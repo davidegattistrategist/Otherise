@@ -23,6 +23,7 @@ App web per personal trainer: clienti, programmi di allenamento, check corporei,
 - [Come lavorare con Claude](docs/COME-LAVORARE-CON-CLAUDE.md)
 - [Bozza del metodo per l'assistente AI](docs/METODO-BOZZA.md)
 - [Privacy e dati dei clienti](docs/PRIVACY.md)
+- [Riepilogo della prima versione e decisioni aperte](docs/RIEPILOGO-PER-DAVIDE.md)
 - [CLAUDE.md](CLAUDE.md) — note tecniche per chi modifica il codice (persone o Claude)
 
 ## Sviluppo
