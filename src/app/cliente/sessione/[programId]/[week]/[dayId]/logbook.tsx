@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { blockSummary, BLOCK_KIND_LABELS, itemLabel, type ProgramDay } from "@/lib/program/types";
+import { blockHeading, itemLabel, type ProgramDay } from "@/lib/program/types";
 import { logPlan, restSeconds, type LogPlan } from "@/lib/program/logbook";
 import type { SetLog } from "@/lib/program/prescription";
 import { saveWorkout } from "../../../actions";
@@ -69,7 +69,9 @@ export function Logbook(props: LogbookProps) {
   const dirty = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef({ items, notes, performedOn, completed });
-  latest.current = { items, notes, performedOn, completed };
+  useEffect(() => {
+    latest.current = { items, notes, performedOn, completed };
+  }, [items, notes, performedOn, completed]);
 
   // Bozza locale: se la connessione salta in palestra non si perde nulla
   useEffect(() => {
@@ -78,6 +80,7 @@ export function Logbook(props: LogbookProps) {
       if (!raw) return;
       const draft = JSON.parse(raw) as { ts: string; items: Record<string, ItemState>; notes: string; performedOn: string };
       if (!initial.updatedAt || draft.ts > initial.updatedAt) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- ripristino della bozza salvata sul telefono
         setItems((cur) => ({ ...cur, ...draft.items }));
         setNotes(draft.notes);
         setPerformedOn(draft.performedOn);
@@ -169,6 +172,7 @@ export function Logbook(props: LogbookProps) {
 
   const startRest = (rest: string) => {
     const s = restSeconds(rest);
+    // eslint-disable-next-line react-hooks/purity -- chiamata solo dai pulsanti, non durante il render
     if (s && s > 0) setTimer({ end: Date.now() + s * 1000, total: s });
   };
 
@@ -203,8 +207,8 @@ export function Logbook(props: LogbookProps) {
           <section key={b.id} className={cx("flex flex-col gap-3 rounded-[24px] bg-card p-4 sm:p-5", multi && "ring-1 ring-sand-deep")}>
             {multi ? (
               <div className="flex flex-wrap items-baseline gap-x-2">
-                <h2 className="text-[13px] font-bold tracking-wider uppercase">{b.title || BLOCK_KIND_LABELS[b.kind]}</h2>
-                <span className="text-sm font-semibold text-accent-deep">{blockSummary(b)}</span>
+                <h2 className="text-[13px] font-bold tracking-wider uppercase">{blockHeading(b).title}</h2>
+                <span className="text-sm font-semibold text-accent-deep">{blockHeading(b).detail}</span>
                 {b.notes ? <p className="w-full text-sm text-muted">{b.notes}</p> : null}
               </div>
             ) : null}

@@ -119,7 +119,9 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
 
   // Ctrl/Cmd+S salva
   const saveRef = useRef(doSave);
-  saveRef.current = doSave;
+  useEffect(() => {
+    saveRef.current = doSave;
+  }, [doSave]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {

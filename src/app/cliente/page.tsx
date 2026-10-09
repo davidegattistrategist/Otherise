@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getMyLogs, getMyPrograms } from "@/lib/data/me";
 import { diffDays, formatHeading, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { completedCount, nextDay, programEndDate, timeProgress } from "@/lib/program/schedule";
-import { blockSummary, BLOCK_KIND_LABELS } from "@/lib/program/types";
+import { blockHeading } from "@/lib/program/types";
 import { billingStatus, type BillingRow, type PlanKind } from "@/lib/billing";
 import { checkinWeekFor } from "@/lib/checkin";
 import { LineChart } from "@/components/line-chart";
@@ -81,7 +81,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
               </div>
               <div className="mt-1 text-sm text-muted-dark">
                 {next
-                  ? next.day.blocks.filter((b) => b.kind !== "text").slice(0, 4).map((b) => (b.kind === "single" ? b.items[0]?.name : `${BLOCK_KIND_LABELS[b.kind]} ${blockSummary(b)}`.trim())).filter(Boolean).join(" · ")
+                  ? next.day.blocks.filter((b) => b.kind !== "text").slice(0, 4).map((b) => (b.kind === "single" ? b.items[0]?.name : `${blockHeading(b).title} ${blockHeading(b).detail}`.trim())).filter(Boolean).join(" · ")
                   : current.position.state === "finished" ? `${coach ?? "Il tuo coach"} sta preparando la prossima fase.` : current.position.state === "not_started" ? current.title : "La prossima sessione arriva lunedì con la nuova settimana."}
               </div>
             </div>

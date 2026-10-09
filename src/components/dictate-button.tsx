@@ -6,7 +6,7 @@
  * Safari). Se il browser non lo supporta il pulsante non compare: resta la
  * dettatura della tastiera del telefono.
  */
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import { IconMic } from "./icons";
 import { cx } from "./ui";
 
@@ -27,11 +27,12 @@ function getSpeech(): (new () => SpeechRec) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+const noop = () => () => {};
+
 export function DictateButton({ target, onText, className }: { target?: RefObject<HTMLTextAreaElement | HTMLInputElement | null>; onText?: (t: string) => void; className?: string }) {
-  const [supported, setSupported] = useState(false);
+  const supported = useSyncExternalStore(noop, () => getSpeech() !== null, () => false);
   const [listening, setListening] = useState(false);
   const rec = useRef<SpeechRec | null>(null);
-  useEffect(() => setSupported(getSpeech() !== null), []);
   useEffect(() => () => rec.current?.stop(), []);
   if (!supported) return null;
 

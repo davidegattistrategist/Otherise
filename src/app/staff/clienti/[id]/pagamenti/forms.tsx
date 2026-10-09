@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 import { Field, Input, Select, Textarea } from "@/components/ui";
 import { isPeriodic, METHOD_LABELS, METHODS, periodEnd, PLAN_KINDS, PLAN_LABELS, type PlanKind } from "@/lib/billing";
@@ -67,12 +67,16 @@ export function PaymentForm({
   const [state, formAction] = useActionState(action, null);
   const [start, setStart] = useState(defaults.period_start ?? "");
   const [end, setEnd] = useState(defaults.period_end ?? "");
-  const formRef = useRef<HTMLFormElement>(null);
-  const periodic = isPeriodic(kind);
-  useEffect(() => {
+  // dopo un pagamento registrato il periodo proposto avanza: aggiorniamo i campi
+  const [prevDefaults, setPrevDefaults] = useState(`${defaults.period_start}|${defaults.period_end}`);
+  const currentDefaults = `${defaults.period_start}|${defaults.period_end}`;
+  if (currentDefaults !== prevDefaults) {
+    setPrevDefaults(currentDefaults);
     setStart(defaults.period_start ?? "");
     setEnd(defaults.period_end ?? "");
-  }, [defaults.period_start, defaults.period_end]);
+  }
+  const formRef = useRef<HTMLFormElement>(null);
+  const periodic = isPeriodic(kind);
   return (
     <form ref={formRef} action={formAction} className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-3">

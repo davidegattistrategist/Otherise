@@ -184,3 +184,16 @@ export function cloneWithNewIds(content: ProgramContent): ProgramContent {
     })),
   };
 }
+
+/** Titolo e dettaglio di un blocco senza ripetizioni ("AMRAP" + "10 min", non "AMRAP AMRAP 10 min"). */
+export function blockHeading(b: ProgramBlock): { title: string; detail: string } {
+  const label = BLOCK_KIND_LABELS[b.kind];
+  const summary = blockSummary(b);
+  if (b.title) return { title: b.title, detail: summary };
+  if (summary.startsWith(label)) return { title: label, detail: summary.slice(label.length).trim() };
+  if (b.kind === "emom" && summary) {
+    const [first, ...rest] = summary.split(" ");
+    if (/^E\d*MOM$/.test(first)) return { title: first, detail: rest.join(" ") };
+  }
+  return { title: label, detail: summary };
+}

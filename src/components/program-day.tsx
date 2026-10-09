@@ -2,7 +2,7 @@
  * Una giornata del programma in sola lettura: blocchi (superserie, circuiti,
  * AMRAP, EMOM…), esercizi e prescrizione della settimana scelta.
  */
-import { blockSummary, BLOCK_KIND_LABELS, itemLabel, type ProgramDay } from "@/lib/program/types";
+import { blockHeading, itemLabel, type ProgramDay } from "@/lib/program/types";
 import { cx } from "./ui";
 import { IconPlay } from "./icons";
 
@@ -30,8 +30,8 @@ export function ProgramDayView({ day, week, videos, compact }: { day: ProgramDay
           <div key={b.id} className={cx(multi && "rounded-2xl border border-sand-deep px-3 py-2.5")}>
             {multi ? (
               <div className="mb-1 flex flex-wrap items-baseline gap-x-2 text-sm">
-                <span className="font-bold">{b.title || BLOCK_KIND_LABELS[b.kind]}</span>
-                <span className="text-muted">{blockSummary(b)}</span>
+                <span className="font-bold">{blockHeading(b).title}</span>
+                <span className="text-muted">{blockHeading(b).detail}</span>
                 {b.notes ? <span className="w-full text-muted">{b.notes}</span> : null}
               </div>
             ) : null}

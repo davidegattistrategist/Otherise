@@ -7,7 +7,7 @@
  * Le proposte dell'AI arrivano nell'editor come modifiche NON salvate: il
  * trainer le rivede e decide se salvarle.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ProgramContent, ProgramItem } from "@/lib/program/types";
 import { Button, Card, Eyebrow, Notice, Textarea, cx } from "@/components/ui";
 import { IconMic, IconSparkle, IconX } from "@/components/icons";
@@ -48,6 +48,8 @@ function getSpeech(): (new () => SpeechRec) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+const noopSubscribe = () => () => {};
+
 export function AiPanel({
   programId,
   currentContent,
@@ -70,10 +72,9 @@ export function AiPanel({
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
-  const [canDictate, setCanDictate] = useState(false);
+  const canDictate = useSyncExternalStore(noopSubscribe, () => getSpeech() !== null, () => false);
   const recRef = useRef<SpeechRec | null>(null);
 
-  useEffect(() => setCanDictate(getSpeech() !== null), []);
 
   const toggleDictation = () => {
     if (listening) {

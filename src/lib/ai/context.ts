@@ -19,7 +19,7 @@ export function programToText(title: string, weeks: number, content: ProgramCont
         lines.push(`  ${b.title || "Testo"}: ${b.notes}`);
         return;
       }
-      if (b.kind !== "single") lines.push(`  Blocco ${BLOCK_KIND_LABELS[b.kind]} ${blockSummary(b)}${b.notes ? ` — ${b.notes}` : ""}`);
+      if (b.kind !== "single") lines.push(`  Blocco ${BLOCK_KIND_LABELS[b.kind]}${b.title ? ` "${b.title}"` : ""}: ${blockSummary(b)}${b.notes ? ` — ${b.notes}` : ""}`);
       b.items.forEach((it, ii) => {
         const weeksTxt = it.prescriptions.map((p, w) => `S${w + 1}: ${p || "—"}`).join(" | ");
         lines.push(`    ${itemLabel(b, bi, ii)} ${it.name}${it.rest ? ` [rec ${it.rest}]` : ""} → ${weeksTxt}${it.notes ? ` (indicazioni: ${it.notes})` : ""}`);

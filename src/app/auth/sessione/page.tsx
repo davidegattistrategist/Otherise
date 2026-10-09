@@ -15,6 +15,7 @@ export default function SessionFromHash() {
     const nextParam = new URLSearchParams(window.location.search).get("next");
     const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : type === "invite" || type === "recovery" ? "/imposta-password" : "/";
     if (!access_token || !refresh_token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- i token arrivano solo dall'indirizzo della pagina
       setFailed(true);
       return;
     }
