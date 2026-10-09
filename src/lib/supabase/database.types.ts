@@ -131,16 +131,42 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
-                },"clients": {
+                },"client_projects": {
                   Row: {
-                    "ai_opt_out": boolean,"archived_at": string | null,"birth_date": string | null,"coach_id": string | null,"consent_source": string | null,"created_at": string,"email": string | null,"first_name": string,"goals": string,"health_consent_at": string | null,"id": string,"last_name": string,"phone": string | null,"privacy_accepted_at": string | null,"privacy_version": string | null,"sex": string,"start_date": string,"status": string,"user_id": string | null,"weekly_checkin": boolean
+                    "client_id": string,"data": NonNullable<Json>,"updated_at": string,"updated_by": string | null,"visible": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_opt_out"?: boolean,"archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name": string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex": string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                    "client_id": string,"data"?: NonNullable<Json>,"updated_at"?: string,"updated_by"?: string | null,"visible"?: boolean
                   }
                   Update: {
-                    "ai_opt_out"?: boolean,"archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name"?: string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex"?: string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                    "client_id"?: string,"data"?: NonNullable<Json>,"updated_at"?: string,"updated_by"?: string | null,"visible"?: boolean
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "client_projects_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: true
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "client_projects_updated_by_fkey"
+      columns: ["updated_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"clients": {
+                  Row: {
+                    "ai_opt_out": boolean,"archived_at": string | null,"birth_date": string | null,"coach_id": string | null,"consent_source": string | null,"created_at": string,"email": string | null,"first_name": string,"goals": string,"health_consent_at": string | null,"id": string,"last_name": string,"phase_weeks": number,"phone": string | null,"privacy_accepted_at": string | null,"privacy_version": string | null,"sex": string,"start_date": string,"status": string,"user_id": string | null,"weekly_checkin": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ai_opt_out"?: boolean,"archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name": string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex": string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                  }
+                  Update: {
+                    "ai_opt_out"?: boolean,"archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name"?: string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex"?: string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
                   }
                   Relationships: [
                     {
@@ -337,14 +363,14 @@ isOneToOne: false
                   ]
                 },"programs": {
                   Row: {
-                    "ai_notes": Json | null,"client_id": string | null,"content": NonNullable<Json>,"created_at": string,"created_by": string | null,"description": string,"id": string,"is_ai_example": boolean,"is_template": boolean,"previous_program_id": string | null,"published_at": string | null,"source": string,"start_date": string | null,"status": string,"title": string,"updated_at": string,"weeks": number
+                    "ai_notes": Json | null,"client_id": string | null,"content": NonNullable<Json>,"created_at": string,"created_by": string | null,"description": string,"id": string,"is_ai_example": boolean,"is_template": boolean,"previous_program_id": string | null,"published_at": string | null,"session_minutes": number | null,"source": string,"start_date": string | null,"status": string,"title": string,"updated_at": string,"weeks": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_notes"?: Json | null,"client_id"?: string | null,"content"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"description"?: string,"id"?: string,"is_ai_example"?: boolean,"is_template"?: boolean,"previous_program_id"?: string | null,"published_at"?: string | null,"source"?: string,"start_date"?: string | null,"status"?: string,"title": string,"updated_at"?: string,"weeks"?: number
+                    "ai_notes"?: Json | null,"client_id"?: string | null,"content"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"description"?: string,"id"?: string,"is_ai_example"?: boolean,"is_template"?: boolean,"previous_program_id"?: string | null,"published_at"?: string | null,"session_minutes"?: number | null,"source"?: string,"start_date"?: string | null,"status"?: string,"title": string,"updated_at"?: string,"weeks"?: number
                   }
                   Update: {
-                    "ai_notes"?: Json | null,"client_id"?: string | null,"content"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"description"?: string,"id"?: string,"is_ai_example"?: boolean,"is_template"?: boolean,"previous_program_id"?: string | null,"published_at"?: string | null,"source"?: string,"start_date"?: string | null,"status"?: string,"title"?: string,"updated_at"?: string,"weeks"?: number
+                    "ai_notes"?: Json | null,"client_id"?: string | null,"content"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"description"?: string,"id"?: string,"is_ai_example"?: boolean,"is_template"?: boolean,"previous_program_id"?: string | null,"published_at"?: string | null,"session_minutes"?: number | null,"source"?: string,"start_date"?: string | null,"status"?: string,"title"?: string,"updated_at"?: string,"weeks"?: number
                   }
                   Relationships: [
                     {
@@ -409,14 +435,14 @@ isOneToOne: false
                   ]
                 },"workout_logs": {
                   Row: {
-                    "client_id": string,"completed": boolean,"created_at": string,"day_id": string,"id": string,"notes": string,"performed_on": string,"program_id": string,"updated_at": string,"week": number
+                    "client_id": string,"completed": boolean,"created_at": string,"day_id": string,"discomfort": string,"discomfort_seen_at": string | null,"id": string,"notes": string,"performed_on": string,"program_id": string,"updated_at": string,"week": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "client_id": string,"completed"?: boolean,"created_at"?: string,"day_id": string,"id"?: string,"notes"?: string,"performed_on"?: string,"program_id": string,"updated_at"?: string,"week": number
+                    "client_id": string,"completed"?: boolean,"created_at"?: string,"day_id": string,"discomfort"?: string,"discomfort_seen_at"?: string | null,"id"?: string,"notes"?: string,"performed_on"?: string,"program_id": string,"updated_at"?: string,"week": number
                   }
                   Update: {
-                    "client_id"?: string,"completed"?: boolean,"created_at"?: string,"day_id"?: string,"id"?: string,"notes"?: string,"performed_on"?: string,"program_id"?: string,"updated_at"?: string,"week"?: number
+                    "client_id"?: string,"completed"?: boolean,"created_at"?: string,"day_id"?: string,"discomfort"?: string,"discomfort_seen_at"?: string | null,"id"?: string,"notes"?: string,"performed_on"?: string,"program_id"?: string,"updated_at"?: string,"week"?: number
                   }
                   Relationships: [
                     {

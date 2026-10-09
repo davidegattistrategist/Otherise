@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { aiEnabled, progressRow, reviseProgram, suggestAlternatives, type AiUsage } from "@/lib/ai/claude";
+import { aiEnabled, askQuestions, progressRow, reviseProgram, suggestAlternatives, type AiUsage } from "@/lib/ai/claude";
 import { AI_OPT_OUT_MESSAGE, buildClientContext, buildMethodContext } from "@/lib/ai/context";
 import { programContentSchema } from "@/lib/program/types";
 import { summarizeSets, type SetLog } from "@/lib/program/prescription";
@@ -15,13 +15,19 @@ const imageSchema = z.object({
   data: z.string().max(7_000_000),
 });
 
+const reviseFields = {
+  programId: z.string().uuid(),
+  instruction: z.string().trim().min(3, "Scrivi cosa vuoi cambiare").max(6000),
+  current: z.object({ title: z.string(), description: z.string(), weeks: z.number().int().min(1).max(12), content: programContentSchema }),
+  images: z.array(imageSchema).max(4).default([]),
+};
+
 const bodySchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("questions"), ...reviseFields }),
   z.object({
     mode: z.literal("revise"),
-    programId: z.string().uuid(),
-    instruction: z.string().trim().min(3, "Scrivi cosa vuoi cambiare").max(6000),
-    current: z.object({ title: z.string(), description: z.string(), weeks: z.number().int().min(1).max(12), content: programContentSchema }),
-    images: z.array(imageSchema).max(4).default([]),
+    ...reviseFields,
+    answers: z.array(z.object({ question: z.string().max(400), answer: z.string().trim().max(1000) })).max(5).default([]),
   }),
   z.object({
     mode: z.literal("progress"),
@@ -52,7 +58,7 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createClient();
   // passa dai permessi: se lo staff non gestisce il cliente il programma non c'è
-  const { data: program } = await supabase.from("programs").select("id, client_id").eq("id", body.programId).maybeSingle();
+  const { data: program } = await supabase.from("programs").select("id, client_id, session_minutes").eq("id", body.programId).maybeSingle();
   if (!program?.client_id) return NextResponse.json({ error: "Programma non trovato" }, { status: 404 });
   const { data: owner } = await supabase.from("clients").select("ai_opt_out").eq("id", program.client_id).maybeSingle();
   if (owner?.ai_opt_out) return NextResponse.json({ error: AI_OPT_OUT_MESSAGE }, { status: 403 });
@@ -76,9 +82,16 @@ export async function POST(req: NextRequest) {
   };
 
   try {
+    if (body.mode === "questions") {
+      const [method, clientContext] = await Promise.all([buildMethodContext(supabase), buildClientContext(supabase, program.client_id, program.id)]);
+      const result = await askQuestions({ instruction: body.instruction, ...method, clientContext, current: body.current, sessionMinutes: program.session_minutes, images: body.images });
+      await log("questions", result.usage);
+      return NextResponse.json({ questions: result.questions });
+    }
     if (body.mode === "revise") {
       const [method, clientContext] = await Promise.all([buildMethodContext(supabase), buildClientContext(supabase, program.client_id, program.id)]);
-      const result = await reviseProgram({ instruction: body.instruction, ...method, clientContext, current: body.current, images: body.images });
+      const answers = body.answers.filter((a) => a.answer);
+      const result = await reviseProgram({ instruction: body.instruction, ...method, clientContext, current: body.current, sessionMinutes: program.session_minutes, answers, images: body.images });
       await log("revise", result.usage);
       return NextResponse.json({ summary: result.summary, title: result.title, description: result.description, weeks: result.weeks, content: result.content, notes: result.notes });
     }

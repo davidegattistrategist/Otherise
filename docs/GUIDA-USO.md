@@ -22,11 +22,20 @@ Dal telefono il menu è in basso: Oggi, Clienti, Messaggi, Pagamenti e "Altro" p
 4. **Programma**: vedi sotto.
 5. **Pagamenti** (titolare): imposta il piano (mensile, 6 settimane, trimestrale, pacchetto di sessioni, sessione singola…).
 
+## Il progetto annuale
+Scheda del cliente → **Progetto**: i prossimi 12 mesi, uno per colonna.
+- **Fase** del mese: Start, Volumizzazione, Intensificazione, Transizione, Reset, Scarico, Libero/estivo, Gara, Pausa.
+- **Stimoli** (Posturale, Forza massima, Forza resistente, Massa magra, Aerobico, Vo2Max, Alimentazione…): tocca la cella per cambiare il livello (assente, mantenimento, medio, alto; per l'alimentazione non trattata, deficit, normocalorica, surplus). Gli stimoli si rinominano, si tolgono e se ne aggiungono.
+- **Note** del mese: gare, vacanze, obiettivi.
+- Con **Visibile al cliente** il cliente lo vede come timeline nel suo Percorso. L'assistente AI lo legge sempre per preparare le bozze.
+
 ## Scrivere un programma
 Dalla scheda del cliente → **Programma**:
 - **Crea la nuova fase**: copia l'ultima fase (stessi giorni ed esercizi) e compila la settimana 1 con quello che il cliente ha fatto davvero nel logbook. È il modo più veloce.
 - **Usa il modello**: parte da un modello salvato.
 - **Programma vuoto**, oppure **Importa dal foglio Google** (file .csv della scheda).
+
+La durata delle fasi (4 o 6 settimane) si imposta nella scheda del cliente, come il suo piano: la nuova fase la usa da sola.
 
 Nell'editor:
 - Ogni riga è un esercizio, ogni colonna una settimana. Scrivi le prescrizioni come sempre: `4x8 60kg`, `3x10/12`, `3x30"`, `5x400m`, oppure testo libero.
@@ -36,6 +45,8 @@ Nell'editor:
 - **Percentuali del massimale**: scrivi `5x5 @75%` e al cliente compare il carico in kg calcolato sul suo massimale (dal test di forza dell'ultimo check, altrimenti stimato dal logbook).
 - **Dal telefono** l'editor mostra una settimana alla volta (S1, S2…) con esercizio, prescrizione e recupero: comodo per ritoccare un programma in palestra.
 - Sotto ogni esercizio vedi cosa ha fatto il cliente l'ultima volta.
+- **Tempo per seduta** (in alto, facoltativo): i minuti che il cliente ha a disposizione. Il cliente lo vede e l'AI ci sta dentro.
+- **Recupero "EMOM 2"**: la serie riparte ogni 2 minuti (1,5 = 90 secondi). Il cliente lo vede spiegato così.
 - **Ctrl/Cmd + S** salva. Il cliente non vede niente finché non premi **Pubblica**; quando pubblichi gli arriva una notifica.
 - **Salva come modello** per riusarlo con altri clienti.
 
@@ -44,11 +55,15 @@ Nell'editor:
 - Sopra la casella ci sono le **richieste rapide** (es. "Stessa struttura, progressione secondo il mio metodo", "Ultima settimana di scarico"): un tocco le aggiunge, poi completi a voce.
 - Sulla singola riga: **Progredisci** (propone la progressione delle settimane) e **Alternative** (esercizi sostitutivi).
 - Nell'editor, la spunta **"Usa come esempio del mio stile per l'AI"** sui programmi che ti rappresentano meglio: l'AI li usa come riferimento.
+- Se ha dubbi, prima della bozza l'AI ti fa **da 1 a 5 domande** brevi (per esempio il passo di corsa di partenza), spesso con le risposte pronte da toccare. Puoi anche saltarle.
+- L'AI non propone mai di sua iniziativa scarichi, programmi estivi, reset o test, e non cambia il programma per un dolore: lo segnala e decidi tu. Non pubblica mai: rivedi sempre tu.
 - Il nome del cliente non viene mai mandato all'AI. La spesa del mese e il tetto sono in Impostazioni.
 
 ## Durante e dopo le sessioni
 - **Nota sessione PT** (in alto nella scheda): due righe a fine allenamento, anche dettate. Le sessioni "che contano nel pacchetto" scalano le sessioni rimaste di chi ha un pacchetto.
 - **Registra l'allenamento** (nella panoramica del cliente): compili tu il logbook al posto del cliente, per esempio durante la sessione in palestra.
+- Il cliente ha sempre il **prossimo allenamento**, mai un giorno fisso: li fa in ordine e, se ne salta uno, riparte da quello. Se un giorno non può (niente palestra) può sceglierne un altro e recuperare dopo.
+- **Dolori e fastidi**: nel logbook il cliente può scrivere "Hai sentito dolore o fastidio?". Ti arriva subito una notifica (ed email) e compare in **Oggi → Dolori e fastidi** finché non premi "Visto". Anche un check-up con "Dolori, fastidi o imprevisti" compilato ti avvisa.
 - Il cliente registra il logbook dal telefono: i campi sono già proposti con i carichi del programma o dell'ultima volta; la spunta conferma la serie e fa partire il timer di recupero (±15 secondi). Lo schermo resta acceso. Se batte un record (massimale stimato o carico più alto) compare **"Nuovo record!"**. Si salva da solo anche se salta la connessione.
 - Nella panoramica del cliente vedi l'**andamento degli esercizi** (massimale stimato nel tempo) e gli **allenamenti per settimana**; il cliente vede gli stessi grafici e i suoi record nei Progressi.
 

@@ -45,6 +45,15 @@ Confronto con le app più usate dai coach (Trainerize, TrueCoach, Everfit, Train
   - nuova bozza in `docs/METODO-BOZZA.md`, con i punti aperti tra parentesi quadre;
   - nell'editor la regola **doppia progressione** (4x7 16kg → 4x8 → 4x9 → 4x7 18,5kg).
 - **Guida per Diego** passo per passo, con il messaggio da incollare in Claude (documento condiviso a parte).
+- **Dalle risposte sul metodo**:
+  - progetto annuale del cliente (fasi e stimoli mese per mese, timeline per il cliente, letto dall'AI);
+  - fasi da 4 o 6 settimane secondo il piano;
+  - prossimo allenamento in sequenza con la possibilità di sceglierne un altro;
+  - dolori e fastidi segnalati al trainer;
+  - l'AI fa da 1 a 5 domande prima della bozza e non propone mai scarichi o programmi estivi;
+  - tempo per seduta;
+  - EMOM spiegato al cliente;
+  - metodo aggiornato in `docs/METODO-BOZZA.md`.
 
 ## Come l'ho provata
 - 51 test sui calcoli (anche progressioni, costanza, record, numeri WhatsApp) (pliche verificate sui valori del foglio di una cliente, prescrizioni, pagamenti, calendario, import).

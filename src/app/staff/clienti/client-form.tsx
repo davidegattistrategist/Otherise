@@ -14,6 +14,7 @@ export type ClientFormValues = {
   goals?: string;
   start_date?: string;
   weekly_checkin?: boolean;
+  phase_weeks?: number;
   coach_id?: string | null;
   status?: string;
   private_notes?: string;
@@ -49,6 +50,13 @@ export function ClientForm({
         </Field>
         <Field label="Data di nascita" hint="serve per le formule"><Input name="birth_date" type="date" defaultValue={values.birth_date ?? ""} /></Field>
         <Field label="Inizio percorso"><Input name="start_date" type="date" defaultValue={values.start_date ?? ""} /></Field>
+        <Field label="Durata delle fasi" hint="come il suo piano">
+          <Select name="phase_weeks" defaultValue={String(values.phase_weeks ?? 4)}>
+            <option value="4">4 settimane (check ogni 4)</option>
+            <option value="6">6 settimane (check ogni 6)</option>
+            {values.phase_weeks && ![4, 6].includes(values.phase_weeks) ? <option value={values.phase_weeks}>{values.phase_weeks} settimane</option> : null}
+          </Select>
+        </Field>
         {isOwner ? (
           <Field label="Segue il cliente">
             <Select name="coach_id" defaultValue={values.coach_id ?? ""}>

@@ -82,6 +82,9 @@ export function AiPanel({
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
+  // domande dell'AI prima della bozza (null = non ancora chieste per questa richiesta)
+  const [questions, setQuestions] = useState<Array<{ question: string; options: string[] }> | null>(null);
+  const [answers, setAnswers] = useState<string[]>([]);
   const canDictate = useSyncExternalStore(noopSubscribe, () => getSpeech() !== null, () => false);
   const recRef = useRef<SpeechRec | null>(null);
 
@@ -108,22 +111,54 @@ export function AiPanel({
     setListening(true);
   };
 
+  const request = () => {
+    const title = (document.getElementById("program-title") as HTMLInputElement | null)?.value ?? "";
+    const description = (document.getElementById("desc") as HTMLTextAreaElement | null)?.value ?? "";
+    return {
+      programId,
+      instruction,
+      current: { title, description, weeks, content: currentContent },
+      images: images.map(({ mediaType, data }) => ({ mediaType, data })),
+    };
+  };
+
+  const draft = async (qa: Array<{ question: string; answer: string }>) => {
+    const res = await post<{ summary: string; content: ProgramContent; notes: Record<string, string>; weeks: number }>({ mode: "revise", ...request(), answers: qa });
+    onApply(res.content, res.notes, res.weeks);
+    setSummary(res.summary);
+    setQuestions(null);
+    setAnswers([]);
+  };
+
+  /** Prima l'AI può fare da 1 a 5 domande; se non ne ha, prepara subito la bozza. */
   const run = async () => {
     setBusy(true);
     setError(null);
     setSummary(null);
     try {
-      const title = (document.getElementById("program-title") as HTMLInputElement | null)?.value ?? "";
-      const description = (document.getElementById("desc") as HTMLTextAreaElement | null)?.value ?? "";
-      const res = await post<{ summary: string; content: ProgramContent; notes: Record<string, string>; weeks: number }>({
-        mode: "revise",
-        programId,
-        instruction,
-        current: { title, description, weeks, content: currentContent },
-        images: images.map(({ mediaType, data }) => ({ mediaType, data })),
-      });
-      onApply(res.content, res.notes, res.weeks);
-      setSummary(res.summary);
+      if (questions === null) {
+        const res = await post<{ questions: Array<{ question: string; options: string[] }> }>({ mode: "questions", ...request() });
+        if (res.questions.length) {
+          setQuestions(res.questions);
+          setAnswers(res.questions.map(() => ""));
+          return;
+        }
+        await draft([]);
+      } else {
+        await draft(questions.map((q, i) => ({ question: q.question, answer: answers[i]?.trim() ?? "" })));
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const skipQuestions = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await draft([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Errore");
     } finally {
@@ -171,7 +206,10 @@ export function AiPanel({
         <Textarea
           id="ai-instruction"
           value={instruction}
-          onChange={(e) => setInstruction(e.target.value)}
+          onChange={(e) => {
+            setInstruction(e.target.value);
+            setQuestions(null);
+          }}
           rows={4}
           placeholder="Es. Passiamo a volumizzazione per 6 settimane. Togli lo stacco da terra per il fastidio lombare, aggiungi un giorno di corsa facile, tieni gli allungamenti per i quadricipiti."
           className="!border-line-dark !bg-[#26241f] !text-card placeholder:!text-muted-dark"
@@ -211,6 +249,41 @@ export function AiPanel({
         </div>
         {dirty ? <p className="text-sm text-muted-dark">L&apos;AI parte dalla versione che vedi ora, comprese le modifiche non salvate.</p> : null}
         {error ? <Notice tone="error">{error}</Notice> : null}
+        {questions?.length ? (
+          <div className="flex flex-col gap-4 rounded-2xl bg-[#26241f] px-4 py-4" aria-label="Domande dell'AI">
+            <div>
+              <div className="font-semibold">Prima di preparare la bozza, qualche domanda</div>
+              <p className="mt-1 text-sm text-muted-dark">Rispondi solo a quelle che vuoi: le altre le lascia decidere al tuo metodo.</p>
+            </div>
+            {questions.map((q, i) => (
+              <div key={i} className="flex flex-col gap-2">
+                <label htmlFor={`ai-answer-${i}`} className="text-[15px] leading-snug">{i + 1}. {q.question}</label>
+                {q.options.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {q.options.map((o) => (
+                      <button
+                        key={o}
+                        type="button"
+                        onClick={() => setAnswers((a) => a.map((x, j) => (j === i ? o : x)))}
+                        className={cx("rounded-full px-3 py-1.5 text-[13px] font-semibold", answers[i] === o ? "bg-card text-ink" : "bg-line-dark text-card hover:bg-[#3a3832]")}
+                      >
+                        {o}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <input
+                  id={`ai-answer-${i}`}
+                  value={answers[i] ?? ""}
+                  onChange={(e) => setAnswers((a) => a.map((x, j) => (j === i ? e.target.value : x)))}
+                  placeholder="La tua risposta"
+                  className="min-h-11 rounded-xl border border-line-dark bg-[#1b1a17] px-3 text-[15px] text-card placeholder:text-muted-dark"
+                />
+              </div>
+            ))}
+            <button type="button" onClick={skipQuestions} disabled={busy} className="self-start text-sm font-semibold text-muted-dark underline disabled:opacity-50">Salta le domande e prepara la bozza</button>
+          </div>
+        ) : null}
         {summary ? (
           <div className="rounded-2xl bg-[#26241f] px-4 py-3 text-[15px] leading-relaxed">
             <div className="mb-1 font-semibold">Cosa ha cambiato l&apos;AI</div>
@@ -225,7 +298,7 @@ export function AiPanel({
             className="inline-flex min-h-12 items-center gap-3 rounded-full bg-card py-1.5 pr-5 pl-1.5 font-semibold text-ink disabled:opacity-50"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent"><IconSparkle size={18} /></span>
-            {busy ? "Sto preparando la bozza… (anche un minuto)" : "Prepara la bozza"}
+            {busy ? (questions === null ? "Sto leggendo i dati…" : "Sto preparando la bozza… (anche un minuto)") : questions?.length ? "Prepara la bozza con queste risposte" : "Prepara la bozza"}
           </button>
         </div>
       </div>

@@ -37,3 +37,22 @@ export function restSeconds(rest: string | null | undefined): number | null {
   if (m) return Math.round(Number(m[1].replace(",", ".")) * 60);
   return null;
 }
+
+/**
+ * Recupero da mostrare al cliente. "EMOM 2" nel recupero vuol dire che la serie
+ * riparte ogni 2 minuti (1,5 = 90 secondi, 2,5 = 2 minuti e mezzo).
+ */
+export function restLabel(rest: string | null | undefined): string {
+  const t = (rest ?? "").trim();
+  if (!t) return "";
+  const m = /^e\.?m\.?o\.?m\.?\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:'|’|min\w*)?$/i.exec(t);
+  if (!m) return `Recupero ${t}`;
+  const min = Number(m[1].replace(",", "."));
+  const secs = Math.round(min * 60);
+  const every = secs < 60 || secs % 60 !== 0 && secs % 30 !== 0
+    ? `${secs} secondi`
+    : secs === 90 ? "90 secondi"
+    : secs % 60 === 0 ? (secs === 60 ? "minuto" : `${secs / 60} minuti`)
+    : `${Math.floor(secs / 60)} minuti e mezzo`;
+  return `EMOM ${String(min).replace(".", ",")}' · riparti ogni ${every}`;
+}

@@ -1,7 +1,7 @@
 /**
- * Calendario di un programma: settimana in corso, fine fase, prossima sessione.
- * Il cliente non è legato ai giorni della settimana: la "prossima sessione"
- * è il primo giorno non ancora registrato nella settimana in corso.
+ * Calendario di un programma: settimana in corso, fine fase, prossimo allenamento.
+ * Il cliente non è legato ai giorni della settimana e gli allenamenti vanno fatti
+ * in ordine: se ne salta uno, il prossimo è ancora quello (si "scala", non si salta).
  */
 import { addDays, diffDays, type ISODate } from "../dates";
 import type { ProgramContent } from "./types";
@@ -39,6 +39,21 @@ export function nextDay(content: ProgramContent, week: number, logs: LoggedDay[]
   const idx = content.days.findIndex((d) => !done.has(d.id));
   if (idx === -1) return null;
   return { day: content.days[idx], index: idx };
+}
+
+/**
+ * Prossimo allenamento in sequenza: il primo giorno non completato, settimana dopo
+ * settimana (null se la fase è tutta fatta). Se il cliente è indietro rispetto al
+ * calendario continua da dove era rimasto.
+ */
+export function nextWorkout(content: ProgramContent, weeks: number, logs: LoggedDay[]) {
+  if (!content.days.length) return null;
+  const done = new Set(logs.filter((l) => l.completed).map((l) => `${l.week}:${l.day_id}`));
+  for (let w = 1; w <= weeks; w++) {
+    const idx = content.days.findIndex((d) => !done.has(`${w}:${d.id}`));
+    if (idx !== -1) return { week: w, day: content.days[idx], index: idx };
+  }
+  return null;
 }
 
 export function completedCount(content: ProgramContent, logs: LoggedDay[], uptoWeek: number) {

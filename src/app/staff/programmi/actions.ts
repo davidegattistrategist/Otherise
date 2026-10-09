@@ -43,7 +43,8 @@ async function suggestedStart(clientId: string): Promise<string> {
 export async function createEmptyProgram(clientId: string | null) {
   const me = await requireStaff();
   const supabase = await createClient();
-  const weeks = 4;
+  const { data: owner } = clientId ? await supabase.from("clients").select("phase_weeks").eq("id", clientId).maybeSingle() : { data: null };
+  const weeks = owner?.phase_weeks ?? 4;
   const content = normalizeWeeks({ days: [{ id: newId(), title: "Giorno 1", notes: "", blocks: [] }] }, weeks);
   const { data, error } = await supabase
     .from("programs")
@@ -91,10 +92,11 @@ export async function createFromTemplate(clientId: string, fd: FormData) {
 export async function createNextPhase(previousId: string, fd?: FormData) {
   const me = await requireStaff();
   const supabase = await createClient();
-  const { data: prev } = await supabase.from("programs").select("id, client_id, title, weeks, content, start_date").eq("id", previousId).maybeSingle();
+  const { data: prev } = await supabase.from("programs").select("id, client_id, title, weeks, content, start_date, session_minutes, clients(phase_weeks)").eq("id", previousId).maybeSingle();
   if (!prev?.client_id) throw new Error("Programma non trovato");
-  const weeksRaw = Number(fd?.get("weeks") ?? prev.weeks);
-  const weeks = Number.isInteger(weeksRaw) && weeksRaw >= 1 && weeksRaw <= 12 ? weeksRaw : prev.weeks;
+  const fallback = (prev.clients as unknown as { phase_weeks: number } | null)?.phase_weeks ?? prev.weeks;
+  const weeksRaw = Number(fd?.get("weeks") ?? fallback);
+  const weeks = Number.isInteger(weeksRaw) && weeksRaw >= 1 && weeksRaw <= 12 ? weeksRaw : fallback;
   const { data: logs } = await supabase.from("exercise_logs").select("item_id, week, sets, result_text").eq("program_id", prev.id);
   const content = buildNextPhase(parseContent(prev.content), weeks, (logs ?? []) as unknown as ItemLastLog[]);
   const start = prev.start_date ? addDays(programEndDate(prev.start_date, prev.weeks), 1) : todayISO();
@@ -107,6 +109,7 @@ export async function createNextPhase(previousId: string, fd?: FormData) {
       start_date: start < todayISO() ? todayISO() : start,
       content: asJson(content),
       previous_program_id: prev.id,
+      session_minutes: prev.session_minutes,
       source: "copy",
       created_by: me.id,
     })
@@ -120,6 +123,8 @@ const saveSchema = z.object({
   title: z.string().trim().min(1, "Dai un nome al programma").max(120),
   description: z.string().max(4000).default(""),
   weeks: z.number().int().min(1).max(12),
+  /** Tempo a disposizione per seduta (minuti), facoltativo */
+  session_minutes: z.number().int().min(10).max(240).nullable().optional(),
   start_date: z.string().nullable().refine((v) => v === null || v === "" || isISODate(v), "Data di inizio non valida"),
   content: programContentSchema,
   expected_updated_at: z.string().nullable(),
@@ -149,6 +154,7 @@ export async function saveProgram(id: string, input: unknown): Promise<SaveResul
       description: v.description,
       weeks: v.weeks,
       start_date: v.start_date || null,
+      ...(v.session_minutes !== undefined ? { session_minutes: v.session_minutes } : {}),
       content: asJson(content),
       ...(v.ai_notes !== undefined ? { ai_notes: v.ai_notes && Object.keys(v.ai_notes).length ? v.ai_notes : null } : {}),
       ...(v.ai_notes && Object.keys(v.ai_notes).length ? { source: "ai" } : {}),

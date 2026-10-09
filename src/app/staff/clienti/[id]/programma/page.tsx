@@ -48,7 +48,7 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
             <form action={createNextPhase.bind(null, latestBase.id)} className="mt-auto flex flex-wrap items-center gap-2.5">
               <label className="flex items-center gap-2 text-sm">
                 <span className="text-muted-dark">Settimane</span>
-                <Select name="weeks" defaultValue={latestBase.weeks} className="!min-h-10 !w-20 !border-line-dark !bg-[#26241f] !py-1 !text-card">
+                <Select name="weeks" defaultValue={client.phase_weeks ?? latestBase.weeks} className="!min-h-10 !w-20 !border-line-dark !bg-[#26241f] !py-1 !text-card">
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
                 </Select>
               </label>

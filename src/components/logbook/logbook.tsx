@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { blockHeading, itemLabel, type ProgramDay } from "@/lib/program/types";
-import { logPlan, restSeconds, type LogPlan } from "@/lib/program/logbook";
+import { logPlan, restLabel, restSeconds, type LogPlan } from "@/lib/program/logbook";
 import type { SetLog } from "@/lib/program/prescription";
 import { saveWorkout } from "./actions";
 import { cx, fmtNum } from "@/components/ui";
@@ -18,7 +18,7 @@ export type LogbookProps = {
   week: number;
   day: ProgramDay;
   today: string;
-  initial: { performedOn: string; completed: boolean; notes: string; items: Record<string, ItemState>; updatedAt: string | null };
+  initial: { performedOn: string; completed: boolean; notes: string; discomfort: string; items: Record<string, ItemState>; updatedAt: string | null };
   last: Record<string, Last>;
   /** Serie dell'ultima volta per esercizio (id o nome minuscolo): diventano i valori proposti */
   lastSets?: Record<string, SetLog[]>;
@@ -118,6 +118,8 @@ export function Logbook(props: LogbookProps) {
 
   const [items, setItems] = useState<Record<string, ItemState>>(buildInitial);
   const [notes, setNotes] = useState(initial.notes);
+  const [discomfort, setDiscomfort] = useState(initial.discomfort);
+  const [showDiscomfort, setShowDiscomfort] = useState(Boolean(initial.discomfort));
   const [performedOn, setPerformedOn] = useState(initial.performedOn);
   const [completed, setCompleted] = useState(initial.completed);
   const [status, setStatus] = useState<{ kind: "idle" | "saving" | "saved" | "error"; text?: string }>({ kind: "idle" });
@@ -125,21 +127,25 @@ export function Logbook(props: LogbookProps) {
   const [now, setNow] = useState(() => Date.now());
   const dirty = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latest = useRef({ items, notes, performedOn, completed });
+  const latest = useRef({ items, notes, discomfort, performedOn, completed });
   useEffect(() => {
-    latest.current = { items, notes, performedOn, completed };
-  }, [items, notes, performedOn, completed]);
+    latest.current = { items, notes, discomfort, performedOn, completed };
+  }, [items, notes, discomfort, performedOn, completed]);
 
   // Bozza locale: se la connessione salta in palestra non si perde nulla
   useEffect(() => {
     try {
       const raw = localStorage.getItem(storageKey(props));
       if (!raw) return;
-      const draft = JSON.parse(raw) as { ts: string; items: Record<string, ItemState>; notes: string; performedOn: string };
+      const draft = JSON.parse(raw) as { ts: string; items: Record<string, ItemState>; notes: string; discomfort?: string; performedOn: string };
       if (!initial.updatedAt || draft.ts > initial.updatedAt) {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- ripristino della bozza salvata sul telefono
         setItems((cur) => ({ ...cur, ...draft.items }));
         setNotes(draft.notes);
+        if (draft.discomfort) {
+          setDiscomfort(draft.discomfort);
+          setShowDiscomfort(true);
+        }
         setPerformedOn(draft.performedOn);
         dirty.current = true;
         setStatus({ kind: "idle", text: "Ripreso da dove eri rimasto" });
@@ -165,6 +171,7 @@ export function Logbook(props: LogbookProps) {
           performedOn: s.performedOn,
           completed: done,
           notes: s.notes,
+          discomfort: s.discomfort,
           items: Object.entries(s.items).map(([itemId, v]) => ({ itemId, sets: v.sets.map((x) => ({ kg: x.kg ?? null, reps: x.reps ?? null, done: x.done })), resultText: v.resultText })),
         });
         if (!res.ok) {
@@ -190,7 +197,7 @@ export function Logbook(props: LogbookProps) {
     dirty.current = true;
     try {
       const s = latest.current;
-      localStorage.setItem(storageKey({ programId, week, day }), JSON.stringify({ ts: new Date().toISOString(), items: s.items, notes: s.notes, performedOn: s.performedOn }));
+      localStorage.setItem(storageKey({ programId, week, day }), JSON.stringify({ ts: new Date().toISOString(), items: s.items, notes: s.notes, discomfort: s.discomfort, performedOn: s.performedOn }));
     } catch {}
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => void save(), 1500);
@@ -304,7 +311,7 @@ export function Logbook(props: LogbookProps) {
                         {plan.mode === "sets" && plan.pct ? (
                           <span className="font-semibold text-accent-deep">{plan.kgHint ? `≈ ${fmtNum(plan.kgHint)} kg` : "massimale non ancora misurato"}</span>
                         ) : null}
-                        {it.rest ? <span className="text-muted">rec. {it.rest}</span> : null}
+                        {it.rest ? <span className="text-muted">{/^emom/i.test(it.rest.trim()) ? restLabel(it.rest) : `rec. ${it.rest}`}</span> : null}
                       </div>
                       {prs[it.id] ? (
                         <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm font-semibold text-white" role="status">
@@ -446,6 +453,26 @@ export function Logbook(props: LogbookProps) {
             touch();
           }}
         />
+        {showDiscomfort ? (
+          <div className="flex flex-col gap-2 rounded-2xl bg-accent-soft p-3">
+            <label htmlFor="session-discomfort" className="text-[15px] font-semibold">Dolore o fastidio</label>
+            <textarea
+              id="session-discomfort"
+              rows={2}
+              className="rounded-xl border border-sand-deep bg-card px-3 py-2.5 text-[15px] leading-relaxed"
+              placeholder="Dove, durante quale esercizio, quanto forte"
+              value={discomfort}
+              onChange={(e) => {
+                setDiscomfort(e.target.value);
+                latest.current = { ...latest.current, discomfort: e.target.value };
+                touch();
+              }}
+            />
+            <p className="text-sm text-ink-soft">Lo legge subito il tuo coach e ti dice come procedere. Nel frattempo non forzare.</p>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setShowDiscomfort(true)} className="self-start text-sm font-semibold underline">Hai sentito dolore o fastidio? Dillo al coach</button>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <label htmlFor="performed-on" className="text-sm text-muted">Fatto il</label>
           <input

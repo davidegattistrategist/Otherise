@@ -4,7 +4,7 @@ import { estimateOneRepMax } from "./strength/e1rm";
 import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
 import { billingStatus, periodEnd, suggestNextPeriod } from "./billing";
 import { addMonths, ageOn, diffDays, formatHeading, isISODate, mondayOf, todayISO } from "./dates";
-import { displayWeek, nextDay, programEndDate, weekPosition } from "./program/schedule";
+import { displayWeek, nextDay, nextWorkout, programEndDate, weekPosition } from "./program/schedule";
 import { buildNextPhase, copyWeekToOthers } from "./program/next-phase";
 import { blockLetter, blockSummary, emptyBlock, itemLabel, normalizeWeeks, parseContent, type ProgramContent } from "./program/types";
 import { parseCsv } from "./import/csv";
@@ -201,6 +201,12 @@ describe("programmi", () => {
     expect(programEndDate("2026-10-05", 6)).toBe("2026-11-15");
     expect(nextDay(sample, 1, [{ week: 1, day_id: "d1", completed: true }])?.day.id).toBe("d2");
     expect(nextDay(sample, 1, [{ week: 1, day_id: "d1", completed: true }, { week: 1, day_id: "d2", completed: true }])).toBeNull();
+    // in sequenza: chi salta un allenamento riparte da quello, anche nella settimana dopo
+    const doneW1 = sample.days.map((d) => ({ week: 1, day_id: d.id, completed: true }));
+    expect(nextWorkout(sample, 4, [])?.week).toBe(1);
+    expect(nextWorkout(sample, 4, doneW1)).toMatchObject({ week: 2, index: 0 });
+    expect(nextWorkout(sample, 4, [...doneW1, { week: 2, day_id: sample.days[1].id, completed: true }])).toMatchObject({ week: 2, index: 0 });
+    expect(nextWorkout(sample, 1, doneW1)).toBeNull();
   });
   it("nuova fase dalla precedente: settimana 1 dal logbook reale", () => {
     const next = buildNextPhase(sample, 4, [
@@ -285,7 +291,7 @@ describe("check-up", () => {
   });
 });
 
-import { logPlan, restSeconds } from "./program/logbook";
+import { logPlan, restLabel, restSeconds } from "./program/logbook";
 import { emptyItem } from "./program/types";
 
 describe("logbook", () => {
@@ -308,6 +314,12 @@ describe("logbook", () => {
     expect(restSeconds('60-90"')).toBe(60);
     expect(restSeconds("2 min")).toBe(120);
     expect(restSeconds("camminando")).toBeNull();
+    expect(restSeconds("EMOM 2")).toBeNull();
+    expect(restLabel("EMOM 2")).toBe("EMOM 2' · riparti ogni 2 minuti");
+    expect(restLabel("EMOM 1,5")).toBe("EMOM 1,5' · riparti ogni 90 secondi");
+    expect(restLabel("emom 2,5")).toBe("EMOM 2,5' · riparti ogni 2 minuti e mezzo");
+    expect(restLabel("EMOM 1")).toBe("EMOM 1' · riparti ogni minuto");
+    expect(restLabel('90"')).toBe('Recupero 90"');
   });
 });
 
@@ -370,5 +382,21 @@ describe("whatsapp e record", () => {
     expect(r.get("squat")?.kg).toBe(85);
     expect(loadFromPercent(75, 100)).toBe(75);
     expect(loadFromPercent(73, 100)).toBe(72.5);
+  });
+});
+
+import { emptyProject, projectForAI, projectNowText } from "./project";
+
+describe("progetto annuale", () => {
+  it("riassume la fase attuale e la prossima, e il testo per l'AI", () => {
+    const p = emptyProject("2026-10");
+    p.phases = ["volume", "volume", "transition", "intensity", "intensity", "", "", "", "", "", "", ""];
+    p.rows[1].values[0] = 3;
+    expect(projectNowText(p, "2026-10-10")).toBe("Adesso volumizzazione fino a novembre, poi transizione da dicembre.");
+    expect(projectNowText(p, "2026-12-01")).toBe("Adesso transizione questo mese, poi intensificazione da gennaio.");
+    expect(projectNowText(p, "2025-01-01")).toBeNull();
+    const ai = projectForAI(p, "2026-10-10");
+    expect(ai).toContain("ottobre 2026 (adesso): fase Volumizzazione");
+    expect(ai).toContain("Forza massima alto");
   });
 });

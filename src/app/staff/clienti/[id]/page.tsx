@@ -5,7 +5,7 @@ import { getStaffClient } from "@/lib/data/client";
 import { createClient } from "@/lib/supabase/server";
 import { diffDays, formatShort, todayISO } from "@/lib/dates";
 import { parseContent } from "@/lib/program/types";
-import { completedCount, displayWeek, nextDay, programEndDate, timeProgress, weekPosition } from "@/lib/program/schedule";
+import { completedCount, displayWeek, nextWorkout, programEndDate, timeProgress, weekPosition } from "@/lib/program/schedule";
 import { summarizeSets, type SetLog } from "@/lib/program/prescription";
 import { billingStatus, formatEuro, PLAN_LABELS, type BillingRow, type PlanKind } from "@/lib/billing";
 import { CHECKIN_QUESTIONS } from "@/lib/checkin";
@@ -60,7 +60,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
     const pos = weekPosition(current.start_date, current.weeks, today);
     const done = completedCount(content, logs ?? [], current.weeks);
     const total = content.days.length * current.weeks;
-    const next = nextDay(content, week, logs ?? []);
+    const next = nextWorkout(content, current.weeks, logs ?? []);
     const end = programEndDate(current.start_date, current.weeks);
     const daysLeft = diffDays(today, end);
     programCard = (
@@ -79,11 +79,11 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
           <div className="mb-1.5 flex justify-between text-sm text-muted-dark"><span>Sessioni registrate</span><span className="tabular">{done} / {total}</span></div>
           <ProgressBar dark value={total ? (done / total) * 100 : 0} />
         </div>
-        {next && pos.state === "running" ? <div className="text-sm text-muted-dark">Prossima: <span className="text-card">{next.day.title}</span></div> : null}
+        {next && pos.state !== "not_started" ? <div className="text-sm text-muted-dark">Prossimo allenamento: <span className="text-card">settimana {next.week} · {next.day.title}</span>{next.week < week ? " (è indietro, sta recuperando)" : ""}</div> : null}
         <div className="flex flex-wrap gap-2">
           <LinkButton href={`/staff/programmi/${current.id}`} variant="light" size="sm">Apri il programma</LinkButton>
           {pos.state !== "not_started" && content.days.length ? (
-            <LinkButton href={`/staff/clienti/${id}/allenamento/${current.id}/${week}/${(next?.day ?? content.days[0]).id}`} variant="secondary" size="sm" className="!bg-transparent !text-card ring-1 ring-line-dark">Registra l&apos;allenamento</LinkButton>
+            <LinkButton href={`/staff/clienti/${id}/allenamento/${current.id}/${next?.week ?? week}/${(next?.day ?? content.days[0]).id}`} variant="secondary" size="sm" className="!bg-transparent !text-card ring-1 ring-line-dark">Registra l&apos;allenamento</LinkButton>
           ) : null}
           {pos.state !== "not_started" && daysLeft <= 10 ? <LinkButton href={`/staff/clienti/${id}/programma`} variant="secondary" size="sm" className="!bg-transparent !text-card ring-1 ring-line-dark">Prepara la prossima fase</LinkButton> : null}
         </div>

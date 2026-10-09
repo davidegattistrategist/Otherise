@@ -16,7 +16,7 @@ export type SessionData = {
   week: number;
   day: ProgramDay;
   today: string;
-  initial: { performedOn: string; completed: boolean; notes: string; items: Record<string, { sets: SetLog[]; resultText: string }>; updatedAt: string | null };
+  initial: { performedOn: string; completed: boolean; notes: string; discomfort: string; items: Record<string, { sets: SetLog[]; resultText: string }>; updatedAt: string | null };
   last: Record<string, { date: string; summary: string }>;
   lastSets: Record<string, SetLog[]>;
   records: Record<string, { e1rm: number | null; heaviest: number }>;
@@ -37,7 +37,7 @@ export async function loadSession(supabase: ServerSupabase, programId: string, w
   const today = todayISO();
   const cid = program.client_id;
 
-  const { data: log } = await supabase.from("workout_logs").select("id, performed_on, completed, notes, updated_at").eq("program_id", programId).eq("week", week).eq("day_id", dayId).maybeSingle();
+  const { data: log } = await supabase.from("workout_logs").select("id, performed_on, completed, notes, discomfort, updated_at").eq("program_id", programId).eq("week", week).eq("day_id", dayId).maybeSingle();
   const before = log?.performed_on ?? addDays(today, 1);
   const [{ data: exLogs }, { data: lastLogs }, { data: history }, checksRes, videos] = await Promise.all([
     log ? supabase.from("exercise_logs").select("item_id, sets, result_text").eq("workout_log_id", log.id) : Promise.resolve({ data: [] as Array<{ item_id: string; sets: unknown; result_text: string }> }),
@@ -84,7 +84,7 @@ export async function loadSession(supabase: ServerSupabase, programId: string, w
     week,
     day,
     today,
-    initial: { performedOn: log?.performed_on ?? today, completed: log?.completed ?? false, notes: log?.notes ?? "", items, updatedAt: log?.updated_at ?? null },
+    initial: { performedOn: log?.performed_on ?? today, completed: log?.completed ?? false, notes: log?.notes ?? "", discomfort: log?.discomfort ?? "", items, updatedAt: log?.updated_at ?? null },
     last,
     lastSets,
     records,

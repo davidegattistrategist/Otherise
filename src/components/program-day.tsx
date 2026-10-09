@@ -2,6 +2,7 @@
  * Una giornata del programma in sola lettura: blocchi (superserie, circuiti,
  * AMRAP, EMOM…), esercizi e prescrizione della settimana scelta.
  */
+import { restLabel } from "@/lib/program/logbook";
 import { blockHeading, itemLabel, type ProgramDay } from "@/lib/program/types";
 import { parsePrescription } from "@/lib/program/prescription";
 import { loadFromPercent } from "@/lib/strength/records";
@@ -62,7 +63,7 @@ export function ProgramDayView({ day, week, videos, compact, maxes }: { day: Pro
                         </span>
                       </span>
                       {!compact && (it.rest || it.notes) ? (
-                        <span className="block text-sm text-muted">{[it.rest ? `Recupero ${it.rest}` : "", it.notes].filter(Boolean).join(" · ")}</span>
+                        <span className="block text-sm text-muted">{[restLabel(it.rest), it.notes].filter(Boolean).join(" · ")}</span>
                       ) : null}
                       {!compact && video ? (
                         <a href={video} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-sm font-semibold text-accent-deep">

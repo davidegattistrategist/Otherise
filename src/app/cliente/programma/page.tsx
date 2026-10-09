@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { requireClient } from "@/lib/auth";
 import { getMyLogs, getMyMaxes, getMyPrograms, getVideoMap, type MyProgram } from "@/lib/data/me";
 import { addDays, formatShort, todayISO } from "@/lib/dates";
-import { programEndDate } from "@/lib/program/schedule";
+import { nextWorkout, programEndDate } from "@/lib/program/schedule";
 import { Card, EmptyState, Eyebrow, cx } from "@/components/ui";
 import { ProgramDayView } from "@/components/program-day";
 import { IconCheck } from "@/components/icons";
@@ -21,8 +21,11 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
   }
   const isCurrent = program.id === current?.id;
   const weekParam = Number(sp.settimana);
-  const week = Number.isInteger(weekParam) && weekParam >= 1 && weekParam <= program.weeks ? weekParam : program.week;
   const [logs, videos, maxes] = await Promise.all([getMyLogs(program.id), getVideoMap(), getMyMaxes(me.clientId)]);
+  // la settimana "di adesso" è quella del prossimo allenamento in sequenza
+  const next = isCurrent && program.position.state !== "not_started" ? nextWorkout(program.content, program.weeks, logs) : null;
+  const nowWeek = next?.week ?? program.week;
+  const week = Number.isInteger(weekParam) && weekParam >= 1 && weekParam <= program.weeks ? weekParam : nowWeek;
   const status = (dayId: string) => logs.find((l) => l.week === week && l.day_id === dayId);
   const weekStart = addDays(program.start_date, (week - 1) * 7);
   const base = `/cliente/programma?${program.id !== current?.id ? `programma=${program.id}&` : ""}settimana=`;
@@ -44,20 +47,22 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
             aria-current={w === week ? "page" : undefined}
             className={cx("flex min-h-11 shrink-0 items-center rounded-full px-4 text-sm font-semibold", w === week ? "bg-ink text-card" : "bg-card text-ink")}
           >
-            Settimana {w}{isCurrent && w === program.week ? " · ora" : ""}
+            Settimana {w}{isCurrent && w === nowWeek ? " · ora" : ""}
           </Link>
         ))}
       </nav>
-      <p className="-mt-1 text-sm text-muted">Dal {formatShort(weekStart)} al {formatShort(addDays(weekStart, 6))}. Fai le sessioni nell&apos;ordine che preferisci.</p>
+      <p className="-mt-1 text-sm leading-relaxed text-muted">
+        Dal {formatShort(weekStart)} al {formatShort(addDays(weekStart, 6))}{program.session_minutes ? ` · circa ${program.session_minutes} minuti a seduta` : ""}. Fai gli allenamenti in ordine: se ne salti uno, la volta dopo riparti da quello. Se un giorno non puoi (per esempio niente palestra), fanne un altro e recupera dopo.
+      </p>
 
       {program.content.days.map((day) => {
         const st = status(day.id);
         return (
           <Card key={day.id} className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xl font-semibold">{day.title}</h2>
+              <h2 className="text-xl font-semibold">{day.title}{next && next.week === week && next.day.id === day.id ? <span className="ml-2 align-middle rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">Prossimo</span> : null}</h2>
               {st?.completed ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1 text-xs font-semibold text-card"><IconCheck size={14} /> Fatto il {formatShort(st.performed_on)}</span>
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ink px-3 py-1 text-xs font-semibold whitespace-nowrap text-card"><IconCheck size={14} /> Fatto il {formatShort(st.performed_on)}</span>
               ) : st ? (
                 <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold">Iniziato</span>
               ) : null}

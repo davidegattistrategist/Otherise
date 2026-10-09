@@ -3,10 +3,11 @@ import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { buildTodayList, getClientsOverview, type TodayItem } from "@/lib/data/staff";
-import { formatHeading, todayISO } from "@/lib/dates";
+import { formatHeading, formatShort, todayISO } from "@/lib/dates";
 import { Card, Dot, Eyebrow, LinkButton, PageTitle } from "@/components/ui";
 import { getBillingLines } from "@/lib/data/billing";
 import { QuickPay } from "@/components/quick-pay";
+import { markDiscomfortSeen } from "./today-actions";
 
 export const metadata: Metadata = { title: "Oggi" };
 
@@ -31,7 +32,7 @@ export default async function StaffToday() {
   const me = await requireStaff();
   const supabase = await createClient();
   const today = todayISO();
-  const [clients, { data: checkins }] = await Promise.all([
+  const [clients, { data: checkins }, { data: pains }] = await Promise.all([
     getClientsOverview(supabase, me),
     supabase
       .from("checkins")
@@ -39,6 +40,13 @@ export default async function StaffToday() {
       .eq("flagged", true)
       .is("reviewed_at", null)
       .order("submitted_at", { ascending: false })
+      .limit(20),
+    supabase
+      .from("workout_logs")
+      .select("id, client_id, week, performed_on, discomfort, clients(first_name, last_name)")
+      .neq("discomfort", "")
+      .is("discomfort_seen_at", null)
+      .order("updated_at", { ascending: false })
       .limit(20),
   ]);
   const { programs, checks, training } = buildTodayList(clients, today);
@@ -72,6 +80,28 @@ export default async function StaffToday() {
             <p className="text-[15px] text-muted">Nessun check-up con problemi. Gli altri restano nella scheda dei clienti.</p>
           )}
         </Card>
+
+        {pains && pains.length > 0 ? (
+          <Card>
+            <div className="mb-3 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Dolori e fastidi</Eyebrow></div>
+            <ul className="flex flex-col">
+              {pains.map((p) => {
+                const cl = p.clients as unknown as { first_name: string; last_name: string } | null;
+                return (
+                  <li key={p.id} className="flex items-start gap-3 border-t border-sand-deep py-2.5 first:border-t-0">
+                    <Link href={`/staff/clienti/${p.client_id}`} className="min-w-0 flex-1 hover:opacity-70">
+                      <span className="block font-semibold">{cl ? `${cl.first_name} ${cl.last_name}` : "Cliente"}</span>
+                      <span className="block text-sm text-muted">{formatShort(p.performed_on)} · settimana {p.week} · “{p.discomfort.slice(0, 140)}”</span>
+                    </Link>
+                    <form action={markDiscomfortSeen.bind(null, p.id)}>
+                      <button type="submit" className="min-h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-sand-deep hover:bg-sand">Visto</button>
+                    </form>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        ) : null}
 
         <Card>
           <div className="mb-3"><Eyebrow>Programmi</Eyebrow></div>

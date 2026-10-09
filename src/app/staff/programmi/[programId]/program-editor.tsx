@@ -44,6 +44,7 @@ export type EditorProgram = {
   description: string;
   weeks: number;
   start_date: string | null;
+  session_minutes: number | null;
   status: "draft" | "published" | "archived";
   is_template: boolean;
   is_ai_example: boolean;
@@ -73,6 +74,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   const [description, setDescription] = useState(program.description);
   const [weeks, setWeeks] = useState(program.weeks);
   const [startDate, setStartDate] = useState(program.start_date ?? "");
+  const [minutes, setMinutes] = useState(program.session_minutes ? String(program.session_minutes) : "");
   const [content, setContent] = useState<ProgramContent>(() => normalizeWeeks(initialContent, program.weeks));
   const [aiNotes, setAiNotes] = useState<Record<string, string>>(program.ai_notes ?? {});
   const [updatedAt, setUpdatedAt] = useState(program.updated_at);
@@ -104,6 +106,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         description,
         weeks,
         start_date: program.is_template ? null : startDate || null,
+        session_minutes: Number(minutes) >= 10 && Number(minutes) <= 240 ? Math.round(Number(minutes)) : null,
         content,
         expected_updated_at: updatedAt,
         ai_notes: aiNotes,
@@ -118,7 +121,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         setMessage({ tone: "error", text: res.error });
       }
     });
-  }, [program.id, program.is_template, title, description, weeks, startDate, content, updatedAt, aiNotes]);
+  }, [program.id, program.is_template, title, description, weeks, startDate, minutes, content, updatedAt, aiNotes]);
 
   // Ctrl/Cmd+S salva
   const saveRef = useRef(doSave);
@@ -273,6 +276,21 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               />
             </div>
           ) : null}
+          <div>
+            <label htmlFor="minutes" className="mb-1.5 block text-sm font-semibold">
+              Tempo per seduta <span className="font-normal text-muted">minuti, facoltativo</span>
+            </label>
+            <Input
+              id="minutes"
+              inputMode="numeric"
+              placeholder="es. 60"
+              value={minutes}
+              onChange={(e) => {
+                setMinutes(e.target.value.replace(/[^0-9]/g, "").slice(0, 3));
+                setDirty(true);
+              }}
+            />
+          </div>
           <div className="[grid-column:1/-1]">
             <label htmlFor="desc" className="mb-1.5 block text-sm font-semibold">
               Note del programma <span className="font-normal text-muted">{program.is_template ? "" : "le vede il cliente"}</span>

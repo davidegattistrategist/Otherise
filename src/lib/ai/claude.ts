@@ -144,7 +144,15 @@ Regole:
 - Usa i carichi e le ripetizioni che il cliente ha fatto davvero (logbook) per decidere i carichi. Se un dato manca, non inventarlo: lascia il carico libero ("4x8/10") e scrivilo nel campo change.
 - Usa gli esercizi dell'eserciziario quando esistono (con il loro exerciseId); per esercizi nuovi metti exerciseId null.
 - Ogni esercizio ha esattamente una prescrizione per settimana (array lungo quanto "weeks"). Per gli stretching e i lavori posturali va bene la stessa prescrizione tutte le settimane.
-- Tieni conto di fastidi, infortuni e note posturali: in caso di dubbio scegli l'opzione più prudente e segnalalo nel campo change.
+- Note posturali e infortuni noti: tienine conto nella scelta degli esercizi.
+- Dolori o fastidi recenti (logbook, check-up, note): NON cambiare il programma di tua iniziativa per questo motivo. Decide il trainer: segnalali nel riassunto. Se la richiesta del trainer dice cosa fare, segui quella.
+- Non proporre mai di tua iniziativa settimane di scarico, programmi estivi o "da viaggio", fasi di reset o test: li inserisci solo se il trainer lo chiede.
+- Se c'è un progetto annuale, segui la fase prevista per il mese: intensificazione = aumentano soprattutto i carichi; volumizzazione = aumentano soprattutto serie e ripetizioni; transizione = fase breve di passaggio. Rispetta anche quanto spingere sugli stimoli (forza, aerobico, Vo2Max…).
+- La durata della fase è quella del programma (dipende dal piano del cliente): non cambiarla se il trainer non lo chiede.
+- Se è indicato il tempo per seduta, ogni giornata deve starci dentro.
+- Complementari: di solito un intervallo di ripetizioni ("4x8/10") con il carico scelto dal cliente, che sale quando completa il massimo delle ripetizioni in tutte le serie.
+- Non usare RPE o RIR nelle prescrizioni, salvo richiesta del trainer (al massimo nelle indicazioni).
+- Non indicare giorni della settimana: gli allenamenti si fanno in sequenza.
 - Scrivi tutto in italiano.`;
 
 function client() {
@@ -189,23 +197,69 @@ export type ReviseInput = {
   exercises: Array<{ id: string; name: string }>;
   clientContext: string;
   current: { title: string; description: string; weeks: number; content: ProgramContent };
+  sessionMinutes?: number | null;
+  answers?: Array<{ question: string; answer: string }>;
   images?: AiImage[];
 };
 
-export async function reviseProgram(input: ReviseInput) {
+function contextText(input: ReviseInput) {
   const exerciseList = input.exercises.map((e) => `${e.id} | ${e.name}`).join("\n");
-  const userText = [
+  return [
     `# Metodo del trainer\n${input.method || "(Il trainer non ha ancora scritto il suo metodo: ricavalo dagli esempi e dai programmi precedenti.)"}`,
     input.examples.length ? `# Esempi di programmi scritti dal trainer\n${input.examples.join("\n\n")}` : "",
     `# Eserciziario (id | nome)\n${exerciseList}`,
     `# Dati del cliente\n${input.clientContext}`,
     `# Programma attuale (JSON) da cui partire\n${JSON.stringify({ title: input.current.title, description: input.current.description, weeks: input.current.weeks, days: input.current.content.days })}`,
+    input.sessionMinutes ? `# Tempo a disposizione per seduta\n${input.sessionMinutes} minuti` : "",
     input.images?.length ? "# Allegati\nIn allegato ci sono immagini con i risultati dei test o appunti del trainer." : "",
     `# Richiesta del trainer\n${input.instruction}`,
-    "Restituisci il programma completo aggiornato.",
+    input.answers?.length ? `# Risposte del trainer alle tue domande\n${input.answers.map((a) => `- ${a.question} → ${a.answer}`).join("\n")}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+const QUESTIONS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["questions"],
+  properties: {
+    questions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["question", "options"],
+        properties: { question: { type: "string" }, options: { type: "array", items: { type: "string" } } },
+      },
+    },
+  },
+} as const;
+
+const QUESTIONS_SYSTEM = `Sei l'assistente di programmazione di un personal trainer italiano. Prima di preparare la bozza di un programma controlli se ti manca qualcosa di importante per farla bene.
+Regole:
+- Fai da 1 a 5 domande SOLO se ti manca un'informazione che cambia davvero il programma (per esempio il passo di corsa di partenza, i carichi di un test, quanti giorni a settimana, il tempo per seduta, il focus della fase, cosa fare con un fastidio segnalato).
+- Se hai già tutto nei dati o nella richiesta, restituisci zero domande.
+- Domande brevi, mirate, facili da rispondere: quando puoi proponi 2-4 risposte pronte (options), altrimenti options vuoto.
+- Non chiedere cose già scritte nei dati del cliente, nel metodo o nella richiesta.
+- In italiano, dando del tu al trainer.`;
+
+/** Da 0 a 5 domande al trainer prima di preparare la bozza. */
+export async function askQuestions(input: ReviseInput) {
+  const userText = `${contextText(input)}\n\nDecidi se ti servono domande prima di preparare la bozza.`;
+  const { json, usage } = await runJson(QUESTIONS_SYSTEM, userText, QUESTIONS_SCHEMA as unknown as Record<string, unknown>, input.images, 2000);
+  const parsed = z
+    .object({ questions: z.array(z.object({ question: z.string(), options: z.array(z.string()) })) })
+    .parse(json);
+  const questions = parsed.questions
+    .filter((q) => q.question.trim())
+    .slice(0, 5)
+    .map((q) => ({ question: q.question.trim().slice(0, 300), options: q.options.map((o) => o.trim()).filter(Boolean).slice(0, 4) }));
+  return { questions, usage };
+}
+
+export async function reviseProgram(input: ReviseInput) {
+  const userText = `${contextText(input)}\n\nRestituisci il programma completo aggiornato.`;
 
   const { json, usage } = await runJson(SYSTEM, userText, PROGRAM_JSON_SCHEMA as unknown as Record<string, unknown>, input.images);
   const parsed = aiProgramSchema.parse(json);

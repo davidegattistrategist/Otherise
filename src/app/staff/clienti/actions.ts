@@ -22,6 +22,7 @@ const clientSchema = z.object({
   goals: z.string().trim().default(""),
   start_date: z.string().refine((v) => v === "" || isISODate(v), "Data di inizio non valida").transform((v) => v || todayISO()),
   weekly_checkin: z.preprocess((v) => v === "on" || v === "true", z.boolean()),
+  phase_weeks: z.coerce.number().int().min(2, "Durata delle fasi non valida").max(12, "Durata delle fasi non valida"),
 });
 
 function readClientForm(fd: FormData) {
@@ -35,6 +36,7 @@ function readClientForm(fd: FormData) {
     goals: fd.get("goals") ?? "",
     start_date: fd.get("start_date") ?? "",
     weekly_checkin: fd.get("weekly_checkin") ?? "",
+    phase_weeks: fd.get("phase_weeks") || 4,
   });
 }
 

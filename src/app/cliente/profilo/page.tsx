@@ -10,6 +10,8 @@ import { PasswordForm } from "@/components/password-form";
 import { IconLogout } from "@/components/icons";
 import { signOut } from "@/app/login/actions";
 import { PrivacyCard } from "./privacy-card";
+import { ProjectTimeline } from "@/components/project-timeline";
+import { parseProject } from "@/lib/project";
 
 export const metadata: Metadata = { title: "Percorso" };
 
@@ -25,6 +27,8 @@ export default async function ClientProfilePage() {
     getMyPrograms(me.clientId),
     supabase.rpc("my_pt_session_dates"),
   ]);
+  const { data: projectRow } = await supabase.from("client_projects").select("data").eq("client_id", me.clientId).maybeSingle();
+  const project = parseProject(projectRow?.data);
   const row = (billing as BillingRow[] | null)?.[0];
   const pay = row ? billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7) : null;
   const phases = [current, upcoming, ...past].filter(Boolean).length;
@@ -42,6 +46,15 @@ export default async function ClientProfilePage() {
         </div>
         <p className="text-sm text-muted-dark">Ti segue {coach ?? "il tuo coach"} · dal {client ? formatLong(client.start_date) : "—"}</p>
       </Card>
+
+      {project ? (
+        <Card id="progetto" className="flex scroll-mt-6 flex-col gap-3">
+          <Eyebrow>Il tuo progetto</Eyebrow>
+          {project.goal.trim() ? <p className="text-lg leading-snug font-semibold">{project.goal}</p> : null}
+          <p className="text-sm text-muted">Come si susseguiranno le fasi nei prossimi mesi e su cosa lavoreremo di più. Il mese in corso è evidenziato.</p>
+          <ProjectTimeline project={project} today={today} />
+        </Card>
+      ) : null}
 
       {current ? (
         <Card className="flex flex-col gap-2">

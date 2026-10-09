@@ -33,7 +33,9 @@ async function user(email: string, fullName: string) {
   return data.user.id;
 }
 
-const item = (name: string, rx: string[], rest = "", notes = "") => ({ id: newId(), exerciseId: null, name, rest, notes, prescriptions: rx });
+// nome esercizio (minuscolo) → id nell'eserciziario, riempita dopo l'import
+const exerciseIds = new Map<string, string>();
+const item = (name: string, rx: string[], rest = "", notes = "") => ({ id: newId(), exerciseId: exerciseIds.get(name.toLowerCase()) ?? null, name, rest, notes, prescriptions: rx });
 
 function programA(): ProgramContent {
   return {
@@ -50,7 +52,7 @@ function programA(): ProgramContent {
       {
         id: newId(), title: "Giorno 2 · Tirata e core", notes: "",
         blocks: [
-          { id: newId(), kind: "single", title: "", notes: "", rounds: null, durationMin: null, everySec: null, workSec: null, restSec: null, items: [item("Stacco rumeno", ["4x8 50kg", "4x9 50kg", "4x10 50kg", "4x8 55kg"], "2'")] },
+          { id: newId(), kind: "single", title: "", notes: "", rounds: null, durationMin: null, everySec: null, workSec: null, restSec: null, items: [item("Stacco rumeno", ["4x8 50kg", "4x9 50kg", "4x10 50kg", "4x8 55kg"], "EMOM 2,5")] },
           { id: newId(), kind: "single", title: "", notes: "", rounds: null, durationMin: null, everySec: null, workSec: null, restSec: null, items: [item("Lat machine presa neutra", ["3x10", "3x10", "3x12", "3x12"], "90\"", "Petto alto, gomiti verso i fianchi")] },
           { id: newId(), kind: "single", title: "", notes: "", rounds: null, durationMin: null, everySec: null, workSec: null, restSec: null, items: [item("Panca piana bilanciere", ["4x6 @75%", "4x6 @77,5%", "4x5 @80%", "4x5 @82,5%"], "2'", "Carico calcolato dal tuo massimale")] },
           { id: newId(), kind: "amrap", title: "", notes: "Annota i giri completati", rounds: null, durationMin: 10, everySec: null, workSec: null, restSec: null, items: [item("Box step-up", ["10", "10", "10", "10"]), item("Push-up", ["8", "8", "10", "10"]), item("Hollow hold", ["20\"", "20\"", "25\"", "25\""])] },
@@ -88,6 +90,15 @@ async function main() {
   // Eserciziario
   const { rows } = parseExerciseCsv(readFileSync(new URL("../dati/eserciziario.csv", import.meta.url), "utf8"));
   await db.from("exercises").insert(rows.map((r) => ({ name: r.name, video_url: r.video_url, description: r.description })));
+  // gli esercizi dei programmi di prova che non sono nell'eserciziario vengono aggiunti (senza video)
+  const used = [...new Set(programA().days.flatMap((d) => d.blocks.flatMap((b) => b.items.map((i) => i.name))))];
+  const { data: lib } = await db.from("exercises").select("id, name");
+  for (const e of lib ?? []) exerciseIds.set(e.name.toLowerCase(), e.id);
+  const missing = used.filter((n) => !exerciseIds.has(n.toLowerCase()));
+  if (missing.length) {
+    const { data: added } = await db.from("exercises").insert(missing.map((name) => ({ name, description: "" }))).select("id, name");
+    for (const e of added ?? []) exerciseIds.set(e.name.toLowerCase(), e.id);
+  }
 
   // Clienti (inventati). Giulia ha dato il consenso nell'app, Luca su carta, Sara non ancora.
   const consentAt = new Date(Date.now() - 150 * 86400000).toISOString();
@@ -109,7 +120,10 @@ async function main() {
   const { data: past } = await db.from("programs").insert({ client_id: giulia, title: "Fase 1 · Adattamento", weeks: 4, start_date: addDays(start, -28), status: "archived", content: pastContent as never, created_by: owner, published_at: new Date().toISOString() }).select("id").single().throwOnError();
   const content = programA();
   const { data: current } = await db.from("programs").insert({ client_id: giulia, title: "Fase 2 · Volume", description: "Quattro settimane di volume crescente. Se un carico è troppo facile, aumentalo e scrivilo nel logbook.", weeks: 4, start_date: start, status: "published", content: content as never, previous_program_id: past!.id, created_by: owner, published_at: new Date().toISOString(), is_ai_example: true }).select("id").single().throwOnError();
-  await db.from("programs").insert({ client_id: luca, title: "Rientro · Fase 1", weeks: 4, start_date: addDays(mondayOf(today), -21), status: "published", content: programA() as never, created_by: coach, published_at: new Date().toISOString() });
+  const lucaContent = programA();
+  const { data: lucaProgram } = await db.from("programs").insert({ client_id: luca, title: "Rientro · Fase 1", weeks: 4, start_date: addDays(mondayOf(today), -21), status: "published", content: lucaContent as never, created_by: coach, published_at: new Date().toISOString() }).select("id").single().throwOnError();
+  // Luca segnala un fastidio nel logbook: compare al trainer in "Oggi"
+  await db.from("workout_logs").insert({ client_id: luca, program_id: lucaProgram!.id, day_id: lucaContent.days[0].id, week: 1, performed_on: addDays(today, -1), completed: true, notes: "", discomfort: "Fastidio al ginocchio destro negli affondi camminati, dalla seconda serie" });
   await db.from("programs").insert({ client_id: sara, title: "Base aerobica (bozza)", weeks: 6, status: "draft", content: programA() as never, created_by: owner });
   await db.from("programs").insert({ client_id: null, is_template: true, title: "Modello · Total body 3 giorni", weeks: 4, content: programA() as never, created_by: owner });
 
@@ -179,6 +193,51 @@ async function main() {
   await db.from("payments").insert({ client_id: luca, plan_id: pl!.id, paid_on: addDays(today, -60), amount: 400, method: "cash", sessions: 10, created_by: owner });
   const { data: ps } = await db.from("payment_plans").insert({ client_id: sara, kind: "monthly", amount: 180, method: "paypal", start_date: addDays(today, -40) }).select("id").single();
   await db.from("payments").insert({ client_id: sara, plan_id: ps!.id, paid_on: addDays(today, -40), amount: 180, method: "paypal", period_start: addDays(today, -40), period_end: addDays(today, -10), created_by: owner });
+  // Altri clienti senza app (inventati), per avere un anno di incassi realistico
+  const { data: extra } = await db.from("clients").insert([
+    { first_name: "Marta", last_name: "Demo", sex: "F", email: "marta@prova.local", goals: "Tonificare e correre 10 km.", start_date: addDays(today, -330), phase_weeks: 6, ...consent("paper") },
+    { first_name: "Paolo", last_name: "Esempio", sex: "M", goals: "Preparazione HYROX.", start_date: addDays(today, -300), ...consent("paper") },
+  ], { defaultToNull: false }).select("id, first_name").throwOnError();
+  const marta = extra!.find((c) => c.first_name === "Marta")!.id;
+  const paolo = extra!.find((c) => c.first_name === "Paolo")!.id;
+  const { data: pm } = await db.from("payment_plans").insert({ client_id: marta, kind: "monthly", amount: 160, method: "transfer", start_date: addDays(today, -330) }).select("id").single();
+  const monthly = [];
+  for (let k = 0; k < 11; k++) {
+    const from = addDays(today, -330 + k * 30);
+    monthly.push({ client_id: marta, plan_id: pm!.id, paid_on: from, amount: 160, method: "transfer" as const, period_start: from, period_end: addDays(from, 29), created_by: owner });
+  }
+  await db.from("payments").insert(monthly);
+  const { data: pp } = await db.from("payment_plans").insert({ client_id: paolo, kind: "six_weeks", amount: 260, method: "card", start_date: addDays(today, -300) }).select("id").single();
+  const blocks = [];
+  for (let k = 0; k < 8; k++) {
+    const from = addDays(today, -300 + k * 42);
+    blocks.push({ client_id: paolo, plan_id: pp!.id, paid_on: from, amount: 260, method: "card" as const, period_start: from, period_end: addDays(from, 41), created_by: owner });
+  }
+  await db.from("payments").insert(blocks);
+
+
+  // Progetto annuale di Giulia (visibile): fasi e stimoli mese per mese
+  const startMonth = today.slice(0, 7);
+  const lv = (...v: number[]) => v;
+  await db.from("client_projects").insert({
+    client_id: giulia,
+    visible: true,
+    updated_by: owner,
+    data: {
+      start: startMonth,
+      goal: "Più forza nelle gambe, schiena senza fastidi e una 10 km in primavera",
+      phases: ["volume", "volume", "transition", "intensity", "intensity", "transition", "volume", "volume", "intensity", "free", "free", "transition"],
+      notes: ["", "", "Natale: 2 sedute", "", "", "10 km", "", "", "", "Vacanze", "", ""],
+      rows: [
+        { id: "d0", label: "Posturale", kind: "training", values: lv(2, 2, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2) },
+        { id: "d1", label: "Forza massima", kind: "training", values: lv(1, 1, 1, 3, 3, 2, 1, 1, 3, 0, 0, 1) },
+        { id: "d2", label: "Massa magra", kind: "training", values: lv(3, 3, 2, 1, 1, 1, 3, 3, 1, 1, 1, 2) },
+        { id: "d3", label: "Aerobico", kind: "training", values: lv(1, 1, 2, 2, 3, 3, 1, 1, 1, 2, 2, 1) },
+        { id: "d4", label: "Vo2Max", kind: "training", values: lv(0, 0, 1, 2, 2, 3, 0, 0, 1, 1, 1, 0) },
+        { id: "d5", label: "Alimentazione", kind: "nutrition", values: lv(2, 2, 2, 1, 1, 2, 2, 3, 3, 2, 2, 2) },
+      ],
+    },
+  }).throwOnError();
 
   // Check-up di Giulia: tre settimane tranquille, l'ultima con un problema
   const weeks = [-21, -14, -7].map((d) => mondayOf(addDays(today, d)));

@@ -8,6 +8,7 @@ import type { ServerSupabase } from "../supabase/server";
 import { addDays, ageOn, todayISO } from "../dates";
 import { blockSummary, BLOCK_KIND_LABELS, itemLabel, parseContent, type ProgramContent } from "../program/types";
 import { summarizeSets, type SetLog } from "../program/prescription";
+import { parseProject, projectForAI } from "../project";
 
 /** Programma in testo leggibile e compatto (per esempi e storico). */
 export function programToText(title: string, weeks: number, content: ProgramContent): string {
@@ -34,21 +35,26 @@ export const AI_OPT_OUT_MESSAGE = "Questo cliente ha chiesto di non usare l'assi
 export async function buildClientContext(supabase: ServerSupabase, clientId: string, excludeProgramId?: string) {
   const today = todayISO();
   const since = addDays(today, -16 * 7);
-  const [client, programs, logs, checks, posture, checkins, pt] = await Promise.all([
-    supabase.from("clients").select("sex, birth_date, goals, start_date").eq("id", clientId).single(),
+  const [client, programs, logs, checks, posture, checkins, pt, project] = await Promise.all([
+    supabase.from("clients").select("sex, birth_date, goals, start_date, phase_weeks").eq("id", clientId).single(),
     supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", clientId).neq("status", "draft").order("start_date", { ascending: false }).limit(3),
     supabase.from("exercise_logs").select("exercise_name, performed_on, week, sets, result_text").eq("client_id", clientId).gte("performed_on", since).order("performed_on"),
     supabase.from("checks").select("check_date, weight_kg, body_fat_pct, lean_mass_kg, fat_mass_kg, circumferences, strength_tests, tests_text, notes_next_phase").eq("client_id", clientId).order("check_date", { ascending: false }).limit(3),
     supabase.from("posture_assessments").select("assessed_on, tight_muscles, what_works, posture_work, notes").eq("client_id", clientId).order("assessed_on", { ascending: false }).limit(2),
     supabase.from("checkins").select("week_start, training, sleep, stress, adherence, issues, request").eq("client_id", clientId).order("week_start", { ascending: false }).limit(4),
     supabase.from("pt_sessions").select("session_date, notes").eq("client_id", clientId).order("session_date", { ascending: false }).limit(6),
+    supabase.from("client_projects").select("data").eq("client_id", clientId).maybeSingle(),
   ]);
 
   const parts: string[] = [];
   const c = client.data;
   if (c) {
     const age = ageOn(c.birth_date, today);
-    parts.push(`## Cliente\nSesso: ${c.sex === "F" ? "donna" : "uomo"}${age ? `, ${age} anni` : ""}. In percorso dal ${c.start_date}.\nObiettivi: ${c.goals || "non indicati"}`);
+    parts.push(`## Cliente\nSesso: ${c.sex === "F" ? "donna" : "uomo"}${age ? `, ${age} anni` : ""}. In percorso dal ${c.start_date}.\nObiettivi: ${c.goals || "non indicati"}\nDurata delle fasi del suo piano: ${c.phase_weeks} settimane.`);
+  }
+  const plan = parseProject(project.data?.data);
+  if (plan) {
+    parts.push(`## Progetto annuale scritto dal trainer (segui la fase e gli stimoli del mese)\n${projectForAI(plan, today)}`);
   }
 
   const past = (programs.data ?? []).filter((p) => p.id !== excludeProgramId);

@@ -22,6 +22,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
   const tabs = [
     { href: base, label: "Panoramica", exact: true },
     { href: `${base}/programma`, label: "Programma" },
+    { href: `${base}/progetto`, label: "Progetto" },
     { href: `${base}/sessioni`, label: "Sessioni PT" },
     { href: `${base}/check`, label: "Check" },
     { href: `${base}/posturale`, label: "Posturale" },

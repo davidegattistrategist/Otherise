@@ -38,6 +38,10 @@ App per personal trainer: staff (titolare + collaboratori) gestisce clienti, pro
 - Pagamenti rapidi, WhatsApp e incassi: `src/lib/data/billing.ts`, `src/lib/whatsapp.ts`, `src/components/quick-pay.tsx`, export CSV in `/api/pagamenti/export`.
 - AI: bozza/modifica programma `/api/ai/program`, riassunto check-up `/api/ai/checkin`, tetto di spesa in `src/lib/ai/budget.ts`.
 - Privacy: informativa in `src/components/privacy-notice.tsx` (pagina pubblica `/privacy`, modulo cartaceo `/privacy/modulo`), versione in `src/lib/privacy.ts` (`PRIVACY_VERSION`: se cambi il testo in modo sostanziale aumentala, ai clienti viene richiesta la conferma). Il cliente senza consenso viene mandato a `/consenso` dal layout `src/app/cliente/layout.tsx`. Consensi del cliente solo tramite le funzioni SQL `accept_privacy`, `withdraw_health_consent`, `set_ai_opt_out`. Con `clients.ai_opt_out` le rotte AI rifiutano (`AI_OPT_OUT_MESSAGE`). Export dati cliente: `/api/clienti/[id]/export` (solo titolare).
+- Progetto annuale del cliente: tabella `client_projects` (JSON validato da `src/lib/project.ts`), editor in `src/app/staff/clienti/[id]/progetto/`, timeline `src/components/project-timeline.tsx`; il cliente lo legge solo se `visible`. L'AI lo riceve in `buildClientContext`.
+- Prossimo allenamento in sequenza (mai giorni fissi): `nextWorkout` in `src/lib/program/schedule.ts`. Durata fasi del cliente: `clients.phase_weeks`; tempo per seduta: `programs.session_minutes`.
+- Dolori nel logbook: `workout_logs.discomfort` (+ `discomfort_seen_at`), avviso allo staff in `src/components/logbook/actions.ts`, card "Dolori e fastidi" in Oggi. L'AI non interviene sui dolori (regole in `SYSTEM` di `src/lib/ai/claude.ts`).
+- Domande dell'AI prima della bozza: `askQuestions` (mode "questions" in `/api/ai/program`), da 0 a 5.
 - Pacchetti chiusi a mano: `payment_plans.sessions_written_off` (sommate alle usate in `client_billing`/`billing_overview`).
 - Variabili d'ambiente: vedi `docs/GUIDA-INSTALLAZIONE.md` passo 5.
 

@@ -11,6 +11,7 @@ export type MyProgram = {
   title: string;
   description: string;
   weeks: number;
+  session_minutes: number | null;
   start_date: string;
   status: string;
   content: ProgramContent;
@@ -24,7 +25,7 @@ export const getMyPrograms = cache(async (clientId: string) => {
   const today = todayISO();
   const { data } = await supabase
     .from("programs")
-    .select("id, title, description, weeks, start_date, status, content")
+    .select("id, title, description, weeks, session_minutes, start_date, status, content")
     .eq("client_id", clientId)
     .in("status", ["published", "archived"])
     .order("start_date", { ascending: false });

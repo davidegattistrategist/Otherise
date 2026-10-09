@@ -231,4 +231,26 @@ describe.skipIf(!run)("permessi", () => {
     // chi non è cliente non può usare le funzioni dei consensi
     expect((await stranger.rpc("accept_privacy", { version: "test" })).error).not.toBeNull();
   });
+  it("progetto annuale: lo scrive lo staff, il cliente lo vede solo se visibile e non lo cambia", async () => {
+    const data = { start: "2026-10", goal: "", phases: Array(12).fill("volume"), notes: Array(12).fill(""), rows: [] };
+    await coach.from("client_projects").upsert({ client_id: clientAId, data, visible: false }).throwOnError();
+    expect((await clientA.from("client_projects").select("data")).data).toEqual([]);
+    await coach.from("client_projects").update({ visible: true }).eq("client_id", clientAId).throwOnError();
+    expect((await clientA.from("client_projects").select("client_id")).data).toHaveLength(1);
+    // il cliente non può modificarlo, gli estranei non lo vedono, il collaboratore non tocca clienti non suoi
+    await clientA.from("client_projects").update({ data: { ...data, goal: "x" } }).eq("client_id", clientAId);
+    const { data: still } = await admin.from("client_projects").select("data").eq("client_id", clientAId).single();
+    expect((still!.data as { goal: string }).goal).toBe("");
+    expect((await stranger.from("client_projects").select("*")).data).toEqual([]);
+    expect((await coach.from("client_projects").insert({ client_id: clientBId, data })).error).not.toBeNull();
+  });
+
+  it("dolori nel logbook: il cliente li scrive, il check-up con fastidi avvisa lo staff", async () => {
+    await clientA.from("workout_logs").upsert({ client_id: clientAId, program_id: publishedId, day_id: "d1", week: 1, discomfort: "ginocchio" }, { onConflict: "program_id,week,day_id" }).throwOnError();
+    const { data: wl } = await coach.from("workout_logs").select("discomfort").eq("program_id", publishedId).single();
+    expect(wl!.discomfort).toBe("ginocchio");
+    const { data: ci } = await clientA.from("checkins").insert({ client_id: clientAId, week_start: "2026-11-02", training: 4, sleep: 4, stress: 4, adherence: 4, issues: "mal di schiena" }).select("flagged, flag_reasons").single().throwOnError();
+    expect(ci!.flagged).toBe(true);
+    expect(ci!.flag_reasons).toContain("Fastidi");
+  });
 });

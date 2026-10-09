@@ -51,6 +51,8 @@ create table public.clients (
   status text not null default 'active' check (status in ('active', 'paused', 'archived')),
   start_date date not null default current_date,
   weekly_checkin boolean not null default false,
+  -- Durata delle fasi (dipende dal piano: check ogni 4 o ogni 6 settimane)
+  phase_weeks int not null default 4 check (phase_weeks between 2 and 12),
   -- Privacy: informativa letta e consenso esplicito per i dati sulla salute
   privacy_accepted_at timestamptz,
   privacy_version text,
@@ -138,6 +140,8 @@ create table public.programs (
   description text not null default '',
   start_date date,
   weeks int not null default 4 check (weeks between 1 and 12),
+  -- Tempo a disposizione per seduta, in minuti (facoltativo)
+  session_minutes int check (session_minutes is null or session_minutes between 10 and 240),
   status text not null default 'draft' check (status in ('draft', 'published', 'archived')),
   content jsonb not null default '{"days": []}'::jsonb,
   previous_program_id uuid references public.programs (id) on delete set null,
@@ -167,6 +171,9 @@ create table public.workout_logs (
   performed_on date not null default current_date,
   completed boolean not null default false,
   notes text not null default '',
+  -- Dolore o fastidio segnalato dal cliente: avvisa lo staff (non l'AI)
+  discomfort text not null default '',
+  discomfort_seen_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (program_id, week, day_id)
@@ -667,6 +674,7 @@ begin
     if prev.stress - new.stress >= 2 and not ('Stress' = any(reasons)) then reasons := array_append(reasons, 'Stress in calo'); end if;
     if prev.adherence - new.adherence >= 2 and not ('Percorso' = any(reasons)) then reasons := array_append(reasons, 'Percorso in calo'); end if;
   end if;
+  if length(trim(new.issues)) > 0 then reasons := array_append(reasons, 'Fastidi'); end if;
   if length(trim(new.request)) > 0 then reasons := array_append(reasons, 'Richiesta'); end if;
 
   new.flagged := cardinality(reasons) > 0;
@@ -674,7 +682,7 @@ begin
   return new;
 end $$;
 
-create trigger checkins_flag before insert or update of training, sleep, stress, adherence, request
+create trigger checkins_flag before insert or update of training, sleep, stress, adherence, issues, request
   on public.checkins for each row execute function public.flag_checkin();
 
 -- Chi deve ricevere le notifiche su un cliente: titolare + collaboratore assegnato
@@ -915,6 +923,25 @@ begin
     on conflict (id) do nothing;
   end if;
 end $$;
+
+-- =====================================================================
+-- Progetto annuale del cliente (lo "studio progettuale"): per ogni mese la
+-- fase prevista e quanto spingere ogni stimolo (0-3). Lo scrive lo staff;
+-- il cliente lo vede solo quando è segnato come visibile.
+-- =====================================================================
+create table public.client_projects (
+  client_id uuid primary key references public.clients (id) on delete cascade,
+  data jsonb not null default '{}'::jsonb,
+  visible boolean not null default false,
+  updated_by uuid references public.profiles (id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+alter table public.client_projects enable row level security;
+create policy client_projects_staff on public.client_projects for all to authenticated
+  using (public.can_manage_client(client_id)) with check (public.can_manage_client(client_id));
+create policy client_projects_client on public.client_projects for select to authenticated
+  using (public.is_client_self(client_id) and visible);
+create trigger client_projects_touch before update on public.client_projects for each row execute function public.touch_updated_at();
 
 -- =====================================================================
 -- Privacy: consensi del cliente

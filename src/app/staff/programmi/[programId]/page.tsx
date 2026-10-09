@@ -17,7 +17,7 @@ export default async function ProgramEditorPage({ params }: { params: Promise<{ 
   const supabase = await createClient();
   const { data: program } = await supabase
     .from("programs")
-    .select("id, title, description, weeks, start_date, status, is_template, is_ai_example, updated_at, client_id, source, ai_notes, content, clients(first_name, last_name)")
+    .select("id, title, description, weeks, start_date, session_minutes, status, is_template, is_ai_example, updated_at, client_id, source, ai_notes, content, clients(first_name, last_name)")
     .eq("id", programId)
     .maybeSingle();
   if (!program) notFound();

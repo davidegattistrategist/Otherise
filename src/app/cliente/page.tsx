@@ -4,7 +4,7 @@ import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getMyLogs, getMyPrograms } from "@/lib/data/me";
 import { diffDays, formatHeading, formatLong, formatShort, todayISO } from "@/lib/dates";
-import { completedCount, nextDay, programEndDate, timeProgress } from "@/lib/program/schedule";
+import { completedCount, nextWorkout, programEndDate, timeProgress } from "@/lib/program/schedule";
 import { blockHeading } from "@/lib/program/types";
 import { billingStatus, type BillingRow, type PlanKind } from "@/lib/billing";
 import { checkinWeekFor } from "@/lib/checkin";
@@ -40,17 +40,18 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
   const lastCheck = checks?.length ? checks[checks.length - 1] : null;
   const firstCheck = checks?.length ? checks[0] : null;
 
-  let next: ReturnType<typeof nextDay> = null;
+  let next: ReturnType<typeof nextWorkout> = null;
   let done = 0;
   let total = 0;
   if (current) {
-    next = current.position.state === "running" ? nextDay(current.content, current.week, logs) : null;
+    // in sequenza: se ha saltato un allenamento riparte da quello
+    next = current.position.state !== "not_started" ? nextWorkout(current.content, current.weeks, logs) : null;
     done = completedCount(current.content, logs, current.weeks);
     total = current.content.days.length * current.weeks;
   }
   const end = current ? programEndDate(current.start_date, current.weeks) : null;
   const daysLeft = end ? diffDays(today, end) : null;
-  const inProgress = current && next ? logs.find((l) => l.week === current.week && l.day_id === next!.day.id && !l.completed) : null;
+  const inProgress = current && next ? logs.find((l) => l.week === next!.week && l.day_id === next!.day.id && !l.completed) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -75,21 +76,24 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
         <Card dark className="flex flex-col gap-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <Eyebrow dark>{next ? (inProgress ? "Da finire" : "Prossima sessione") : current.position.state === "not_started" ? "Si parte presto" : current.position.state === "finished" ? "Fase conclusa" : "Settimana completata"}</Eyebrow>
+              <Eyebrow dark>{next ? (inProgress ? `Da finire · settimana ${next.week}` : `Prossimo allenamento · settimana ${next.week}`) : current.position.state === "not_started" ? "Si parte presto" : "Fase completata"}</Eyebrow>
               <div className="mt-2 text-[26px] leading-tight font-semibold">
-                {next ? next.day.title : current.position.state === "not_started" ? `Il ${formatLong(current.start_date)}` : current.position.state === "finished" ? "Ottimo lavoro" : "Riposo meritato"}
+                {next ? next.day.title : current.position.state === "not_started" ? `Il ${formatLong(current.start_date)}` : "Ottimo lavoro"}
               </div>
               <div className="mt-1 text-sm text-muted-dark">
                 {next
                   ? next.day.blocks.filter((b) => b.kind !== "text").slice(0, 4).map((b) => (b.kind === "single" ? b.items[0]?.name : `${blockHeading(b).title} ${blockHeading(b).detail}`.trim())).filter(Boolean).join(" · ")
-                  : current.position.state === "finished" ? `${coach ?? "Il tuo coach"} sta preparando la prossima fase.` : current.position.state === "not_started" ? current.title : "La prossima sessione arriva lunedì con la nuova settimana."}
+                  : current.position.state === "not_started" ? current.title : `Hai fatto tutti gli allenamenti della fase. ${coach ?? "Il tuo coach"} sta preparando la prossima.`}
               </div>
             </div>
           </div>
           {next ? (
-            <LinkButton href={`/cliente/sessione/${current.id}/${current.week}/${next.day.id}`} variant="light" className="w-full justify-center sm:w-auto">
-              <IconPlay size={18} /> {inProgress ? "Riprendi l'allenamento" : "Inizia l'allenamento"}
-            </LinkButton>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+              <LinkButton href={`/cliente/sessione/${current.id}/${next.week}/${next.day.id}`} variant="light" className="w-full justify-center sm:w-auto">
+                <IconPlay size={18} /> {inProgress ? "Riprendi l'allenamento" : "Inizia l'allenamento"}
+              </LinkButton>
+              <Link href={`/cliente/programma?settimana=${next.week}`} className="text-center text-sm font-semibold text-muted-dark underline">Oggi non puoi? Scegli un altro allenamento</Link>
+            </div>
           ) : (
             <ArrowCTA href="/cliente/programma" dark>Vedi il programma</ArrowCTA>
           )}
