@@ -144,7 +144,7 @@ describe("pagamenti", () => {
     expect(suggestNextPeriod("package", "2026-01-01", null)).toBeNull();
   });
   it("stati", () => {
-    const base = { plan_id: "p", amount: 600, sessions_bought: 0, sessions_used: 0 };
+    const base = { plan_id: "p", amount: 600, sessions_bought: 0, sessions_used: 0, paid_until: null as string | null };
     expect(billingStatus({ ...base, kind: "quarterly", paid_until: "2026-11-01" }, "2026-10-09").state).toBe("ok");
     const soon = billingStatus({ ...base, kind: "quarterly", paid_until: "2026-10-14" }, "2026-10-09");
     expect(soon.state).toBe("due_soon");

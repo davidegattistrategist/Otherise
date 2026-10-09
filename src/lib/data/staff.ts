@@ -1,0 +1,123 @@
+import "server-only";
+import type { ServerSupabase } from "../supabase/server";
+import type { Me } from "../auth";
+import { billingStatus, type BillingRow, type BillingStatus, type PlanKind } from "../billing";
+import { addDays, diffDays, todayISO, type ISODate } from "../dates";
+import { displayWeek, programEndDate, weekPosition } from "../program/schedule";
+
+export type ClientRow = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  sex: "M" | "F";
+  status: string;
+  coach_id: string | null;
+  user_id: string | null;
+  weekly_checkin: boolean;
+  birth_date: string | null;
+};
+
+export type ClientOverview = ClientRow & {
+  fullName: string;
+  coachName: string | null;
+  program: { id: string; title: string; week: number; weeks: number; endDate: ISODate; state: "running" | "not_started" | "finished" } | null;
+  draftCount: number;
+  lastCheck: ISODate | null;
+  lastLog: ISODate | null;
+  billing: BillingStatus | null;
+};
+
+export function fullName(c: { first_name: string; last_name: string }) {
+  return `${c.first_name} ${c.last_name}`.trim();
+}
+
+/** Tutti i clienti visibili allo staff collegato, con programma in corso, ultimo check, ultima sessione e pagamenti. */
+export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts: { includeArchived?: boolean } = {}): Promise<ClientOverview[]> {
+  const today = todayISO();
+  let q = supabase
+    .from("clients")
+    .select("id, first_name, last_name, email, sex, status, coach_id, user_id, weekly_checkin, birth_date")
+    .order("first_name");
+  if (!opts.includeArchived) q = q.neq("status", "archived");
+  const { data: clients } = await q;
+  if (!clients?.length) return [];
+  const ids = clients.map((c) => c.id);
+
+  const [programs, checks, logs, coaches, billing, settings] = await Promise.all([
+    supabase.from("programs").select("id, client_id, title, weeks, start_date, status").in("client_id", ids).in("status", ["published", "draft"]).order("start_date", { ascending: false }),
+    supabase.from("checks").select("client_id, check_date").in("client_id", ids).order("check_date", { ascending: false }),
+    supabase.from("workout_logs").select("client_id, performed_on").in("client_id", ids).order("performed_on", { ascending: false }).limit(1000),
+    supabase.from("profiles").select("id, full_name").in("role", ["owner", "coach"]),
+    me.role === "owner" ? supabase.rpc("billing_overview") : Promise.resolve({ data: null }),
+    supabase.from("app_settings").select("reminder_days").maybeSingle(),
+  ]);
+  const reminderDays = settings.data?.reminder_days ?? 7;
+  const coachName = new Map((coaches.data ?? []).map((p) => [p.id, p.full_name]));
+  const firstBy = <T extends { client_id: string | null }>(rows: T[] | null | undefined) => {
+    const m = new Map<string, T>();
+    for (const r of rows ?? []) if (r.client_id && !m.has(r.client_id)) m.set(r.client_id, r);
+    return m;
+  };
+  const lastCheck = firstBy(checks.data);
+  const lastLog = firstBy(logs.data);
+  const billingBy = new Map((billing.data ?? []).map((b) => [b.client_id, b]));
+
+  return clients.map((c) => {
+    const progs = (programs.data ?? []).filter((p) => p.client_id === c.id);
+    const published = progs.filter((p) => p.status === "published" && p.start_date);
+    // il programma "in corso": quello iniziato più di recente, altrimenti il prossimo
+    const started = published.filter((p) => p.start_date! <= today);
+    const current = started[0] ?? published[published.length - 1] ?? null;
+    let program: ClientOverview["program"] = null;
+    if (current?.start_date) {
+      const pos = weekPosition(current.start_date, current.weeks, today);
+      program = {
+        id: current.id,
+        title: current.title,
+        weeks: current.weeks,
+        week: displayWeek(current.start_date, current.weeks, today),
+        endDate: programEndDate(current.start_date, current.weeks),
+        state: pos.state,
+      };
+    }
+    const b = billingBy.get(c.id);
+    return {
+      ...(c as ClientRow),
+      fullName: fullName(c),
+      coachName: c.coach_id ? coachName.get(c.coach_id) ?? null : null,
+      program,
+      draftCount: progs.filter((p) => p.status === "draft").length,
+      lastCheck: lastCheck.get(c.id)?.check_date ?? null,
+      lastLog: lastLog.get(c.id)?.performed_on ?? null,
+      billing: me.role === "owner" ? billingStatus(b ? ({ ...b, kind: b.kind as PlanKind } as BillingRow) : null, today, reminderDays) : null,
+    };
+  });
+}
+
+export type TodayItem = { clientId: string; clientName: string; text: string; href: string; tone: "accent" | "ink" };
+
+/** Le cose da fare oggi per lo staff, in ordine di urgenza. */
+export function buildTodayList(clients: ClientOverview[], today: ISODate = todayISO()) {
+  const payments: TodayItem[] = [];
+  const programs: TodayItem[] = [];
+  const checks: TodayItem[] = [];
+  for (const c of clients) {
+    if (c.status !== "active") continue;
+    if (c.billing && (c.billing.state === "due_soon" || c.billing.state === "overdue")) {
+      payments.push({ clientId: c.id, clientName: c.fullName, text: c.billing.label, href: `/staff/clienti/${c.id}/pagamenti`, tone: c.billing.state === "overdue" ? "accent" : "ink" });
+    }
+    if (!c.program) {
+      programs.push({ clientId: c.id, clientName: c.fullName, text: c.draftCount ? "Bozza di programma da pubblicare" : "Nessun programma pubblicato", href: `/staff/clienti/${c.id}/programma`, tone: "accent" });
+    } else {
+      const left = diffDays(today, c.program.endDate);
+      if (c.program.state === "finished") programs.push({ clientId: c.id, clientName: c.fullName, text: `Programma finito da ${-left} giorni`, href: `/staff/clienti/${c.id}/programma`, tone: "accent" });
+      else if (left <= 7) programs.push({ clientId: c.id, clientName: c.fullName, text: left === 0 ? "Il programma finisce oggi" : `Il programma finisce tra ${left} giorni`, href: `/staff/clienti/${c.id}/programma`, tone: "ink" });
+    }
+    const checkLimit = addDays(today, -35);
+    if (!c.lastCheck || c.lastCheck < checkLimit) {
+      checks.push({ clientId: c.id, clientName: c.fullName, text: c.lastCheck ? `Ultimo check ${diffDays(c.lastCheck, today)} giorni fa` : "Nessun check registrato", href: `/staff/clienti/${c.id}/check`, tone: "ink" });
+    }
+  }
+  return { payments, programs, checks };
+}

@@ -1,0 +1,574 @@
+
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+
+export type Database = {
+  
+  "public": {
+          Tables: {
+            "ai_requests": {
+                  Row: {
+                    "client_id": string | null,"cost_eur": number,"created_at": string,"created_by": string | null,"id": string,"input_tokens": number,"kind": string,"model": string,"output_tokens": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id"?: string | null,"cost_eur"?: number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"input_tokens"?: number,"kind": string,"model": string,"output_tokens"?: number
+                  }
+                  Update: {
+                    "client_id"?: string | null,"cost_eur"?: number,"created_at"?: string,"created_by"?: string | null,"id"?: string,"input_tokens"?: number,"kind"?: string,"model"?: string,"output_tokens"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ai_requests_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ai_requests_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"app_settings": {
+                  Row: {
+                    "ai_monthly_budget_eur": number,"business_name": string,"coaching_method": string,"id": number,"reminder_days": number,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"reminder_days"?: number,"updated_at"?: string
+                  }
+                  Update: {
+                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"reminder_days"?: number,"updated_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"checkins": {
+                  Row: {
+                    "adherence": number,"client_id": string,"coach_reply": string,"flag_reasons": (string)[],"flagged": boolean,"id": string,"issues": string,"request": string,"reviewed_at": string | null,"sleep": number,"stress": number,"submitted_at": string,"training": number,"week_start": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "adherence": number,"client_id": string,"coach_reply"?: string,"flag_reasons"?: (string)[],"flagged"?: boolean,"id"?: string,"issues"?: string,"request"?: string,"reviewed_at"?: string | null,"sleep": number,"stress": number,"submitted_at"?: string,"training": number,"week_start": string
+                  }
+                  Update: {
+                    "adherence"?: number,"client_id"?: string,"coach_reply"?: string,"flag_reasons"?: (string)[],"flagged"?: boolean,"id"?: string,"issues"?: string,"request"?: string,"reviewed_at"?: string | null,"sleep"?: number,"stress"?: number,"submitted_at"?: string,"training"?: number,"week_start"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "checkins_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"checks": {
+                  Row: {
+                    "age_years": number | null,"body_fat_pct": number | null,"check_date": string,"circumferences": NonNullable<Json>,"client_id": string,"created_at": string,"created_by": string | null,"fat_mass_kg": number | null,"id": string,"lean_mass_kg": number | null,"notes_next_phase": string,"sex": string | null,"skinfold_sum_mm": number | null,"skinfolds": NonNullable<Json>,"strength_tests": NonNullable<Json>,"tests_text": string,"visible_to_client": boolean,"weight_kg": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "age_years"?: number | null,"body_fat_pct"?: number | null,"check_date"?: string,"circumferences"?: NonNullable<Json>,"client_id": string,"created_at"?: string,"created_by"?: string | null,"fat_mass_kg"?: number | null,"id"?: string,"lean_mass_kg"?: number | null,"notes_next_phase"?: string,"sex"?: string | null,"skinfold_sum_mm"?: number | null,"skinfolds"?: NonNullable<Json>,"strength_tests"?: NonNullable<Json>,"tests_text"?: string,"visible_to_client"?: boolean,"weight_kg"?: number | null
+                  }
+                  Update: {
+                    "age_years"?: number | null,"body_fat_pct"?: number | null,"check_date"?: string,"circumferences"?: NonNullable<Json>,"client_id"?: string,"created_at"?: string,"created_by"?: string | null,"fat_mass_kg"?: number | null,"id"?: string,"lean_mass_kg"?: number | null,"notes_next_phase"?: string,"sex"?: string | null,"skinfold_sum_mm"?: number | null,"skinfolds"?: NonNullable<Json>,"strength_tests"?: NonNullable<Json>,"tests_text"?: string,"visible_to_client"?: boolean,"weight_kg"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "checks_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "checks_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"client_private_notes": {
+                  Row: {
+                    "client_id": string,"notes": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"notes"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "client_id"?: string,"notes"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "client_private_notes_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: true
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"clients": {
+                  Row: {
+                    "birth_date": string | null,"coach_id": string | null,"created_at": string,"email": string | null,"first_name": string,"goals": string,"id": string,"last_name": string,"phone": string | null,"sex": string,"start_date": string,"status": string,"user_id": string | null,"weekly_checkin": boolean
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "birth_date"?: string | null,"coach_id"?: string | null,"created_at"?: string,"email"?: string | null,"first_name": string,"goals"?: string,"id"?: string,"last_name"?: string,"phone"?: string | null,"sex": string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                  }
+                  Update: {
+                    "birth_date"?: string | null,"coach_id"?: string | null,"created_at"?: string,"email"?: string | null,"first_name"?: string,"goals"?: string,"id"?: string,"last_name"?: string,"phone"?: string | null,"sex"?: string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "clients_coach_id_fkey"
+      columns: ["coach_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"exercise_logs": {
+                  Row: {
+                    "client_id": string,"created_at": string,"exercise_id": string | null,"exercise_name": string,"id": string,"item_id": string,"performed_on": string,"program_id": string,"result_text": string,"sets": NonNullable<Json>,"week": number,"workout_log_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"created_at"?: string,"exercise_id"?: string | null,"exercise_name": string,"id"?: string,"item_id": string,"performed_on": string,"program_id": string,"result_text"?: string,"sets"?: NonNullable<Json>,"week": number,"workout_log_id": string
+                  }
+                  Update: {
+                    "client_id"?: string,"created_at"?: string,"exercise_id"?: string | null,"exercise_name"?: string,"id"?: string,"item_id"?: string,"performed_on"?: string,"program_id"?: string,"result_text"?: string,"sets"?: NonNullable<Json>,"week"?: number,"workout_log_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "exercise_logs_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "exercise_logs_exercise_id_fkey"
+      columns: ["exercise_id"]
+isOneToOne: false
+      referencedRelation: "exercises"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "exercise_logs_program_id_fkey"
+      columns: ["program_id"]
+isOneToOne: false
+      referencedRelation: "programs"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "exercise_logs_workout_log_id_fkey"
+      columns: ["workout_log_id"]
+isOneToOne: false
+      referencedRelation: "workout_logs"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"exercises": {
+                  Row: {
+                    "archived": boolean,"category": string,"created_at": string,"description": string,"id": string,"name": string,"updated_at": string,"video_url": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "archived"?: boolean,"category"?: string,"created_at"?: string,"description"?: string,"id"?: string,"name": string,"updated_at"?: string,"video_url"?: string | null
+                  }
+                  Update: {
+                    "archived"?: boolean,"category"?: string,"created_at"?: string,"description"?: string,"id"?: string,"name"?: string,"updated_at"?: string,"video_url"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"notifications": {
+                  Row: {
+                    "body": string,"client_id": string | null,"created_at": string,"dedupe_key": string | null,"emailed_at": string | null,"id": string,"kind": string,"link": string | null,"read_at": string | null,"recipient_id": string,"title": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "body"?: string,"client_id"?: string | null,"created_at"?: string,"dedupe_key"?: string | null,"emailed_at"?: string | null,"id"?: string,"kind": string,"link"?: string | null,"read_at"?: string | null,"recipient_id": string,"title": string
+                  }
+                  Update: {
+                    "body"?: string,"client_id"?: string | null,"created_at"?: string,"dedupe_key"?: string | null,"emailed_at"?: string | null,"id"?: string,"kind"?: string,"link"?: string | null,"read_at"?: string | null,"recipient_id"?: string,"title"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "notifications_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"payment_plans": {
+                  Row: {
+                    "active": boolean,"amount": number,"client_id": string,"created_at": string,"id": string,"kind": string,"method": string,"notes": string,"package_sessions": number | null,"start_date": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"amount"?: number,"client_id": string,"created_at"?: string,"id"?: string,"kind": string,"method"?: string,"notes"?: string,"package_sessions"?: number | null,"start_date"?: string
+                  }
+                  Update: {
+                    "active"?: boolean,"amount"?: number,"client_id"?: string,"created_at"?: string,"id"?: string,"kind"?: string,"method"?: string,"notes"?: string,"package_sessions"?: number | null,"start_date"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "payment_plans_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"payments": {
+                  Row: {
+                    "amount": number,"client_id": string,"created_at": string,"created_by": string | null,"id": string,"method": string,"notes": string,"paid_on": string,"period_end": string | null,"period_start": string | null,"plan_id": string | null,"sessions": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount": number,"client_id": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"method"?: string,"notes"?: string,"paid_on"?: string,"period_end"?: string | null,"period_start"?: string | null,"plan_id"?: string | null,"sessions"?: number | null
+                  }
+                  Update: {
+                    "amount"?: number,"client_id"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"method"?: string,"notes"?: string,"paid_on"?: string,"period_end"?: string | null,"period_start"?: string | null,"plan_id"?: string | null,"sessions"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "payments_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_plan_id_fkey"
+      columns: ["plan_id"]
+isOneToOne: false
+      referencedRelation: "payment_plans"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"posture_assessments": {
+                  Row: {
+                    "assessed_on": string,"client_id": string,"created_at": string,"created_by": string | null,"id": string,"notes": string,"posture_work": string,"tight_muscles": string,"visible_to_client": boolean,"what_works": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "assessed_on"?: string,"client_id": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"notes"?: string,"posture_work"?: string,"tight_muscles"?: string,"visible_to_client"?: boolean,"what_works"?: string
+                  }
+                  Update: {
+                    "assessed_on"?: string,"client_id"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"notes"?: string,"posture_work"?: string,"tight_muscles"?: string,"visible_to_client"?: boolean,"what_works"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "posture_assessments_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "posture_assessments_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"profiles": {
+                  Row: {
+                    "created_at": string,"email": string,"full_name": string,"id": string,"role": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"email": string,"full_name"?: string,"id": string,"role"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"email"?: string,"full_name"?: string,"id"?: string,"role"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"programs": {
+                  Row: {
+                    "ai_notes": Json | null,"client_id": string | null,"content": NonNullable<Json>,"created_at": string,"created_by": string | null,"description": string,"id": string,"is_ai_example": boolean,"is_template": boolean,"previous_program_id": string | null,"published_at": string | null,"source": string,"start_date": string | null,"status": string,"title": string,"updated_at": string,"weeks": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "ai_notes"?: Json | null,"client_id"?: string | null,"content"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"description"?: string,"id"?: string,"is_ai_example"?: boolean,"is_template"?: boolean,"previous_program_id"?: string | null,"published_at"?: string | null,"source"?: string,"start_date"?: string | null,"status"?: string,"title": string,"updated_at"?: string,"weeks"?: number
+                  }
+                  Update: {
+                    "ai_notes"?: Json | null,"client_id"?: string | null,"content"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"description"?: string,"id"?: string,"is_ai_example"?: boolean,"is_template"?: boolean,"previous_program_id"?: string | null,"published_at"?: string | null,"source"?: string,"start_date"?: string | null,"status"?: string,"title"?: string,"updated_at"?: string,"weeks"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "programs_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "programs_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "programs_previous_program_id_fkey"
+      columns: ["previous_program_id"]
+isOneToOne: false
+      referencedRelation: "programs"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"pt_sessions": {
+                  Row: {
+                    "client_id": string,"counts_toward_package": boolean,"created_at": string,"created_by": string | null,"id": string,"notes": string,"session_date": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"counts_toward_package"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"notes"?: string,"session_date"?: string
+                  }
+                  Update: {
+                    "client_id"?: string,"counts_toward_package"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"notes"?: string,"session_date"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "pt_sessions_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "pt_sessions_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"staff_invites": {
+                  Row: {
+                    "created_at": string,"email": string,"full_name": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"email": string,"full_name"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"email"?: string,"full_name"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"workout_logs": {
+                  Row: {
+                    "client_id": string,"completed": boolean,"created_at": string,"day_id": string,"id": string,"notes": string,"performed_on": string,"program_id": string,"updated_at": string,"week": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"completed"?: boolean,"created_at"?: string,"day_id": string,"id"?: string,"notes"?: string,"performed_on"?: string,"program_id": string,"updated_at"?: string,"week": number
+                  }
+                  Update: {
+                    "client_id"?: string,"completed"?: boolean,"created_at"?: string,"day_id"?: string,"id"?: string,"notes"?: string,"performed_on"?: string,"program_id"?: string,"updated_at"?: string,"week"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "workout_logs_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "workout_logs_program_id_fkey"
+      columns: ["program_id"]
+isOneToOne: false
+      referencedRelation: "programs"
+      referencedColumns: ["id"]
+    }
+                  ]
+                }
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "billing_overview":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "amount": number,"client_id": string,"kind": string,"paid_until": string,"plan_id": string,"sessions_bought": number,"sessions_used": number,"start_date": string
+            }[]
+                           },
+"business_name":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"can_log_program":
+{ Args: { "cid": string,"pid": string }; Returns: boolean
+                           },
+"can_manage_client":
+{ Args: { "cid": string }; Returns: boolean
+                           },
+"client_billing":
+{ Args: { "cid": string }; Returns: {
+              "amount": number,"kind": string,"paid_until": string,"plan_id": string,"sessions_bought": number,"sessions_used": number
+            }[]
+                           },
+"client_staff_recipients":
+{ Args: { "cid": string }; Returns: string[]
+                           },
+"is_client_self":
+{ Args: { "cid": string }; Returns: boolean
+                           },
+"is_owner":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"is_staff":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"last_exercise_logs":
+{ Args: { "before_date"?: string,"cid": string }; Returns: {
+              "exercise_id": string,"exercise_name": string,"performed_on": string,"result_text": string,"sets": Json,"week": number
+            }[]
+                           },
+"monday_of":
+{ Args: { "d": string }; Returns: string
+                           },
+"my_client_id":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"my_coach_name":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
+"my_pt_session_dates":
+{ Args: Record<PropertyKey, never>; Returns: string[]
+                           },
+"my_role":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           }
+          }
+          Enums: {
+            [_ in never]: never
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        }
+}
+
+type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
+
+export const Constants = {
+  "public": {
+          Enums: {
+            
+          }
+        }
+} as const

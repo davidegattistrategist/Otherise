@@ -306,7 +306,7 @@ create table public.notifications (
   created_at timestamptz not null default now()
 );
 create index notifications_recipient_idx on public.notifications (recipient_id, created_at desc);
-create unique index notifications_dedupe on public.notifications (recipient_id, dedupe_key) where dedupe_key is not null;
+create unique index notifications_dedupe on public.notifications (recipient_id, dedupe_key);
 
 -- ---------------------------------------------------------------------
 -- Impostazioni dell'attività (una sola riga)
@@ -701,6 +701,35 @@ begin
   limit 1;
 end $$;
 
+-- Stato pagamenti di tutti i clienti (solo titolare), per la lista e gli avvisi
+create or replace function public.billing_overview()
+returns table (
+  client_id uuid,
+  plan_id uuid,
+  kind text,
+  amount numeric,
+  start_date date,
+  paid_until date,
+  sessions_bought int,
+  sessions_used int
+) language plpgsql stable security definer set search_path = public as $$
+begin
+  if not (public.is_owner() or auth.uid() is null) then
+    raise exception 'Non autorizzato';
+  end if;
+  return query
+  select distinct on (p.client_id)
+         p.client_id, p.id, p.kind, p.amount, p.start_date,
+         (select max(pay.period_end) from public.payments pay where pay.plan_id = p.id),
+         coalesce((select sum(pay.sessions) from public.payments pay where pay.plan_id = p.id), 0)::int,
+         (select count(*) from public.pt_sessions s
+           where s.client_id = p.client_id and s.counts_toward_package and s.session_date >= p.start_date)::int
+  from public.payment_plans p
+  join public.clients c on c.id = p.client_id
+  where p.active and c.status <> 'archived'
+  order by p.client_id, p.created_at desc;
+end $$;
+
 -- Sessioni PT fatte dal cliente (al cliente servono solo i conteggi,
 -- non le note dello staff)
 create or replace function public.my_pt_session_dates()
@@ -749,7 +778,7 @@ $$;
 revoke execute on all functions in schema public from anon, public;
 grant execute on function public.my_role(), public.is_owner(), public.is_staff(),
   public.can_manage_client(uuid), public.is_client_self(uuid), public.my_client_id(),
-  public.can_log_program(uuid, uuid), public.client_billing(uuid), public.my_pt_session_dates(),
+  public.can_log_program(uuid, uuid), public.client_billing(uuid), public.billing_overview(), public.my_pt_session_dates(),
   public.last_exercise_logs(uuid, date), public.my_coach_name(), public.business_name(),
   public.monday_of(date)
   to authenticated, service_role;

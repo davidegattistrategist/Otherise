@@ -1,26 +1,67 @@
 @import "tailwindcss";
 
+/*
+ * Colori e caratteri dell'app. Per cambiare l'aspetto basta modificare
+ * questi valori: tutte le schermate li usano.
+ *   sabbia  = fondo          carta = card          inchiostro = testo
+ *   accento = arancio: solo per segni grafici (anelli, barre, puntini) e avvisi,
+ *             mai per il testo, perché su fondo chiaro non si legge bene.
+ */
+@theme {
+  --color-sand: #ece6dc;
+  --color-sand-deep: #dcd5c9;
+  --color-card: #f6f2eb;
+  --color-ink: #1b1a17;
+  --color-ink-soft: #4a463f;
+  --color-muted: #67625a;
+  --color-muted-dark: #a8a196;
+  --color-line-dark: #3a3833;
+  --color-accent: #e2622a;
+  --color-accent-soft: #f6d3c2;
+  --color-accent-deep: #9a3412;
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+  --radius-card: 28px;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-sand);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Testi "etichetta" maiuscoletti usati sopra le card */
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+/* La griglia del programma scorre in orizzontale su schermi stretti */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }

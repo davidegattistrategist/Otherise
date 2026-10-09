@@ -1,0 +1,95 @@
+import Link from "next/link";
+import type { Metadata } from "next";
+import { requireStaff } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { getClientsOverview } from "@/lib/data/staff";
+import { formatShort, todayISO } from "@/lib/dates";
+import { Dot, EmptyState, Input, LinkButton, PageTitle, cx } from "@/components/ui";
+
+export const metadata: Metadata = { title: "Clienti" };
+
+export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ q?: string; archivio?: string }> }) {
+  const me = await requireStaff();
+  const { q = "", archivio } = await searchParams;
+  const supabase = await createClient();
+  const all = await getClientsOverview(supabase, me, { includeArchived: archivio === "1" });
+  const needle = q.trim().toLowerCase();
+  const clients = all
+    .filter((c) => (archivio === "1" ? c.status === "archived" : c.status !== "archived"))
+    .filter((c) => !needle || c.fullName.toLowerCase().includes(needle) || (c.email ?? "").includes(needle));
+  const year = Number(todayISO().slice(0, 4));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageTitle title={archivio === "1" ? "Ex clienti" : "Clienti"} actions={<LinkButton href="/staff/clienti/nuovo">Nuovo cliente</LinkButton>} />
+      <form className="flex flex-wrap items-center gap-3" role="search">
+        <label htmlFor="q" className="sr-only">Cerca cliente</label>
+        <Input id="q" name="q" defaultValue={q} placeholder="Cerca per nome o email" className="max-w-sm" />
+        {archivio === "1" ? <input type="hidden" name="archivio" value="1" /> : null}
+        <Link href={archivio === "1" ? "/staff/clienti" : "/staff/clienti?archivio=1"} className="text-sm font-semibold underline-offset-4 hover:underline">
+          {archivio === "1" ? "Clienti attivi" : "Ex clienti"}
+        </Link>
+      </form>
+
+      {clients.length === 0 ? (
+        <EmptyState title={needle ? "Nessun cliente trovato" : "Ancora nessun cliente"} action={<LinkButton href="/staff/clienti/nuovo">Aggiungi il primo</LinkButton>}>
+          {needle ? "Prova con un'altra parola." : "Crea un cliente, poi invialo con un clic: riceverà un'email per entrare."}
+        </EmptyState>
+      ) : (
+        <div className="scroll-x rounded-[24px] bg-card">
+          <table className="w-full min-w-[720px] border-collapse text-[15px]">
+            <thead>
+              <tr className="text-left text-xs tracking-wide text-muted uppercase">
+                <th scope="col" className="px-5 pt-4 pb-2 font-semibold">Cliente</th>
+                <th scope="col" className="px-3 pt-4 pb-2 font-semibold">Programma</th>
+                <th scope="col" className="px-3 pt-4 pb-2 font-semibold">Ultima sessione</th>
+                <th scope="col" className="px-3 pt-4 pb-2 font-semibold">Ultimo check</th>
+                {me.role === "owner" ? <th scope="col" className="px-5 pt-4 pb-2 font-semibold">Pagamenti</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {clients.map((c) => (
+                <tr key={c.id} className="border-t border-sand-deep">
+                  <td className="px-5 py-3">
+                    <Link href={`/staff/clienti/${c.id}`} className="font-semibold hover:underline">{c.fullName}</Link>
+                    <div className="text-xs text-muted">
+                      {c.status === "paused" ? "In pausa · " : ""}
+                      {c.user_id ? "Account attivo" : "Da invitare"}
+                      {c.coachName && me.role === "owner" ? ` · ${c.coachName}` : ""}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    {c.program ? (
+                      <>
+                        <div>{c.program.title}</div>
+                        <div className="text-xs text-muted">
+                          {c.program.state === "finished" ? "Finito" : c.program.state === "not_started" ? `Inizia` : `Settimana ${c.program.week} di ${c.program.weeks}`}
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-muted">{c.draftCount ? "Bozza da pubblicare" : "—"}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-muted">{c.lastLog ? formatShort(c.lastLog, year) : "—"}</td>
+                  <td className="px-3 py-3 text-muted">{c.lastCheck ? formatShort(c.lastCheck, year) : "—"}</td>
+                  {me.role === "owner" ? (
+                    <td className="px-5 py-3">
+                      {c.billing && c.billing.state !== "none" ? (
+                        <span className={cx("inline-flex items-center gap-2 text-sm", c.billing.state === "overdue" && "font-semibold")}>
+                          <Dot tone={c.billing.state === "ok" ? "ink" : c.billing.state === "overdue" ? "deep" : "accent"} />
+                          {c.billing.label}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-muted">Nessun piano</span>
+                      )}
+                    </td>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
