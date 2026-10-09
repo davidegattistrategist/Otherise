@@ -62,6 +62,7 @@ button {
 
 /* La griglia del programma scorre in orizzontale su schermi stretti */
 .scroll-x {
+  position: relative; /* tiene dentro anche le etichette nascoste (sr-only) */
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }

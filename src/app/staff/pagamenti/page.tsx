@@ -50,7 +50,7 @@ export default async function PaymentsOverviewPage() {
         <Card><Eyebrow>Ricorrente stimato</Eyebrow><BigNumber className="mt-3" value={formatEuro(Math.round(recurring))} unit="/ mese" /><p className="mt-1 text-xs text-muted">Abbonamenti attivi, senza pacchetti</p></Card>
       </div>
 
-      <Card className="overflow-x-auto p-0">
+      <Card className="relative overflow-x-auto p-0">
         <table className="w-full min-w-[640px] text-left text-[15px]">
           <thead>
             <tr className="text-xs tracking-wider text-muted uppercase">

@@ -35,7 +35,7 @@ export default async function CheckupPage({ params }: { params: Promise<{ id: st
         <EmptyState title="Ancora nessun check-up" />
       ) : (
         <>
-          <Card className="overflow-x-auto">
+          <Card className="relative overflow-x-auto">
             <Eyebrow className="mb-3">Ultime settimane</Eyebrow>
             <table className="border-separate border-spacing-1 text-sm">
               <thead>

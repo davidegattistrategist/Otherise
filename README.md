@@ -1,3 +1,34 @@
 # Otherise
 
-App di gestione clienti per personal trainer. Lavori in corso.
+App web per personal trainer: clienti, programmi di allenamento, check corporei, sessioni PT, valutazione posturale, pagamenti e check-up settimanali, con un assistente AI che prepara le bozze dei programmi seguendo il tuo metodo. Funziona da computer e da telefono.
+
+**Per chi allena**
+- Pagina "Oggi" con solo le cose da fare: check-up con problemi, programmi in scadenza o da pubblicare, pagamenti, check da fare.
+- Scheda cliente: panoramica, programma, sessioni PT (note anche dettate), check con pliche e calcolo automatico di massa grassa e magra (Jackson-Pollock 7 pliche uomo, 5 donna), grafici, posturale, pagamenti, check-up.
+- Editor dei programmi a griglia settimane × esercizi, blocchi (superserie, circuiti, AMRAP, EMOM, intervalli), copia settimana, nuova fase che riparte dal logbook reale, modelli, import dai fogli Google, eserciziario con video.
+- Assistente AI (Claude): prepara o modifica la bozza da una richiesta scritta o dettata, propone progressioni e alternative; conosce metodo, esempi, eserciziario e storico del cliente.
+- Ruoli: titolare (vede tutto) e collaboratori (solo i clienti assegnati, niente pagamenti).
+- Pagamenti fuori dall'app: registro chiaro con scadenze, pacchetti di sessioni e promemoria automatici.
+
+**Per il cliente**
+- Prossimo allenamento, avanzamento della fase, stato del percorso.
+- Programma completo settimana per settimana con i video.
+- Logbook dal telefono: serie, chili, ripetizioni, "ultima volta", timer di recupero, salvataggio automatico.
+- Progressi: composizione corporea, circonferenze, test, posturale.
+- Check-up settimanale da 3 minuti.
+
+## Documenti
+- [Guida all'installazione](docs/GUIDA-INSTALLAZIONE.md) — portare l'app online sui propri account
+- [Come si usa](docs/GUIDA-USO.md)
+- [Come lavorare con Claude](docs/COME-LAVORARE-CON-CLAUDE.md)
+- [Bozza del metodo per l'assistente AI](docs/METODO-BOZZA.md)
+- [Privacy e dati dei clienti](docs/PRIVACY.md)
+- [CLAUDE.md](CLAUDE.md) — note tecniche per chi modifica il codice (persone o Claude)
+
+## Sviluppo
+```bash
+npm install
+cp .env.example .env.local   # e compila le variabili
+npm run dev
+```
+Controlli: `npm run typecheck && npm run lint && npm test && npm run build`. Dettagli in [CLAUDE.md](CLAUDE.md).

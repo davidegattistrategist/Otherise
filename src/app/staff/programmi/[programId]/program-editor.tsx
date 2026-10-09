@@ -347,13 +347,13 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
           </div>
 
           <div className="scroll-x mt-3 px-3 pb-2 sm:px-4">
-            <table className="w-full border-collapse text-sm" style={{ minWidth: 520 + weeks * 112 }}>
+            <table className="w-full border-collapse text-sm" style={{ minWidth: 640 + weeks * 120 }}>
               <thead>
                 <tr className="text-left text-xs text-muted">
                   <th scope="col" className="w-10 px-2 py-2 font-semibold"><span className="sr-only">Etichetta</span></th>
-                  <th scope="col" className="min-w-[220px] px-2 py-2 font-semibold">Esercizio</th>
+                  <th scope="col" className="w-[260px] min-w-[220px] px-2 py-2 font-semibold">Esercizio</th>
                   {Array.from({ length: weeks }, (_, w) => (
-                    <th key={w} scope="col" className="w-[112px] px-1 py-2 font-semibold">
+                    <th key={w} scope="col" className="w-[120px] min-w-[120px] px-1 py-2 font-semibold">
                       <span className="flex items-center gap-1">
                         S{w + 1}
                         {w < weeks - 1 ? (
@@ -389,7 +389,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                     </th>
                   ))}
                   <th scope="col" className="w-[96px] px-1 py-2 font-semibold">Recupero</th>
-                  <th scope="col" className="min-w-[200px] px-1 py-2 font-semibold">Indicazioni</th>
+                  <th scope="col" className="min-w-[180px] px-1 py-2 font-semibold">Indicazioni</th>
                   <th scope="col" className="w-[150px] px-1 py-2"><span className="sr-only">Azioni</span></th>
                 </tr>
               </thead>
