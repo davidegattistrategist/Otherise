@@ -1,0 +1,64 @@
+/**
+ * Chat: il cliente scrive con foto e video, lo staff vede il non letto e risponde.
+ */
+import { expect, test, type Page } from "@playwright/test";
+import path from "node:path";
+
+const PASS = "Password-di-prova-123";
+const FIX = path.join(__dirname, "fixtures");
+
+async function login(page: Page, email: string) {
+  page.on("dialog", (d) => void d.accept());
+  await page.goto("/login");
+  await page.fill("input[name=email]", email);
+  await page.fill("input[name=password]", PASS);
+  await Promise.all([page.waitForURL((u) => !u.pathname.startsWith("/login")), page.getByRole("button", { name: "Entra" }).click()]);
+}
+
+test("chat con foto e video tra cliente e titolare", async ({ browser }, info) => {
+  const tag = `${info.project.name}-${Date.now() % 100000}`;
+  const client = await (await browser.newContext(info.project.use)).newPage();
+  const errors: string[] = [];
+  client.on("pageerror", (e) => errors.push(e.message));
+  await login(client, "giulia@prova.local");
+  await client.goto("/cliente/messaggi");
+  await client.waitForLoadState("networkidle");
+  // l'audio non si può mandare
+  await client.setInputFiles('input[type=file][aria-label="Allega foto o video"]', path.join(FIX, "audio.mp3"));
+  await expect(client.getByText("Si possono mandare solo foto e video.")).toBeVisible();
+  // testo + foto + video
+  await client.fill("textarea", `Ciao, ecco il mio squat ${tag}`);
+  await client.setInputFiles('input[type=file][aria-label="Allega foto o video"]', [path.join(FIX, "foto.jpg"), path.join(FIX, "video.mp4")]);
+  await client.getByRole("button", { name: "Invia" }).click();
+  await expect(client.getByText(`Ciao, ecco il mio squat ${tag}`)).toBeVisible({ timeout: 20_000 });
+  await expect(client.locator('img[alt="Foto allegata"]').last()).toBeVisible();
+  await expect(client.locator("video").last()).toBeVisible();
+  const imgOk = await client.locator('img[alt="Foto allegata"]').last().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0);
+  expect(imgOk).toBe(true);
+
+  // il titolare vede il non letto e risponde
+  const owner = await (await browser.newContext(info.project.use)).newPage();
+  owner.on("pageerror", (e) => errors.push(e.message));
+  await login(owner, "titolare@prova.local");
+  await owner.goto("/staff/messaggi");
+  const row = owner.getByRole("link", { name: /Giulia Esempio/ });
+  await expect(row).toContainText(`squat ${tag}`);
+  await row.click();
+  await owner.waitForURL(/\/staff\/messaggi\//);
+  await owner.waitForLoadState("networkidle");
+  await expect(owner.getByText(`Ciao, ecco il mio squat ${tag}`)).toBeVisible();
+  await owner.fill("textarea", `Perfetto, scendi un po' di più ${tag}`);
+  await owner.getByRole("button", { name: "Invia" }).click();
+  await expect(owner.getByText(`Perfetto, scendi un po' di più ${tag}`)).toBeVisible();
+
+  // il cliente riceve la risposta senza ricaricare
+  await expect(client.getByText(`Perfetto, scendi un po' di più ${tag}`)).toBeVisible({ timeout: 15_000 });
+  expect(errors).toEqual([]);
+});
+
+test("il collaboratore non vede le chat dei clienti non suoi", async ({ page }) => {
+  await login(page, "collaboratore@prova.local");
+  await page.goto("/staff/messaggi");
+  await expect(page.getByRole("link", { name: /Luca Prova/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Giulia Esempio/ })).toHaveCount(0);
+});

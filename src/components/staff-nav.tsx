@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "./ui";
-import { IconBell, IconBook, IconSettings, IconTemplate, IconToday, IconUsers, IconWallet, IconUser } from "./icons";
+import { IconBell, IconBook, IconChat, IconSettings, IconTemplate, IconToday, IconUsers, IconWallet, IconUser } from "./icons";
 
-const ICONS = { today: IconToday, users: IconUsers, template: IconTemplate, book: IconBook, wallet: IconWallet, team: IconUser, settings: IconSettings, bell: IconBell };
+const ICONS = { today: IconToday, users: IconUsers, chat: IconChat, template: IconTemplate, book: IconBook, wallet: IconWallet, team: IconUser, settings: IconSettings, bell: IconBell };
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number; exact?: boolean };
 

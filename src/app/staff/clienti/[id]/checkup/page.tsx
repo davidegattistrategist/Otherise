@@ -7,6 +7,8 @@ import { CHECKIN_QUESTIONS, SCORE_LABELS } from "@/lib/checkin";
 import { Card, Dot, EmptyState, Eyebrow, Notice, Textarea, cx } from "@/components/ui";
 import { SubmitButton } from "@/components/form-bits";
 import { reviewCheckin } from "./actions";
+import { AiCheckinBrief } from "./ai-brief";
+import { aiEnabled } from "@/lib/ai/claude";
 
 export const metadata: Metadata = { title: "Check-up" };
 
@@ -35,6 +37,7 @@ export default async function CheckupPage({ params }: { params: Promise<{ id: st
         <EmptyState title="Ancora nessun check-up" />
       ) : (
         <>
+          {aiEnabled() ? <AiCheckinBrief clientId={id} replyTargetId={list[0] ? `r-${list[0].id}` : null} /> : null}
           <Card className="relative overflow-x-auto">
             <Eyebrow className="mb-3">Ultime settimane</Eyebrow>
             <table className="border-separate border-spacing-1 text-sm">

@@ -46,6 +46,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
           </div>
         </div>
         <div className="flex flex-wrap gap-2.5">
+          <LinkButton href={`/staff/messaggi/${id}`} variant="secondary">Chat</LinkButton>
           <LinkButton href={`${base}/sessioni#nuova`} variant="secondary">Nota sessione PT</LinkButton>
           <LinkButton href={`${base}/check/nuovo`}>Nuovo check</LinkButton>
         </div>

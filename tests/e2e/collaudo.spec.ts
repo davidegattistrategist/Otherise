@@ -26,7 +26,7 @@ function noHorizontalScroll(page: Page) {
 
 async function openClient(page: Page, name: string) {
   await page.goto("/staff/clienti");
-  await page.getByRole("link", { name, exact: true }).first().click();
+  await page.locator('a[href^="/staff/clienti/"]', { hasText: name }).filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
   return page.url();
 }
@@ -96,11 +96,12 @@ test.describe("titolare", () => {
     await page.waitForURL(/\/staff\/programmi\//);
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "Esercizio", exact: true }).first().click();
-    const name = page.getByLabel("Esercizio", { exact: true }).first();
+    const name = page.getByLabel("Esercizio", { exact: true }).filter({ visible: true }).first();
     await name.fill("Panca piana");
-    await page.getByLabel("Panca piana, settimana 1").fill("4x8 60kg");
-    await page.getByRole("button", { name: /Copia la settimana 1/ }).first().click();
-    await expect(page.getByLabel("Panca piana, settimana 3")).toHaveValue("4x8 60kg");
+    await page.getByLabel("Panca piana, settimana 1").filter({ visible: true }).fill("4x8 60kg");
+    if (info.project.name === "pc") await page.getByRole("button", { name: /Copia la settimana 1/ }).first().click();
+    else await page.getByLabel("Panca piana, settimana 1").filter({ visible: true }).fill("4x8 60kg");
+    if (info.project.name === "pc") await expect(page.getByLabel("Panca piana, settimana 3").filter({ visible: true })).toHaveValue("4x8 60kg");
     await page.getByRole("button", { name: "AMRAP" }).first().click();
     await page.getByRole("button", { name: "Testo libero" }).first().click();
     await page.fill("#start", "2026-10-12");
@@ -116,7 +117,8 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: "Importa", exact: true }).click();
     await page.waitForURL(/\/staff\/programmi\//);
     await page.waitForLoadState("networkidle");
-    await expect(page.getByLabel("Squat con bilanciere, settimana 2")).toHaveValue("5x6 80kg");
+    if (info.project.name === "pc") await expect(page.getByLabel("Squat con bilanciere, settimana 2").filter({ visible: true })).toHaveValue("5x6 80kg");
+    else await expect(page.getByLabel("Squat con bilanciere, settimana 1").filter({ visible: true })).toHaveValue("5x5 80kg");
 
     // panoramica
     await page.goto(base);
@@ -131,7 +133,7 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: "Crea la nuova fase" }).click();
     await page.waitForURL(/\/staff\/programmi\//);
     await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: /Chiedi all'AI/ }).click();
+    await page.getByRole("button", { name: /Chiedi all.AI/ }).click();
     await page.fill("#ai-instruction", "Più volume sui fondamentali");
     await page.getByRole("button", { name: "Prepara la bozza" }).click();
     await expect(page.getByText("Cosa ha cambiato l'AI")).toBeVisible({ timeout: 30_000 });
@@ -172,7 +174,7 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: "Salva", exact: true }).click();
     await expect(page.getByText("Impostazioni salvate.")).toBeVisible();
     await page.goto("/staff/clienti?q=Giulia");
-    await expect(page.getByRole("link", { name: "Giulia Esempio" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Giulia Esempio/ }).filter({ visible: true }).first()).toBeVisible();
     expect(errors).toEqual([]);
   });
 });
@@ -181,7 +183,7 @@ test.describe("collaboratore", () => {
   test("vede solo i suoi clienti e niente pagamenti", async ({ page }) => {
     const errors = await login(page, "collaboratore@prova.local");
     await page.goto("/staff/clienti");
-    await expect(page.getByRole("link", { name: "Luca Prova" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Luca Prova/ }).filter({ visible: true }).first()).toBeVisible();
     await expect(page.getByRole("link", { name: "Giulia Esempio" })).toHaveCount(0);
     await page.goto("/staff/pagamenti");
     await expect(page).toHaveURL(/\/staff$/);

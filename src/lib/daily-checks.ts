@@ -4,8 +4,9 @@ import "server-only";
  */
 import { createAdminClient } from "./supabase/admin";
 import { notify, type NewNotification } from "./notify";
-import { deliverPendingEmails } from "./email";
-import { addDays, diffDays, formatLong, isoWeekday, todayISO } from "./dates";
+import { deliverPendingEmails, sendEmail } from "./email";
+import { addDays, diffDays, formatHeading, formatLong, isoWeekday, mondayOf, todayISO } from "./dates";
+import { siteUrl } from "./site";
 import { billingStatus, type PlanKind } from "./billing";
 import { checkinWeekFor } from "./checkin";
 import { programEndDate } from "./program/schedule";
@@ -90,9 +91,78 @@ export async function runDailyChecks(today = todayISO()) {
     }
   }
 
+  // 4) Clienti che non registrano allenamenti da 7+ giorni con un programma in corso (avviso settimanale)
+  const { data: lastLogs } = await admin.from("workout_logs").select("client_id, performed_on").order("performed_on", { ascending: false }).limit(3000);
+  const lastBy = new Map<string, string>();
+  for (const l of lastLogs ?? []) if (!lastBy.has(l.client_id)) lastBy.set(l.client_id, l.performed_on);
+  for (const p of programs ?? []) {
+    if (!p.start_date || !p.client_id || p.start_date > addDays(today, -7)) continue;
+    const c = byId.get(p.client_id);
+    if (!c || !c.user_id) continue;
+    if (diffDays(today, programEndDate(p.start_date, p.weeks)) < 0) continue;
+    const last = lastBy.get(c.id);
+    const since = last ? diffDays(last, today) : null;
+    if (since !== null && since < 7) continue;
+    const recipients = new Set(ownerIds);
+    if (c.coach_id) recipients.add(c.coach_id);
+    for (const r of recipients) {
+      out.push({
+        recipient_id: r,
+        client_id: c.id,
+        kind: "inactive",
+        title: `Da sentire: ${name(c)}`,
+        body: since === null ? "Non ha ancora registrato allenamenti sul programma in corso." : `Nessun allenamento registrato da ${since} giorni.`,
+        link: `/staff/clienti/${c.id}`,
+        dedupe_key: `inactive:${c.id}:${mondayOf(today)}`,
+      });
+    }
+  }
+
   await notify(out);
-  const emailed = await deliverPendingEmails();
+  const digests = await sendStaffDigests(today);
+  const emailed = (await deliverPendingEmails()) + digests;
   // pulizia: notifiche lette più vecchie di 6 mesi
   await admin.from("notifications").delete().lt("created_at", `${addDays(today, -180)}T00:00:00Z`).not("read_at", "is", null);
   return { ok: true, today, notifications: out.length, emailed };
+}
+
+/**
+ * Un'unica email al mattino per ogni membro dello staff con tutto quello che
+ * è emerso (pagamenti, programmi, clienti da sentire), invece di tante email.
+ * Check-up con problemi e messaggi in chat partono invece subito, a parte.
+ */
+async function sendStaffDigests(today: string): Promise<number> {
+  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) return 0;
+  const admin = createAdminClient();
+  const since = new Date(Date.now() - 26 * 3600 * 1000).toISOString();
+  const { data: staff } = await admin.from("profiles").select("id, email, full_name").in("role", ["owner", "coach"]);
+  const base = await siteUrl();
+  let sent = 0;
+  for (const s of staff ?? []) {
+    const { data: items } = await admin
+      .from("notifications")
+      .select("id, kind, title, body")
+      .eq("recipient_id", s.id)
+      .is("emailed_at", null)
+      .in("kind", ["payment_due", "program_ending", "inactive"])
+      .gte("created_at", since)
+      .order("kind");
+    if (!items?.length) continue;
+    const groups: Array<[string, string]> = [["payment_due", "Pagamenti"], ["program_ending", "Programmi da preparare"], ["inactive", "Clienti da sentire"]];
+    const lines: string[] = [`Ciao ${s.full_name.split(" ")[0] || ""}, ecco il riepilogo di ${formatHeading(today).toLowerCase()}.`, ""];
+    for (const [kind, label] of groups) {
+      const g = items.filter((i) => i.kind === kind);
+      if (!g.length) continue;
+      lines.push(`${label}:`);
+      for (const i of g) lines.push(`• ${i.title.replace(/^[^:]+: /, "")} — ${i.body}`);
+      lines.push("");
+    }
+    lines.push(`${base}/staff`);
+    const ok = await sendEmail(s.email, `Il riepilogo di oggi (${items.length})`, lines.join("\n"));
+    if (ok) {
+      sent++;
+      await admin.from("notifications").update({ emailed_at: new Date().toISOString() }).in("id", items.map((i) => i.id));
+    }
+  }
+  return sent;
 }

@@ -10,7 +10,10 @@ import { summarizeSets, type SetLog } from "@/lib/program/prescription";
 import { billingStatus, formatEuro, PLAN_LABELS, type BillingRow, type PlanKind } from "@/lib/billing";
 import { CHECKIN_QUESTIONS } from "@/lib/checkin";
 import { LineChart } from "@/components/line-chart";
-import { ArrowCTA, BigNumber, Card, Dot, EmptyState, Eyebrow, LinkButton, ProgressBar, Ring, fmtNum } from "@/components/ui";
+import { BarChart } from "@/components/bar-chart";
+import { ExerciseProgress } from "@/components/exercise-progress";
+import { getExerciseProgress, getWeeklySessions } from "@/lib/data/progress";
+import { ArrowCTA, BigNumber, Card, Dot, EmptyState, Eyebrow, LinkButton, Notice, ProgressBar, Ring, fmtNum } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Cliente" };
 
@@ -26,8 +29,9 @@ function Delta({ now, before, unit, goodWhen }: { now: number | null; before: nu
   );
 }
 
-export default async function ClientOverviewPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClientOverviewPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fatto?: string; esercizio?: string }> }) {
   const { id } = await params;
+  const { fatto, esercizio } = await searchParams;
   const me = await requireStaff();
   const client = await getStaffClient(id);
   const supabase = await createClient();
@@ -44,6 +48,7 @@ export default async function ClientOverviewPage({ params }: { params: Promise<{
     supabase.from("app_settings").select("reminder_days").maybeSingle(),
   ]);
 
+  const [exerciseSeries, weekly] = await Promise.all([getExerciseProgress(supabase, id), getWeeklySessions(supabase, id)]);
   const published = (programs.data ?? []).filter((p) => p.status === "published" && p.start_date);
   const current = published.find((p) => p.start_date! <= today) ?? published[published.length - 1] ?? null;
   const drafts = (programs.data ?? []).filter((p) => p.status === "draft");
@@ -77,6 +82,9 @@ export default async function ClientOverviewPage({ params }: { params: Promise<{
         {next && pos.state === "running" ? <div className="text-sm text-muted-dark">Prossima: <span className="text-card">{next.day.title}</span></div> : null}
         <div className="flex flex-wrap gap-2">
           <LinkButton href={`/staff/programmi/${current.id}`} variant="light" size="sm">Apri il programma</LinkButton>
+          {pos.state !== "not_started" && content.days.length ? (
+            <LinkButton href={`/staff/clienti/${id}/allenamento/${current.id}/${week}/${(next?.day ?? content.days[0]).id}`} variant="secondary" size="sm" className="!bg-transparent !text-card ring-1 ring-line-dark">Registra l&apos;allenamento</LinkButton>
+          ) : null}
           {pos.state !== "not_started" && daysLeft <= 10 ? <LinkButton href={`/staff/clienti/${id}/programma`} variant="secondary" size="sm" className="!bg-transparent !text-card ring-1 ring-line-dark">Prepara la prossima fase</LinkButton> : null}
         </div>
       </Card>
@@ -105,6 +113,7 @@ export default async function ClientOverviewPage({ params }: { params: Promise<{
 
   return (
     <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(300px,1fr))]">
+      {fatto ? <div className="[grid-column:1/-1]"><Notice tone="success">Allenamento registrato.</Notice></div> : null}
       {programCard}
 
       <Card className="flex flex-col gap-3">
@@ -151,6 +160,13 @@ export default async function ClientOverviewPage({ params }: { params: Promise<{
         ) : (
           <p className="text-[15px] text-muted">Nessuna sessione registrata.</p>
         )}
+      </Card>
+
+      <ExerciseProgress series={exerciseSeries} selected={esercizio} hrefFor={(k) => `/staff/clienti/${id}?esercizio=${encodeURIComponent(k)}`} />
+
+      <Card className="flex flex-col gap-3">
+        <div className="flex items-baseline justify-between"><Eyebrow>Allenamenti per settimana</Eyebrow><span className="text-sm text-muted">ultime 8</span></div>
+        <BarChart label="Allenamenti per settimana" height={90} bars={weekly.map((w) => ({ label: formatShort(w.week).replace(/ \d{4}$/, ""), value: w.count }))} />
       </Card>
 
       <Card className="flex flex-col gap-3">

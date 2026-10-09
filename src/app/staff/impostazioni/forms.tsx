@@ -7,7 +7,7 @@ import { DictateButton } from "@/components/dictate-button";
 
 type Action = (s: ActionState, fd: FormData) => Promise<ActionState>;
 
-export function SettingsForm({ action, values }: { action: Action; values: { business_name: string; reminder_days: number; ai_monthly_budget_eur: number | string } }) {
+export function SettingsForm({ action, values, defaultMessage }: { action: Action; values: { business_name: string; reminder_days: number; ai_monthly_budget_eur: number | string; payment_message: string }; defaultMessage: string }) {
   const [state, formAction] = useActionState(action, null);
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -22,6 +22,9 @@ export function SettingsForm({ action, values }: { action: Action; values: { bus
           <Input name="ai_monthly_budget_eur" inputMode="decimal" defaultValue={String(values.ai_monthly_budget_eur).replace(".", ",")} required />
         </Field>
       </div>
+      <Field label="Messaggio WhatsApp per i rinnovi" hint="{nome} {situazione} {importo} {scadenza}">
+        <Textarea name="payment_message" rows={3} defaultValue={values.payment_message} placeholder={defaultMessage} />
+      </Field>
       <ActionMessage state={state} />
       <div><SubmitButton>Salva</SubmitButton></div>
     </form>

@@ -317,6 +317,8 @@ create table public.app_settings (
   coaching_method text not null default '',
   reminder_days int not null default 7 check (reminder_days between 1 and 30),
   ai_monthly_budget_eur numeric(8, 2) not null default 20,
+  -- messaggio WhatsApp per ricordare un rinnovo ({nome}, {situazione}, {importo})
+  payment_message text not null default '',
   updated_at timestamptz not null default now()
 );
 insert into public.app_settings (id) values (1);
@@ -793,12 +795,96 @@ returns text language sql stable security definer set search_path = public as $$
   select business_name from public.app_settings where id = 1
 $$;
 
+
+-- =====================================================================
+-- Chat tra cliente e staff (titolare + collaboratore che lo segue)
+-- Testo, foto e video (niente audio). Gli allegati stanno nello storage
+-- privato "chat" e si leggono solo con link temporanei creati dal server.
+-- =====================================================================
+create table public.messages (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references public.clients (id) on delete cascade,
+  sender_id uuid references auth.users (id) on delete set null,
+  body text not null default '' check (length(body) <= 4000),
+  attachments jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz,
+  constraint messages_not_empty check (length(trim(body)) > 0 or jsonb_array_length(attachments) > 0 or deleted_at is not null)
+);
+create index messages_client_idx on public.messages (client_id, created_at desc);
+
+-- Fin dove ognuno ha letto ogni conversazione
+create table public.chat_reads (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  client_id uuid not null references public.clients (id) on delete cascade,
+  last_read_at timestamptz not null default now(),
+  primary key (user_id, client_id)
+);
+
+alter table public.messages enable row level security;
+alter table public.chat_reads enable row level security;
+
+create policy messages_select on public.messages for select to authenticated
+  using (public.can_manage_client(client_id) or public.is_client_self(client_id));
+create policy messages_insert on public.messages for insert to authenticated
+  with check (sender_id = auth.uid() and deleted_at is null
+              and (public.can_manage_client(client_id) or public.is_client_self(client_id)));
+-- Si può solo "eliminare" (svuotare) un proprio messaggio
+create policy messages_update_own on public.messages for update to authenticated
+  using (sender_id = auth.uid()) with check (sender_id = auth.uid());
+
+create or replace function public.guard_message_update()
+returns trigger language plpgsql as $$
+begin
+  if new.client_id is distinct from old.client_id or new.sender_id is distinct from old.sender_id
+     or new.created_at is distinct from old.created_at then
+    raise exception 'Non modificabile';
+  end if;
+  if new.deleted_at is null then
+    raise exception 'Si può solo eliminare un messaggio';
+  end if;
+  new.body := '';
+  new.attachments := '[]'::jsonb;
+  return new;
+end $$;
+create trigger messages_guard before update on public.messages
+  for each row execute function public.guard_message_update();
+
+create policy chat_reads_own on public.chat_reads for all to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid() and (public.can_manage_client(client_id) or public.is_client_self(client_id)));
+
+-- Conversazioni con messaggi non letti per chi è collegato
+create or replace function public.my_unread_chats()
+returns table (client_id uuid, unread int, last_at timestamptz)
+language sql stable set search_path = public as $$
+  select m.client_id, count(*)::int, max(m.created_at)
+  from public.messages m
+  left join public.chat_reads r on r.client_id = m.client_id and r.user_id = auth.uid()
+  where m.deleted_at is null
+    and m.sender_id is distinct from auth.uid()
+    and m.created_at > coalesce(r.last_read_at, '-infinity'::timestamptz)
+  group by m.client_id
+$$;
+
+-- Bucket privato per gli allegati della chat (solo dove c'è lo storage di Supabase)
+do $$
+begin
+  if exists (select 1 from pg_namespace where nspname = 'storage') then
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    values ('chat', 'chat', false, 52428800,
+            array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif',
+                  'video/mp4', 'video/quicktime', 'video/webm', 'video/3gpp'])
+    on conflict (id) do nothing;
+  end if;
+end $$;
+
 -- Le funzioni interne non devono essere chiamate da chi non è collegato
 revoke execute on all functions in schema public from anon, public;
 grant execute on function public.my_role(), public.is_owner(), public.is_staff(),
   public.can_manage_client(uuid), public.is_client_self(uuid), public.my_client_id(),
   public.can_log_program(uuid, uuid), public.client_billing(uuid), public.billing_overview(), public.my_pt_session_dates(), public.my_checks(),
   public.last_exercise_logs(uuid, date), public.my_coach_name(), public.business_name(),
-  public.monday_of(date)
+  public.monday_of(date), public.my_unread_chats()
   to authenticated, service_role;
 revoke all on all tables in schema public from anon;

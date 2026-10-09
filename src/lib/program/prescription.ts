@@ -18,6 +18,8 @@ export type ParsedPrescription =
       /** Carico da proporre in kg (solo se è un numero preciso) */
       kg: number | null;
       loadText: string;
+      /** Percentuale del massimale ("5x5 @75%"): il carico si calcola per ogni cliente */
+      pct: number | null;
     }
   | { kind: "timed"; sets: number; seconds: number }
   | { kind: "distance"; sets: number; meters: number }
@@ -51,7 +53,9 @@ export function parsePrescription(raw: string | null | undefined): ParsedPrescri
     const load = /(\d+(?:[.,]\d+)?(?:\s*\/\s*\d+(?:[.,]\d+)?)?)\s*kg/i.exec(rest);
     const loadText = load ? `${load[1].replace(/\s+/g, "")} kg` : "";
     const kg = load && !load[1].includes("/") ? num(load[1]) : null;
-    return { kind: "sets", sets, reps, repsText, kg, loadText };
+    const pctMatch = /@?\s*(\d{2,3}(?:[.,]\d)?)\s*%/.exec(rest);
+    const pct = pctMatch ? num(pctMatch[1]) : null;
+    return { kind: "sets", sets, reps, repsText, kg, loadText, pct: pct && pct > 0 && pct <= 120 ? pct : null };
   }
 
   return { kind: "text" };

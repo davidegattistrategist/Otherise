@@ -33,17 +33,37 @@ isOneToOne: false
                   ]
                 },"app_settings": {
                   Row: {
-                    "ai_monthly_budget_eur": number,"business_name": string,"coaching_method": string,"id": number,"reminder_days": number,"updated_at": string
+                    "ai_monthly_budget_eur": number,"business_name": string,"coaching_method": string,"id": number,"payment_message": string,"reminder_days": number,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"reminder_days"?: number,"updated_at"?: string
+                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"payment_message"?: string,"reminder_days"?: number,"updated_at"?: string
                   }
                   Update: {
-                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"reminder_days"?: number,"updated_at"?: string
+                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"payment_message"?: string,"reminder_days"?: number,"updated_at"?: string
                   }
                   Relationships: [
                     
+                  ]
+                },"chat_reads": {
+                  Row: {
+                    "client_id": string,"last_read_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"last_read_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "client_id"?: string,"last_read_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "chat_reads_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"checkins": {
                   Row: {
@@ -182,6 +202,26 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"messages": {
+                  Row: {
+                    "attachments": NonNullable<Json>,"body": string,"client_id": string,"created_at": string,"deleted_at": string | null,"id": string,"sender_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attachments"?: NonNullable<Json>,"body"?: string,"client_id": string,"created_at"?: string,"deleted_at"?: string | null,"id"?: string,"sender_id"?: string | null
+                  }
+                  Update: {
+                    "attachments"?: NonNullable<Json>,"body"?: string,"client_id"?: string,"created_at"?: string,"deleted_at"?: string | null,"id"?: string,"sender_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "messages_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"notifications": {
                   Row: {
@@ -454,6 +494,11 @@ isOneToOne: false
                            },
 "my_role":
 { Args: Record<PropertyKey, never>; Returns: string
+                           },
+"my_unread_chats":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "client_id": string,"last_at": string,"unread": number
+            }[]
                            }
           }
           Enums: {

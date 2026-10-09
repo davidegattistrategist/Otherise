@@ -41,3 +41,11 @@ export const IconMail = (p: P) => <Base {...p}><rect x="3" y="5" width="18" heig
 export const IconPosture = (p: P) => <Base {...p}><circle cx="12" cy="4.5" r="2" /><path d="M12 7v7M8 10h8M12 14l-3 7M12 14l3 7" /></Base>;
 export const IconNote = (p: P) => <Base {...p}><path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5M9 13h7M9 17h5" /></Base>;
 export const IconRuler = (p: P) => <Base {...p}><rect x="3" y="8" width="18" height="8" rx="2" /><path d="M7 8v3M11 8v4M15 8v3M19 8v4" /></Base>;
+export const IconChat = (p: P) => <Base {...p}><path d="M4 5h16v11H9l-5 4z" /><path d="M8 9.5h8M8 12.5h5" /></Base>;
+export const IconMenu = (p: P) => <Base {...p}><path d="M4 7h16M4 12h16M4 17h16" /></Base>;
+export const IconPaperclip = (p: P) => <Base {...p}><path d="m20 11.5-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" /></Base>;
+export const IconSend = (p: P) => <Base {...p}><path d="M4 12 20 4l-6 16-2.5-6.5z" /><path d="M11.5 13.5 20 4" /></Base>;
+export const IconTrophy = (p: P) => <Base {...p}><path d="M8 4h8v5a4 4 0 0 1-8 0z" /><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4" /><path d="M12 13v4M9 20h6M10 17h4" /></Base>;
+export const IconDownload = (p: P) => <Base {...p}><path d="M12 4v12" /><path d="m7 11 5 5 5-5" /><path d="M4 20h16" /></Base>;
+export const IconWhatsapp = (p: P) => <Base {...p}><path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z" /><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-1.8-1.8l.8-1-1-2z" /></Base>;
+export const IconPhoto = (p: P) => <Base {...p}><rect x="3" y="5" width="18" height="14" rx="3" /><circle cx="9" cy="10" r="1.8" /><path d="m21 16-5-5-8 8" /></Base>;

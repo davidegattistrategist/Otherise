@@ -11,12 +11,13 @@ export async function saveSettings(_: ActionState, fd: FormData): Promise<Action
   const business = String(fd.get("business_name") ?? "").trim();
   const reminder = Number(fd.get("reminder_days"));
   const budget = Number(String(fd.get("ai_monthly_budget_eur") ?? "").replace(",", "."));
+  const paymentMessage = String(fd.get("payment_message") ?? "").trim().slice(0, 1000);
   if (!business) return { error: "Scrivi il nome dell'attività." };
   if (!Number.isInteger(reminder) || reminder < 1 || reminder > 30) return { error: "I giorni di preavviso vanno da 1 a 30." };
   if (!Number.isFinite(budget) || budget < 0 || budget > 1000) return { error: "Tetto di spesa AI non valido." };
   const { error } = await supabase
     .from("app_settings")
-    .update({ business_name: business, reminder_days: reminder, ai_monthly_budget_eur: budget, updated_at: new Date().toISOString() })
+    .update({ business_name: business, reminder_days: reminder, ai_monthly_budget_eur: budget, payment_message: paymentMessage, updated_at: new Date().toISOString() })
     .eq("id", 1);
   if (error) return { error: "Salvataggio non riuscito." };
   revalidatePath("/", "layout");

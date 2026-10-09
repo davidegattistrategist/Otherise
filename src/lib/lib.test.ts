@@ -310,3 +310,62 @@ describe("logbook", () => {
     expect(restSeconds("camminando")).toBeNull();
   });
 });
+
+import { deload, fillWeeks, progress } from "./program/progression";
+import { compliance } from "./compliance";
+import { normalizePhone, waLink, fillTemplate } from "./whatsapp";
+import { bestSet, computeRecords, epley, loadFromPercent } from "./strength/records";
+
+describe("progressioni automatiche", () => {
+  it("ripetizioni, chili, serie, percentuali", () => {
+    expect(progress("4x8 60kg", "reps", 2)).toBe("4x10 60kg");
+    expect(progress("3x8/10", "reps", 1)).toBe("3x9/11");
+    expect(progress('3x30"', "reps", 2)).toBe('3x40"');
+    expect(progress("4x8 60kg", "kg25", 3)).toBe("4x8 67,5kg");
+    expect(progress("5x5 @75%", "pct", 2)).toBe("5x5 @80%");
+    expect(progress("4x8 60kg", "sets", 1)).toBe("5x8 60kg");
+    expect(progress("4x8", "kg25", 1)).toBeNull();
+    expect(progress("a sensazione", "reps", 1)).toBeNull();
+  });
+  it("compila le settimane e mette lo scarico in fondo", () => {
+    expect(fillWeeks(["4x8 60kg", "", "", ""], 0, "reps")).toEqual(["4x8 60kg", "4x9 60kg", "4x10 60kg", "4x11 60kg"]);
+    expect(fillWeeks(["4x8 60kg", "", "", ""], 0, "reps", { deloadLast: true })).toEqual(["4x8 60kg", "4x9 60kg", "4x10 60kg", "3x10 55kg"]);
+    expect(deload("6x5 100kg")).toBe("4x5 90kg");
+  });
+});
+
+describe("costanza", () => {
+  it("allenamenti fatti su previsti nella finestra", () => {
+    const c = compliance({ today: "2026-10-09", windowDays: 14, sessionsPerWeek: 3, programStart: "2026-09-01", programEnd: "2026-10-30", completedDates: ["2026-09-28", "2026-10-01", "2026-10-03", "2026-10-06"], lastLog: "2026-10-06" });
+    expect(c.expected).toBe(6);
+    expect(c.done).toBe(4);
+    expect(c.pct).toBe(67);
+    expect(c.daysSinceLast).toBe(3);
+  });
+  it("programma appena iniziato: nessun giudizio", () => {
+    expect(compliance({ today: "2026-10-09", windowDays: 14, sessionsPerWeek: 3, programStart: "2026-10-07", programEnd: "2026-11-03", completedDates: [], lastLog: null }).pct).toBeNull();
+  });
+});
+
+describe("whatsapp e record", () => {
+  it("numeri e link", () => {
+    expect(normalizePhone("333 123 4567")).toBe("393331234567");
+    expect(normalizePhone("+39 333-1234567")).toBe("393331234567");
+    expect(normalizePhone("0041 79 123 45 67")).toBe("41791234567");
+    expect(normalizePhone("123")).toBeNull();
+    expect(waLink("3331234567", "Ciao Anna")).toBe("https://wa.me/393331234567?text=Ciao%20Anna");
+    expect(fillTemplate("Ciao {nome}, {x}", { nome: "Anna" })).toBe("Ciao Anna, {x}");
+  });
+  it("massimale stimato e record", () => {
+    expect(epley(100, 5)).toBe(116.7);
+    expect(epley(100, 15)).toBeNull();
+    expect(bestSet([{ kg: 60, reps: 10 }, { kg: 70, reps: 5 }])).toEqual({ e1rm: 81.7, kg: 70, reps: 5 });
+    const r = computeRecords([
+      { exercise_name: "Squat", performed_on: "2026-09-01", sets: [{ kg: 80, reps: 5 }] },
+      { exercise_name: "squat", performed_on: "2026-10-01", sets: [{ kg: 85, reps: 5 }] },
+    ]);
+    expect(r.get("squat")?.kg).toBe(85);
+    expect(loadFromPercent(75, 100)).toBe(75);
+    expect(loadFromPercent(73, 100)).toBe(72.5);
+  });
+});

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong, isISODate, todayISO } from "@/lib/dates";
-import { billingStatus, formatEuro, isPeriodic, METHODS, PLAN_KINDS, type BillingRow, type PlanKind } from "@/lib/billing";
+import { billingStatus, formatEuro, isPeriodic, METHODS, nextPaymentProposal, PLAN_KINDS, situationText, type BillingRow, type PlanKind } from "@/lib/billing";
 import { notify } from "@/lib/notify";
 import { sendEmail } from "@/lib/email";
 import { siteUrl } from "@/lib/site";
@@ -112,6 +112,36 @@ export async function deletePayment(clientId: string, paymentId: string) {
   revalidate(clientId);
 }
 
+/** Registra in un tocco il pagamento atteso (importo e periodo del piano attivo). */
+export async function quickPayment(clientId: string): Promise<ActionState> {
+  const me = await requireOwner();
+  const supabase = await createClient();
+  const [{ data: plan }, { data: billing }] = await Promise.all([
+    supabase.from("payment_plans").select("id, kind, amount, method, start_date, package_sessions").eq("client_id", clientId).eq("active", true).maybeSingle(),
+    supabase.rpc("client_billing", { cid: clientId }),
+  ]);
+  if (!plan) return { error: "Il cliente non ha un piano attivo." };
+  const row = (billing as BillingRow[] | null)?.[0];
+  const p = nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, row?.paid_until ?? null);
+  const { error } = await supabase.from("payments").insert({
+    client_id: clientId,
+    plan_id: plan.id,
+    paid_on: todayISO(),
+    amount: p.amount,
+    method: plan.method as (typeof METHODS)[number],
+    period_start: p.period_start,
+    period_end: p.period_end,
+    sessions: p.sessions,
+    created_by: me.id,
+  });
+  if (error) return { error: "Registrazione non riuscita." };
+  revalidate(clientId);
+  return {
+    ok: true,
+    message: `Registrato ${formatEuro(p.amount)}${p.period_end ? ` · saldato fino al ${formatLong(p.period_end)}` : p.sessions ? ` · ${p.sessions} ${p.sessions === 1 ? "sessione" : "sessioni"}` : ""}.`,
+  };
+}
+
 /** Promemoria gentile al cliente: notifica nell'app + email (se configurata). */
 export async function sendPaymentReminder(clientId: string, _: ActionState, __: FormData): Promise<ActionState> {
   await requireOwner();
@@ -126,12 +156,7 @@ export async function sendPaymentReminder(clientId: string, _: ActionState, __: 
   if (!row) return { error: "Il cliente non ha un piano di pagamento." };
   const status = billingStatus({ ...row, kind: row.kind as PlanKind }, todayISO(), settings?.reminder_days ?? 7);
   const business = settings?.business_name || "Otherise";
-  const what =
-    status.sessionsLeft !== null
-      ? status.sessionsLeft <= 0 ? "il tuo pacchetto di sessioni è terminato" : `ti restano ${status.sessionsLeft} sessioni nel pacchetto`
-      : status.dueDate
-        ? status.daysLeft !== null && status.daysLeft < 0 ? `il periodo saldato è terminato il ${formatLong(status.dueDate)}` : `il periodo saldato termina il ${formatLong(status.dueDate)}`
-        : "c'è un pagamento da saldare";
+  const what = situationText(status, row.kind as PlanKind, formatLong);
   const body = `Ciao ${client.first_name}, ti ricordiamo che ${what}. Quando vuoi, rinnova con le solite modalità. Grazie!`;
   if (!client.user_id && !client.email) return { error: "Il cliente non ha né account né email." };
   if (client.user_id) {
@@ -146,6 +171,6 @@ export async function sendPaymentReminder(clientId: string, _: ActionState, __: 
     const { createAdminClient } = await import("@/lib/supabase/admin");
     await createAdminClient().from("notifications").update({ emailed_at: new Date().toISOString() }).eq("recipient_id", client.user_id).eq("dedupe_key", `payrem:${clientId}:${todayISO()}`);
   }
-  if (!client.user_id && !emailed) return { error: "Il cliente non ha ancora l'app e l'invio delle email non è configurato: scrivigli su WhatsApp." };
+  if (!client.user_id && !emailed) return { error: "Il cliente non ha ancora l'app e l'invio delle email non è configurato: usa il pulsante WhatsApp." };
   return { ok: true, message: emailed ? (client.user_id ? "Promemoria inviato nell'app e per email." : "Promemoria inviato per email.") : "Promemoria inviato nell'app (invio email non configurato)." };
 }

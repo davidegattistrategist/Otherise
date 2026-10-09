@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { blockHeading, itemLabel, type ProgramDay } from "@/lib/program/types";
 import { logPlan, restSeconds, type LogPlan } from "@/lib/program/logbook";
 import type { SetLog } from "@/lib/program/prescription";
-import { saveWorkout } from "../../../actions";
-import { cx } from "@/components/ui";
-import { IconCheck, IconPlay, IconPlus, IconX } from "@/components/icons";
+import { saveWorkout } from "./actions";
+import { cx, fmtNum } from "@/components/ui";
+import { IconCheck, IconPlay, IconPlus, IconTrophy, IconX } from "@/components/icons";
+import { epley, loadFromPercent } from "@/lib/strength/records";
 
 type ItemState = { sets: SetLog[]; resultText: string };
 type Last = { date: string; summary: string };
@@ -19,8 +20,18 @@ export type LogbookProps = {
   today: string;
   initial: { performedOn: string; completed: boolean; notes: string; items: Record<string, ItemState>; updatedAt: string | null };
   last: Record<string, Last>;
+  /** Serie dell'ultima volta per esercizio (id o nome minuscolo): diventano i valori proposti */
+  lastSets?: Record<string, SetLog[]>;
+  /** Record per esercizio: massimale stimato e carico più alto mai registrati */
+  records?: Record<string, { e1rm: number | null; heaviest: number }>;
+  /** Massimali per le prescrizioni in % (es. "5x5 @75%") */
+  maxes?: Record<string, number>;
   videos: Record<string, string>;
   backHref: string;
+  /** Pulsante finale: il cliente torna alla sua home, lo staff alla scheda */
+  finishLabel?: string;
+  /** Posizione della barra in basso (sopra il menu del telefono) */
+  barClass?: string;
 };
 
 const numOrNull = (v: string): number | null => {
@@ -37,13 +48,59 @@ function storageKey(p: { programId: string; week: number; day: ProgramDay }) {
 
 export function Logbook(props: LogbookProps) {
   const { programId, week, day, today, initial, last, videos } = props;
+  const lastSets = props.lastSets ?? {};
+  const records = props.records ?? {};
+  const maxes = props.maxes ?? {};
+  const keyOf = (it: { exerciseId?: string | null; name: string }) => [it.exerciseId, it.name.trim().toLowerCase()].filter(Boolean) as string[];
+  const pick = <T,>(map: Record<string, T>, it: { exerciseId?: string | null; name: string }): T | undefined => {
+    for (const k of keyOf(it)) if (map[k] !== undefined) return map[k];
+    return undefined;
+  };
   const router = useRouter();
 
   const plans = useMemo(() => {
-    const m: Record<string, LogPlan> = {};
-    for (const b of day.blocks) for (const it of b.items) m[it.id] = logPlan(it, b, week);
+    const m: Record<string, LogPlan & { pctKg?: number | null }> = {};
+    for (const b of day.blocks) {
+      for (const it of b.items) {
+        const plan = logPlan(it, b, week);
+        if (plan.mode === "sets" && plan.kgHint === null && plan.pct) {
+          const max = pick(maxes, it);
+          const kg = max ? loadFromPercent(plan.pct, max) : null;
+          m[it.id] = { ...plan, kgHint: kg, pctKg: kg };
+        } else m[it.id] = plan;
+      }
+    }
     return m;
-  }, [day, week]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day, week, maxes]);
+
+  /** Valori proposti per una serie: dal programma, altrimenti dall'ultima volta */
+  const suggestion = (it: { id: string; exerciseId?: string | null; name: string }, si: number) => {
+    const plan = plans[it.id];
+    if (plan.mode !== "sets") return { kg: null as number | null, reps: null as number | null, repsText: "" };
+    const prev = pick(lastSets, it) ?? [];
+    const prevSet = prev[si] ?? prev[prev.length - 1];
+    const kg = plan.kgHint ?? (typeof prevSet?.kg === "number" ? prevSet.kg : null);
+    const reps = /^\d+$/.test(plan.repsHint) ? Number(plan.repsHint) : null;
+    return { kg, reps, repsText: plan.repsHint };
+  };
+
+  const [prs, setPrs] = useState<Record<string, string>>({});
+  const checkRecord = (it: { id: string; exerciseId?: string | null; name: string }, sets: SetLog[]) => {
+    const rec = pick(records, it);
+    if (!rec || prs[it.id]) return; // la prima volta non è un record: è il punto di partenza
+    let best: { kg: number; reps: number; e: number } | null = null;
+    for (const x of sets) {
+      if (typeof x.kg !== "number" || typeof x.reps !== "number" || x.kg <= 0 || x.reps <= 0) continue;
+      const e = epley(x.kg, x.reps) ?? 0;
+      if (!best || e > best.e) best = { kg: x.kg, reps: x.reps, e };
+    }
+    if (!best) return;
+    const heavier = sets.some((x) => typeof x.kg === "number" && x.kg > rec.heaviest && (x.reps ?? 0) > 0);
+    if ((rec.e1rm && best.e > rec.e1rm + 0.01) || heavier) {
+      setPrs((cur) => ({ ...cur, [it.id]: heavier ? `${fmtNum(Math.max(...sets.map((x) => (typeof x.kg === "number" ? x.kg : 0))))} kg: il carico più alto di sempre` : `${fmtNum(best!.kg)} kg × ${best!.reps}: massimale stimato ${fmtNum(best!.e, 0)} kg` }));
+    }
+  };
 
   const buildInitial = () => {
     const out: Record<string, ItemState> = {};
@@ -147,6 +204,21 @@ export function Logbook(props: LogbookProps) {
     return () => document.removeEventListener("visibilitychange", onHide);
   }, [save]);
 
+  // schermo sempre acceso durante l'allenamento (dove il telefono lo permette)
+  useEffect(() => {
+    let lock: { release: () => Promise<void> } | null = null;
+    const nav = navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } };
+    const get = () => {
+      if (document.visibilityState === "visible" && nav.wakeLock) nav.wakeLock.request("screen").then((l) => (lock = l)).catch(() => undefined);
+    };
+    get();
+    document.addEventListener("visibilitychange", get);
+    return () => {
+      document.removeEventListener("visibilitychange", get);
+      void lock?.release().catch(() => undefined);
+    };
+  }, []);
+
   useEffect(() => {
     if (!timer) return;
     const id = setInterval(() => {
@@ -162,12 +234,15 @@ export function Logbook(props: LogbookProps) {
     return () => clearInterval(id);
   }, [timer]);
 
+  const itemById = useMemo(() => new Map(day.blocks.flatMap((b) => b.items).map((it) => [it.id, it])), [day]);
   const update = (itemId: string, fn: (s: ItemState) => ItemState) => {
     const cur = latest.current.items;
     const next = { ...cur, [itemId]: fn(cur[itemId]) };
     latest.current = { ...latest.current, items: next };
     setItems(next);
     touch();
+    const it = itemById.get(itemId);
+    if (it) checkRecord(it, next[itemId].sets.filter((x) => x.done || (x.kg !== null && x.reps !== null)));
   };
 
   const startRest = (rest: string) => {
@@ -226,8 +301,16 @@ export function Logbook(props: LogbookProps) {
                       <div className="text-[17px] leading-snug font-semibold">{it.name}</div>
                       <div className="mt-0.5 flex flex-wrap gap-x-3 text-[15px]">
                         {rx ? <span className="font-bold">{rx}</span> : null}
+                        {plan.mode === "sets" && plan.pct ? (
+                          <span className="font-semibold text-accent-deep">{plan.kgHint ? `≈ ${fmtNum(plan.kgHint)} kg` : "massimale non ancora misurato"}</span>
+                        ) : null}
                         {it.rest ? <span className="text-muted">rec. {it.rest}</span> : null}
                       </div>
+                      {prs[it.id] ? (
+                        <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm font-semibold text-white" role="status">
+                          <IconTrophy size={16} /> Nuovo record! {prs[it.id]}
+                        </p>
+                      ) : null}
                       {it.notes ? <p className="mt-1 text-sm text-ink-soft">{it.notes}</p> : null}
                       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                         {prev ? <span className="text-muted">Ultima volta: <span className="font-semibold text-ink">{prev.summary}</span></span> : null}
@@ -250,7 +333,7 @@ export function Logbook(props: LogbookProps) {
                             aria-label={`${it.name}, serie ${si + 1}, chili`}
                             inputMode="decimal"
                             className="h-11 w-full rounded-xl border border-sand-deep bg-sand px-3 text-[16px] font-semibold tabular"
-                            placeholder={plan.kgHint !== null ? fmt(plan.kgHint) : ""}
+                            placeholder={fmt(suggestion(it, si).kg)}
                             value={fmt(s.kg)}
                             onChange={(e) => update(it.id, (cur) => ({ ...cur, sets: cur.sets.map((x, i) => (i === si ? { ...x, kg: numOrNull(e.target.value) } : x)) }))}
                           />
@@ -278,8 +361,9 @@ export function Logbook(props: LogbookProps) {
                                   if (i !== si) return x;
                                   if (!willBeDone) return { ...x, done: false };
                                   // "fatto come scritto": riempie con i valori proposti se vuoti
-                                  const reps = x.reps ?? (/^\d+$/.test(plan.repsHint) ? Number(plan.repsHint) : null);
-                                  const kg = x.kg ?? plan.kgHint ?? (si > 0 ? cur.sets[si - 1].kg ?? null : null);
+                                  const sug = suggestion(it, si);
+                                  const reps = x.reps ?? sug.reps;
+                                  const kg = x.kg ?? sug.kg ?? (si > 0 ? cur.sets[si - 1].kg ?? null : null);
                                   return { kg, reps, done: true };
                                 }),
                               }));
@@ -379,12 +463,14 @@ export function Logbook(props: LogbookProps) {
         </div>
       </section>
 
-      <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 flex flex-col gap-2 md:bottom-4">
+      <div className={cx("sticky z-20 flex flex-col gap-2", props.barClass ?? "bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-4")}>
         {timer ? (
           <div className="flex items-center gap-3 rounded-full bg-accent px-4 py-2.5 text-white shadow-lg" role="timer" aria-live="off">
             <span className="text-sm font-semibold">Recupero</span>
             <span className="text-xl font-bold tabular">{Math.max(0, Math.ceil((timer.end - now) / 1000))}&quot;</span>
             <div className="h-1.5 flex-1 rounded-full bg-white/30"><div className="h-1.5 rounded-full bg-white" style={{ width: `${Math.max(0, Math.min(100, ((timer.end - now) / (timer.total * 1000)) * 100))}%` }} /></div>
+            <button type="button" aria-label="Recupero 15 secondi in meno" onClick={() => setTimer((t) => (t ? { ...t, end: Math.max(Date.now() + 1000, t.end - 15000) } : t))} className="h-8 rounded-full bg-white/20 px-2 text-xs font-bold">−15</button>
+            <button type="button" aria-label="Recupero 15 secondi in più" onClick={() => setTimer((t) => (t ? { end: t.end + 15000, total: t.total + 15 } : t))} className="h-8 rounded-full bg-white/20 px-2 text-xs font-bold">+15</button>
             <button type="button" aria-label="Ferma il recupero" onClick={() => setTimer(null)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20"><IconX size={16} /></button>
           </div>
         ) : null}
@@ -396,7 +482,7 @@ export function Logbook(props: LogbookProps) {
             <button type="button" onClick={() => void save()} className="h-11 rounded-full px-4 text-sm font-semibold text-card ring-1 ring-line-dark">Riprova</button>
           ) : null}
           <button type="button" onClick={() => void finish()} disabled={status.kind === "saving"} className="h-11 rounded-full bg-accent px-5 text-[15px] font-bold text-white disabled:opacity-60">
-            {completed ? "Salva" : "Ho finito"}
+            {completed ? "Salva" : props.finishLabel ?? "Ho finito"}
           </button>
         </div>
       </div>

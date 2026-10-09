@@ -50,6 +50,16 @@ function getSpeech(): (new () => SpeechRec) | null {
 
 const noopSubscribe = () => () => {};
 
+/** Richieste frequenti: un tocco le aggiunge al testo, poi si può completare a voce. */
+const AI_PRESETS = [
+  "Stessa struttura, progressione secondo il mio metodo",
+  "Ultima settimana di scarico",
+  "Cambia i complementari, tieni i fondamentali",
+  "Tieni conto dei fastidi segnalati nei check-up e nelle note",
+  "Più lavoro posturale e di core",
+  "Usa i carichi del logbook",
+];
+
 export function AiPanel({
   programId,
   currentContent,
@@ -125,7 +135,7 @@ export function AiPanel({
     return (
       <div>
         <Button variant="secondary" onClick={() => setOpen(true)}>
-          <IconSparkle size={18} /> Chiedi all&apos;AI di preparare o modificare la bozza
+          <IconSparkle size={18} /> Chiedi all&apos;AI <span className="hidden sm:inline">di preparare o modificare la bozza</span>
         </Button>
       </div>
     );
@@ -145,6 +155,18 @@ export function AiPanel({
         </button>
       </div>
       <div className="mt-4 flex flex-col gap-3">
+        <div className="flex flex-wrap gap-1.5" aria-label="Richieste rapide">
+          {AI_PRESETS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setInstruction((v) => (v.trim() ? `${v.trim().replace(/[.]$/, "")}. ${p}.` : `${p}.`))}
+              className="rounded-full bg-line-dark px-3 py-1.5 text-[13px] font-semibold text-card hover:bg-[#3a3832]"
+            >
+              + {p}
+            </button>
+          ))}
+        </div>
         <label htmlFor="ai-instruction" className="sr-only">Richiesta per l&apos;AI</label>
         <Textarea
           id="ai-instruction"

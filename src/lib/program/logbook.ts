@@ -6,7 +6,7 @@ import { parsePrescription } from "./prescription";
 import type { ProgramBlock, ProgramItem } from "./types";
 
 export type LogPlan =
-  | { mode: "sets"; rows: number; repsHint: string; kgHint: number | null; loadText: string }
+  | { mode: "sets"; rows: number; repsHint: string; kgHint: number | null; loadText: string; pct?: number | null }
   | { mode: "check"; rows: number; label: string }
   | { mode: "text" };
 
@@ -14,7 +14,7 @@ export function logPlan(item: ProgramItem, block: ProgramBlock, week: number): L
   const rx = item.prescriptions[week - 1] ?? "";
   const p = parsePrescription(rx);
   if (block.kind === "amrap" || block.kind === "emom" || block.kind === "interval") return { mode: "text" };
-  if (p.kind === "sets") return { mode: "sets", rows: p.sets, repsHint: p.repsText, kgHint: p.kg, loadText: p.loadText };
+  if (p.kind === "sets") return { mode: "sets", rows: p.sets, repsHint: p.repsText, kgHint: p.kg, loadText: p.loadText, ...(p.pct ? { pct: p.pct } : {}) };
   if (p.kind === "timed") return { mode: "check", rows: p.sets, label: `${p.seconds}"` };
   if (p.kind === "distance") return { mode: "check", rows: p.sets, label: p.meters >= 1000 ? `${p.meters / 1000} km` : `${p.meters} m` };
   // Nei circuiti spesso si scrive solo "12" o "10-12": le serie sono i giri del blocco

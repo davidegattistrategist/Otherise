@@ -3,6 +3,7 @@ import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_MODEL } from "@/lib/ai/claude";
 import { formatEuro } from "@/lib/billing";
+import { DEFAULT_PAYMENT_MESSAGE } from "@/lib/whatsapp";
 import { todayISO } from "@/lib/dates";
 import { Card, Dot, Eyebrow, PageTitle, ProgressBar } from "@/components/ui";
 import { MethodForm, SettingsForm } from "./forms";
@@ -26,11 +27,11 @@ export default async function SettingsPage() {
   const supabase = await createClient();
   const monthStart = `${todayISO().slice(0, 7)}-01`;
   const [{ data: settings }, { data: usage }, { count: examples }] = await Promise.all([
-    supabase.from("app_settings").select("business_name, coaching_method, reminder_days, ai_monthly_budget_eur").maybeSingle(),
+    supabase.from("app_settings").select("business_name, coaching_method, reminder_days, ai_monthly_budget_eur, payment_message").maybeSingle(),
     supabase.from("ai_requests").select("cost_eur, kind").gte("created_at", `${monthStart}T00:00:00Z`),
     supabase.from("programs").select("id", { count: "exact", head: true }).eq("is_ai_example", true),
   ]);
-  const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20 };
+  const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20, payment_message: "" };
   const spent = (usage ?? []).reduce((t, u) => t + Number(u.cost_eur), 0);
   const budget = Number(s.ai_monthly_budget_eur);
   const hasAi = Boolean(process.env.ANTHROPIC_API_KEY);
@@ -55,7 +56,7 @@ export default async function SettingsPage() {
         <div className="flex flex-col gap-4">
           <Card className="flex flex-col gap-4">
             <Eyebrow>Attività</Eyebrow>
-            <SettingsForm action={saveSettings} values={s} />
+            <SettingsForm action={saveSettings} values={s} defaultMessage={DEFAULT_PAYMENT_MESSAGE} />
           </Card>
 
           <Card className="flex flex-col gap-3">

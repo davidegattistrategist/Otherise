@@ -138,3 +138,30 @@ export function formatEuro(n: number | string | null | undefined): string {
   const v = typeof n === "string" ? Number(n) : n ?? 0;
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: Number.isInteger(v) ? 0 : 2 }).format(v);
 }
+
+/** "il tuo trimestre è saldato fino al 13 ottobre", "ti restano 2 sessioni nel pacchetto"… per i promemoria. */
+export function situationText(status: BillingStatus, kind: PlanKind, formatDate: (d: ISODate) => string): string {
+  if (status.sessionsLeft !== null) {
+    return status.sessionsLeft <= 0 ? "il tuo pacchetto di sessioni è terminato" : `ti ${status.sessionsLeft === 1 ? "resta 1 sessione" : `restano ${status.sessionsLeft} sessioni`} nel pacchetto`;
+  }
+  if (status.dueDate) {
+    const what = PERIOD_NOUN[kind].toLowerCase();
+    return status.daysLeft !== null && status.daysLeft < 0 ? `il periodo saldato (${what}) è terminato il ${formatDate(status.dueDate)}` : `il periodo saldato (${what}) termina il ${formatDate(status.dueDate)}`;
+  }
+  return "c'è un pagamento da saldare";
+}
+
+/** Prossimo pagamento proposto per un piano: importo, periodo o sessioni. */
+export function nextPaymentProposal(plan: { kind: PlanKind; amount: number | string; method: string; start_date: ISODate; package_sessions: number | null }, paidUntil: ISODate | null) {
+  const period = suggestNextPeriod(plan.kind, plan.start_date, paidUntil);
+  return {
+    amount: Number(plan.amount),
+    method: plan.method,
+    period_start: period?.start ?? null,
+    period_end: period?.end ?? null,
+    sessions: plan.kind === "package" ? plan.package_sessions ?? 1 : plan.kind === "single" ? 1 : null,
+  };
+}
+
+/** Quanto vale un piano in un mese (per le stime delle entrate ricorrenti) */
+export const MONTHLY_FACTOR: Partial<Record<PlanKind, number>> = { monthly: 1, six_weeks: 30.44 / 42, quarterly: 1 / 3, semiannual: 1 / 6, annual: 1 / 12 };

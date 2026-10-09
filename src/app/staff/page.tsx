@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { buildTodayList, getClientsOverview, type TodayItem } from "@/lib/data/staff";
 import { formatHeading, todayISO } from "@/lib/dates";
 import { Card, Dot, Eyebrow, LinkButton, PageTitle } from "@/components/ui";
+import { getBillingLines } from "@/lib/data/billing";
+import { QuickPay } from "@/components/quick-pay";
 
 export const metadata: Metadata = { title: "Oggi" };
 
@@ -39,7 +41,8 @@ export default async function StaffToday() {
       .order("submitted_at", { ascending: false })
       .limit(20),
   ]);
-  const { payments, programs, checks } = buildTodayList(clients, today);
+  const { programs, checks, training } = buildTodayList(clients, today);
+  const billing = me.role === "owner" ? (await getBillingLines(supabase)).lines.filter((l) => !l.paused && (l.status.state === "overdue" || l.status.state === "due_soon")) : [];
   const active = clients.filter((c) => c.status === "active").length;
 
   return (
@@ -78,9 +81,31 @@ export default async function StaffToday() {
         {me.role === "owner" ? (
           <Card>
             <div className="mb-3"><Eyebrow>Pagamenti</Eyebrow></div>
-            <List items={payments} empty="Nessuna scadenza nei prossimi giorni." />
+            {billing.length === 0 ? (
+              <p className="text-[15px] text-muted">Nessuna scadenza nei prossimi giorni.</p>
+            ) : (
+              <ul className="flex flex-col">
+                {billing.map((l) => (
+                  <li key={l.clientId} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-sand-deep py-2.5 first:border-t-0">
+                    <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="flex min-w-0 items-center gap-3 hover:opacity-70">
+                      <Dot tone={l.status.state === "overdue" ? "accent" : "ink"} />
+                      <span className="min-w-0">
+                        <span className="block font-semibold">{l.name}</span>
+                        <span className="block text-sm text-muted">{l.status.label}</span>
+                      </span>
+                    </Link>
+                    <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} whatsapp={l.whatsapp} compact />
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
         ) : null}
+
+        <Card>
+          <div className="mb-3"><Eyebrow>Allenamenti</Eyebrow></div>
+          <List items={training} empty="Tutti i clienti con un programma in corso si stanno allenando." />
+        </Card>
 
         <Card>
           <div className="mb-3"><Eyebrow>Check da fare</Eyebrow></div>

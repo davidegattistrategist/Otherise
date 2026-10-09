@@ -36,13 +36,33 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
           {needle ? "Prova con un'altra parola." : "Crea un cliente, poi invialo con un clic: riceverà un'email per entrare."}
         </EmptyState>
       ) : (
-        <div className="scroll-x rounded-[24px] bg-card">
+        <>
+        {/* telefono: elenco compatto */}
+        <ul className="flex flex-col overflow-hidden rounded-[24px] bg-card md:hidden">
+          {clients.map((c) => (
+            <li key={c.id} className="border-t border-sand-deep first:border-t-0">
+              <Link href={`/staff/clienti/${c.id}`} className="flex flex-col gap-1 px-4 py-3 active:bg-white">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">{c.fullName}</span>
+                  {c.billing && (c.billing.state === "overdue" || c.billing.state === "due_soon") ? <Dot tone={c.billing.state === "overdue" ? "accent" : "deep"} /> : null}
+                </span>
+                <span className="text-sm text-muted">
+                  {c.program ? (c.program.state === "running" ? `${c.program.title} · sett. ${c.program.week}/${c.program.weeks}` : c.program.state === "finished" ? "Programma finito" : "Programma in partenza") : c.draftCount ? "Bozza da pubblicare" : "Nessun programma"}
+                  {c.compliance?.pct !== null && c.compliance?.pct !== undefined ? ` · costanza ${c.compliance.pct}%` : ""}
+                  {c.status === "paused" ? " · in pausa" : ""}
+                  {!c.user_id ? " · da invitare" : ""}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <div className="scroll-x hidden rounded-[24px] bg-card md:block">
           <table className="w-full min-w-[720px] border-collapse text-[15px]">
             <thead>
               <tr className="text-left text-xs tracking-wide text-muted uppercase">
                 <th scope="col" className="px-5 pt-4 pb-2 font-semibold">Cliente</th>
                 <th scope="col" className="px-3 pt-4 pb-2 font-semibold">Programma</th>
-                <th scope="col" className="px-3 pt-4 pb-2 font-semibold">Ultima sessione</th>
+                <th scope="col" className="px-3 pt-4 pb-2 font-semibold">Allenamenti</th>
                 <th scope="col" className="px-3 pt-4 pb-2 font-semibold">Ultimo check</th>
                 {me.role === "owner" ? <th scope="col" className="px-5 pt-4 pb-2 font-semibold">Pagamenti</th> : null}
               </tr>
@@ -70,7 +90,12 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                       <span className="text-muted">{c.draftCount ? "Bozza da pubblicare" : "—"}</span>
                     )}
                   </td>
-                  <td className="px-3 py-3 text-muted">{c.lastLog ? formatShort(c.lastLog, year) : "—"}</td>
+                  <td className="px-3 py-3 text-muted">
+                    <div>{c.lastLog ? `Ultimo ${formatShort(c.lastLog, year)}` : "—"}</div>
+                    {c.compliance?.pct !== null && c.compliance?.pct !== undefined ? (
+                      <div className={cx("text-xs", c.compliance.pct < 50 && "font-semibold text-accent-deep")}>Costanza {c.compliance.pct}% · 2 sett.</div>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-3 text-muted">{c.lastCheck ? formatShort(c.lastCheck, year) : "—"}</td>
                   {me.role === "owner" ? (
                     <td className="px-5 py-3">
@@ -89,6 +114,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

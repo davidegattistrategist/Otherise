@@ -48,11 +48,22 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-input,
-textarea,
-select,
-button {
-  font: inherit;
+@layer base {
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+  }
+}
+
+/* Sul telefono i campi restano a 16px: sotto, iPhone ingrandisce la pagina quando li tocchi */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 :focus-visible {

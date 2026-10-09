@@ -316,3 +316,34 @@ export async function suggestAlternatives(input: { exerciseName: string; exercis
   const parsed = z.object({ alternatives: z.array(z.object({ name: z.string(), reason: z.string() })) }).parse(json);
   return { alternatives: parsed.alternatives.slice(0, 3), usage };
 }
+
+const CHECKIN_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["working", "slipping", "focus", "reply"],
+  properties: {
+    working: { type: "array", items: { type: "string" }, description: "Cosa sta funzionando (2-4 punti brevi, con il dato che lo dimostra)" },
+    slipping: { type: "array", items: { type: "string" }, description: "Cosa sta peggiorando o va tenuto d'occhio (0-4 punti brevi, con il dato)" },
+    focus: { type: "array", items: { type: "string" }, description: "Su cosa concentrarsi nelle prossime settimane (1-3 azioni concrete per il trainer)" },
+    reply: { type: "string", description: "Bozza di risposta al cliente, 2-4 frasi, dando del tu, tono caldo e concreto" },
+  },
+} as const;
+
+const CHECKIN_SYSTEM = `Sei l'assistente di un personal trainer italiano. Leggi i dati del cliente (check-up settimanali, logbook, check corporei, note di sessione) e prepari per il trainer un riassunto onesto e breve. Regole:
+- Ogni punto cita il dato da cui viene (es. "sonno 2/5 nelle ultime due settimane", "squat da 60 a 65 kg").
+- Non inventare nulla: se un dato manca, non parlarne.
+- Niente diagnosi mediche: se emergono dolori, suggerisci di parlarne in sessione.
+- La risposta al cliente è una bozza che il trainer rivede: breve, calda, concreta, in italiano, dando del tu, senza emoji.`;
+
+export async function checkinBrief(input: { clientContext: string; method: string }) {
+  const userText = [
+    input.method ? `# Metodo del trainer (per il tono)\n${input.method.slice(0, 4000)}` : "",
+    `# Dati del cliente\n${input.clientContext}`,
+    "Prepara il riassunto delle ultime 2-4 settimane e la bozza di risposta all'ultimo check-up.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const { json, usage } = await runJson(CHECKIN_SYSTEM, userText, CHECKIN_SCHEMA as unknown as Record<string, unknown>, [], 3000);
+  const parsed = z.object({ working: z.array(z.string()), slipping: z.array(z.string()), focus: z.array(z.string()), reply: z.string() }).parse(json);
+  return { ...parsed, usage };
+}

@@ -5,14 +5,17 @@ import { createClient } from "@/lib/supabase/server";
 import { formatLong, formatShort } from "@/lib/dates";
 import { CIRCUMFERENCES } from "@/lib/body/skinfolds";
 import { LineChart } from "@/components/line-chart";
+import { ExerciseProgress } from "@/components/exercise-progress";
+import { getExerciseProgress } from "@/lib/data/progress";
+import { IconTrophy } from "@/components/icons";
 import { BigNumber, Card, EmptyState, Eyebrow, cx, fmtNum } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Progressi" };
 
 type Test = { exercise?: string; load?: number | null; reps?: number | null; rpe?: number | null; e1rm?: number | null };
 
-export default async function ProgressPage({ searchParams }: { searchParams: Promise<{ misura?: string }> }) {
-  const { misura } = await searchParams;
+export default async function ProgressPage({ searchParams }: { searchParams: Promise<{ misura?: string; esercizio?: string }> }) {
+  const { misura, esercizio } = await searchParams;
   const me = await requireClient();
   const supabase = await createClient();
   const [{ data: checks }, { data: posture }, { data: checkins }, { data: sessions }] = await Promise.all([
@@ -22,6 +25,8 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
     supabase.rpc("my_pt_session_dates"),
   ]);
   const list = checks ?? [];
+  const exerciseSeries = await getExerciseProgress(supabase, me.clientId);
+  const records = exerciseSeries.filter((x) => x.record).slice(0, 6);
   const series = (pick: (c: (typeof list)[number]) => number | string | null) =>
     list.map((c) => ({ date: c.check_date, value: pick(c) })).filter((p) => p.value !== null && p.value !== undefined).map((p) => ({ date: p.date, value: Number(p.value) }));
   const circKey = CIRCUMFERENCES.find((c) => c.key === misura)?.key ?? CIRCUMFERENCES.find((c) => list.some((k) => (k.circumferences as Record<string, number>)?.[c.key]))?.key ?? "vita";
@@ -85,6 +90,22 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
           </div>
         </>
       )}
+
+      <ExerciseProgress title="I tuoi esercizi" series={exerciseSeries} selected={esercizio} hrefFor={(k) => `/cliente/progressi?esercizio=${encodeURIComponent(k)}`} />
+
+      {records.length ? (
+        <Card className="flex flex-col gap-2">
+          <Eyebrow>I tuoi record</Eyebrow>
+          <ul className="flex flex-col">
+            {records.map((r) => (
+              <li key={r.key} className="flex items-center justify-between gap-3 border-t border-sand-deep py-2.5 first:border-t-0">
+                <span className="flex min-w-0 items-center gap-2.5"><IconTrophy size={18} className="shrink-0 text-accent-deep" /><span className="truncate font-semibold">{r.name}</span></span>
+                <span className="shrink-0 text-right text-sm"><span className="font-semibold tabular">{fmtNum(r.record!.kg)} kg × {r.record!.reps}</span> <span className="text-muted">· {formatShort(r.record!.date)}</span></span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       {byExercise.size || testsText.length ? (
         <Card className="flex flex-col gap-3">

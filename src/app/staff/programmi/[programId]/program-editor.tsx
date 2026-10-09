@@ -22,6 +22,7 @@ import {
   type ProgramItem,
 } from "@/lib/program/types";
 import { copyWeekToOthers, duplicateDay } from "@/lib/program/next-phase";
+import { PROGRESSION_RULES, fillWeeks, type ProgressionRule } from "@/lib/program/progression";
 import { formatLong, type ISODate } from "@/lib/dates";
 import { Button, Card, Eyebrow, Input, Notice, Pill, Select, Textarea, buttonClass, cx } from "@/components/ui";
 import { IconArrowLeft, IconCopy, IconDown, IconPlus, IconSparkle, IconTrash, IconUp, IconX } from "@/components/icons";
@@ -82,6 +83,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState(program.status);
   const [isExample, setIsExample] = useState(program.is_ai_example);
+  const [mobileWeek, setMobileWeek] = useState(0);
 
   const exerciseByName = useMemo(() => new Map(exercises.map((e) => [e.name.trim().toLowerCase(), e])), [exercises]);
   const exerciseById = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
@@ -347,7 +349,32 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             />
           </div>
 
-          <div className="scroll-x mt-3 px-3 pb-2 sm:px-4">
+          {/* telefono: una settimana alla volta */}
+          <div className="mt-3 flex flex-col gap-3 px-4 pb-3 md:hidden">
+            <div className="scroll-x -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Settimana da modificare">
+              {Array.from({ length: weeks }, (_, w) => (
+                <button key={w} type="button" role="tab" aria-selected={w === Math.min(mobileWeek, weeks - 1)} onClick={() => setMobileWeek(w)} className={cx("shrink-0 rounded-full px-3.5 py-2 text-sm font-semibold", w === Math.min(mobileWeek, weeks - 1) ? "bg-ink text-card" : "bg-sand")}>
+                  S{w + 1}
+                </button>
+              ))}
+            </div>
+            {day.blocks.map((block, blockIdx) => (
+              <MobileBlock
+                key={block.id}
+                block={block}
+                blockIdx={blockIdx}
+                blockCount={day.blocks.length}
+                week={Math.min(mobileWeek, weeks - 1)}
+                weeks={weeks}
+                aiNotes={aiNotes}
+                lastLogFor={lastLogFor}
+                onBlock={(fn) => mutate((d) => fn(d.days[dayIdx].blocks[blockIdx], d.days[dayIdx].blocks))}
+                onItemName={(itemIdx, name) => setItemName(dayIdx, blockIdx, itemIdx, name)}
+              />
+            ))}
+          </div>
+
+          <div className="scroll-x mt-3 hidden px-3 pb-2 sm:px-4 md:block">
             <table className="w-full border-collapse text-sm" style={{ minWidth: 640 + weeks * 120 }}>
               <thead>
                 <tr className="text-left text-xs text-muted">
@@ -414,7 +441,21 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               </tbody>
             </table>
           </div>
-          <div className="flex flex-wrap gap-2 border-t border-sand-deep px-5 py-4 sm:px-6">
+          <div className="flex flex-wrap items-center gap-2 border-t border-sand-deep px-5 py-4 sm:px-6">
+            <ProgressionMenu
+              wide
+              label="Compila le settimane di tutto il giorno"
+              onApply={(rule, deloadLast) =>
+                mutate((d) => {
+                  for (const b of d.days[dayIdx].blocks) {
+                    for (const item of b.items) {
+                      const from = item.prescriptions.findIndex((p) => p.trim());
+                      if (from >= 0) item.prescriptions = fillWeeks(item.prescriptions, from, rule, { deloadLast });
+                    }
+                  }
+                })
+              }
+            />
             {(BLOCK_KINDS as readonly BlockKind[]).map((k) => (
               <button
                 key={k}
@@ -710,6 +751,16 @@ function BlockRows({
                 >
                   <IconX size={16} />
                 </IconBtn>
+                <ProgressionMenu
+                  label={`Compila le settimane di ${it.name || "questo esercizio"}`}
+                  onApply={(rule, deloadLast) =>
+                    onBlock((b) => {
+                      const item = b.items[itemIdx];
+                      const from = item.prescriptions.findIndex((p) => p.trim());
+                      if (from >= 0) item.prescriptions = fillWeeks(item.prescriptions, from, rule, { deloadLast });
+                    })
+                  }
+                />
                 {aiEnabled && it.name.trim() ? (
                   <RowAiButtons
                     programId={programId}
@@ -775,6 +826,152 @@ function SaveAsTemplate({ onSave, defaultTitle, disabled }: { onSave: (title: st
       </div>
       <Button onClick={() => { onSave(t); setOpen(false); }} disabled={disabled}>Salva modello</Button>
       <Button variant="ghost" onClick={() => setOpen(false)}>Annulla</Button>
+    </div>
+  );
+}
+
+/**
+ * Menu "Progressione": compila le settimane successive partendo dalla prima
+ * scritta, con una regola (+1 ripetizione, +2,5 kg…), senza AI e all'istante.
+ */
+function ProgressionMenu({ label, onApply, wide }: { label: string; onApply: (rule: ProgressionRule, deloadLast: boolean) => void; wide?: boolean }) {
+  const [deloadLast, setDeloadLast] = useState(false);
+  const ref = useRef<HTMLDetailsElement>(null);
+  return (
+    <details ref={ref} className="relative">
+      <summary
+        aria-label={label}
+        title={label}
+        className={cx(
+          "flex cursor-pointer list-none items-center justify-center gap-1.5 rounded-full text-muted hover:bg-sand hover:text-ink [&::-webkit-details-marker]:hidden",
+          wide ? "min-h-9 px-3 text-sm font-semibold ring-1 ring-sand-deep" : "h-9 w-9",
+        )}
+      >
+        <IconTrend size={16} />
+        {wide ? "Progressione" : null}
+      </summary>
+      <div className={cx("absolute z-30 mt-1 w-72 rounded-2xl bg-card p-3 shadow-xl ring-1 ring-sand-deep", wide ? "left-0" : "right-0")}>
+        <p className="mb-2 px-1 text-xs text-muted">Parte dalla prima settimana scritta e compila le altre.</p>
+        <div className="flex flex-col">
+          {PROGRESSION_RULES.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              className="rounded-xl px-2.5 py-2 text-left text-sm font-semibold hover:bg-sand"
+              onClick={() => {
+                onApply(r.key, deloadLast);
+                ref.current?.removeAttribute("open");
+              }}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <label className="mt-2 flex items-center gap-2 border-t border-sand-deep px-1 pt-2 text-sm">
+          <input type="checkbox" checked={deloadLast} onChange={(e) => setDeloadLast(e.target.checked)} className="h-4 w-4 accent-[#1b1a17]" />
+          Ultima settimana di scarico
+        </label>
+      </div>
+    </details>
+  );
+}
+
+function IconTrend({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m4 17 5-5 4 3 7-8" />
+      <path d="M15 7h5v5" />
+    </svg>
+  );
+}
+
+/** Un blocco nella vista telefono: esercizio, prescrizione della settimana scelta, recupero e note. */
+function MobileBlock({
+  block,
+  blockIdx,
+  blockCount,
+  week,
+  weeks,
+  aiNotes,
+  lastLogFor,
+  onBlock,
+  onItemName,
+}: {
+  block: ProgramBlock;
+  blockIdx: number;
+  blockCount: number;
+  week: number;
+  weeks: number;
+  aiNotes: Record<string, string>;
+  lastLogFor: (it: ProgramItem) => string | undefined;
+  onBlock: (fn: (b: ProgramBlock, siblings: ProgramBlock[]) => void) => void;
+  onItemName: (itemIdx: number, name: string) => void;
+}) {
+  const multi = block.kind !== "single" && block.kind !== "text";
+  const moves = (
+    <div className="flex items-center">
+      <IconBtn label="Sposta blocco su" disabled={blockIdx === 0} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx - 1))}><IconUp size={16} /></IconBtn>
+      <IconBtn label="Sposta blocco giù" disabled={blockIdx === blockCount - 1} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx + 1))}><IconDown size={16} /></IconBtn>
+      <IconBtn label="Elimina blocco" onClick={() => { if (window.confirm("Eliminare questo blocco?")) onBlock((_, s) => void s.splice(blockIdx, 1)); }}><IconTrash size={16} /></IconBtn>
+    </div>
+  );
+  if (block.kind === "text") {
+    return (
+      <div className="rounded-2xl bg-sand/60 p-3">
+        <div className="mb-2 flex items-center justify-between"><span className="text-sm font-bold">{blockLetter(blockIdx)} · Testo</span>{moves}</div>
+        <input aria-label="Titolo del blocco di testo" value={block.title} onChange={(e) => onBlock((b) => void (b.title = e.target.value))} placeholder="Titolo (es. Riscaldamento)" className={cx(cellInput, "mb-1.5 font-semibold")} />
+        <textarea aria-label="Testo del blocco" value={block.notes} onChange={(e) => onBlock((b) => void (b.notes = e.target.value))} rows={3} className={cx(cellInput, "min-h-16")} />
+      </div>
+    );
+  }
+  return (
+    <div className={cx("rounded-2xl p-3", multi ? "bg-sand/60 ring-1 ring-sand-deep" : "bg-sand/30")}>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-sm font-bold">{blockLetter(blockIdx)}{multi ? ` · ${BLOCK_KIND_LABELS[block.kind]}${block.rounds ? ` · ${block.rounds} giri` : block.durationMin ? ` · ${block.durationMin} min` : ""}` : ""}</span>
+        {moves}
+      </div>
+      <div className="flex flex-col gap-3">
+        {block.items.map((it, itemIdx) => {
+          const last = lastLogFor(it);
+          return (
+            <div key={it.id} className={cx("flex flex-col gap-1.5", itemIdx > 0 && "border-t border-sand-deep pt-3", aiNotes[it.id] && "rounded-xl bg-accent-soft/40 p-2")}>
+              <div className="flex items-center gap-2">
+                <span className="w-7 shrink-0 text-sm font-semibold text-muted">{itemLabel(block, blockIdx, itemIdx)}</span>
+                <input list="exercise-library" aria-label="Esercizio" value={it.name} onChange={(e) => onItemName(itemIdx, e.target.value)} placeholder="Esercizio" className={cx(cellInput, "flex-1 font-semibold")} />
+                <IconBtn label="Togli esercizio" onClick={() => onBlock((b, s) => { b.items.splice(itemIdx, 1); if (b.items.length === 0) s.splice(blockIdx, 1); else if (b.items.length === 1 && b.kind === "superset") b.kind = "single"; })}><IconX size={16} /></IconBtn>
+              </div>
+              <div className="grid grid-cols-[1fr_6rem] gap-2 pl-9">
+                <input aria-label={`${it.name || "Esercizio"}, settimana ${week + 1}`} value={it.prescriptions[week] ?? ""} onChange={(e) => onBlock((b) => void (b.items[itemIdx].prescriptions[week] = e.target.value))} placeholder={`Settimana ${week + 1}: 4x8 60kg`} className={cellInput} />
+                <input aria-label="Recupero" value={it.rest} onChange={(e) => onBlock((b) => void (b.items[itemIdx].rest = e.target.value))} placeholder="Rec. 90&quot;" className={cellInput} />
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-9 text-xs text-muted">
+                {last ? <span>Ultimo log: {last}</span> : null}
+                {aiNotes[it.id] ? <span className="text-ink"><IconSparkle size={12} className="mr-1 inline" />{aiNotes[it.id]}</span> : null}
+                {week > 0 && !it.prescriptions[week] && it.prescriptions[week - 1] ? (
+                  <button type="button" className="font-semibold text-ink underline" onClick={() => onBlock((b) => void (b.items[itemIdx].prescriptions[week] = b.items[itemIdx].prescriptions[week - 1]))}>Copia dalla settimana {week}</button>
+                ) : null}
+                <ProgressionMenu
+                  label={`Compila le settimane di ${it.name || "questo esercizio"}`}
+                  onApply={(rule, deloadLast) =>
+                    onBlock((b) => {
+                      const item = b.items[itemIdx];
+                      const from = item.prescriptions.findIndex((p) => p.trim());
+                      if (from >= 0) item.prescriptions = fillWeeks(item.prescriptions, from, rule, { deloadLast });
+                    })
+                  }
+                />
+              </div>
+              <details className="pl-9">
+                <summary className="cursor-pointer text-xs font-semibold text-muted">Indicazioni{it.notes ? ": " + (it.notes.length > 30 ? it.notes.slice(0, 30) + "…" : it.notes) : ""}</summary>
+                <textarea aria-label="Indicazioni" rows={2} value={it.notes} onChange={(e) => onBlock((b) => void (b.items[itemIdx].notes = e.target.value))} className={cx(cellInput, "mt-1.5")} />
+              </details>
+            </div>
+          );
+        })}
+        <button type="button" className="flex items-center gap-1.5 self-start pl-9 text-xs font-semibold text-muted" onClick={() => onBlock((b) => { b.items.push(emptyItem(weeks)); if (b.kind === "single") b.kind = "superset"; })}>
+          <IconPlus size={14} /> {multi ? `Esercizio in ${BLOCK_KIND_LABELS[block.kind].toLowerCase()}` : "Fai superserie con un altro esercizio"}
+        </button>
+      </div>
     </div>
   );
 }
