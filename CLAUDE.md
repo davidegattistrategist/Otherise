@@ -32,7 +32,13 @@ App per personal trainer: staff (titolare + collaboratori) gestisce clienti, pro
 - Pagamenti (fuori dall'app, qui solo il registro): `src/lib/billing.ts`, funzioni SQL `client_billing()` e `billing_overview()`.
 - Check-up: soglie di avviso nella funzione SQL `flag_checkin` (voto ≤ 2, calo di 2 punti, richiesta scritta).
 - Notifiche: tabella `notifications` (+ email via Resend in `src/lib/email.ts`); controlli giornalieri in `src/lib/daily-checks.ts` chiamati da `/api/cron/daily` (Vercel Cron, `vercel.json`, header `Authorization: Bearer CRON_SECRET`).
+- Chat: tabelle `messages` e `chat_reads`, funzione `my_unread_chats()`. Allegati (solo foto e video, niente audio) nel bucket privato `chat` di Supabase Storage: il browser carica direttamente con un link firmato (`prepareUpload` in `src/app/chat/actions.ts`), i link di lettura sono firmati e temporanei (`src/lib/chat.ts`). Aggiornamento ogni 4 secondi da `/api/chat/[clientId]`.
+- Logbook condiviso tra cliente e staff: `src/components/logbook/` (+ `src/lib/data/session.ts` per i dati: ultima volta, record, massimali per le prescrizioni in %).
+- Progressioni senza AI: `src/lib/program/progression.ts`; record e massimali dal logbook (Epley): `src/lib/strength/records.ts`; costanza: `src/lib/compliance.ts`; grafici esercizi e allenamenti per settimana: `src/lib/data/progress.ts`.
+- Pagamenti rapidi, WhatsApp e incassi: `src/lib/data/billing.ts`, `src/lib/whatsapp.ts`, `src/components/quick-pay.tsx`, export CSV in `/api/pagamenti/export`.
+- AI: bozza/modifica programma `/api/ai/program`, riassunto check-up `/api/ai/checkin`, tetto di spesa in `src/lib/ai/budget.ts`.
 - Variabili d'ambiente: vedi `docs/GUIDA-INSTALLAZIONE.md` passo 5.
 
 ## Prima di dire "fatto"
-`npm run typecheck && npm run lint && npm test && npm run build`. Se tocchi permessi o SQL, anche i test di integrazione. Se tocchi pagine, aprile nel browser (anche a larghezza telefono, 390px).
+`npm run typecheck && npm run lint && npm test && npm run build`. Se tocchi permessi o SQL, anche i test di integrazione. Se tocchi pagine, aprile nel browser (anche a larghezza telefono, 390px) e lancia i test end-to-end (`npx playwright test`, progetti "pc" e "telefono"; servono i dati di `scripts/seed-demo.ts`).
+Le stesse schermate hanno spesso due versioni (telefono e computer) nascoste con le classi `md:hidden` / `hidden md:block`: nei test usa `.filter({ visible: true })`.

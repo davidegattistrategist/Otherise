@@ -8,7 +8,11 @@ Una pagina per le cose di tutti i giorni. L'app funziona da computer e da telefo
 - **Cliente**: vede solo sé stesso, solo i programmi pubblicati, e i check/valutazioni posturali che rendi visibili. Le note delle sessioni PT e le "note per la prossima fase" non le vede mai.
 
 ## La pagina "Oggi"
-Le cose da fare, in ordine: check-up con qualcosa che non va, programmi che finiscono o da pubblicare, pagamenti in scadenza (solo titolare), clienti senza check da più di 5 settimane. Le notifiche arrivano anche per email.
+Le cose da fare: check-up con qualcosa che non va, programmi che finiscono o da pubblicare, pagamenti in scadenza (con i pulsanti **Pagato** e **WhatsApp**, solo titolare), clienti che non registrano allenamenti da una settimana o con costanza sotto il 50%, clienti senza check da più di 5 settimane.
+
+Ogni mattina alle 8 arriva **una sola email di riepilogo** con pagamenti, programmi da preparare e clienti da sentire. Check-up con problemi e messaggi in chat arrivano invece subito.
+
+Dal telefono il menu è in basso: Oggi, Clienti, Messaggi, Pagamenti e "Altro" per il resto.
 
 ## Un nuovo cliente
 1. **Clienti → Nuovo cliente**: nome, sesso (serve per le pliche), data di nascita, email, obiettivi. Spunta "Check-up settimanale" se vuoi che lo compili, e "Invia subito l'invito".
@@ -28,28 +32,44 @@ Nell'editor:
 - Ogni riga è un esercizio, ogni colonna una settimana. Scrivi le prescrizioni come sempre: `4x8 60kg`, `3x10/12`, `3x30"`, `5x400m`, oppure testo libero.
 - Blocchi: esercizio singolo, superserie, circuito, AMRAP, EMOM, intervalli, testo libero (riscaldamento, note).
 - **Copia la settimana** nelle successive e poi ritocca solo i numeri.
+- **Progressione** (icona con la freccia che sale, su ogni riga e in fondo a ogni giorno): scrivi solo la settimana 1 e scegli la regola, +1 ripetizione, +2,5 kg, +5 kg, +2,5% del massimale, +1 serie, uguale, con l'eventuale ultima settimana di scarico. Le altre settimane si compilano da sole, all'istante e senza AI.
+- **Percentuali del massimale**: scrivi `5x5 @75%` e al cliente compare il carico in kg calcolato sul suo massimale (dal test di forza dell'ultimo check, altrimenti stimato dal logbook).
+- **Dal telefono** l'editor mostra una settimana alla volta (S1, S2…) con esercizio, prescrizione e recupero: comodo per ritoccare un programma in palestra.
 - Sotto ogni esercizio vedi cosa ha fatto il cliente l'ultima volta.
 - **Ctrl/Cmd + S** salva. Il cliente non vede niente finché non premi **Pubblica**; quando pubblichi gli arriva una notifica.
 - **Salva come modello** per riusarlo con altri clienti.
 
 ### L'assistente AI
 - **"Chiedi all'AI di preparare o modificare la bozza"**: scrivi o detta (pulsante "Detta") cosa vuoi, anche in modo sbrigativo: *"fase di intensificazione, 3 giorni, togli gli affondi per il ginocchio, più lavoro di core"*. Puoi allegare una foto (es. i risultati dei test). L'AI conosce il tuo metodo (Impostazioni), i programmi che hai segnato come esempio, l'eserciziario e lo storico del cliente (programmi, logbook, check, posturale, check-up, note di sessione). Prepara una bozza: le righe cambiate sono evidenziate con il motivo. Tu controlli e pubblichi.
+- Sopra la casella ci sono le **richieste rapide** (es. "Stessa struttura, progressione secondo il mio metodo", "Ultima settimana di scarico"): un tocco le aggiunge, poi completi a voce.
 - Sulla singola riga: **Progredisci** (propone la progressione delle settimane) e **Alternative** (esercizi sostitutivi).
 - Nell'editor, la spunta **"Usa come esempio del mio stile per l'AI"** sui programmi che ti rappresentano meglio: l'AI li usa come riferimento.
 - Il nome del cliente non viene mai mandato all'AI. La spesa del mese e il tetto sono in Impostazioni.
 
 ## Durante e dopo le sessioni
 - **Nota sessione PT** (in alto nella scheda): due righe a fine allenamento, anche dettate. Le sessioni "che contano nel pacchetto" scalano le sessioni rimaste di chi ha un pacchetto.
-- Il cliente registra il logbook dal telefono: serie, chili, ripetizioni, spunta "fatto" (che fa partire il timer di recupero), note. Si salva da solo anche se salta la connessione.
+- **Registra l'allenamento** (nella panoramica del cliente): compili tu il logbook al posto del cliente, per esempio durante la sessione in palestra.
+- Il cliente registra il logbook dal telefono: i campi sono già proposti con i carichi del programma o dell'ultima volta; la spunta conferma la serie e fa partire il timer di recupero (±15 secondi). Lo schermo resta acceso. Se batte un record (massimale stimato o carico più alto) compare **"Nuovo record!"**. Si salva da solo anche se salta la connessione.
+- Nella panoramica del cliente vedi l'**andamento degli esercizi** (massimale stimato nel tempo) e gli **allenamenti per settimana**; il cliente vede gli stessi grafici e i suoi record nei Progressi.
+
+## Chat
+- **Messaggi** nel menu: una conversazione per cliente, con testo, foto e video (niente vocali). Il cliente la trova in "Chat" nell'app.
+- Il titolare vede tutte le conversazioni, il collaboratore quelle dei suoi clienti. I messaggi si aggiornano da soli mentre la chat è aperta; chi riceve un messaggio ha una notifica (al massimo una all'ora per conversazione) e un'email.
+- Tocca un tuo messaggio per eliminarlo. WhatsApp resta comodo per le cose al volo: la chat dell'app tiene tutto ordinato dentro la scheda del cliente, per esempio il video di un esercizio da correggere.
 
 ## Il check-up settimanale
 Il cliente lo compila da venerdì a domenica (allenamenti, sonno, stress, percorso, da 1 a 5, più problemi e richieste). **Ricevi un avviso solo se qualcosa non va**: un voto 1–2, un calo di 2 punti rispetto alla settimana prima, oppure una richiesta scritta. Rispondi dalla scheda del cliente → **Check-up**: la risposta la vede nell'app.
 
+**Prepara il riassunto** (nella stessa pagina): l'AI legge check-up, logbook, check e note di sessione e ti dice cosa funziona, cosa sta calando e su cosa puntare, con una bozza di risposta che puoi usare con un tocco e correggere.
+
 ## Pagamenti (titolare)
-I pagamenti avvengono fuori dall'app. Qui registri cosa è saldato:
-- Scheda cliente → **Pagamenti → Registra un pagamento**: il periodo coperto si propone da solo (riparte dal giorno dopo l'ultimo saldato).
-- **Pagamenti** nel menu: chi è scaduto, chi scade a breve, incassi del mese e dell'anno.
-- L'app avvisa te e il cliente prima della scadenza (giorni di preavviso in Impostazioni). C'è anche **Manda un promemoria al cliente** per mandarlo subito.
+I pagamenti avvengono fuori dall'app. Qui registri cosa è saldato, nel modo più veloce possibile:
+- **Pagato**: in "Oggi" e in "Pagamenti", un tocco registra il pagamento atteso (importo del piano e periodo successivo, o le sessioni del pacchetto). Prima ti chiede conferma mostrandoti cosa registra.
+- **WhatsApp**: apre la chat del cliente con il promemoria già scritto (lo controlli e premi invio). Il testo si cambia in Impostazioni.
+- Scheda cliente → **Pagamenti → Registra un pagamento** per i casi particolari (importo diverso, pagamento a metà…).
+- **Pagamenti** nel menu: chi è scaduto e chi scade a breve, incassi per mese (grafico dell'ultimo anno), quanto entra nei prossimi 30 giorni, ricorrente stimato.
+- **Esporta per il commercialista**: un file con tutti i pagamenti dell'anno (data, cliente, importo, metodo, periodo) che si apre con Excel.
+- L'app avvisa te e il cliente prima della scadenza (giorni di preavviso in Impostazioni). I pacchetti di sessioni si scalano da soli con le sessioni PT.
 
 ## Eserciziario
 Nome, link al video YouTube, indicazioni. Quando scrivi un programma i nomi si completano da soli e il cliente vede il video. Se in un programma usi un esercizio che non c'è, l'editor ti propone di aggiungerlo.

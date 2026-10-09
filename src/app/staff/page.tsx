@@ -18,7 +18,7 @@ function List({ items, empty }: { items: TodayItem[]; empty: string }) {
         <li key={it.clientId + i} className="border-t border-sand-deep first:border-t-0">
           <Link href={it.href} className="flex min-h-12 items-center gap-3 py-2.5 hover:opacity-70">
             <Dot tone={it.tone === "accent" ? "accent" : "ink"} />
-            <span className="font-semibold">{it.clientName}</span>
+            <span className="font-semibold whitespace-nowrap">{it.clientName}</span>
             <span className="ml-auto text-right text-sm text-muted">{it.text}</span>
           </Link>
         </li>

@@ -8,12 +8,14 @@ App web per personal trainer: clienti, programmi di allenamento, check corporei,
 - Editor dei programmi a griglia settimane × esercizi, blocchi (superserie, circuiti, AMRAP, EMOM, intervalli), copia settimana, nuova fase che riparte dal logbook reale, modelli, import dai fogli Google, eserciziario con video.
 - Assistente AI (Claude): prepara o modifica la bozza da una richiesta scritta o dettata, propone progressioni e alternative; conosce metodo, esempi, eserciziario e storico del cliente.
 - Ruoli: titolare (vede tutto) e collaboratori (solo i clienti assegnati, niente pagamenti).
-- Pagamenti fuori dall'app: registro chiaro con scadenze, pacchetti di sessioni e promemoria automatici.
+- Pagamenti fuori dall'app: "Pagato" in un tocco, promemoria WhatsApp già scritti, scadenze e pacchetti automatici, incassi per mese, export per il commercialista.
+- Chat con i clienti (testo, foto e video), costanza degli allenamenti, record, progressioni automatiche, prescrizioni in % del massimale, riassunto AI dei check-up, email di riepilogo ogni mattina.
 
 **Per il cliente**
 - Prossimo allenamento, avanzamento della fase, stato del percorso.
 - Programma completo settimana per settimana con i video.
-- Logbook dal telefono: serie, chili, ripetizioni, "ultima volta", timer di recupero, salvataggio automatico.
+- Logbook dal telefono: valori già proposti, "ultima volta", nuovi record, timer di recupero, schermo sempre acceso, salvataggio automatico.
+- Chat con il coach, anche con foto e video.
 - Progressi: composizione corporea, circonferenze, test, posturale.
 - Check-up settimanale da 3 minuti.
 

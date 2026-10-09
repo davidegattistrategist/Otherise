@@ -186,4 +186,29 @@ describe.skipIf(!run)("permessi", () => {
     const after = (await owner.from("notifications").select("id")).data!.length;
     expect(after).toBe(before);
   });
+
+  it("chat: ognuno scrive solo nelle proprie conversazioni e vede solo le proprie", async () => {
+    const clientUid = (await clientA.auth.getUser()).data.user!.id;
+    const own = await clientA.from("messages").insert({ client_id: clientAId, sender_id: clientUid, body: "Ciao coach" }).select("id").single();
+    expect(own.error).toBeNull();
+    expect((await clientA.from("messages").insert({ client_id: clientBId, sender_id: clientUid, body: "x" })).error).not.toBeNull();
+    expect((await clientA.from("messages").insert({ client_id: clientAId, sender_id: coachId, body: "finto" })).error).not.toBeNull();
+    // il collaboratore la legge e risponde; vede il non letto
+    const unread = (await coach.rpc("my_unread_chats")).data as Array<{ client_id: string; unread: number }>;
+    expect(unread.find((u) => u.client_id === clientAId)?.unread).toBe(1);
+    const reply = await coach.from("messages").insert({ client_id: clientAId, sender_id: coachId, body: "Ciao!" }).select("id").single();
+    expect(reply.error).toBeNull();
+    // estranei e altri clienti non vedono nulla
+    expect((await stranger.from("messages").select("*")).data).toEqual([]);
+    // il cliente non può toccare il messaggio del coach
+    await clientA.from("messages").update({ deleted_at: new Date().toISOString() }).eq("id", reply.data!.id);
+    const { data: still } = await admin.from("messages").select("body, deleted_at").eq("id", reply.data!.id).single();
+    expect(still!.deleted_at).toBeNull();
+    // si può solo eliminare il proprio messaggio, non modificarlo
+    expect((await clientA.from("messages").update({ body: "modificato" }).eq("id", own.data!.id)).error).not.toBeNull();
+    await clientA.from("messages").update({ deleted_at: new Date().toISOString() }).eq("id", own.data!.id).throwOnError();
+    const { data: gone } = await admin.from("messages").select("body, deleted_at").eq("id", own.data!.id).single();
+    expect(gone!.body).toBe("");
+    expect(gone!.deleted_at).not.toBeNull();
+  });
 });

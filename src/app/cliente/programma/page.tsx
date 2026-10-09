@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireClient } from "@/lib/auth";
-import { getMyLogs, getMyPrograms, getVideoMap, type MyProgram } from "@/lib/data/me";
+import { getMyLogs, getMyMaxes, getMyPrograms, getVideoMap, type MyProgram } from "@/lib/data/me";
 import { addDays, formatShort, todayISO } from "@/lib/dates";
 import { programEndDate } from "@/lib/program/schedule";
 import { Card, EmptyState, Eyebrow, cx } from "@/components/ui";
@@ -22,7 +22,7 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
   const isCurrent = program.id === current?.id;
   const weekParam = Number(sp.settimana);
   const week = Number.isInteger(weekParam) && weekParam >= 1 && weekParam <= program.weeks ? weekParam : program.week;
-  const [logs, videos] = await Promise.all([getMyLogs(program.id), getVideoMap()]);
+  const [logs, videos, maxes] = await Promise.all([getMyLogs(program.id), getVideoMap(), getMyMaxes(me.clientId)]);
   const status = (dayId: string) => logs.find((l) => l.week === week && l.day_id === dayId);
   const weekStart = addDays(program.start_date, (week - 1) * 7);
   const base = `/cliente/programma?${program.id !== current?.id ? `programma=${program.id}&` : ""}settimana=`;
@@ -62,7 +62,7 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
                 <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold">Iniziato</span>
               ) : null}
             </div>
-            <ProgramDayView day={day} week={week} videos={videos} />
+            <ProgramDayView day={day} week={week} videos={videos} maxes={maxes} />
             {canLog ? (
               <Link href={`/cliente/sessione/${program.id}/${week}/${day.id}`} className={cx("mt-1 flex min-h-12 items-center justify-center rounded-full text-[15px] font-semibold", st?.completed ? "bg-sand-deep/60 text-ink" : "bg-ink text-card")}>
                 {st?.completed ? "Rivedi o correggi il logbook" : st ? "Riprendi l'allenamento" : "Inizia questo allenamento"}

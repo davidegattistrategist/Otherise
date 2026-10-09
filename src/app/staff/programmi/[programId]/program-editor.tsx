@@ -188,6 +188,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             <label htmlFor="program-title" className="sr-only">Nome del programma</label>
             <input
               id="program-title"
+              data-large
               value={title}
               onChange={(e) => {
                 setTitle(e.target.value);
@@ -320,6 +321,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             <label htmlFor={`day-${day.id}`} className="sr-only">Nome del giorno</label>
             <input
               id={`day-${day.id}`}
+              data-large
               value={day.title}
               onChange={(e) => mutate((d) => void (d.days[dayIdx].title = e.target.value))}
               className="min-w-0 flex-1 rounded-lg bg-transparent px-1 py-1 text-xl font-semibold hover:bg-sand focus:bg-sand focus:outline-none"
@@ -375,13 +377,13 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
           </div>
 
           <div className="scroll-x mt-3 hidden px-3 pb-2 sm:px-4 md:block">
-            <table className="w-full border-collapse text-sm" style={{ minWidth: 640 + weeks * 120 }}>
+            <table className="w-full border-collapse text-sm" style={{ minWidth: 560 + weeks * 104 }}>
               <thead>
                 <tr className="text-left text-xs text-muted">
                   <th scope="col" className="w-10 px-2 py-2 font-semibold"><span className="sr-only">Etichetta</span></th>
-                  <th scope="col" className="w-[260px] min-w-[220px] px-2 py-2 font-semibold">Esercizio</th>
+                  <th scope="col" className="w-[230px] min-w-[200px] px-2 py-2 font-semibold">Esercizio</th>
                   {Array.from({ length: weeks }, (_, w) => (
-                    <th key={w} scope="col" className="w-[120px] min-w-[120px] px-1 py-2 font-semibold">
+                    <th key={w} scope="col" className="w-[104px] min-w-[104px] px-1 py-2 font-semibold">
                       <span className="flex items-center gap-1">
                         S{w + 1}
                         {w < weeks - 1 ? (
@@ -417,8 +419,8 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                     </th>
                   ))}
                   <th scope="col" className="w-[96px] px-1 py-2 font-semibold">Recupero</th>
-                  <th scope="col" className="min-w-[180px] px-1 py-2 font-semibold">Indicazioni</th>
-                  <th scope="col" className="w-[150px] px-1 py-2"><span className="sr-only">Azioni</span></th>
+                  <th scope="col" className="min-w-[140px] px-1 py-2 font-semibold">Indicazioni</th>
+                  <th scope="col" className="w-[112px] px-1 py-2"><span className="sr-only">Azioni</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -714,7 +716,7 @@ function BlockRows({
               />
             </td>
             <td className="px-1 py-2">
-              <div className="flex flex-wrap items-center gap-0.5">
+              <div className="flex flex-wrap items-center justify-end gap-0.5">
                 <IconBtn
                   label="Sposta su"
                   disabled={multi ? itemIdx === 0 : blockIdx === 0}
@@ -927,7 +929,7 @@ function MobileBlock({
   return (
     <div className={cx("rounded-2xl p-3", multi ? "bg-sand/60 ring-1 ring-sand-deep" : "bg-sand/30")}>
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-sm font-bold">{blockLetter(blockIdx)}{multi ? ` · ${BLOCK_KIND_LABELS[block.kind]}${block.rounds ? ` · ${block.rounds} giri` : block.durationMin ? ` · ${block.durationMin} min` : ""}` : ""}</span>
+        <span className="text-sm font-bold">{multi ? `${blockLetter(blockIdx)} · ${BLOCK_KIND_LABELS[block.kind]}${block.rounds ? ` · ${block.rounds} giri` : block.durationMin ? ` · ${block.durationMin} min` : ""}` : <span className="font-semibold text-muted">Esercizio singolo</span>}</span>
         {moves}
       </div>
       <div className="flex flex-col gap-3">

@@ -43,7 +43,7 @@ export default async function PaymentsOverviewPage() {
         <p className="max-w-2xl text-[15px] text-muted">I pagamenti avvengono fuori dall&apos;app. Qui segni cosa è saldato con un tocco e l&apos;app ti avvisa prima di ogni scadenza.</p>
       </PageTitle>
 
-      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))] sm:gap-4">
         <Card dark><Eyebrow dark>Da guardare</Eyebrow><BigNumber className="mt-3 text-card" value={attention.length} unit={attention.length === 1 ? "cliente" : "clienti"} /></Card>
         <Card><Eyebrow>Incassato questo mese</Eyebrow><BigNumber className="mt-3" value={formatEuro(thisMonth)} /></Card>
         <Card><Eyebrow>Nel {year}</Eyebrow><BigNumber className="mt-3" value={formatEuro(thisYear)} /></Card>
@@ -118,7 +118,7 @@ export default async function PaymentsOverviewPage() {
                   </span>
                 </td>
                 <td className="px-3 py-3 text-right text-muted tabular">{l.status.dueDate ? formatShort(l.status.dueDate) : l.status.sessionsLeft !== null ? `${l.sessionsUsed}/${l.sessionsBought} sessioni` : "—"}</td>
-                <td className="px-5 py-3 text-right">{l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} whatsapp={null} compact /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="text-sm font-semibold underline">Imposta piano</Link>}</td>
+                <td className="px-5 py-3 text-right">{l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} whatsapp={null} compact label={l.status.state === "ok" ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="text-sm font-semibold underline">Imposta piano</Link>}</td>
               </tr>
             ))}
           </tbody>

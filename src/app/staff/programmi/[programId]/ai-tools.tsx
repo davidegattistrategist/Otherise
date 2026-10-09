@@ -7,7 +7,7 @@
  * Le proposte dell'AI arrivano nell'editor come modifiche NON salvate: il
  * trainer le rivede e decide se salvarle.
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import type { ProgramContent, ProgramItem } from "@/lib/program/types";
 import { Button, Card, Eyebrow, Notice, Textarea, cx } from "@/components/ui";
 import { IconMic, IconSparkle, IconX } from "@/components/icons";
@@ -277,14 +277,14 @@ export function RowAiButtons({
   };
 
   return (
-    <span className="relative inline-flex">
+    <span className="relative flex w-full flex-col items-end">
       <button
         type="button"
         title="Fai progredire le settimane con l'AI"
         aria-label="Fai progredire le settimane con l'AI"
         disabled={busy !== null}
         onClick={progress}
-        className="flex h-9 items-center gap-1 rounded-full px-2 text-xs font-semibold text-muted hover:bg-sand hover:text-ink disabled:opacity-40"
+        className="flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold whitespace-nowrap text-muted hover:bg-sand hover:text-ink disabled:opacity-40"
       >
         <IconSparkle size={15} /> {busy === "progress" ? "…" : "Progredisci"}
       </button>
@@ -294,7 +294,7 @@ export function RowAiButtons({
         aria-label="Proponi esercizi alternativi con l'AI"
         disabled={busy !== null}
         onClick={alternatives}
-        className="flex h-9 items-center rounded-full px-2 text-xs font-semibold text-muted hover:bg-sand hover:text-ink disabled:opacity-40"
+        className="flex h-8 items-center rounded-full px-2 text-xs font-semibold whitespace-nowrap text-muted hover:bg-sand hover:text-ink disabled:opacity-40"
       >
         {busy === "alt" ? "…" : "Alternative"}
       </button>

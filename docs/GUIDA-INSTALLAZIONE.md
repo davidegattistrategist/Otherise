@@ -47,7 +47,7 @@ Da quel momento il codice è tuo. Quando Davide migliora l'app, può mandarti gl
    - Database password: generane una e salvala nelle note
    - Region: **Central EU (Frankfurt)** — i dati restano in Europa
    - **Create new project** e aspetta un paio di minuti.
-3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Apri sul tuo GitHub il file `supabase/migrations/20261009120000_schema.sql`, premi il pulsante "Copy raw file", incolla tutto nell'editor di Supabase e premi **Run**. Deve comparire "Success. No rows returned".
+3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Apri sul tuo GitHub il file `supabase/migrations/20261009120000_schema.sql`, premi il pulsante "Copy raw file", incolla tutto nell'editor di Supabase e premi **Run**. Deve comparire "Success. No rows returned". Lo stesso script prepara anche lo spazio privato per le foto e i video della chat: in **Storage** deve comparire un contenitore chiamato `chat`.
 4. **Chiudi le iscrizioni libere** (nell'app si entra solo su invito): **Authentication → Sign In / Providers** → disattiva **Allow new users to sign up** → Save.
 5. **Indirizzi dell'app**: **Authentication → URL Configuration**
    - Site URL: `https://app.tuodominio.it` (l'indirizzo che userai; se non hai ancora il dominio metti per ora quello che ti darà Vercel al passo 5 e cambialo dopo)
@@ -107,7 +107,7 @@ Senza questo passo l'app funziona lo stesso, ma inviti e avvisi via email parton
 | `EMAIL_FROM` | `Nome Attività <avvisi@tuodominio.it>` |
 | `CRON_SECRET` | una frase lunga a caso, es. 40 lettere e numeri inventati |
 
-   Facoltativa: `ANTHROPIC_MODEL` se un giorno vuoi cambiare il modello dell'assistente (senza, usa quello predefinito).
+   Facoltative: `ANTHROPIC_MODEL` se un giorno vuoi cambiare il modello dell'assistente (senza, usa quello predefinito); `NEXT_PUBLIC_CHAT_MAX_VIDEO_MB` se con Supabase Pro alzi il limite dei file (vedi sotto).
 
 4. **Deploy**. Dopo un paio di minuti l'app è online su un indirizzo tipo `otherise-xxx.vercel.app`.
 5. **Il tuo dominio**: nel progetto Vercel **Settings → Domains → Add** → `app.tuodominio.it`. Vercel ti dice quale record DNS aggiungere (di solito un CNAME): aggiungilo dal pannello del dominio. Quando è attivo, controlla che Site URL e Redirect URLs su Supabase (passo 2.5) e `NEXT_PUBLIC_SITE_URL` su Vercel usino proprio questo indirizzo. Se cambi una variabile su Vercel, fai **Deployments → … → Redeploy**.
@@ -139,7 +139,12 @@ Per importare le vecchie schede: apri la scheda Google del cliente, scegli la sc
 - **Codice**: Davide (o Claude, vedi `docs/COME-LAVORARE-CON-CLAUDE.md`) carica le modifiche sul tuo GitHub; Vercel rimette online la nuova versione da solo in un paio di minuti.
 - **Database**: se un aggiornamento aggiunge un file nella cartella `supabase/migrations/`, va eseguito una volta nel **SQL Editor** di Supabase, come al passo 2.3 (solo il file nuovo, non quelli già eseguiti). Chi ti manda l'aggiornamento te lo dice.
 
-## 8. Sicurezza e manutenzione
+## 8. Chat: foto e video
+
+- I video della chat possono pesare al massimo 50 MB (circa 30–60 secondi girati col telefono): è il limite del piano gratuito di Supabase. Con il piano Pro puoi alzarlo in **Storage → Settings → Upload file size limit** e nel contenitore `chat` (**Storage → chat → Edit bucket**), poi su Vercel aggiungi `NEXT_PUBLIC_CHAT_MAX_VIDEO_MB` con il nuovo valore (es. `200`) e fai Redeploy.
+- Le foto vengono ridotte automaticamente prima dell'invio, quindi occupano poco spazio. Messaggi vocali e audio non si possono mandare (scelta voluta).
+
+## 9. Sicurezza e manutenzione
 
 - Non condividere mai la chiave secret di Supabase né quella di Anthropic. Se pensi che una chiave sia uscita, rigenerala dal servizio e aggiornala su Vercel (poi Redeploy).
 - Con il piano Free di Supabase **non ci sono backup automatici** e il progetto si mette in pausa se resta inattivo per una settimana (i controlli giornalieri lo tengono sveglio, ma non contarci). Con dati veri dei clienti passa al piano Pro.

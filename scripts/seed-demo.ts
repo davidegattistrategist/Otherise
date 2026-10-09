@@ -51,6 +51,7 @@ function programA(): ProgramContent {
         blocks: [
           { id: newId(), kind: "single", title: "", notes: "", rounds: null, durationMin: null, everySec: null, workSec: null, restSec: null, items: [item("Stacco rumeno", ["4x8 50kg", "4x9 50kg", "4x10 50kg", "4x8 55kg"], "2'")] },
           { id: newId(), kind: "single", title: "", notes: "", rounds: null, durationMin: null, everySec: null, workSec: null, restSec: null, items: [item("Lat machine presa neutra", ["3x10", "3x10", "3x12", "3x12"], "90\"", "Petto alto, gomiti verso i fianchi")] },
+          { id: newId(), kind: "single", title: "", notes: "", rounds: null, durationMin: null, everySec: null, workSec: null, restSec: null, items: [item("Panca piana bilanciere", ["4x6 @75%", "4x6 @77,5%", "4x5 @80%", "4x5 @82,5%"], "2'", "Carico calcolato dal tuo massimale")] },
           { id: newId(), kind: "amrap", title: "", notes: "Annota i giri completati", rounds: null, durationMin: 10, everySec: null, workSec: null, restSec: null, items: [item("Box step-up", ["10", "10", "10", "10"]), item("Push-up", ["8", "8", "10", "10"]), item("Hollow hold", ["20\"", "20\"", "25\"", "25\""])] },
         ],
       },
@@ -147,7 +148,10 @@ async function main() {
       client_id: giulia, check_date: c.date, weight_kg: c.weight, age_years: age, sex: "F", skinfolds: skinfolds as never,
       skinfold_sum_mm: comp.ok ? comp.sumMm : null, body_fat_pct: comp.ok ? comp.bodyFatPct : null, fat_mass_kg: comp.ok ? comp.fatMassKg : null, lean_mass_kg: comp.ok ? comp.leanMassKg : null,
       circumferences: { vita: 72 - i * 1.5, fianchi: 98 - i, coscia_dx: 56 - i * 0.5, braccio_dx: 27 + i * 0.3 } as never,
-      strength_tests: [{ exercise: "Back squat", load: squat, reps: 5, rpe: 8, e1rm: estimateOneRepMax(squat, 5, 8) }] as never,
+      strength_tests: [
+        { exercise: "Back squat", load: squat, reps: 5, rpe: 8, e1rm: estimateOneRepMax(squat, 5, 8) },
+        { exercise: "Panca piana bilanciere", load: 40 + i * 2.5, reps: 6, rpe: 8, e1rm: estimateOneRepMax(40 + i * 2.5, 6, 8) },
+      ] as never,
       tests_text: i === 2 ? "Plank 1'40\". Sit and reach +4 cm." : "",
       notes_next_phase: i === 2 ? "Spingere sul volume gambe, inserire lavoro unilaterale. Schiena ok." : "",
       visible_to_client: true, created_by: owner,

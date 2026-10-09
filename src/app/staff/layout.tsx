@@ -4,6 +4,7 @@ import { StaffNav, type NavItem } from "@/components/staff-nav";
 import { StaffMobileNav, type MobileItem } from "@/components/staff-mobile-nav";
 import Link from "next/link";
 import { IconBell } from "@/components/icons";
+import { Toaster } from "@/components/toaster";
 import { IconLogout } from "@/components/icons";
 import { signOut } from "../login/actions";
 
@@ -40,7 +41,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   ];
   const moreMobile = items.filter((i) => !mainMobile.some((m) => m.href === i.href)) as MobileItem[];
   return (
-    <div className="flex min-h-dvh flex-wrap items-stretch">
+    <div className="flex min-h-dvh flex-wrap content-start items-stretch">
       {/* telefono: barra in alto e menu in basso */}
       <header className="flex w-full items-center justify-between px-4 pt-4 lg:hidden">
         <Link href="/staff" className="flex items-center gap-2.5">
@@ -52,6 +53,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
           {unread ? <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-white">{unread}</span> : null}
         </Link>
       </header>
+      <Toaster />
       <StaffMobileNav main={mainMobile} more={moreMobile} signOut={signOut} who={`${me.fullName} · ${owner ? "Titolare" : "Collaboratore"}`} />
       <aside className="box-border hidden w-full flex-col gap-6 border-b border-sand-deep px-4 py-5 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-[260px] lg:border-r lg:border-b-0 lg:px-5 lg:py-8">
         <div className="flex items-center justify-between gap-2.5 px-2">

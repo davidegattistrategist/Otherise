@@ -18,7 +18,7 @@ test("pagamenti: segna pagato in un tocco ed export CSV", async ({ page }) => {
   const box = page.locator("li", { hasText: /Sara Test|Giulia Esempio/ }).first();
   if (await box.getByRole("button", { name: "Pagato" }).count()) {
     await box.getByRole("button", { name: "Pagato" }).click();
-    await expect(page.getByText(/Registrato .*€/).first()).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: /Registrato .*€/ }).first()).toBeVisible();
   }
   const res = await page.request.get("/api/pagamenti/export?anno=2026");
   expect(res.status()).toBe(200);

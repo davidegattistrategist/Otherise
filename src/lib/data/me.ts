@@ -4,6 +4,7 @@ import { createClient } from "../supabase/server";
 import { todayISO } from "../dates";
 import { parseContent, type ProgramContent } from "../program/types";
 import { displayWeek, weekPosition, type WeekPosition } from "../program/schedule";
+import { computeRecords } from "../strength/records";
 
 export type MyProgram = {
   id: string;
@@ -62,4 +63,21 @@ export const getVideoMap = cache(async () => {
     map[e.name.trim().toLowerCase()] = e.video_url;
   }
   return map;
+});
+
+/** Massimali del cliente collegato (test dei check, altrimenti stima dal logbook), per le prescrizioni in %. */
+export const getMyMaxes = cache(async (clientId: string) => {
+  const supabase = await createClient();
+  const [{ data: logs }, { data: checks }] = await Promise.all([
+    supabase.from("exercise_logs").select("exercise_name, performed_on, sets").eq("client_id", clientId).order("performed_on", { ascending: false }).limit(1500),
+    supabase.rpc("my_checks"),
+  ]);
+  const maxes: Record<string, number> = {};
+  for (const [k, r] of computeRecords(logs ?? [])) if (r.e1rm) maxes[k] = r.e1rm;
+  for (const c of checks ?? []) {
+    for (const t of (c.strength_tests as Array<{ exercise?: string; e1rm?: number | null }> | null) ?? []) {
+      if (t.exercise && t.e1rm) maxes[t.exercise.trim().toLowerCase()] = Number(t.e1rm);
+    }
+  }
+  return maxes;
 });
