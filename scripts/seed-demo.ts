@@ -214,6 +214,20 @@ async function main() {
     blocks.push({ client_id: paolo, plan_id: pp!.id, paid_on: from, amount: 260, method: "card" as const, period_start: from, period_end: addDays(from, 41), created_by: owner });
   }
   await db.from("payments").insert(blocks);
+  // due ex clienti (archiviati) che a un certo punto non hanno rinnovato: servono allo scenario prudente
+  const { data: past2 } = await db.from("clients").insert([
+    { first_name: "Elena", last_name: "Passata", sex: "F", goals: "", start_date: addDays(today, -250), status: "archived", archived_at: new Date(Date.now() - 120 * 864e5).toISOString() },
+    { first_name: "Andrea", last_name: "Finito", sex: "M", goals: "", start_date: addDays(today, -90), status: "archived", archived_at: new Date(Date.now() - 50 * 864e5).toISOString() },
+  ], { defaultToNull: false }).select("id, first_name").throwOnError();
+  const exPay = [];
+  for (const [who, n, from0] of [["Elena", 4, -250], ["Andrea", 1, -90]] as const) {
+    const id = past2!.find((c) => c.first_name === who)!.id;
+    for (let k = 0; k < n; k++) {
+      const from = addDays(today, from0 + k * 30);
+      exPay.push({ client_id: id, paid_on: from, amount: 150, method: "cash" as const, period_start: from, period_end: addDays(from, 29), created_by: owner });
+    }
+  }
+  await db.from("payments").insert(exPay).throwOnError();
 
 
   // Progetto annuale di Giulia (visibile): fasi e stimoli mese per mese
