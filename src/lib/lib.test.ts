@@ -1,0 +1,286 @@
+import { describe, expect, it } from "vitest";
+import { computeBodyComposition, protocolSites, siteAverage } from "./body/skinfolds";
+import { estimateOneRepMax } from "./strength/e1rm";
+import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
+import { billingStatus, periodEnd, suggestNextPeriod } from "./billing";
+import { addMonths, ageOn, diffDays, formatHeading, isISODate, mondayOf, todayISO } from "./dates";
+import { displayWeek, nextDay, programEndDate, weekPosition } from "./program/schedule";
+import { buildNextPhase, copyWeekToOthers } from "./program/next-phase";
+import { blockLetter, blockSummary, emptyBlock, itemLabel, normalizeWeeks, parseContent, type ProgramContent } from "./program/types";
+import { parseCsv } from "./import/csv";
+import { parseProgramSheet } from "./import/sheet";
+import { parseExerciseCsv, youtubeId } from "./import/exercises";
+import { checkinWeekFor } from "./checkin";
+
+describe("plicometria", () => {
+  it("donna, 5 pliche: stessi numeri del foglio report mensile", () => {
+    // valori di un check reale del foglio: somma 75,5 mm, 33 anni, 65,5 kg → 21,71% / 14,22 / 51,28
+    const r = computeBodyComposition({
+      sex: "F",
+      age: 33,
+      weightKg: 65.5,
+      skinfolds: {
+        tricipite: [18.5, 18.5, 18.5],
+        sottoscapolare: [9.5, 9.5, 9.5],
+        soprailiaca: [8, 8, 8.5],
+        addominale: [11, 11, 10.5],
+        coscia: [28.5, 28.5, 28.5],
+      },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.sumMm).toBe(75.5);
+    expect(r.bodyFatPct).toBe(21.71);
+    expect(r.fatMassKg).toBe(14.22);
+    expect(r.leanMassKg).toBe(51.28);
+  });
+
+  it("uomo, 7 pliche: formula Jackson-Pollock + Siri", () => {
+    const sk = Object.fromEntries(protocolSites("M").map((s) => [s, [100 / 7, 100 / 7, 100 / 7]]));
+    const r = computeBodyComposition({ sex: "M", age: 30, weightKg: 80, skinfolds: sk });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.bodyFatPct).toBe(14.63);
+  });
+
+  it("non calcola la percentuale se manca una plica (errore trovato nei fogli)", () => {
+    const r = computeBodyComposition({
+      sex: "M",
+      age: 29,
+      weightKg: 98,
+      skinfolds: { tricipite: [21, 21, 21], pettorale: [16, 16, 16], sottoscapolare: [22, 22.5, 22] },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.missing).toEqual(["ascellare", "soprailiaca", "addominale", "coscia"]);
+  });
+
+  it("chiede l'età se manca", () => {
+    const sk = Object.fromEntries(protocolSites("F").map((s) => [s, [10]]));
+    const r = computeBodyComposition({ sex: "F", age: null, weightKg: 60, skinfolds: sk });
+    expect(r.ok).toBe(false);
+  });
+
+  it("media delle sole rilevazioni inserite", () => {
+    expect(siteAverage([8, 8, 8.5])).toBeCloseTo(8.1667, 3);
+    expect(siteAverage([12, null, null])).toBe(12);
+    expect(siteAverage([null, null])).toBeNull();
+  });
+
+  it("protocollo donna senza pettorale e ascellare", () => {
+    expect(protocolSites("F")).toEqual(["tricipite", "sottoscapolare", "soprailiaca", "addominale", "coscia"]);
+  });
+});
+
+describe("massimale stimato", () => {
+  it("100 kg × 5 a RPE 8 → 81% → 122,5 kg", () => {
+    expect(estimateOneRepMax(100, 5, 8)).toBe(122.5);
+  });
+  it("1 ripetizione a RPE 10 = carico", () => {
+    expect(estimateOneRepMax(72.5, 1, 10)).toBe(72.5);
+  });
+  it("fuori tabella → null", () => {
+    expect(estimateOneRepMax(100, 15, 8)).toBeNull();
+    expect(estimateOneRepMax(100, 5, 6)).toBeNull();
+  });
+});
+
+describe("prescrizioni dei vostri programmi", () => {
+  const cases: Array<[string, unknown]> = [
+    ["4x8 65kg", { kind: "sets", sets: 4, reps: 8, kg: 65 }],
+    ["1x1 72,5kg", { kind: "sets", sets: 1, reps: 1, kg: 72.5 }],
+    ["4x8/10", { kind: "sets", sets: 4, reps: null, repsText: "8/10", kg: null }],
+    ["4x10 45/47,5kg", { kind: "sets", sets: 4, reps: 10, kg: null, loadText: "45/47,5 kg" }],
+    ["2x 6/8  ripetizioni più controllate possibile", { kind: "sets", sets: 2, repsText: "6/8" }],
+    ["4x8/10 discesa in 3\"", { kind: "sets", sets: 4, repsText: "8/10" }],
+    ["3x20\"", { kind: "timed", sets: 3, seconds: 20 }],
+    ["3x20-30\"", { kind: "timed", sets: 3, seconds: 20 }],
+    ["2x20\" per gamba", { kind: "timed", sets: 2, seconds: 20 }],
+    ["5x800m", { kind: "distance", sets: 5, meters: 800 }],
+    ["5x 1400m 12.5km/h", { kind: "distance", sets: 5, meters: 1400 }],
+    ["3x20m 40kg", { kind: "distance", sets: 3, meters: 20 }],
+    ["4x1000 4:30 + 3x500 4:15", { kind: "text" }],
+    ["7 corridoi 140kg", { kind: "text" }],
+    ["50kg 3 ripetizioni ogni 70\" x 10", { kind: "text" }],
+    ["2km facili", { kind: "text" }],
+    ["", { kind: "text" }],
+  ];
+  for (const [input, expected] of cases) {
+    it(JSON.stringify(input), () => {
+      expect(parsePrescription(input)).toMatchObject(expected as object);
+    });
+  }
+
+  it("riassume e ricostruisce dal logbook", () => {
+    expect(summarizeSets([{ kg: 65, reps: 10 }, { kg: 65, reps: 10 }])).toBe("2 × 10 · 65 kg");
+    expect(summarizeSets([{ kg: 22.5, reps: 6 }, { kg: 22.5, reps: 7 }])).toBe("6×22,5, 7×22,5 kg");
+    expect(summarizeSets([])).toBeNull();
+    expect(prescriptionFromSets([{ kg: 65, reps: 11 }, { kg: 65, reps: 11 }, { kg: 65, reps: 11 }, { kg: 65, reps: 11 }])).toBe("4x11 65kg");
+    expect(prescriptionFromSets([{ kg: 65, reps: 11 }, { kg: 60, reps: 11 }])).toBeNull();
+  });
+});
+
+describe("date", () => {
+  it("formato e calcoli", () => {
+    expect(isISODate("2026-02-30")).toBe(false);
+    expect(isISODate("2026-10-09")).toBe(true);
+    expect(addMonths("2026-01-31", 1)).toBe("2026-02-28");
+    expect(diffDays("2026-10-01", "2026-10-09")).toBe(8);
+    expect(mondayOf("2026-10-11")).toBe("2026-10-05");
+    expect(ageOn("1992-10-10", "2026-10-09")).toBe(33);
+    expect(ageOn("1992-10-09", "2026-10-09")).toBe(34);
+    expect(formatHeading("2026-10-09")).toBe("Venerdì 9 ottobre");
+  });
+  it("oggi è calcolato sull'ora italiana", () => {
+    // 23:30 UTC del 9 ottobre = 01:30 del 10 ottobre in Italia
+    expect(todayISO(new Date("2026-10-09T23:30:00Z"))).toBe("2026-10-10");
+  });
+});
+
+describe("pagamenti", () => {
+  it("periodi", () => {
+    expect(periodEnd("quarterly", "2026-10-13")).toBe("2027-01-12");
+    expect(periodEnd("six_weeks", "2026-10-01")).toBe("2026-11-11");
+    expect(periodEnd("monthly", "2026-01-31")).toBe("2026-02-27");
+    expect(suggestNextPeriod("quarterly", "2026-01-01", "2026-03-31")).toEqual({ start: "2026-04-01", end: "2026-06-30" });
+    expect(suggestNextPeriod("package", "2026-01-01", null)).toBeNull();
+  });
+  it("stati", () => {
+    const base = { plan_id: "p", amount: 600, sessions_bought: 0, sessions_used: 0 };
+    expect(billingStatus({ ...base, kind: "quarterly", paid_until: "2026-11-01" }, "2026-10-09").state).toBe("ok");
+    const soon = billingStatus({ ...base, kind: "quarterly", paid_until: "2026-10-14" }, "2026-10-09");
+    expect(soon.state).toBe("due_soon");
+    expect(soon.label).toBe("Scade tra 5 giorni");
+    expect(billingStatus({ ...base, kind: "quarterly", paid_until: "2026-10-08" }, "2026-10-09").label).toBe("Scaduto da 1 giorno");
+    expect(billingStatus({ ...base, kind: "monthly", paid_until: null }, "2026-10-09").state).toBe("overdue");
+    const pkg = billingStatus({ ...base, kind: "package", sessions_bought: 10, sessions_used: 8 }, "2026-10-09");
+    expect(pkg.state).toBe("due_soon");
+    expect(pkg.label).toBe("2 sessioni rimaste");
+    expect(billingStatus({ ...base, kind: "package", sessions_bought: 10, sessions_used: 10 }, "2026-10-09").state).toBe("overdue");
+    expect(billingStatus(null, "2026-10-09").state).toBe("none");
+  });
+});
+
+const sample: ProgramContent = {
+  days: [
+    {
+      id: "d1", title: "Giorno 1", notes: "",
+      blocks: [
+        { id: "b1", kind: "single", title: "", notes: "", items: [{ id: "i1", name: "Squat", rest: "90\"", notes: "", prescriptions: ["4x8 60kg", "4x9 60kg", "4x10 60kg"] }] },
+        { id: "b2", kind: "superset", title: "", notes: "", rounds: 4, items: [
+          { id: "i2", name: "Panca", rest: "", notes: "", prescriptions: ["4x8", "", ""] },
+          { id: "i3", name: "Rematore", rest: "", notes: "", prescriptions: ["4x10", "", ""] },
+        ] },
+      ],
+    },
+    { id: "d2", title: "Giorno 2", notes: "", blocks: [] },
+  ],
+};
+
+describe("programmi", () => {
+  it("etichette A, A1, A2…", () => {
+    expect(blockLetter(0)).toBe("A");
+    expect(blockLetter(27)).toBe("AB");
+    expect(itemLabel(sample.days[0].blocks[0], 0, 0)).toBe("A");
+    expect(itemLabel(sample.days[0].blocks[1], 1, 1)).toBe("B2");
+  });
+  it("riassunto dei blocchi", () => {
+    expect(blockSummary({ ...emptyBlock(4, "emom"), everySec: 120, durationMin: 12 })).toBe("E2MOM 12 min");
+    expect(blockSummary({ ...emptyBlock(4, "amrap"), durationMin: 15 })).toBe("AMRAP 15 min");
+    expect(blockSummary({ ...emptyBlock(4, "interval"), workSec: 40, restSec: 20, rounds: 8 })).toBe("40\" lavoro · 20\" recupero · 8 giri");
+  });
+  it("normalizza il numero di settimane e legge contenuti incompleti", () => {
+    const n = normalizeWeeks(sample, 5);
+    expect(n.days[0].blocks[0].items[0].prescriptions).toHaveLength(5);
+    expect(parseContent(null)).toEqual({ days: [] });
+    expect(parseContent({ days: [{ id: "x", title: "G", blocks: [{ id: "b", kind: "single", items: [{ id: "i", name: "A" }] }] }] }).days[0].blocks[0].items[0].prescriptions).toEqual([]);
+  });
+  it("settimana in corso e prossima sessione", () => {
+    expect(weekPosition("2026-10-05", 6, "2026-10-09")).toEqual({ state: "running", week: 1 });
+    expect(weekPosition("2026-10-05", 6, "2026-10-12")).toEqual({ state: "running", week: 2 });
+    expect(weekPosition("2026-10-05", 1, "2026-10-12")).toEqual({ state: "finished", endedDaysAgo: 1 });
+    expect(displayWeek("2026-10-12", 6, "2026-10-09")).toBe(1);
+    expect(programEndDate("2026-10-05", 6)).toBe("2026-11-15");
+    expect(nextDay(sample, 1, [{ week: 1, day_id: "d1", completed: true }])?.day.id).toBe("d2");
+    expect(nextDay(sample, 1, [{ week: 1, day_id: "d1", completed: true }, { week: 1, day_id: "d2", completed: true }])).toBeNull();
+  });
+  it("nuova fase dalla precedente: settimana 1 dal logbook reale", () => {
+    const next = buildNextPhase(sample, 4, [
+      { item_id: "i1", week: 3, sets: [{ kg: 60, reps: 10 }, { kg: 60, reps: 10 }, { kg: 60, reps: 10 }, { kg: 60, reps: 10 }], result_text: "" },
+      { item_id: "i1", week: 2, sets: [{ kg: 60, reps: 9 }], result_text: "" },
+    ]);
+    expect(next.days[0].blocks[0].items[0].prescriptions).toEqual(["4x10 60kg", "", "", ""]);
+    expect(next.days[0].blocks[1].items[0].prescriptions).toEqual(["4x8", "", "", ""]);
+    expect(next.days[0].blocks[0].items[0].id).toBe("i1");
+  });
+  it("copia la settimana sulle altre vuote", () => {
+    const c = copyWeekToOthers(sample, 0, 3);
+    expect(c.days[0].blocks[1].items[1].prescriptions).toEqual(["4x10", "4x10", "4x10"]);
+    expect(c.days[0].blocks[0].items[0].prescriptions).toEqual(["4x8 60kg", "4x9 60kg", "4x10 60kg"]);
+  });
+});
+
+describe("import dai fogli Google", () => {
+  it("CSV con virgolette e a capo nelle celle", () => {
+    expect(parseCsv('a,"b,c","d\n+\ne"\n1,2,3')).toEqual([["a", "b,c", "d\n+\ne"], ["1", "2", "3"]]);
+    expect(parseCsv("a;b\n1;2")).toEqual([["a", "b"], ["1", "2"]]);
+  });
+
+  // Foglio di prova con la stessa struttura del template "BASE Programma" (dati inventati)
+  const csv = [
+    "Programmazione,,,,,,,,,,,,",
+    ',Giorno 1,,,Week 1,Week 2,Week 3,Week 4,,,Rest,Indicazioni,Video',
+    ',Stretching quadricipite,,,"1x20""",,,,,,-,,',
+    ',Log,https://www.youtube.com/watch?v=vpT4S6IcBRE,,,,,,,,,,',
+    'Circuito,Plank,https://youtu.be/OHVQLXodML4,,"3x20-30""",,,,,,,,',
+    ',Log,https://www.youtube.com/watch?v=vpT4S6IcBRE,,,,,,,,,,',
+    ',Addome con mattonella,,,"3x20-30""",,,,,,"20""",,',
+    ',Log,,,,,,,,,,,',
+    ',Squat con bilanciere,https://youtu.be/324ZrDHOvyQ,,5x5 80kg,5x6 80kg,5x3 85kg,5x4 85kg,,,"90""",Spinta a terra,video',
+    ',Log,https://www.youtube.com/watch?v=vpT4S6IcBRE,,5x5 80kg,5x6 80kg fatica,,,,,,,',
+    ',,,,,,,,,,,,',
+    ',Giorno 2 Corsa,,,Week 1,Week 2,Week 3,Week 4,Week 5,Week 6,Rest,Indicazioni,Video',
+    ',Corsa,,,"4x1000 4:30 + 3x500 4:15",,,,,,"60-90"" da fermo",,',
+    ',Log,,,,,,,,,,,',
+  ].join("\n");
+
+  it("legge giorni, esercizi, settimane, superserie e log", () => {
+    const r = parseProgramSheet(csv, (n) => (n === "Squat con bilanciere" ? "11111111-1111-4111-8111-111111111111" : null));
+    expect(r.weeks).toBe(4);
+    expect(r.content.days.map((d) => d.title)).toEqual(["Giorno 1", "Giorno 2 Corsa"]);
+    const d1 = r.content.days[0];
+    expect(d1.blocks.map((b) => b.kind)).toEqual(["single", "superset", "single"]);
+    expect(d1.blocks[1].items.map((i) => i.name)).toEqual(["Plank", "Addome con mattonella"]);
+    const squat = d1.blocks[2].items[0];
+    expect(squat.prescriptions).toEqual(["5x5 80kg", "5x6 80kg", "5x3 85kg", "5x4 85kg"]);
+    expect(squat.rest).toBe("90\"");
+    expect(squat.notes).toBe("Spinta a terra");
+    expect(squat.exerciseId).toBe("11111111-1111-4111-8111-111111111111");
+    expect(d1.blocks[0].items[0].rest).toBe("");
+    expect(r.logs.filter((l) => l.itemId === squat.id).map((l) => l.text)).toEqual(["5x5 80kg", "5x6 80kg fatica"]);
+    expect(r.videos.find((v) => v.itemName === "Plank")?.url).toBe("https://youtu.be/OHVQLXodML4");
+    expect(r.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("eserciziario: colonne Esercizio, Video, Note e doppioni", () => {
+    const { rows, duplicates } = parseExerciseCsv(
+      "Esercizio,Video,Note\nAbductor machine,https://www.youtube.com/watch?v=_U2eLh9h4VU,Schiena staccata\nRematore con elastico,,\nRematore con elastico,https://youtu.be/abcdefghijk,Nota\n",
+    );
+    expect(rows).toHaveLength(2);
+    expect(duplicates).toEqual(["Rematore con elastico"]);
+    expect(rows[1]).toEqual({ name: "Rematore con elastico", video_url: "https://youtu.be/abcdefghijk", description: "Nota" });
+  });
+
+  it("riconosce i link YouTube", () => {
+    expect(youtubeId("https://www.youtube.com/watch?v=xlRUV_WNJMc&list=PLEAerig9kl1obt0fTE2bOi1Kp3pveZk6i&index=25")).toBe("xlRUV_WNJMc");
+    expect(youtubeId("https://youtu.be/m6_6_OzAsY4")).toBe("m6_6_OzAsY4");
+    expect(youtubeId("https://www.youtube.com/shorts/kXEKwIzgA_M")).toBe("kXEKwIzgA_M");
+    expect(youtubeId("https://vimeo.com/123")).toBeNull();
+  });
+});
+
+describe("check-up", () => {
+  it("si compila da venerdì a domenica", () => {
+    expect(checkinWeekFor("2026-10-08")).toBeNull();
+    expect(checkinWeekFor("2026-10-09")).toBe("2026-10-05");
+    expect(checkinWeekFor("2026-10-11")).toBe("2026-10-05");
+  });
+});
