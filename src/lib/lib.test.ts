@@ -284,3 +284,29 @@ describe("check-up", () => {
     expect(checkinWeekFor("2026-10-11")).toBe("2026-10-05");
   });
 });
+
+import { logPlan, restSeconds } from "./program/logbook";
+import { emptyItem } from "./program/types";
+
+describe("logbook", () => {
+  const single = emptyBlock(1);
+  it("prepara le serie dalla prescrizione", () => {
+    expect(logPlan({ ...emptyItem(1), prescriptions: ["4x8 65kg"] }, single, 1)).toEqual({ mode: "sets", rows: 4, repsHint: "8", kgHint: 65, loadText: "65 kg" });
+    expect(logPlan({ ...emptyItem(1), prescriptions: ["3x20\""] }, single, 1)).toEqual({ mode: "check", rows: 3, label: "20\"" });
+    expect(logPlan({ ...emptyItem(1), prescriptions: ["a sensazione"] }, single, 1)).toEqual({ mode: "text" });
+  });
+  it("nei circuiti usa i giri del blocco", () => {
+    const circuit = { ...emptyBlock(1, "circuit"), rounds: 3 };
+    expect(logPlan({ ...emptyItem(1), prescriptions: ["12"] }, circuit, 1)).toMatchObject({ mode: "sets", rows: 3, repsHint: "12" });
+    expect(logPlan({ ...emptyItem(1), prescriptions: ["10-12 20kg"] }, circuit, 1)).toMatchObject({ mode: "sets", rows: 3, kgHint: 20 });
+    expect(logPlan({ ...emptyItem(1), prescriptions: ["12"] }, emptyBlock(1, "amrap"), 1)).toEqual({ mode: "text" });
+  });
+  it("legge i recuperi", () => {
+    expect(restSeconds('90"')).toBe(90);
+    expect(restSeconds("1'30\"")).toBe(90);
+    expect(restSeconds("2'")).toBe(120);
+    expect(restSeconds('60-90"')).toBe(60);
+    expect(restSeconds("2 min")).toBe(120);
+    expect(restSeconds("camminando")).toBeNull();
+  });
+});

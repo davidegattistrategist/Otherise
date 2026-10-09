@@ -1,0 +1,401 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { blockSummary, BLOCK_KIND_LABELS, itemLabel, type ProgramDay } from "@/lib/program/types";
+import { logPlan, restSeconds, type LogPlan } from "@/lib/program/logbook";
+import type { SetLog } from "@/lib/program/prescription";
+import { saveWorkout } from "../../../actions";
+import { cx } from "@/components/ui";
+import { IconCheck, IconPlay, IconPlus, IconX } from "@/components/icons";
+
+type ItemState = { sets: SetLog[]; resultText: string };
+type Last = { date: string; summary: string };
+
+export type LogbookProps = {
+  programId: string;
+  week: number;
+  day: ProgramDay;
+  today: string;
+  initial: { performedOn: string; completed: boolean; notes: string; items: Record<string, ItemState>; updatedAt: string | null };
+  last: Record<string, Last>;
+  videos: Record<string, string>;
+  backHref: string;
+};
+
+const numOrNull = (v: string): number | null => {
+  const s = v.trim().replace(",", ".");
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+};
+const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n).replace(".", ","));
+
+function storageKey(p: { programId: string; week: number; day: ProgramDay }) {
+  return `otherise:log:${p.programId}:${p.week}:${p.day.id}`;
+}
+
+export function Logbook(props: LogbookProps) {
+  const { programId, week, day, today, initial, last, videos } = props;
+  const router = useRouter();
+
+  const plans = useMemo(() => {
+    const m: Record<string, LogPlan> = {};
+    for (const b of day.blocks) for (const it of b.items) m[it.id] = logPlan(it, b, week);
+    return m;
+  }, [day, week]);
+
+  const buildInitial = () => {
+    const out: Record<string, ItemState> = {};
+    for (const b of day.blocks) {
+      for (const it of b.items) {
+        const saved = initial.items[it.id];
+        const plan = plans[it.id];
+        const rows = plan.mode === "text" ? 0 : plan.rows;
+        const sets = saved?.sets?.length ? saved.sets : Array.from({ length: rows }, () => ({ kg: null, reps: null }));
+        out[it.id] = { sets, resultText: saved?.resultText ?? "" };
+      }
+    }
+    return out;
+  };
+
+  const [items, setItems] = useState<Record<string, ItemState>>(buildInitial);
+  const [notes, setNotes] = useState(initial.notes);
+  const [performedOn, setPerformedOn] = useState(initial.performedOn);
+  const [completed, setCompleted] = useState(initial.completed);
+  const [status, setStatus] = useState<{ kind: "idle" | "saving" | "saved" | "error"; text?: string }>({ kind: "idle" });
+  const [timer, setTimer] = useState<{ end: number; total: number } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const dirty = useRef(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef({ items, notes, performedOn, completed });
+  latest.current = { items, notes, performedOn, completed };
+
+  // Bozza locale: se la connessione salta in palestra non si perde nulla
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(storageKey(props));
+      if (!raw) return;
+      const draft = JSON.parse(raw) as { ts: string; items: Record<string, ItemState>; notes: string; performedOn: string };
+      if (!initial.updatedAt || draft.ts > initial.updatedAt) {
+        setItems((cur) => ({ ...cur, ...draft.items }));
+        setNotes(draft.notes);
+        setPerformedOn(draft.performedOn);
+        dirty.current = true;
+        setStatus({ kind: "idle", text: "Ripreso da dove eri rimasto" });
+      } else {
+        localStorage.removeItem(storageKey(props));
+      }
+    } catch {
+      /* archiviazione locale non disponibile */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const save = useCallback(
+    async (opts: { completed?: boolean } = {}) => {
+      const s = latest.current;
+      const done = opts.completed ?? s.completed;
+      setStatus({ kind: "saving" });
+      try {
+        const res = await saveWorkout({
+          programId,
+          week,
+          dayId: day.id,
+          performedOn: s.performedOn,
+          completed: done,
+          notes: s.notes,
+          items: Object.entries(s.items).map(([itemId, v]) => ({ itemId, sets: v.sets.map((x) => ({ kg: x.kg ?? null, reps: x.reps ?? null, done: x.done })), resultText: v.resultText })),
+        });
+        if (!res.ok) {
+          setStatus({ kind: "error", text: res.error });
+          return false;
+        }
+        dirty.current = false;
+        try {
+          localStorage.removeItem(storageKey({ programId, week, day }));
+        } catch {}
+        const t = new Date(res.savedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+        setStatus({ kind: "saved", text: `Salvato alle ${t}` });
+        return true;
+      } catch {
+        setStatus({ kind: "error", text: "Nessuna connessione: i dati restano sul telefono, riprova tra poco." });
+        return false;
+      }
+    },
+    [programId, week, day],
+  );
+
+  const touch = useCallback(() => {
+    dirty.current = true;
+    try {
+      const s = latest.current;
+      localStorage.setItem(storageKey({ programId, week, day }), JSON.stringify({ ts: new Date().toISOString(), items: s.items, notes: s.notes, performedOn: s.performedOn }));
+    } catch {}
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => void save(), 1500);
+  }, [programId, week, day, save]);
+
+  useEffect(() => {
+    const onHide = () => {
+      if (dirty.current) void save();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [save]);
+
+  useEffect(() => {
+    if (!timer) return;
+    const id = setInterval(() => {
+      const t = Date.now();
+      setNow(t);
+      if (t >= timer.end) {
+        try {
+          navigator.vibrate?.([200, 100, 200]);
+        } catch {}
+        setTimer(null);
+      }
+    }, 250);
+    return () => clearInterval(id);
+  }, [timer]);
+
+  const update = (itemId: string, fn: (s: ItemState) => ItemState) => {
+    const cur = latest.current.items;
+    const next = { ...cur, [itemId]: fn(cur[itemId]) };
+    latest.current = { ...latest.current, items: next };
+    setItems(next);
+    touch();
+  };
+
+  const startRest = (rest: string) => {
+    const s = restSeconds(rest);
+    if (s && s > 0) setTimer({ end: Date.now() + s * 1000, total: s });
+  };
+
+  const finish = async () => {
+    setCompleted(true);
+    latest.current = { ...latest.current, completed: true };
+    const ok = await save({ completed: true });
+    if (ok) {
+      router.push(`${props.backHref}?fatto=1`);
+      router.refresh();
+    }
+  };
+
+  const lastFor = (it: { exerciseId?: string | null; name: string }) => (it.exerciseId && last[it.exerciseId]) || last[it.name.trim().toLowerCase()] || null;
+  const videoFor = (it: { exerciseId?: string | null; name: string }) => (it.exerciseId && videos[it.exerciseId]) || videos[it.name.trim().toLowerCase()] || null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {day.notes ? <p className="rounded-2xl bg-card px-4 py-3 text-[15px] whitespace-pre-line">{day.notes}</p> : null}
+
+      {day.blocks.map((b, bi) => {
+        if (b.kind === "text") {
+          return (
+            <section key={b.id} className="rounded-[24px] bg-sand-deep/50 px-5 py-4">
+              {b.title ? <h2 className="font-semibold">{b.title}</h2> : null}
+              <p className="text-[15px] whitespace-pre-line text-ink-soft">{b.notes}</p>
+            </section>
+          );
+        }
+        const multi = b.kind !== "single";
+        return (
+          <section key={b.id} className={cx("flex flex-col gap-3 rounded-[24px] bg-card p-4 sm:p-5", multi && "ring-1 ring-sand-deep")}>
+            {multi ? (
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <h2 className="text-[13px] font-bold tracking-wider uppercase">{b.title || BLOCK_KIND_LABELS[b.kind]}</h2>
+                <span className="text-sm font-semibold text-accent-deep">{blockSummary(b)}</span>
+                {b.notes ? <p className="w-full text-sm text-muted">{b.notes}</p> : null}
+              </div>
+            ) : null}
+            {b.items.map((it, ii) => {
+              const plan = plans[it.id];
+              const st = items[it.id];
+              const rx = it.prescriptions[week - 1] || "";
+              const prev = lastFor(it);
+              const video = videoFor(it);
+              return (
+                <div key={it.id} className={cx("flex flex-col gap-2.5", ii > 0 && "border-t border-sand-deep pt-3")}>
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 flex h-7 min-w-7 items-center justify-center rounded-full bg-ink px-1.5 text-xs font-bold text-card">{itemLabel(b, bi, ii)}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[17px] leading-snug font-semibold">{it.name}</div>
+                      <div className="mt-0.5 flex flex-wrap gap-x-3 text-[15px]">
+                        {rx ? <span className="font-bold">{rx}</span> : null}
+                        {it.rest ? <span className="text-muted">rec. {it.rest}</span> : null}
+                      </div>
+                      {it.notes ? <p className="mt-1 text-sm text-ink-soft">{it.notes}</p> : null}
+                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                        {prev ? <span className="text-muted">Ultima volta: <span className="font-semibold text-ink">{prev.summary}</span></span> : null}
+                        {video ? (
+                          <a href={video} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-accent-deep"><IconPlay size={14} /> Video</a>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  {plan.mode === "sets" ? (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="grid grid-cols-[2.5rem_1fr_1fr_2.75rem] gap-2 px-0.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
+                        <span>Serie</span><span>Kg</span><span>Rip.</span><span className="sr-only">Fatto</span>
+                      </div>
+                      {st.sets.map((s, si) => (
+                        <div key={si} className="grid grid-cols-[2.5rem_1fr_1fr_2.75rem] items-center gap-2">
+                          <span className="text-center text-sm font-semibold text-muted tabular">{si + 1}</span>
+                          <input
+                            aria-label={`${it.name}, serie ${si + 1}, chili`}
+                            inputMode="decimal"
+                            className="h-11 w-full rounded-xl border border-sand-deep bg-sand px-3 text-[16px] font-semibold tabular"
+                            placeholder={plan.kgHint !== null ? fmt(plan.kgHint) : ""}
+                            value={fmt(s.kg)}
+                            onChange={(e) => update(it.id, (cur) => ({ ...cur, sets: cur.sets.map((x, i) => (i === si ? { ...x, kg: numOrNull(e.target.value) } : x)) }))}
+                          />
+                          <input
+                            aria-label={`${it.name}, serie ${si + 1}, ripetizioni`}
+                            inputMode="numeric"
+                            className="h-11 w-full rounded-xl border border-sand-deep bg-sand px-3 text-[16px] font-semibold tabular"
+                            placeholder={plan.repsHint}
+                            value={fmt(s.reps)}
+                            onChange={(e) => {
+                              const n = numOrNull(e.target.value);
+                              update(it.id, (cur) => ({ ...cur, sets: cur.sets.map((x, i) => (i === si ? { ...x, reps: n === null ? null : Math.round(n) } : x)) }));
+                            }}
+                          />
+                          <button
+                            type="button"
+                            aria-label={s.done ? "Serie fatta" : "Segna la serie come fatta"}
+                            aria-pressed={Boolean(s.done)}
+                            className={cx("flex h-11 w-11 items-center justify-center rounded-xl", s.done ? "bg-ink text-card" : "bg-sand-deep/70 text-muted")}
+                            onClick={() => {
+                              const willBeDone = !s.done;
+                              update(it.id, (cur) => ({
+                                ...cur,
+                                sets: cur.sets.map((x, i) => {
+                                  if (i !== si) return x;
+                                  if (!willBeDone) return { ...x, done: false };
+                                  // "fatto come scritto": riempie con i valori proposti se vuoti
+                                  const reps = x.reps ?? (/^\d+$/.test(plan.repsHint) ? Number(plan.repsHint) : null);
+                                  const kg = x.kg ?? plan.kgHint ?? (si > 0 ? cur.sets[si - 1].kg ?? null : null);
+                                  return { kg, reps, done: true };
+                                }),
+                              }));
+                              if (willBeDone && it.rest) startRest(it.rest);
+                            }}
+                          >
+                            <IconCheck size={20} />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex gap-4 pt-1 text-sm font-semibold">
+                        <button type="button" className="inline-flex items-center gap-1 text-ink-soft" onClick={() => update(it.id, (cur) => ({ ...cur, sets: [...cur.sets, { kg: cur.sets[cur.sets.length - 1]?.kg ?? null, reps: null }] }))}>
+                          <IconPlus size={16} /> serie
+                        </button>
+                        {st.sets.length > 1 ? (
+                          <button type="button" className="text-muted" onClick={() => update(it.id, (cur) => ({ ...cur, sets: cur.sets.slice(0, -1) }))}>− serie</button>
+                        ) : null}
+                      </div>
+                      <input
+                        aria-label={`Note su ${it.name}`}
+                        className="h-10 rounded-xl border border-transparent bg-transparent px-1 text-sm placeholder:text-muted focus:border-sand-deep focus:bg-sand"
+                        placeholder="Una nota? (es. ultima serie pesante, fastidio al ginocchio)"
+                        value={st.resultText}
+                        onChange={(e) => update(it.id, (cur) => ({ ...cur, resultText: e.target.value }))}
+                      />
+                    </div>
+                  ) : plan.mode === "check" ? (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        {st.sets.map((s, si) => (
+                          <button
+                            key={si}
+                            type="button"
+                            aria-pressed={Boolean(s.done)}
+                            className={cx("flex h-11 min-w-16 items-center justify-center gap-1 rounded-xl px-3 text-sm font-semibold tabular", s.done ? "bg-ink text-card" : "bg-sand-deep/70")}
+                            onClick={() => {
+                              update(it.id, (cur) => ({ ...cur, sets: cur.sets.map((x, i) => (i === si ? { ...x, done: !x.done } : x)) }));
+                              if (!s.done && it.rest) startRest(it.rest);
+                            }}
+                          >
+                            {s.done ? <IconCheck size={16} /> : null}{plan.label}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        aria-label={`Note su ${it.name}`}
+                        className="h-11 rounded-xl border border-sand-deep bg-sand px-3 text-[15px]"
+                        placeholder="Carico, tempo o note (facoltativo)"
+                        value={st.resultText}
+                        onChange={(e) => update(it.id, (cur) => ({ ...cur, resultText: e.target.value }))}
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      aria-label={`Com'è andata: ${it.name}`}
+                      className="h-11 rounded-xl border border-sand-deep bg-sand px-3 text-[15px]"
+                      placeholder={b.kind === "amrap" && ii === 0 ? "Giri completati, carico…" : "Com'è andata? Carico, tempo, giri…"}
+                      value={st.resultText}
+                      onChange={(e) => update(it.id, (cur) => ({ ...cur, resultText: e.target.value }))}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </section>
+        );
+      })}
+
+      <section className="flex flex-col gap-3 rounded-[24px] bg-card p-4 sm:p-5">
+        <label htmlFor="session-notes" className="font-semibold">Com&apos;è andata in generale?</label>
+        <textarea
+          id="session-notes"
+          rows={3}
+          className="rounded-xl border border-sand-deep bg-sand px-3 py-2.5 text-[15px] leading-relaxed"
+          placeholder="Energia, sensazioni, qualcosa da dire al coach (facoltativo)"
+          value={notes}
+          onChange={(e) => {
+            setNotes(e.target.value);
+            latest.current = { ...latest.current, notes: e.target.value };
+            touch();
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <label htmlFor="performed-on" className="text-sm text-muted">Fatto il</label>
+          <input
+            id="performed-on"
+            type="date"
+            max={today}
+            className="h-11 rounded-xl border border-sand-deep bg-sand px-3 text-[15px]"
+            value={performedOn}
+            onChange={(e) => {
+              setPerformedOn(e.target.value);
+              latest.current = { ...latest.current, performedOn: e.target.value };
+              touch();
+            }}
+          />
+        </div>
+      </section>
+
+      <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 flex flex-col gap-2 md:bottom-4">
+        {timer ? (
+          <div className="flex items-center gap-3 rounded-full bg-accent px-4 py-2.5 text-white shadow-lg" role="timer" aria-live="off">
+            <span className="text-sm font-semibold">Recupero</span>
+            <span className="text-xl font-bold tabular">{Math.max(0, Math.ceil((timer.end - now) / 1000))}&quot;</span>
+            <div className="h-1.5 flex-1 rounded-full bg-white/30"><div className="h-1.5 rounded-full bg-white" style={{ width: `${Math.max(0, Math.min(100, ((timer.end - now) / (timer.total * 1000)) * 100))}%` }} /></div>
+            <button type="button" aria-label="Ferma il recupero" onClick={() => setTimer(null)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20"><IconX size={16} /></button>
+          </div>
+        ) : null}
+        <div className="flex items-center gap-3 rounded-full bg-ink p-1.5 pl-5 text-card shadow-lg">
+          <span className={cx("min-w-0 flex-1 truncate text-sm", status.kind === "error" ? "text-accent" : "text-muted-dark")} aria-live="polite">
+            {status.kind === "saving" ? "Salvataggio…" : status.text ?? (completed ? "Sessione completata" : "Si salva da solo")}
+          </span>
+          {status.kind === "error" ? (
+            <button type="button" onClick={() => void save()} className="h-11 rounded-full px-4 text-sm font-semibold text-card ring-1 ring-line-dark">Riprova</button>
+          ) : null}
+          <button type="button" onClick={() => void finish()} disabled={status.kind === "saving"} className="h-11 rounded-full bg-accent px-5 text-[15px] font-bold text-white disabled:opacity-60">
+            {completed ? "Salva" : "Ho finito"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

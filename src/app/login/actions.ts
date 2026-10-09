@@ -40,3 +40,15 @@ export async function signOut() {
   await supabase.auth.signOut();
   redirect("/login");
 }
+
+/** Cambio password dall'interno dell'app (utente già collegato). */
+export async function changePassword(_: ActionState, formData: FormData): Promise<ActionState> {
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (password.length < 8) return { error: "La password deve avere almeno 8 caratteri." };
+  if (password !== confirm) return { error: "Le due password non coincidono." };
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: /different/i.test(error.message) ? "La nuova password deve essere diversa da quella attuale." : "Non sono riuscito a cambiare la password. Riprova." };
+  return { ok: true, message: "Password cambiata." };
+}

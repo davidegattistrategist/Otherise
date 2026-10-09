@@ -6,7 +6,7 @@ import { z } from "zod";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isISODate, todayISO, addDays } from "@/lib/dates";
-import { cloneWithNewIds, normalizeWeeks, parseContent, programContentSchema, type ProgramContent } from "@/lib/program/types";
+import { cloneWithNewIds, newId, normalizeWeeks, parseContent, programContentSchema, type ProgramContent } from "@/lib/program/types";
 import { buildNextPhase, type ItemLastLog } from "@/lib/program/next-phase";
 import { parseProgramSheet } from "@/lib/import/sheet";
 import { programEndDate } from "@/lib/program/schedule";
@@ -44,7 +44,7 @@ export async function createEmptyProgram(clientId: string | null) {
   const me = await requireStaff();
   const supabase = await createClient();
   const weeks = 4;
-  const content = normalizeWeeks({ days: [{ id: crypto.randomUUID().slice(0, 8), title: "Giorno 1", notes: "", blocks: [] }] }, weeks);
+  const content = normalizeWeeks({ days: [{ id: newId(), title: "Giorno 1", notes: "", blocks: [] }] }, weeks);
   const { data, error } = await supabase
     .from("programs")
     .insert({
