@@ -84,8 +84,12 @@ async function sendInvite(clientId: string): Promise<ActionState> {
   const { data: client } = await supabase.from("clients").select("id, email, user_id").eq("id", clientId).maybeSingle();
   if (!client) return { error: "Cliente non trovato." };
   if (!client.email) return { error: "Aggiungi prima l'email del cliente." };
-  if (client.user_id) return { error: "Il cliente ha già un account. Se ha perso la password può usare “Password dimenticata”." };
   const admin = createAdminClient();
+  if (client.user_id) {
+    const { data: u } = await admin.auth.admin.getUserById(client.user_id);
+    if (u.user?.last_sign_in_at) return { error: "Il cliente ha già un account. Se ha perso la password può usare “Password dimenticata”." };
+    // invitato ma mai entrato: rimandiamo l'invito
+  }
   const { error } = await admin.auth.admin.inviteUserByEmail(client.email, {
     redirectTo: `${await siteUrl()}/auth/confirm?next=/imposta-password`,
   });

@@ -1,0 +1,131 @@
+"use client";
+
+import { useActionState, useEffect, useRef, useState } from "react";
+import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
+import { Field, Input, Select, Textarea } from "@/components/ui";
+import { isPeriodic, METHOD_LABELS, METHODS, periodEnd, PLAN_KINDS, PLAN_LABELS, type PlanKind } from "@/lib/billing";
+import { isISODate } from "@/lib/dates";
+
+type Action = (s: ActionState, fd: FormData) => Promise<ActionState>;
+
+export function PlanForm({
+  action,
+  values,
+  today,
+  submitLabel,
+}: {
+  action: Action;
+  values?: { kind: string; amount: number | string; method: string; start_date: string; package_sessions: number | null; notes: string };
+  today: string;
+  submitLabel: string;
+}) {
+  const [state, formAction] = useActionState(action, null);
+  const [kind, setKind] = useState<PlanKind>((values?.kind as PlanKind) ?? "monthly");
+  return (
+    <form action={formAction} className="flex flex-col gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Tipo di piano">
+          <Select name="kind" value={kind} onChange={(e) => setKind(e.target.value as PlanKind)}>
+            {PLAN_KINDS.map((k) => <option key={k} value={k}>{PLAN_LABELS[k]}</option>)}
+          </Select>
+        </Field>
+        <Field label="Importo" hint={kind === "package" ? "per pacchetto" : kind === "single" ? "a sessione" : "a periodo"}>
+          <Input name="amount" inputMode="decimal" defaultValue={values ? String(values.amount).replace(".", ",") : ""} placeholder="es. 240" required />
+        </Field>
+        {kind === "package" ? (
+          <Field label="Sessioni nel pacchetto">
+            <Input name="package_sessions" type="number" min={1} defaultValue={values?.package_sessions ?? 10} required />
+          </Field>
+        ) : null}
+        <Field label="Metodo abituale">
+          <Select name="method" defaultValue={values?.method ?? "transfer"}>
+            {METHODS.map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
+          </Select>
+        </Field>
+        <Field label="In vigore dal" hint={kind === "package" ? "le sessioni PT da questa data scalano il pacchetto" : undefined}>
+          <Input name="start_date" type="date" defaultValue={values?.start_date ?? today} required />
+        </Field>
+      </div>
+      <Field label="Note" hint="facoltative">
+        <Textarea name="notes" rows={2} defaultValue={values?.notes ?? ""} placeholder="Es. sconto amici, paga a inizio mese" />
+      </Field>
+      <ActionMessage state={state} />
+      <div><SubmitButton>{submitLabel}</SubmitButton></div>
+    </form>
+  );
+}
+
+export function PaymentForm({
+  action,
+  kind,
+  defaults,
+}: {
+  action: Action;
+  kind: PlanKind;
+  defaults: { paid_on: string; amount: number | string; method: string; period_start: string | null; period_end: string | null; sessions: number | null };
+}) {
+  const [state, formAction] = useActionState(action, null);
+  const [start, setStart] = useState(defaults.period_start ?? "");
+  const [end, setEnd] = useState(defaults.period_end ?? "");
+  const formRef = useRef<HTMLFormElement>(null);
+  const periodic = isPeriodic(kind);
+  useEffect(() => {
+    setStart(defaults.period_start ?? "");
+    setEnd(defaults.period_end ?? "");
+  }, [defaults.period_start, defaults.period_end]);
+  return (
+    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Pagato il">
+          <Input name="paid_on" type="date" defaultValue={defaults.paid_on} required />
+        </Field>
+        <Field label="Importo">
+          <Input name="amount" inputMode="decimal" defaultValue={String(defaults.amount).replace(".", ",")} required />
+        </Field>
+        <Field label="Metodo">
+          <Select name="method" defaultValue={defaults.method}>
+            {METHODS.map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
+          </Select>
+        </Field>
+      </div>
+      {periodic ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Copre dal">
+            <Input
+              name="period_start"
+              type="date"
+              value={start}
+              onChange={(e) => {
+                setStart(e.target.value);
+                if (isISODate(e.target.value)) setEnd(periodEnd(kind, e.target.value) ?? "");
+              }}
+              required
+            />
+          </Field>
+          <Field label="Al" hint="calcolato in automatico">
+            <Input name="period_end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} required />
+          </Field>
+        </div>
+      ) : (
+        <Field label="Sessioni pagate">
+          <Input name="sessions" type="number" min={1} defaultValue={defaults.sessions ?? 1} required className="max-w-40" />
+        </Field>
+      )}
+      <Field label="Note" hint="facoltative">
+        <Input name="notes" placeholder="Es. pagato metà, il resto a fine mese" />
+      </Field>
+      <ActionMessage state={state} />
+      <div><SubmitButton>Registra il pagamento</SubmitButton></div>
+    </form>
+  );
+}
+
+export function ReminderButton({ action }: { action: Action }) {
+  const [state, formAction] = useActionState(action, null);
+  return (
+    <form action={formAction} className="flex flex-col gap-2">
+      <div><SubmitButton variant="secondary" size="sm" pendingText="Invio…">Manda un promemoria al cliente</SubmitButton></div>
+      <ActionMessage state={state} />
+    </form>
+  );
+}

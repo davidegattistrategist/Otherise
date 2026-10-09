@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { getStaffClient } from "@/lib/data/client";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, Eyebrow, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { ClientForm } from "../../client-form";
@@ -20,6 +21,8 @@ export default async function ClientProfilePage({ params, searchParams }: { para
     supabase.from("profiles").select("id, full_name").eq("role", "coach").order("full_name"),
     supabase.from("client_private_notes").select("notes").eq("client_id", id).maybeSingle(),
   ]);
+  const account = client.user_id ? (await createAdminClient().auth.admin.getUserById(client.user_id)).data.user : null;
+  const hasEntered = Boolean(account?.last_sign_in_at);
   return (
     <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
       <Card className="[grid-column:1/-1] lg:[grid-column:auto/span_2]">
@@ -35,8 +38,13 @@ export default async function ClientProfilePage({ params, searchParams }: { para
         <Card>
           <Eyebrow className="mb-3">Accesso all&apos;app</Eyebrow>
           {invito === "errore" ? <div className="mb-3"><Notice tone="error">Il cliente è stato creato, ma l&apos;invito non è partito. Riprova da qui.</Notice></div> : null}
-          {client.user_id ? (
+          {client.user_id && hasEntered ? (
             <p className="text-[15px] leading-relaxed text-muted">Il cliente ha già un account e può entrare con {client.email}. Se perde la password usa “Password dimenticata” nella pagina di accesso.</p>
+          ) : client.user_id ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-[15px] leading-relaxed text-muted">Invito inviato a {client.email}, ma il cliente non è ancora entrato. Il link vale 24 ore: se è scaduto, rimandalo.</p>
+              <InviteButton action={inviteClientAction.bind(null, id)} label="Rimanda l'invito" />
+            </div>
           ) : (
             <div className="flex flex-col gap-3">
               <p className="text-[15px] leading-relaxed text-muted">
