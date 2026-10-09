@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong, isISODate, todayISO } from "@/lib/dates";
@@ -59,7 +60,7 @@ export async function savePlan(clientId: string, planId: string | null, _: Actio
     if (error) return { error: "Salvataggio non riuscito." };
   }
   revalidate(clientId);
-  return { ok: true, message: "Piano salvato." };
+  redirect(`/staff/clienti/${clientId}/pagamenti?piano=salvato`);
 }
 
 export async function recordPayment(clientId: string, planId: string, _: ActionState, fd: FormData): Promise<ActionState> {

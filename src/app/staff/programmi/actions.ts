@@ -123,6 +123,8 @@ const saveSchema = z.object({
   start_date: z.string().nullable().refine((v) => v === null || v === "" || isISODate(v), "Data di inizio non valida"),
   content: programContentSchema,
   expected_updated_at: z.string().nullable(),
+  /** Note dell'AI sulle righe cambiate (presenti dopo una bozza preparata con l'assistente) */
+  ai_notes: z.record(z.string(), z.string()).nullable().optional(),
 });
 
 export type SaveResult = { ok: true; updated_at: string; unknownExercises: string[] } | { ok: false; error: string; conflict?: boolean };
@@ -142,7 +144,15 @@ export async function saveProgram(id: string, input: unknown): Promise<SaveResul
   const content = normalizeWeeks(v.content, v.weeks);
   const { data, error } = await supabase
     .from("programs")
-    .update({ title: v.title, description: v.description, weeks: v.weeks, start_date: v.start_date || null, content: asJson(content) })
+    .update({
+      title: v.title,
+      description: v.description,
+      weeks: v.weeks,
+      start_date: v.start_date || null,
+      content: asJson(content),
+      ...(v.ai_notes !== undefined ? { ai_notes: v.ai_notes && Object.keys(v.ai_notes).length ? v.ai_notes : null } : {}),
+      ...(v.ai_notes && Object.keys(v.ai_notes).length ? { source: "ai" } : {}),
+    })
     .eq("id", id)
     .select("updated_at, client_id")
     .single();

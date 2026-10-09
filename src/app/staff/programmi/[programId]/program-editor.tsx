@@ -104,6 +104,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         start_date: program.is_template ? null : startDate || null,
         content,
         expected_updated_at: updatedAt,
+        ai_notes: aiNotes,
       });
       if (res.ok) {
         setUpdatedAt(res.updated_at);
@@ -115,7 +116,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         setMessage({ tone: "error", text: res.error });
       }
     });
-  }, [program.id, program.is_template, title, description, weeks, startDate, content, updatedAt]);
+  }, [program.id, program.is_template, title, description, weeks, startDate, content, updatedAt, aiNotes]);
 
   // Ctrl/Cmd+S salva
   const saveRef = useRef(doSave);
@@ -208,7 +209,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                 variant="secondary"
                 disabled={pending || dirty || !hasContent}
                 title={dirty ? "Salva prima di pubblicare" : undefined}
-                onClick={() => runAction(() => publishProgram(program.id), () => setStatus("published"))}
+                onClick={() => runAction(() => publishProgram(program.id), () => { setStatus("published"); setAiNotes({}); })}
               >
                 Pubblica
               </Button>

@@ -43,7 +43,6 @@ export default async function ProgramEditorPage({ params }: { params: Promise<{ 
 
   return (
     <ProgramEditor
-      key={program.updated_at}
       program={{ ...(program as unknown as EditorProgram), ai_notes: (program.ai_notes as Record<string, string> | null) ?? null }}
       initialContent={parseContent(program.content)}
       exercises={exercises ?? []}

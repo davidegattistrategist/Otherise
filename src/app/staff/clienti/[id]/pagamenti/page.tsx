@@ -3,7 +3,7 @@ import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatShort, todayISO } from "@/lib/dates";
 import { billingStatus, formatEuro, isPeriodic, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
-import { Card, Dot, EmptyState, Eyebrow } from "@/components/ui";
+import { Card, Dot, EmptyState, Eyebrow, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { PaymentForm, PlanForm, ReminderButton } from "./forms";
 import { deletePayment, recordPayment, savePlan, sendPaymentReminder } from "./actions";
@@ -34,6 +34,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
       <div className="flex flex-col gap-4">
+        {piano === "salvato" ? <Notice tone="success">Piano salvato.</Notice> : null}
         {plan && kind ? (
           <Card dark className="flex flex-col gap-3">
             <Eyebrow dark>Stato</Eyebrow>

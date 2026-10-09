@@ -78,7 +78,6 @@ export async function POST(req: NextRequest) {
       const [method, clientContext] = await Promise.all([buildMethodContext(supabase), buildClientContext(supabase, program.client_id, program.id)]);
       const result = await reviseProgram({ instruction: body.instruction, ...method, clientContext, current: body.current, images: body.images });
       await log("revise", result.usage);
-      await supabase.from("programs").update({ ai_notes: result.notes, source: "ai" }).eq("id", program.id);
       return NextResponse.json({ summary: result.summary, title: result.title, description: result.description, weeks: result.weeks, content: result.content, notes: result.notes });
     }
     if (body.mode === "progress") {
