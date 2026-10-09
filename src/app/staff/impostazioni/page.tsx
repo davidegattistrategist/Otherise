@@ -6,8 +6,8 @@ import { formatEuro } from "@/lib/billing";
 import { DEFAULT_PAYMENT_MESSAGE } from "@/lib/whatsapp";
 import { todayISO } from "@/lib/dates";
 import { Card, Dot, Eyebrow, PageTitle, ProgressBar } from "@/components/ui";
-import { MethodForm, SettingsForm } from "./forms";
-import { saveMethod, saveSettings } from "./actions";
+import { MethodForm, PrivacyForm, SettingsForm } from "./forms";
+import { saveMethod, savePrivacy, saveSettings } from "./actions";
 
 export const metadata: Metadata = { title: "Impostazioni" };
 
@@ -27,11 +27,12 @@ export default async function SettingsPage() {
   const supabase = await createClient();
   const monthStart = `${todayISO().slice(0, 7)}-01`;
   const [{ data: settings }, { data: usage }, { count: examples }] = await Promise.all([
-    supabase.from("app_settings").select("business_name, coaching_method, reminder_days, ai_monthly_budget_eur, payment_message").maybeSingle(),
+    supabase.from("app_settings").select("business_name, coaching_method, reminder_days, ai_monthly_budget_eur, payment_message, legal_name, legal_address, legal_tax_id, privacy_email").maybeSingle(),
     supabase.from("ai_requests").select("cost_eur, kind").gte("created_at", `${monthStart}T00:00:00Z`),
     supabase.from("programs").select("id", { count: "exact", head: true }).eq("is_ai_example", true),
   ]);
-  const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20, payment_message: "" };
+  const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20, payment_message: "", legal_name: "", legal_address: "", legal_tax_id: "", privacy_email: "" };
+  const privacyMissing = !s.legal_name || !s.legal_address || !s.legal_tax_id || !s.privacy_email;
   const spent = (usage ?? []).reduce((t, u) => t + Number(u.cost_eur), 0);
   const budget = Number(s.ai_monthly_budget_eur);
   const hasAi = Boolean(process.env.ANTHROPIC_API_KEY);
@@ -57,6 +58,17 @@ export default async function SettingsPage() {
           <Card className="flex flex-col gap-4">
             <Eyebrow>Attività</Eyebrow>
             <SettingsForm action={saveSettings} values={s} defaultMessage={DEFAULT_PAYMENT_MESSAGE} />
+          </Card>
+
+          <Card className="flex flex-col gap-4">
+            <div>
+              <Eyebrow>Privacy</Eyebrow>
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Questi dati compaiono nell&apos;<a href="/privacy" target="_blank" className="font-semibold text-ink underline">informativa</a> che i clienti confermano al primo accesso.
+                {privacyMissing ? " Completali prima di invitare i clienti." : ""} Per chi inizia di persona c&apos;è il <a href="/privacy/modulo" target="_blank" className="font-semibold text-ink underline">modulo da stampare</a>.
+              </p>
+            </div>
+            <PrivacyForm action={savePrivacy} values={s} />
           </Card>
 
           <Card className="flex flex-col gap-3">

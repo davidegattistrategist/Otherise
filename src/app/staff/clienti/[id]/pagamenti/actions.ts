@@ -174,3 +174,39 @@ export async function sendPaymentReminder(clientId: string, _: ActionState, __: 
   if (!client.user_id && !emailed) return { error: "Il cliente non ha ancora l'app e l'invio delle email non è configurato: usa il pulsante WhatsApp." };
   return { ok: true, message: emailed ? (client.user_id ? "Promemoria inviato nell'app e per email." : "Promemoria inviato per email.") : "Promemoria inviato nell'app (invio email non configurato)." };
 }
+
+/**
+ * Pacchetto chiuso a mano: le sessioni rimaste non valgono più
+ * (es. pacchetto scaduto secondo gli accordi presi col cliente).
+ */
+export async function closePackage(clientId: string, planId: string) {
+  await requireOwner();
+  const supabase = await createClient();
+  const [{ data: plan }, { data: billing }] = await Promise.all([
+    supabase.from("payment_plans").select("id, kind, sessions_written_off").eq("id", planId).eq("client_id", clientId).maybeSingle(),
+    supabase.rpc("client_billing", { cid: clientId }),
+  ]);
+  const row = (billing as BillingRow[] | null)?.[0];
+  if (!plan || plan.kind !== "package" || !row || row.plan_id !== planId) return;
+  const left = row.sessions_bought - row.sessions_used;
+  if (left <= 0) return;
+  await supabase
+    .from("payment_plans")
+    .update({ sessions_written_off: plan.sessions_written_off + left, package_closed_on: todayISO(), package_closed_sessions: left })
+    .eq("id", planId);
+  revalidate(clientId);
+  redirect(`/staff/clienti/${clientId}/pagamenti?piano=chiuso`);
+}
+
+/** Annulla l'ultima chiusura a mano del pacchetto. */
+export async function reopenPackage(clientId: string, planId: string) {
+  await requireOwner();
+  const supabase = await createClient();
+  const { data: plan } = await supabase.from("payment_plans").select("sessions_written_off, package_closed_sessions").eq("id", planId).eq("client_id", clientId).maybeSingle();
+  if (!plan) return;
+  await supabase
+    .from("payment_plans")
+    .update({ sessions_written_off: Math.max(0, plan.sessions_written_off - plan.package_closed_sessions), package_closed_on: null, package_closed_sessions: 0 })
+    .eq("id", planId);
+  revalidate(clientId);
+}

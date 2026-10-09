@@ -5,6 +5,7 @@
 import { mround } from "../strength/e1rm";
 
 export const PROGRESSION_RULES = [
+  { key: "double", label: "Doppia progressione: +1 rip. per 2 settimane, poi +2,5 kg e si riparte" },
   { key: "reps", label: "+1 ripetizione a settimana" },
   { key: "kg25", label: "+2,5 kg a settimana" },
   { key: "kg5", label: "+5 kg a settimana" },
@@ -32,6 +33,16 @@ export function progress(base: string, rule: ProgressionRule, steps: number): st
   const timed = Boolean(m[5]);
   let rest = m[6] ?? "";
   switch (rule) {
+    case "double": {
+      // 4x7 16kg → 4x8 16kg → 4x9 16kg → 4x7 18,5kg → …
+      const k = /(\d+(?:[.,]\d+)?)\s*kg/i.exec(rest);
+      const cycle = k ? Math.floor(steps / 3) : 0;
+      const inc = k ? steps % 3 : steps;
+      a += timed ? 5 * inc : inc;
+      if (b !== null) b += timed ? 5 * inc : inc;
+      if (k && cycle) rest = rest.replace(k[0], `${fmt(num(k[1]) + 2.5 * cycle)}kg`);
+      break;
+    }
     case "reps": {
       const inc = timed ? 5 * steps : steps;
       a += inc;

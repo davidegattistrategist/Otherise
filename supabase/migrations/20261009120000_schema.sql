@@ -51,6 +51,14 @@ create table public.clients (
   status text not null default 'active' check (status in ('active', 'paused', 'archived')),
   start_date date not null default current_date,
   weekly_checkin boolean not null default false,
+  -- Privacy: informativa letta e consenso esplicito per i dati sulla salute
+  privacy_accepted_at timestamptz,
+  privacy_version text,
+  health_consent_at timestamptz,
+  consent_source text check (consent_source in ('app', 'paper')),
+  -- Il cliente può chiedere di non usare l'assistente AI sui suoi dati
+  ai_opt_out boolean not null default false,
+  archived_at timestamptz,
   created_at timestamptz not null default now()
 );
 create unique index clients_email_unique on public.clients (email) where email is not null;
@@ -245,6 +253,10 @@ create table public.payment_plans (
   method text not null default 'transfer' check (method in ('cash', 'transfer', 'paypal', 'card', 'other')),
   start_date date not null default current_date,
   package_sessions int check (package_sessions is null or package_sessions > 0),
+  -- Pacchetto chiuso a mano dal titolare: le sessioni rimaste non valgono più
+  sessions_written_off int not null default 0 check (sessions_written_off >= 0),
+  package_closed_on date,
+  package_closed_sessions int not null default 0 check (package_closed_sessions >= 0),
   active boolean not null default true,
   notes text not null default '',
   created_at timestamptz not null default now()
@@ -319,6 +331,11 @@ create table public.app_settings (
   ai_monthly_budget_eur numeric(8, 2) not null default 20,
   -- messaggio WhatsApp per ricordare un rinnovo ({nome}, {situazione}, {importo})
   payment_message text not null default '',
+  -- Dati del titolare del trattamento per l'informativa privacy
+  legal_name text not null default '',
+  legal_address text not null default '',
+  legal_tax_id text not null default '',
+  privacy_email text not null default '',
   updated_at timestamptz not null default now()
 );
 insert into public.app_settings (id) values (1);
@@ -521,10 +538,30 @@ begin
   if auth.uid() is null then
     return new;
   end if;
+  -- Il cliente (tramite le funzioni qui sotto) cambia solo i propri consensi
+  if public.is_client_self(old.id)
+     and (to_jsonb(new) - array['privacy_accepted_at', 'privacy_version', 'health_consent_at', 'consent_source', 'ai_opt_out'])
+       = (to_jsonb(old) - array['privacy_accepted_at', 'privacy_version', 'health_consent_at', 'consent_source', 'ai_opt_out']) then
+    return new;
+  end if;
   raise exception 'Non autorizzato';
 end $$;
 create trigger clients_guard before update on public.clients
   for each row execute function public.guard_client_update();
+
+-- Data di archiviazione (serve per ricordare quando cancellare i dati)
+create or replace function public.track_client_archive()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if new.status = 'archived' and (tg_op = 'INSERT' or old.status is distinct from 'archived') then
+    new.archived_at := now();
+  elsif new.status <> 'archived' then
+    new.archived_at := null;
+  end if;
+  return new;
+end $$;
+create trigger clients_archive before insert or update of status on public.clients
+  for each row execute function public.track_client_archive();
 
 -- Il cliente non può modificare risposta e revisione del check-up;
 -- lo staff non può modificare le risposte del cliente.
@@ -695,8 +732,8 @@ begin
   select p.id, p.kind, p.amount,
          (select max(pay.period_end) from public.payments pay where pay.client_id = cid and pay.plan_id = p.id),
          coalesce((select sum(pay.sessions) from public.payments pay where pay.client_id = cid and pay.plan_id = p.id), 0)::int,
-         (select count(*) from public.pt_sessions s
-           where s.client_id = cid and s.counts_toward_package and s.session_date >= p.start_date)::int
+         ((select count(*) from public.pt_sessions s
+           where s.client_id = cid and s.counts_toward_package and s.session_date >= p.start_date) + p.sessions_written_off)::int
   from public.payment_plans p
   where p.client_id = cid and p.active
   order by p.created_at desc
@@ -724,8 +761,8 @@ begin
          p.client_id, p.id, p.kind, p.amount, p.start_date,
          (select max(pay.period_end) from public.payments pay where pay.plan_id = p.id),
          coalesce((select sum(pay.sessions) from public.payments pay where pay.plan_id = p.id), 0)::int,
-         (select count(*) from public.pt_sessions s
-           where s.client_id = p.client_id and s.counts_toward_package and s.session_date >= p.start_date)::int
+         ((select count(*) from public.pt_sessions s
+           where s.client_id = p.client_id and s.counts_toward_package and s.session_date >= p.start_date) + p.sessions_written_off)::int
   from public.payment_plans p
   join public.clients c on c.id = p.client_id
   where p.active and c.status <> 'archived'
@@ -879,12 +916,50 @@ begin
   end if;
 end $$;
 
+-- =====================================================================
+-- Privacy: consensi del cliente
+-- =====================================================================
+-- Il cliente conferma di aver letto l'informativa e dà il consenso esplicito
+-- al trattamento dei dati relativi alla salute (art. 9 GDPR).
+create or replace function public.accept_privacy(version text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_client_id() is null then
+    raise exception 'Non autorizzato';
+  end if;
+  update public.clients
+     set privacy_accepted_at = now(), privacy_version = version,
+         health_consent_at = now(), consent_source = 'app'
+   where id = public.my_client_id();
+end $$;
+
+-- Revoca del consenso sui dati di salute (resta traccia dell'informativa letta)
+create or replace function public.withdraw_health_consent()
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_client_id() is null then
+    raise exception 'Non autorizzato';
+  end if;
+  update public.clients set health_consent_at = null, consent_source = null where id = public.my_client_id();
+end $$;
+
+-- Il cliente sceglie se l'assistente AI può lavorare sui suoi dati
+create or replace function public.set_ai_opt_out(opt_out boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if public.my_client_id() is null then
+    raise exception 'Non autorizzato';
+  end if;
+  update public.clients set ai_opt_out = opt_out where id = public.my_client_id();
+end $$;
+
 -- Le funzioni interne non devono essere chiamate da chi non è collegato
 revoke execute on all functions in schema public from anon, public;
 grant execute on function public.my_role(), public.is_owner(), public.is_staff(),
   public.can_manage_client(uuid), public.is_client_self(uuid), public.my_client_id(),
   public.can_log_program(uuid, uuid), public.client_billing(uuid), public.billing_overview(), public.my_pt_session_dates(), public.my_checks(),
   public.last_exercise_logs(uuid, date), public.my_coach_name(), public.business_name(),
-  public.monday_of(date), public.my_unread_chats()
+  public.monday_of(date), public.my_unread_chats(),
+  public.accept_privacy(text), public.withdraw_health_consent(), public.set_ai_opt_out(boolean)
   to authenticated, service_role;
 revoke all on all tables in schema public from anon;

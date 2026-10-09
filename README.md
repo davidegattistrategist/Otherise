@@ -9,7 +9,8 @@ App web per personal trainer: clienti, programmi di allenamento, check corporei,
 - Assistente AI (Claude): prepara o modifica la bozza da una richiesta scritta o dettata, propone progressioni e alternative; conosce metodo, esempi, eserciziario e storico del cliente.
 - Ruoli: titolare (vede tutto) e collaboratori (solo i clienti assegnati, niente pagamenti).
 - Pagamenti fuori dall'app: "Pagato" in un tocco, promemoria WhatsApp già scritti, scadenze e pacchetti automatici, incassi per mese, export per il commercialista.
-- Chat con i clienti (testo, foto e video), costanza degli allenamenti, record, progressioni automatiche, prescrizioni in % del massimale, riassunto AI dei check-up, email di riepilogo ogni mattina.
+- Chat con i clienti (testo, foto e video), costanza degli allenamenti, record, progressioni automatiche (anche doppia progressione), prescrizioni in % del massimale, riassunto AI dei check-up, email di riepilogo ogni mattina.
+- Privacy GDPR: informativa con i dati del titolare, consenso esplicito al primo accesso (o modulo cartaceo), AI disattivabile dal cliente, export e cancellazione dei dati, promemoria di cancellazione dopo 24 mesi.
 
 **Per il cliente**
 - Prossimo allenamento, avanzamento della fase, stato del percorso.
@@ -24,7 +25,7 @@ App web per personal trainer: clienti, programmi di allenamento, check corporei,
 - [Come si usa](docs/GUIDA-USO.md)
 - [Come lavorare con Claude](docs/COME-LAVORARE-CON-CLAUDE.md)
 - [Bozza del metodo per l'assistente AI](docs/METODO-BOZZA.md)
-- [Privacy e dati dei clienti](docs/PRIVACY.md)
+- [Privacy: cosa fa l'app, modelli e cose da fare](docs/PRIVACY.md)
 - [Riepilogo della prima versione e decisioni aperte](docs/RIEPILOGO-PER-DAVIDE.md)
 - [CLAUDE.md](CLAUDE.md) — note tecniche per chi modifica il codice (persone o Claude)
 

@@ -1,5 +1,7 @@
 # Guida all'installazione di Otherise
 
+> Esiste anche una versione passo per passo per chi parte da zero, con le spiegazioni di ogni schermata e il messaggio da incollare in Claude: è il documento "Otherise: guida all'installazione per Diego" che ti ha condiviso Davide.
+
 Questa guida porta l'app online **sui tuoi account**: il codice su GitHub, il database su Supabase, il sito su Vercel, l'assistente AI su Anthropic. Nessuno oltre a te (e a chi inviti) vede i dati dei tuoi clienti.
 
 Tempo: circa un'ora e mezza la prima volta. Non serve saper programmare: si tratta di creare account, copiare e incollare.
@@ -124,6 +126,7 @@ Il **primo account creato diventa il titolare** (vede tutto). Crealo così:
 2. Apri `https://app.tuodominio.it`, entra con email e password.
 3. In **Impostazioni e metodo**:
    - scrivi il nome della tua attività;
+   - in **Privacy** scrivi titolare, indirizzo, codice fiscale o partita IVA ed email per la privacy: compaiono nell'informativa che i clienti accettano al primo accesso (vedi `docs/PRIVACY.md`);
    - incolla il testo di `docs/METODO-BOZZA.md` nel riquadro del metodo e **correggilo con il tuo modo di lavorare**: è quello che l'assistente AI legge ogni volta;
    - controlla il tetto di spesa AI e che i tre "Collegamenti" siano attivi.
 4. **Eserciziario → Importa l'eserciziario Otherise** (circa 175 esercizi con video), poi aggiungi o correggi quello che vuoi.

@@ -46,3 +46,27 @@ export function MethodForm({ action, value }: { action: Action; value: string })
     </form>
   );
 }
+
+export function PrivacyForm({ action, values }: { action: Action; values: { legal_name: string; legal_address: string; legal_tax_id: string; privacy_email: string } }) {
+  const [state, formAction] = useActionState(action, null);
+  return (
+    <form action={formAction} className="flex flex-col gap-4">
+      <Field label="Titolare" hint="nome e cognome, o ragione sociale">
+        <Input name="legal_name" defaultValue={values.legal_name} placeholder="Mario Rossi" />
+      </Field>
+      <Field label="Indirizzo" hint="sede o residenza fiscale">
+        <Input name="legal_address" defaultValue={values.legal_address} placeholder="Via Roma 1, 20100 Milano" />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Codice fiscale o P. IVA">
+          <Input name="legal_tax_id" defaultValue={values.legal_tax_id} />
+        </Field>
+        <Field label="Email per la privacy">
+          <Input name="privacy_email" type="email" defaultValue={values.privacy_email} />
+        </Field>
+      </div>
+      <ActionMessage state={state} />
+      <div><SubmitButton>Salva i dati privacy</SubmitButton></div>
+    </form>
+  );
+}

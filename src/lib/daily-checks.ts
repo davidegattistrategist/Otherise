@@ -118,6 +118,26 @@ export async function runDailyChecks(today = todayISO()) {
     }
   }
 
+  // 5) Privacy: dati di clienti archiviati da più di 24 mesi (come scritto nell'informativa)
+  const { data: oldArchived } = await admin
+    .from("clients")
+    .select("id, first_name, last_name")
+    .eq("status", "archived")
+    .lt("archived_at", `${addDays(today, -730)}T00:00:00Z`);
+  for (const c of oldArchived ?? []) {
+    for (const o of ownerIds) {
+      out.push({
+        recipient_id: o,
+        client_id: c.id,
+        kind: "privacy_retention",
+        title: `Privacy: ${name(c)} è archiviato da 2 anni`,
+        body: "L'informativa prevede di cancellare i dati dopo 24 mesi dalla fine del percorso. Se non ti servono più, eliminalo dalla sua scheda.",
+        link: `/staff/clienti/${c.id}/profilo`,
+        dedupe_key: `retention:${c.id}`,
+      });
+    }
+  }
+
   await notify(out);
   const digests = await sendStaffDigests(today);
   const emailed = (await deliverPendingEmails()) + digests;

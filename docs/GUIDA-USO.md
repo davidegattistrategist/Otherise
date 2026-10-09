@@ -32,7 +32,7 @@ Nell'editor:
 - Ogni riga è un esercizio, ogni colonna una settimana. Scrivi le prescrizioni come sempre: `4x8 60kg`, `3x10/12`, `3x30"`, `5x400m`, oppure testo libero.
 - Blocchi: esercizio singolo, superserie, circuito, AMRAP, EMOM, intervalli, testo libero (riscaldamento, note).
 - **Copia la settimana** nelle successive e poi ritocca solo i numeri.
-- **Progressione** (icona con la freccia che sale, su ogni riga e in fondo a ogni giorno): scrivi solo la settimana 1 e scegli la regola, +1 ripetizione, +2,5 kg, +5 kg, +2,5% del massimale, +1 serie, uguale, con l'eventuale ultima settimana di scarico. Le altre settimane si compilano da sole, all'istante e senza AI.
+- **Progressione** (icona con la freccia che sale, su ogni riga e in fondo a ogni giorno): scrivi solo la settimana 1 e scegli la regola. Le altre settimane si compilano da sole, all'istante e senza AI. Regole: **doppia progressione** (+1 ripetizione per due settimane, poi +2,5 kg e si riparte: 4x7 16kg → 4x8 → 4x9 → 4x7 18,5kg), +1 ripetizione, +2,5 kg, +5 kg, +2,5% del massimale, +1 serie, uguale; con l'eventuale ultima settimana di scarico.
 - **Percentuali del massimale**: scrivi `5x5 @75%` e al cliente compare il carico in kg calcolato sul suo massimale (dal test di forza dell'ultimo check, altrimenti stimato dal logbook).
 - **Dal telefono** l'editor mostra una settimana alla volta (S1, S2…) con esercizio, prescrizione e recupero: comodo per ritoccare un programma in palestra.
 - Sotto ogni esercizio vedi cosa ha fatto il cliente l'ultima volta.
@@ -70,6 +70,13 @@ I pagamenti avvengono fuori dall'app. Qui registri cosa è saldato, nel modo pi�
 - **Pagamenti** nel menu: chi è scaduto e chi scade a breve, incassi per mese (grafico dell'ultimo anno), quanto entra nei prossimi 30 giorni, ricorrente stimato.
 - **Esporta per il commercialista**: un file con tutti i pagamenti dell'anno (data, cliente, importo, metodo, periodo) che si apre con Excel.
 - L'app avvisa te e il cliente prima della scadenza (giorni di preavviso in Impostazioni). I pacchetti di sessioni si scalano da soli con le sessioni PT.
+- **Pacchetto terminato**: se un pacchetto finisce secondo i vostri accordi anche con sessioni non usate, nella scheda Pagamenti premi "Segna il pacchetto come terminato" (si può annullare). Il cliente risulta da rinnovare.
+
+## Privacy
+- Al primo accesso il cliente legge l'informativa e dà il consenso sui dati di salute: senza consenso non entra nella sua area. Chi inizia di persona prima di avere l'app firma il **modulo da stampare** (scheda → Scheda → Privacy) e tu premi "Firmato su carta".
+- Il cliente può chiedere di **non usare l'assistente AI** con i suoi dati: per lui l'AI si blocca.
+- Richieste di copia o cancellazione dei dati ti arrivano come notifica: "Scarica tutti i suoi dati" ed "Elimina per sempre" sono nella scheda del cliente. Rispondi entro un mese.
+- Un cliente archiviato da 2 anni: l'app ti ricorda di cancellarne i dati. Tutto il resto è in `docs/PRIVACY.md`.
 
 ## Eserciziario
 Nome, link al video YouTube, indicazioni. Quando scrivi un programma i nomi si completano da soli e il cliente vede il video. Se in un programma usi un esercizio che non c'è, l'editor ti propone di aggiungerlo.

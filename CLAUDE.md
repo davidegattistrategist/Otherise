@@ -37,6 +37,8 @@ App per personal trainer: staff (titolare + collaboratori) gestisce clienti, pro
 - Progressioni senza AI: `src/lib/program/progression.ts`; record e massimali dal logbook (Epley): `src/lib/strength/records.ts`; costanza: `src/lib/compliance.ts`; grafici esercizi e allenamenti per settimana: `src/lib/data/progress.ts`.
 - Pagamenti rapidi, WhatsApp e incassi: `src/lib/data/billing.ts`, `src/lib/whatsapp.ts`, `src/components/quick-pay.tsx`, export CSV in `/api/pagamenti/export`.
 - AI: bozza/modifica programma `/api/ai/program`, riassunto check-up `/api/ai/checkin`, tetto di spesa in `src/lib/ai/budget.ts`.
+- Privacy: informativa in `src/components/privacy-notice.tsx` (pagina pubblica `/privacy`, modulo cartaceo `/privacy/modulo`), versione in `src/lib/privacy.ts` (`PRIVACY_VERSION`: se cambi il testo in modo sostanziale aumentala, ai clienti viene richiesta la conferma). Il cliente senza consenso viene mandato a `/consenso` dal layout `src/app/cliente/layout.tsx`. Consensi del cliente solo tramite le funzioni SQL `accept_privacy`, `withdraw_health_consent`, `set_ai_opt_out`. Con `clients.ai_opt_out` le rotte AI rifiutano (`AI_OPT_OUT_MESSAGE`). Export dati cliente: `/api/clienti/[id]/export` (solo titolare).
+- Pacchetti chiusi a mano: `payment_plans.sessions_written_off` (sommate alle usate in `client_billing`/`billing_overview`).
 - Variabili d'ambiente: vedi `docs/GUIDA-INSTALLAZIONE.md` passo 5.
 
 ## Prima di dire "fatto"

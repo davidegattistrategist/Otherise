@@ -9,6 +9,7 @@ import { Card, Dot, Eyebrow, ProgressBar } from "@/components/ui";
 import { PasswordForm } from "@/components/password-form";
 import { IconLogout } from "@/components/icons";
 import { signOut } from "@/app/login/actions";
+import { PrivacyCard } from "./privacy-card";
 
 export const metadata: Metadata = { title: "Percorso" };
 
@@ -17,7 +18,7 @@ export default async function ClientProfilePage() {
   const supabase = await createClient();
   const today = todayISO();
   const [{ data: client }, { data: coach }, { data: billing }, { data: payments }, { current, upcoming, past }, { data: sessions }] = await Promise.all([
-    supabase.from("clients").select("first_name, last_name, email, start_date, goals").eq("id", me.clientId).single(),
+    supabase.from("clients").select("first_name, last_name, email, start_date, goals, health_consent_at, consent_source, ai_opt_out").eq("id", me.clientId).single(),
     supabase.rpc("my_coach_name"),
     supabase.rpc("client_billing", { cid: me.clientId }),
     supabase.from("payments").select("id, paid_on, amount, method, period_start, period_end, sessions").eq("client_id", me.clientId).order("paid_on", { ascending: false }).limit(12),
@@ -87,7 +88,11 @@ export default async function ClientProfilePage() {
           <button type="submit" className="flex min-h-11 items-center gap-2 text-[15px] font-semibold"><IconLogout size={18} /> Esci</button>
         </form>
       </Card>
-      <p className="px-1 text-xs leading-relaxed text-muted">I tuoi dati sono visibili solo a te e a chi ti allena. Per correggerli o cancellarli chiedi a {coach ?? "il tuo coach"}.</p>
+      <PrivacyCard
+        consentLabel={client?.health_consent_at ? `Consenso sui dati relativi alla salute dato il ${formatLong(client.health_consent_at.slice(0, 10))}${client.consent_source === "paper" ? " (su carta)" : ""}.` : "Consenso non ancora dato."}
+        aiOptOut={client?.ai_opt_out ?? false}
+      />
+      <p className="px-1 text-xs leading-relaxed text-muted">I tuoi dati sono visibili solo a te e a chi ti allena. Per correggerli chiedi a {coach ?? "il tuo coach"}.</p>
     </div>
   );
 }

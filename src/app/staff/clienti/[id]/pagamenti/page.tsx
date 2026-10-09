@@ -9,7 +9,7 @@ import { IconWhatsapp } from "@/components/icons";
 import { Card, Dot, EmptyState, Eyebrow, Notice, buttonClass } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { PaymentForm, PlanForm, ReminderButton } from "./forms";
-import { deletePayment, recordPayment, savePlan, sendPaymentReminder } from "./actions";
+import { closePackage, deletePayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder } from "./actions";
 
 export const metadata: Metadata = { title: "Pagamenti" };
 
@@ -20,7 +20,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
   const supabase = await createClient();
   const today = todayISO();
   const [{ data: plans }, { data: payments }, { data: billing }, { data: settings }] = await Promise.all([
-    supabase.from("payment_plans").select("id, kind, amount, method, start_date, package_sessions, active, notes, created_at").eq("client_id", id).order("created_at", { ascending: false }),
+    supabase.from("payment_plans").select("id, kind, amount, method, start_date, package_sessions, active, notes, created_at, sessions_written_off, package_closed_on, package_closed_sessions").eq("client_id", id).order("created_at", { ascending: false }),
     supabase.from("payments").select("id, plan_id, paid_on, amount, method, period_start, period_end, sessions, notes").eq("client_id", id).order("paid_on", { ascending: false }),
     supabase.rpc("client_billing", { cid: id }),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
@@ -42,6 +42,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
       <div className="flex flex-col gap-4">
         {piano === "salvato" ? <Notice tone="success">Piano salvato.</Notice> : null}
+        {piano === "chiuso" ? <Notice tone="success">Pacchetto segnato come terminato. Quando rinnova, registra il nuovo pagamento.</Notice> : null}
         {plan && kind ? (
           <Card dark className="flex flex-col gap-3">
             <Eyebrow dark>Stato</Eyebrow>
@@ -52,13 +53,27 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
             <p className="text-[15px] text-muted-dark">
               {PLAN_LABELS[kind]} · {formatEuro(plan.amount)} · {METHOD_LABELS[plan.method as PaymentMethod]}
               {status.dueDate ? ` · saldato fino al ${formatShort(status.dueDate, 0)}` : ""}
-              {kind === "package" && row ? ` · ${row.sessions_used} fatte su ${row.sessions_bought} pagate` : ""}
+              {kind === "package" && row ? ` · ${row.sessions_used - plan.sessions_written_off} fatte su ${row.sessions_bought} pagate` : ""}
+              {kind === "package" && plan.sessions_written_off ? ` · ${plan.sessions_written_off} non usate (pacchetto chiuso)` : ""}
             </p>
             {plan.notes ? <p className="text-sm text-muted-dark">{plan.notes}</p> : null}
-            <div className="flex flex-wrap gap-4 pt-1 text-sm font-semibold">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1 text-sm font-semibold">
               <a href={`/staff/clienti/${id}/pagamenti?piano=modifica`} className="underline">Modifica il piano</a>
               <a href={`/staff/clienti/${id}/pagamenti?piano=nuovo`} className="underline">Cambia piano</a>
+              {kind === "package" && status.sessionsLeft !== null && status.sessionsLeft > 0 ? (
+                <form action={closePackage.bind(null, id, plan.id)}>
+                  <ConfirmButton variant="ghost" className="!min-h-0 !p-0 !text-card underline" message={`Segnare il pacchetto come terminato?\nLe ${status.sessionsLeft} sessioni rimaste non saranno più disponibili.`}>Segna il pacchetto come terminato</ConfirmButton>
+                </form>
+              ) : null}
             </div>
+            {kind === "package" && plan.package_closed_on ? (
+              <div className="flex flex-wrap items-center gap-x-3 text-sm text-muted-dark">
+                Chiuso a mano il {formatShort(plan.package_closed_on, 0)} ({plan.package_closed_sessions} {plan.package_closed_sessions === 1 ? "sessione non usata" : "sessioni non usate"}).
+                <form action={reopenPackage.bind(null, id, plan.id)}>
+                  <button type="submit" className="font-semibold text-card underline">Annulla</button>
+                </form>
+              </div>
+            ) : null}
           </Card>
         ) : null}
 

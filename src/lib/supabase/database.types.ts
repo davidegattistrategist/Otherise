@@ -33,14 +33,14 @@ isOneToOne: false
                   ]
                 },"app_settings": {
                   Row: {
-                    "ai_monthly_budget_eur": number,"business_name": string,"coaching_method": string,"id": number,"payment_message": string,"reminder_days": number,"updated_at": string
+                    "ai_monthly_budget_eur": number,"business_name": string,"coaching_method": string,"id": number,"legal_address": string,"legal_name": string,"legal_tax_id": string,"payment_message": string,"privacy_email": string,"reminder_days": number,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"payment_message"?: string,"reminder_days"?: number,"updated_at"?: string
+                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
                   }
                   Update: {
-                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"payment_message"?: string,"reminder_days"?: number,"updated_at"?: string
+                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -133,14 +133,14 @@ isOneToOne: true
                   ]
                 },"clients": {
                   Row: {
-                    "birth_date": string | null,"coach_id": string | null,"created_at": string,"email": string | null,"first_name": string,"goals": string,"id": string,"last_name": string,"phone": string | null,"sex": string,"start_date": string,"status": string,"user_id": string | null,"weekly_checkin": boolean
+                    "ai_opt_out": boolean,"archived_at": string | null,"birth_date": string | null,"coach_id": string | null,"consent_source": string | null,"created_at": string,"email": string | null,"first_name": string,"goals": string,"health_consent_at": string | null,"id": string,"last_name": string,"phone": string | null,"privacy_accepted_at": string | null,"privacy_version": string | null,"sex": string,"start_date": string,"status": string,"user_id": string | null,"weekly_checkin": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "birth_date"?: string | null,"coach_id"?: string | null,"created_at"?: string,"email"?: string | null,"first_name": string,"goals"?: string,"id"?: string,"last_name"?: string,"phone"?: string | null,"sex": string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                    "ai_opt_out"?: boolean,"archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name": string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex": string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
                   }
                   Update: {
-                    "birth_date"?: string | null,"coach_id"?: string | null,"created_at"?: string,"email"?: string | null,"first_name"?: string,"goals"?: string,"id"?: string,"last_name"?: string,"phone"?: string | null,"sex"?: string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                    "ai_opt_out"?: boolean,"archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name"?: string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex"?: string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
                   }
                   Relationships: [
                     {
@@ -245,14 +245,14 @@ isOneToOne: false
                   ]
                 },"payment_plans": {
                   Row: {
-                    "active": boolean,"amount": number,"client_id": string,"created_at": string,"id": string,"kind": string,"method": string,"notes": string,"package_sessions": number | null,"start_date": string
+                    "active": boolean,"amount": number,"client_id": string,"created_at": string,"id": string,"kind": string,"method": string,"notes": string,"package_closed_on": string | null,"package_closed_sessions": number,"package_sessions": number | null,"sessions_written_off": number,"start_date": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "active"?: boolean,"amount"?: number,"client_id": string,"created_at"?: string,"id"?: string,"kind": string,"method"?: string,"notes"?: string,"package_sessions"?: number | null,"start_date"?: string
+                    "active"?: boolean,"amount"?: number,"client_id": string,"created_at"?: string,"id"?: string,"kind": string,"method"?: string,"notes"?: string,"package_closed_on"?: string | null,"package_closed_sessions"?: number,"package_sessions"?: number | null,"sessions_written_off"?: number,"start_date"?: string
                   }
                   Update: {
-                    "active"?: boolean,"amount"?: number,"client_id"?: string,"created_at"?: string,"id"?: string,"kind"?: string,"method"?: string,"notes"?: string,"package_sessions"?: number | null,"start_date"?: string
+                    "active"?: boolean,"amount"?: number,"client_id"?: string,"created_at"?: string,"id"?: string,"kind"?: string,"method"?: string,"notes"?: string,"package_closed_on"?: string | null,"package_closed_sessions"?: number,"package_sessions"?: number | null,"sessions_written_off"?: number,"start_date"?: string
                   }
                   Relationships: [
                     {
@@ -439,7 +439,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "billing_overview":
+            "accept_privacy":
+{ Args: { "version": string }; Returns: undefined
+                           },
+"billing_overview":
 { Args: Record<PropertyKey, never>; Returns: {
               "amount": number,"client_id": string,"kind": string,"paid_until": string,"plan_id": string,"sessions_bought": number,"sessions_used": number,"start_date": string
             }[]
@@ -499,6 +502,12 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: {
               "client_id": string,"last_at": string,"unread": number
             }[]
+                           },
+"set_ai_opt_out":
+{ Args: { "opt_out": boolean }; Returns: undefined
+                           },
+"withdraw_health_consent":
+{ Args: Record<PropertyKey, never>; Returns: undefined
                            }
           }
           Enums: {

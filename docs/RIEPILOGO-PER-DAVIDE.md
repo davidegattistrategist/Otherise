@@ -27,6 +27,25 @@ Confronto con le app più usate dai coach (Trainerize, TrueCoach, Everfit, Train
 - **Telefono**: menu in basso per lo staff, lista clienti compatta, nessuna pagina più larga dello schermo.
 - Corretti nel collaudo: salvataggio dopo la bozza AI (dava "modificato da qualcun altro"), conferma del piano di pagamento, messaggio "Salvato" che spariva nell'editor, dimensioni dei testi di pulsanti e campi (una regola CSS le annullava).
 
+## Terza passata (9-10 ottobre, notte)
+- **Le tue risposte** applicate:
+  - pacchetti chiusi a mano ("Segna il pacchetto come terminato", si può annullare);
+  - il titolare vede anche le chat dei collaboratori;
+  - WhatsApp senza invio automatico;
+  - nessuna ricevuta o fattura.
+- **Privacy completa**:
+  - informativa definitiva (da far rileggere a un legale) con i dati del titolare dalle Impostazioni;
+  - consenso esplicito al primo accesso o modulo cartaceo;
+  - AI disattivabile dal cliente;
+  - richieste di copia o cancellazione, export dei dati, cancellazione anche di foto e video della chat;
+  - promemoria dopo 24 mesi di archiviazione;
+  - in `docs/PRIVACY.md` modelli per collaboratori, registro dei trattamenti e procedura in caso di violazione.
+- **Metodo**:
+  - letta una decina di tue programmazioni su Drive (senza aprire "01 GESTIONE" e "02 EX Clienti");
+  - nuova bozza in `docs/METODO-BOZZA.md`, con i punti aperti tra parentesi quadre;
+  - nell'editor la regola **doppia progressione** (4x7 16kg → 4x8 → 4x9 → 4x7 18,5kg).
+- **Guida per Diego** passo per passo, con il messaggio da incollare in Claude (documento condiviso a parte).
+
 ## Come l'ho provata
 - 51 test sui calcoli (anche progressioni, costanza, record, numeri WhatsApp) (pliche verificate sui valori del foglio di una cliente, prescrizioni, pagamenti, calendario, import).
 - 14 test sui permessi direttamente sul database (anche la chat: nessuno legge o scrive conversazioni non sue) (collaboratore vede solo i suoi, cliente non vede note PT/note fase/bozze, nessuno può cambiarsi ruolo, ecc.).
@@ -40,13 +59,13 @@ Confronto con le app più usate dai coach (Trainerize, TrueCoach, Everfit, Train
 3. **Come passare il codice a Diego**: la guida prevede che lui crei il repository vuoto e ti aggiunga come collaboratore, tu fai il push. Così il codice è suo e tu puoi mandargli aggiornamenti. Per la tua installazione: stesso procedimento con un repository tuo (anche questo stesso).
 4. **Modello AI**: predefinito `claude-sonnet-5-5` (buon rapporto qualità/costo). Si cambia con la variabile `ANTHROPIC_MODEL` senza toccare il codice.
 5. **Metodo**: `docs/METODO-BOZZA.md` è solo una traccia con domande aperte; va riscritto da Diego (e da te per la tua installazione). È la cosa che più migliora le bozze dell'AI.
-6. **Privacy**: informativa e consenso per i dati sanitari restano da preparare (`docs/PRIVACY.md`).
+6. **Privacy**: informativa, consenso e modelli pronti (`docs/PRIVACY.md`); prima dei clienti veri vanno firmati i DPA dei fornitori e fatta rileggere l'informativa a un legale.
 
-## Domande aperte della seconda passata
-1. **Scadenza dei pacchetti**: oggi un pacchetto non scade. Vuoi una data di scadenza (es. 10 sessioni entro 3 mesi) con avviso?
-2. **Chat del collaboratore**: il titolare vede anche le conversazioni tra collaboratore e cliente. Va bene così?
-3. **WhatsApp**: l'app prepara il messaggio e apre WhatsApp, l'invio lo fai tu (gli invii automatici richiedono un account WhatsApp Business a pagamento). Va bene così?
-4. **Ricevute**: l'app non emette ricevute o fatture (in Italia vanno fatte con i canali fiscali). Ti basta l'export per il commercialista?
+## Domande della seconda passata (risposte di Davide)
+1. Scadenza dei pacchetti: la decide il titolare a mano → fatto.
+2. Il titolare vede le chat dei collaboratori: sì.
+3. WhatsApp senza invio automatico: va bene.
+4. Ricevute e fatture: non le fa l'app.
 
 ## Limiti noti di questa versione
 - Le schede Google si importano una fase alla volta come CSV (File → Scarica → CSV). L'import riconosce la struttura delle schede attuali; formati molto diversi potrebbero richiedere ritocchi.

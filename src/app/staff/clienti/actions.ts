@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { siteUrl } from "@/lib/site";
 import { isISODate, todayISO } from "@/lib/dates";
+import { CHAT_BUCKET } from "@/lib/chat-shared";
 import type { ActionState } from "@/components/form-bits";
 import type { TablesUpdate } from "@/lib/supabase/database.types";
 
@@ -121,6 +122,12 @@ export async function deleteClientAction(clientId: string) {
   await requireOwner();
   const supabase = await createClient();
   const { data: client } = await supabase.from("clients").select("user_id").eq("id", clientId).maybeSingle();
+  if (!client) return;
+  // foto e video della chat: vanno cancellati anche dall'archivio
+  const admin = createAdminClient();
+  const { data: msgs } = await admin.from("messages").select("attachments").eq("client_id", clientId);
+  const paths = (msgs ?? []).flatMap((m) => ((m.attachments ?? []) as Array<{ path?: string }>).map((a) => a.path).filter((p): p is string => Boolean(p)));
+  for (let i = 0; i < paths.length; i += 100) await admin.storage.from(CHAT_BUCKET).remove(paths.slice(i, i + 100));
   await supabase.from("clients").delete().eq("id", clientId);
   if (client?.user_id) {
     // elimina anche l'account di accesso del cliente

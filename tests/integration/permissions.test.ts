@@ -211,4 +211,24 @@ describe.skipIf(!run)("permessi", () => {
     expect(gone!.body).toBe("");
     expect(gone!.deleted_at).not.toBeNull();
   });
+  it("privacy: il cliente dà e revoca solo i propri consensi, nient'altro", async () => {
+    await clientA.rpc("accept_privacy", { version: "test" }).throwOnError();
+    const { data: a } = await admin.from("clients").select("health_consent_at, privacy_version, consent_source, goals").eq("id", clientAId).single();
+    expect(a!.health_consent_at).not.toBeNull();
+    expect(a!.privacy_version).toBe("test");
+    expect(a!.consent_source).toBe("app");
+    // non può cambiare altri campi della scheda, nemmeno passando dai consensi
+    expect((await clientA.from("clients").update({ goals: "x" }).eq("id", clientAId).select("id")).data ?? []).toEqual([]);
+    await clientA.rpc("set_ai_opt_out", { opt_out: true }).throwOnError();
+    await clientA.rpc("withdraw_health_consent").throwOnError();
+    const { data: b } = await admin.from("clients").select("health_consent_at, ai_opt_out, goals").eq("id", clientAId).single();
+    expect(b!.health_consent_at).toBeNull();
+    expect(b!.ai_opt_out).toBe(true);
+    expect(b!.goals).toBe(a!.goals);
+    // il consenso del cliente B non cambia
+    const { data: other } = await admin.from("clients").select("health_consent_at").eq("id", clientBId).single();
+    expect(other!.health_consent_at).toBeNull();
+    // chi non è cliente non può usare le funzioni dei consensi
+    expect((await stranger.rpc("accept_privacy", { version: "test" })).error).not.toBeNull();
+  });
 });

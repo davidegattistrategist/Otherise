@@ -11,6 +11,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
         <h1 className="text-[32px] leading-tight font-normal tracking-tight">{title}</h1>
         {subtitle ? <p className="mt-2 text-[15px] leading-relaxed text-muted">{subtitle}</p> : null}
         <div className="mt-8">{children}</div>
+        <p className="mt-10 text-xs text-muted"><a href="/privacy" className="underline">Informativa privacy</a></p>
       </div>
     </main>
   );

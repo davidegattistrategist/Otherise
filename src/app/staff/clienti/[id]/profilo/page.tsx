@@ -8,6 +8,7 @@ import { ConfirmButton } from "@/components/form-bits";
 import { ClientForm } from "../../client-form";
 import { deleteClientAction, inviteClientAction, updateClientAction } from "../../actions";
 import { InviteButton } from "./invite-button";
+import { PrivacyStaffCard } from "./privacy-staff-card";
 
 export const metadata: Metadata = { title: "Scheda cliente" };
 
@@ -17,9 +18,10 @@ export default async function ClientProfilePage({ params, searchParams }: { para
   const me = await requireStaff();
   const client = await getStaffClient(id);
   const supabase = await createClient();
-  const [{ data: coaches }, { data: notes }] = await Promise.all([
+  const [{ data: coaches }, { data: notes }, { data: consent }] = await Promise.all([
     supabase.from("profiles").select("id, full_name").eq("role", "coach").order("full_name"),
     supabase.from("client_private_notes").select("notes").eq("client_id", id).maybeSingle(),
+    supabase.from("clients").select("health_consent_at, consent_source, ai_opt_out").eq("id", id).single(),
   ]);
   const account = client.user_id ? (await createAdminClient().auth.admin.getUserById(client.user_id)).data.user : null;
   const hasEntered = Boolean(account?.last_sign_in_at);
@@ -54,6 +56,7 @@ export default async function ClientProfilePage({ params, searchParams }: { para
             </div>
           )}
         </Card>
+        {consent ? <PrivacyStaffCard clientId={id} isOwner={me.role === "owner"} consent={consent} /> : null}
         {me.role === "owner" ? (
           <Card>
             <Eyebrow className="mb-3">Elimina cliente</Eyebrow>

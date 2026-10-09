@@ -34,3 +34,18 @@ export async function saveMethod(_: ActionState, fd: FormData): Promise<ActionSt
   revalidatePath("/staff/impostazioni");
   return { ok: true, message: "Metodo salvato: l'assistente AI lo userà da subito." };
 }
+
+export async function savePrivacy(_: ActionState, fd: FormData): Promise<ActionState> {
+  await requireOwner();
+  const supabase = await createClient();
+  const v = (k: string) => String(fd.get(k) ?? "").trim().slice(0, 300);
+  const email = v("privacy_email");
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "L'email per la privacy non sembra valida." };
+  const { error } = await supabase
+    .from("app_settings")
+    .update({ legal_name: v("legal_name"), legal_address: v("legal_address"), legal_tax_id: v("legal_tax_id"), privacy_email: email, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) return { error: "Salvataggio non riuscito." };
+  revalidatePath("/privacy");
+  return { ok: true, message: "Dati per l'informativa salvati." };
+}

@@ -1,17 +1,21 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { needsConsent } from "@/lib/privacy";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { ClientNav } from "@/components/client-nav";
 import { IconBell } from "@/components/icons";
 
 export default async function ClientAreaLayout({ children }: { children: React.ReactNode }) {
-  await requireClient();
+  const me = await requireClient();
   const supabase = await createClient();
-  const [{ count: unread }, { data: name }, { data: chats }] = await Promise.all([
+  const [{ count: unread }, { data: name }, { data: chats }, { data: consent }] = await Promise.all([
     supabase.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null),
     supabase.rpc("business_name"),
     supabase.rpc("my_unread_chats"),
+    supabase.from("clients").select("privacy_accepted_at, privacy_version, health_consent_at").eq("id", me.clientId).single(),
   ]);
+  if (needsConsent(consent)) redirect("/consenso");
   const chatUnread = (chats ?? []).reduce((n, c) => n + c.unread, 0);
   return (
     <div className="mx-auto flex min-h-dvh max-w-[880px] flex-col px-4 sm:px-6">

@@ -319,6 +319,9 @@ import { bestSet, computeRecords, epley, loadFromPercent } from "./strength/reco
 describe("progressioni automatiche", () => {
   it("ripetizioni, chili, serie, percentuali", () => {
     expect(progress("4x8 60kg", "reps", 2)).toBe("4x10 60kg");
+    // doppia progressione: +1 ripetizione per due settimane, poi +2,5 kg e si riparte
+    expect([1, 2, 3, 4].map((st) => progress("4x7 16kg", "double", st))).toEqual(["4x8 16kg", "4x9 16kg", "4x7 18,5kg", "4x8 18,5kg"]);
+    expect(progress("4x8/10", "double", 1)).toBe("4x9/11");
     expect(progress("3x8/10", "reps", 1)).toBe("3x9/11");
     expect(progress('3x30"', "reps", 2)).toBe('3x40"');
     expect(progress("4x8 60kg", "kg25", 3)).toBe("4x8 67,5kg");

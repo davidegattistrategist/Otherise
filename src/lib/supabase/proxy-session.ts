@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/password-dimenticata", "/auth", "/api/cron"];
+const PUBLIC_PATHS = ["/login", "/password-dimenticata", "/auth", "/api/cron", "/privacy"];
 
 /** Rinnova la sessione a ogni richiesta e manda al login chi non è collegato. */
 export async function updateSession(request: NextRequest) {

@@ -4,7 +4,7 @@ import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiEnabled, progressRow, reviseProgram, suggestAlternatives, type AiUsage } from "@/lib/ai/claude";
-import { buildClientContext, buildMethodContext } from "@/lib/ai/context";
+import { AI_OPT_OUT_MESSAGE, buildClientContext, buildMethodContext } from "@/lib/ai/context";
 import { programContentSchema } from "@/lib/program/types";
 import { summarizeSets, type SetLog } from "@/lib/program/prescription";
 
@@ -54,6 +54,8 @@ export async function POST(req: NextRequest) {
   // passa dai permessi: se lo staff non gestisce il cliente il programma non c'è
   const { data: program } = await supabase.from("programs").select("id, client_id").eq("id", body.programId).maybeSingle();
   if (!program?.client_id) return NextResponse.json({ error: "Programma non trovato" }, { status: 404 });
+  const { data: owner } = await supabase.from("clients").select("ai_opt_out").eq("id", program.client_id).maybeSingle();
+  if (owner?.ai_opt_out) return NextResponse.json({ error: AI_OPT_OUT_MESSAGE }, { status: 403 });
 
   // tetto di spesa mensile
   const [{ data: settings }, { data: spent }] = await Promise.all([

@@ -16,6 +16,7 @@ import { computeBodyComposition, type SkinfoldReadings } from "../src/lib/body/s
 import { estimateOneRepMax } from "../src/lib/strength/e1rm";
 import { parseExerciseCsv } from "../src/lib/import/exercises";
 import { newId, type ProgramContent } from "../src/lib/program/types";
+import { PRIVACY_VERSION } from "../src/lib/privacy";
 
 const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -77,6 +78,10 @@ async function main() {
 
   await db.from("app_settings").update({
     business_name: "Otherise",
+    legal_name: "Diego Prova",
+    legal_address: "Via dell'Esempio 1, 20100 Milano",
+    legal_tax_id: "P. IVA 00000000000",
+    privacy_email: "privacy@prova.local",
     coaching_method: readFileSync(new URL("../docs/METODO-BOZZA.md", import.meta.url), "utf8").replace(/^#.*\n+/, ""),
   }).eq("id", 1);
 
@@ -84,10 +89,12 @@ async function main() {
   const { rows } = parseExerciseCsv(readFileSync(new URL("../dati/eserciziario.csv", import.meta.url), "utf8"));
   await db.from("exercises").insert(rows.map((r) => ({ name: r.name, video_url: r.video_url, description: r.description })));
 
-  // Clienti (inventati)
+  // Clienti (inventati). Giulia ha dato il consenso nell'app, Luca su carta, Sara non ancora.
+  const consentAt = new Date(Date.now() - 150 * 86400000).toISOString();
+  const consent = (source: "app" | "paper") => ({ privacy_accepted_at: consentAt, privacy_version: PRIVACY_VERSION, health_consent_at: consentAt, consent_source: source });
   const { data: clients } = await db.from("clients").insert([
-    { first_name: "Giulia", last_name: "Esempio", sex: "F", email: "giulia@prova.local", birth_date: "1993-05-14", goals: "Ricomposizione corporea, più forza nelle gambe, gestire il mal di schiena da scrivania.", start_date: addDays(today, -200), weekly_checkin: true, phone: "+39 333 0000001" },
-    { first_name: "Luca", last_name: "Prova", sex: "M", email: "luca@prova.local", birth_date: "1988-11-02", goals: "Tornare in forma dopo l'infortunio al ginocchio.", start_date: addDays(today, -60), coach_id: coach, weekly_checkin: true },
+    { first_name: "Giulia", last_name: "Esempio", sex: "F", email: "giulia@prova.local", birth_date: "1993-05-14", goals: "Ricomposizione corporea, più forza nelle gambe, gestire il mal di schiena da scrivania.", start_date: addDays(today, -200), weekly_checkin: true, phone: "+39 333 0000001", ...consent("app") },
+    { first_name: "Luca", last_name: "Prova", sex: "M", email: "luca@prova.local", birth_date: "1988-11-02", goals: "Tornare in forma dopo l'infortunio al ginocchio.", start_date: addDays(today, -60), coach_id: coach, weekly_checkin: true, ...consent("paper") },
     { first_name: "Sara", last_name: "Test", sex: "F", email: "sara@prova.local", birth_date: "1999-02-20", goals: "Preparazione per la mezza maratona.", start_date: addDays(today, -20) },
   ], { defaultToNull: false }).select("id, first_name").throwOnError();
   const giulia = clients!.find((c) => c.first_name === "Giulia")!.id;
