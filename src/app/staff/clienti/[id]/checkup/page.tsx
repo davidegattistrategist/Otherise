@@ -9,6 +9,7 @@ import { SubmitButton } from "@/components/form-bits";
 import { reviewCheckin } from "./actions";
 import { AiCheckinBrief } from "./ai-brief";
 import { aiEnabled } from "@/lib/ai/claude";
+import { CheckinReplyDraft } from "./reply-draft";
 
 export const metadata: Metadata = { title: "Check-up" };
 
@@ -26,6 +27,11 @@ export default async function CheckupPage({ params }: { params: Promise<{ id: st
     .order("week_start", { ascending: false })
     .limit(26);
   const list = data ?? [];
+  const draftsOn = aiEnabled() && !client.ai_opt_out;
+  const { data: drafts } = draftsOn && list.length
+    ? await supabase.from("ai_reply_drafts").select("id, body, checkin_id").in("checkin_id", list.map((c) => c.id)).eq("status", "ready")
+    : { data: [] as Array<{ id: string; body: string; checkin_id: string | null }> };
+  const draftOf = new Map((drafts ?? []).map((d) => [d.checkin_id, { id: d.id, body: d.body }]));
   const grid = [...list].slice(0, 12).reverse();
 
   return (
@@ -83,6 +89,9 @@ export default async function CheckupPage({ params }: { params: Promise<{ id: st
               {c.request ? <p className="rounded-2xl bg-accent-soft px-4 py-3 text-[15px]"><span className="font-semibold">Richiesta:</span> {c.request}</p> : null}
               <form action={reviewCheckin.bind(null, id, c.id)} className="flex flex-col gap-2">
                 <label htmlFor={`r-${c.id}`} className="text-sm font-semibold">Risposta al cliente <span className="font-normal text-muted">(facoltativa, la vede nell&apos;app)</span></label>
+                {draftsOn && !c.coach_reply ? (
+                  <CheckinReplyDraft clientId={id} checkinId={c.id} targetId={`r-${c.id}`} initial={draftOf.get(c.id) ?? null} canRequest={Boolean(c.request || c.issues)} />
+                ) : null}
                 <Textarea id={`r-${c.id}`} name="coach_reply" rows={2} defaultValue={c.coach_reply} placeholder="Es. Grazie, giovedì alleggeriamo le gambe." className="min-h-16" />
                 <div className="flex flex-wrap items-center gap-3">
                   <SubmitButton size="sm" variant={c.reviewed_at ? "secondary" : "primary"}>{c.reviewed_at ? "Aggiorna risposta" : "Segna come visto"}</SubmitButton>

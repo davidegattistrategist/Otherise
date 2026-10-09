@@ -81,3 +81,20 @@ test("l'AI fa qualche domanda prima della bozza", async ({ page }) => {
   await page.getByRole("button", { name: "Prepara la bozza con queste risposte" }).click();
   await expect(page.getByText("Cosa ha cambiato l'AI")).toBeVisible({ timeout: 30_000 });
 });
+
+test("previsione incassi: solo il titolare, con orizzonte 3/6/12 mesi", async ({ page, browser }, info) => {
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/pagamenti");
+  await page.getByRole("link", { name: "Previsione dei prossimi mesi" }).click();
+  await expect(page.getByRole("heading", { name: "Previsione incassi" })).toBeVisible();
+  await expect(page.getByText("Prossimi 30 giorni")).toBeVisible();
+  await expect(page.locator("tbody tr")).toHaveCount(6);
+  await page.getByRole("link", { name: "12 mesi" }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(12);
+  await expect(page.getByText("Luca Prova").first()).toBeVisible();
+  // il collaboratore non ci entra
+  const coach = await (await browser.newContext(info.project.use)).newPage();
+  await login(coach, "collaboratore@prova.local");
+  await coach.goto("/staff/pagamenti/previsione");
+  await expect(coach.getByRole("heading", { name: "Previsione incassi" })).toHaveCount(0);
+});

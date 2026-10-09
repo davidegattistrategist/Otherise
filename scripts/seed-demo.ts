@@ -111,7 +111,7 @@ async function main() {
   const giulia = clients!.find((c) => c.first_name === "Giulia")!.id;
   const luca = clients!.find((c) => c.first_name === "Luca")!.id;
   const sara = clients!.find((c) => c.first_name === "Sara")!.id;
-  await user("giulia@prova.local", "Giulia Esempio");
+  const giuliaUser = await user("giulia@prova.local", "Giulia Esempio");
   await user("luca@prova.local", "Luca Prova");
 
   // Programmi di Giulia: fase passata + fase in corso (iniziata 3 settimane fa)
@@ -244,6 +244,24 @@ async function main() {
   await db.from("checkins").insert({ client_id: giulia, week_start: weeks[0], training: 4, sleep: 4, stress: 3, adherence: 4 });
   await db.from("checkins").insert({ client_id: giulia, week_start: weeks[1], training: 4, sleep: 4, stress: 4, adherence: 4, coach_reply: "Brava, continua così!", reviewed_at: new Date().toISOString() });
   await db.from("checkins").insert({ client_id: giulia, week_start: weeks[2], training: 3, sleep: 2, stress: 2, adherence: 3, issues: "Settimana pesante al lavoro", request: "Posso spostare l'allenamento di giovedì a sabato?" });
+
+  const { data: lastCheckin } = await db.from("checkins").select("id").eq("client_id", giulia).eq("week_start", weeks[2]).single();
+
+  // Chat di Giulia: qualche scambio passato (fa da esempio dello stile del trainer per le bozze AI)
+  const at = (days: number, h: number) => new Date(Date.now() - days * 864e5 + h * 36e5).toISOString();
+  const chat = [
+    { sender_id: giuliaUser, body: "Ciao! Oggi lo stacco rumeno mi è sembrato pesantissimo, è normale?", created_at: at(6, 0) },
+    { sender_id: owner, body: "Ciao Giulia! Sì normale, è la settimana con più volume. Tieni 40 e pensa solo a spingere il sedere indietro, poi mi dici come va", created_at: at(6, 1) },
+    { sender_id: giuliaUser, body: "Oggi molto meglio, grazie!", created_at: at(3, 0) },
+    { sender_id: owner, body: "Grande! Così si fa", created_at: at(3, 2) },
+  ];
+  await db.from("messages").insert(chat.map((m) => ({ ...m, client_id: giulia }))).throwOnError();
+  await db.from("chat_reads").insert([{ user_id: owner, client_id: giulia, last_read_at: at(3, 2) }, { user_id: giuliaUser, client_id: giulia, last_read_at: at(3, 2) }]);
+  // una bozza già corretta dal trainer (l'assistente impara da qui) e una pronta per il check-up
+  await db.from("ai_reply_drafts").insert([
+    { client_id: giulia, source: "chat", body: "Ciao Giulia, è normale percepire più fatica in questa settimana perché il volume di lavoro è più alto. Ti consiglio di mantenere 40 kg e concentrarti sulla tecnica.", status: "used", sent_text: chat[1].body, sent_by: owner, created_at: at(6, 0.5), closed_at: at(6, 1) },
+    { client_id: giulia, source: "checkin", checkin_id: lastCheckin!.id, body: "Ciao Giulia, certo che puoi spostarlo a sabato, nessun problema: l'importante è fare gli allenamenti in ordine. Visto che hai dormito poco, sabato tieni i carichi della settimana scorsa e non forzare. Ci sentiamo giovedì!" },
+  ], { defaultToNull: false }).throwOnError();
 
   console.log("Dati di prova creati. Accessi (password: " + PASSWORD + "):");
   console.log("  titolare@prova.local · collaboratore@prova.local · giulia@prova.local · luca@prova.local");

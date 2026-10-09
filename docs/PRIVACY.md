@@ -20,7 +20,7 @@ Questo file mette insieme tutto quello che serve sulla privacy (GDPR) per usare 
 - **Consenso su carta** per chi inizia di persona, prima di avere l'app:
   - nella scheda del cliente → Scheda → Privacy → "Modulo da stampare" (oppure `/privacy/modulo`);
   - lo fai firmare, lo conservi e premi "Firmato su carta".
-- **Assistente AI disattivabile.** Il cliente può dire di non usarlo, al primo accesso o in Percorso → Privacy. Per quel cliente l'AI si blocca e i suoi programmi non vengono usati come esempi. In ogni caso all'AI non arrivano mai nome, cognome, email o telefono.
+- **Assistente AI disattivabile.** Il cliente può dire di non usarlo, al primo accesso o in Percorso → Privacy. Per quel cliente l'AI si blocca e i suoi programmi non vengono usati come esempi. In ogni caso all'AI non arrivano mai nome, cognome, email o telefono. Per le bozze di risposta riceve anche il testo degli ultimi messaggi della chat (niente foto o video); le risposte le manda sempre il trainer.
 - **Diritti del cliente.** Da Percorso → Privacy il cliente:
   - chiede una copia dei suoi dati;
   - chiede la cancellazione;

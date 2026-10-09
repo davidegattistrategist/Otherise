@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { notify } from "@/lib/notify";
 import { deliverPendingEmails } from "@/lib/email";
+import { closeDrafts, generateCheckinDraft, type ReplyDraft } from "@/lib/ai/reply";
 
 export async function reviewCheckin(clientId: string, checkinId: string, fd: FormData) {
   const me = await requireStaff();
@@ -13,6 +14,11 @@ export async function reviewCheckin(clientId: string, checkinId: string, fd: For
   const { data: before } = await supabase.from("checkins").select("coach_reply").eq("id", checkinId).eq("client_id", clientId).maybeSingle();
   if (!before) return;
   await supabase.from("checkins").update({ coach_reply: reply, reviewed_at: new Date().toISOString() }).eq("id", checkinId).eq("client_id", clientId);
+  // la bozza dell'assistente: usata (anche se corretta) o sostituita. Il testo vero insegna lo stile.
+  if (reply && reply !== before.coach_reply) {
+    const used = String(fd.get("draft_used") ?? "");
+    await closeDrafts(supabase, { checkinId }, reply, me.id, /^[0-9a-f-]{36}$/i.test(used) ? used : null);
+  }
   // Il "visto" sulle notifiche di questo check-up per chi l'ha guardato
   await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("recipient_id", me.id).like("dedupe_key", `checkin:${checkinId}:%`).is("read_at", null);
   if (reply && reply !== before.coach_reply) {
@@ -24,4 +30,13 @@ export async function reviewCheckin(clientId: string, checkinId: string, fd: For
   }
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
   revalidatePath("/staff");
+}
+
+export async function requestCheckinDraft(clientId: string, checkinId: string): Promise<{ ok: true; draft: ReplyDraft | null } | { ok: false; error: string }> {
+  await requireStaff();
+  const supabase = await createClient();
+  // passa dai permessi: se lo staff non vede il check-up, niente bozza
+  const { data } = await supabase.from("checkins").select("id").eq("id", checkinId).eq("client_id", clientId).maybeSingle();
+  if (!data) return { ok: false, error: "Check-up non trovato." };
+  return generateCheckinDraft(checkinId, { force: true });
 }

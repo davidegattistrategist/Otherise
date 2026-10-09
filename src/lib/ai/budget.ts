@@ -19,7 +19,7 @@ export async function budgetExceeded(supabase: ServerSupabase): Promise<string |
   return used >= budget ? `Raggiunto il tetto di spesa AI del mese (${budget.toFixed(0)} €). Si può alzare in Impostazioni.` : null;
 }
 
-export async function logAiRequest(userId: string, clientId: string | null, kind: string, usage: AiUsage) {
+export async function logAiRequest(userId: string | null, clientId: string | null, kind: string, usage: AiUsage) {
   await createAdminClient().from("ai_requests").insert({
     created_by: userId, client_id: clientId, kind, model: usage.model,
     input_tokens: usage.input, output_tokens: usage.output, cost_eur: Number(usage.costEur.toFixed(4)),

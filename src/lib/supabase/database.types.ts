@@ -5,7 +5,45 @@ export type Database = {
   
   "public": {
           Tables: {
-            "ai_requests": {
+            "ai_reply_drafts": {
+                  Row: {
+                    "body": string,"checkin_id": string | null,"client_id": string,"closed_at": string | null,"created_at": string,"id": string,"last_message_id": string | null,"sent_by": string | null,"sent_text": string | null,"source": string,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "body": string,"checkin_id"?: string | null,"client_id": string,"closed_at"?: string | null,"created_at"?: string,"id"?: string,"last_message_id"?: string | null,"sent_by"?: string | null,"sent_text"?: string | null,"source": string,"status"?: string
+                  }
+                  Update: {
+                    "body"?: string,"checkin_id"?: string | null,"client_id"?: string,"closed_at"?: string | null,"created_at"?: string,"id"?: string,"last_message_id"?: string | null,"sent_by"?: string | null,"sent_text"?: string | null,"source"?: string,"status"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ai_reply_drafts_checkin_id_fkey"
+      columns: ["checkin_id"]
+isOneToOne: true
+      referencedRelation: "checkins"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ai_reply_drafts_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ai_reply_drafts_last_message_id_fkey"
+      columns: ["last_message_id"]
+isOneToOne: false
+      referencedRelation: "messages"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ai_reply_drafts_sent_by_fkey"
+      columns: ["sent_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"ai_requests": {
                   Row: {
                     "client_id": string | null,"cost_eur": number,"created_at": string,"created_by": string | null,"id": string,"input_tokens": number,"kind": string,"model": string,"output_tokens": number
                   }

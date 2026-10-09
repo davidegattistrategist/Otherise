@@ -944,6 +944,32 @@ create policy client_projects_client on public.client_projects for select to aut
 create trigger client_projects_touch before update on public.client_projects for each row execute function public.touch_updated_at();
 
 -- =====================================================================
+-- Bozze di risposta preparate dall'assistente AI quando il cliente fa una
+-- domanda in chat o nel check-up. Le vede solo lo staff: il trainer le usa,
+-- le corregge o scrive da zero. Quello che invia davvero (sent_text) serve
+-- all'assistente per imparare il suo modo di rispondere.
+-- =====================================================================
+create table public.ai_reply_drafts (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references public.clients (id) on delete cascade,
+  source text not null check (source in ('chat', 'checkin')),
+  checkin_id uuid references public.checkins (id) on delete cascade,
+  -- ultimo messaggio del cliente a cui la bozza risponde
+  last_message_id uuid references public.messages (id) on delete set null,
+  body text not null check (length(body) between 1 and 4000),
+  status text not null default 'ready' check (status in ('ready', 'used', 'replaced', 'dismissed')),
+  sent_text text,
+  sent_by uuid references public.profiles (id) on delete set null,
+  created_at timestamptz not null default now(),
+  closed_at timestamptz,
+  unique (checkin_id)
+);
+create index ai_reply_drafts_client_idx on public.ai_reply_drafts (client_id, created_at desc);
+alter table public.ai_reply_drafts enable row level security;
+create policy ai_reply_drafts_staff on public.ai_reply_drafts for all to authenticated
+  using (public.can_manage_client(client_id)) with check (public.can_manage_client(client_id));
+
+-- =====================================================================
 -- Privacy: consensi del cliente
 -- =====================================================================
 -- Il cliente conferma di aver letto l'informativa e dà il consenso esplicito

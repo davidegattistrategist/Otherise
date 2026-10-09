@@ -1,12 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/dates";
 import { CHECKIN_QUESTIONS, checkinWeekFor } from "@/lib/checkin";
 import { deliverPendingEmails } from "@/lib/email";
+import { generateCheckinDraft } from "@/lib/ai/reply";
 import type { ActionState } from "@/components/form-bits";
 
 export async function submitCheckin(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -29,10 +31,12 @@ export async function submitCheckin(_: ActionState, fd: FormData): Promise<Actio
   };
   const supabase = await createClient();
   const { data: existing } = await supabase.from("checkins").select("id").eq("client_id", me.clientId).eq("week_start", week).maybeSingle();
-  const { error } = existing
-    ? await supabase.from("checkins").update(row).eq("id", existing.id)
-    : await supabase.from("checkins").insert({ ...row, client_id: me.clientId, week_start: week });
-  if (error) return { error: "Invio non riuscito, riprova." };
+  const { data: saved, error } = existing
+    ? await supabase.from("checkins").update(row).eq("id", existing.id).select("id").single()
+    : await supabase.from("checkins").insert({ ...row, client_id: me.clientId, week_start: week }).select("id").single();
+  if (error || !saved) return { error: "Invio non riuscito, riprova." };
+  // C'è una richiesta per il coach: l'assistente gli prepara una bozza di risposta
+  if (row.request) after(() => generateCheckinDraft(saved.id).catch(() => undefined));
   // Se qualcosa non va il database ha già creato l'avviso per lo staff: lo mandiamo anche per email
   await deliverPendingEmails();
   revalidatePath("/cliente", "layout");

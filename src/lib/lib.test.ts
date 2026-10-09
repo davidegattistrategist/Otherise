@@ -1,3 +1,4 @@
+import { fillName, looksLikeQuestion, pendingClientMessages, pseudonymize, similarity } from "./reply-draft";
 import { describe, expect, it } from "vitest";
 import { computeBodyComposition, protocolSites, siteAverage } from "./body/skinfolds";
 import { estimateOneRepMax } from "./strength/e1rm";
@@ -398,5 +399,68 @@ describe("progetto annuale", () => {
     const ai = projectForAI(p, "2026-10-10");
     expect(ai).toContain("ottobre 2026 (adesso): fase Volumizzazione");
     expect(ai).toContain("Forza massima alto");
+  });
+});
+
+import { buildForecast, renewalRateFrom, weeklyPace } from "./forecast";
+
+describe("previsione incassi", () => {
+  const today = "2026-10-10";
+  it("abbonamenti alla scadenza, pacchetti al ritmo delle sessioni", () => {
+    const f = buildForecast(
+      [
+        { clientId: "a", name: "A", kind: "monthly", amount: 100, paidUntil: "2026-10-20", packageSessions: null, sessionsLeft: null, recentSessions: [] },
+        { clientId: "b", name: "B", kind: "package", amount: 400, paidUntil: null, packageSessions: 10, sessionsLeft: 4, recentSessions: ["2026-09-01", "2026-09-08", "2026-09-15", "2026-09-22", "2026-09-29", "2026-10-06", "2026-08-20", "2026-08-27"] },
+      ],
+      today,
+      3,
+      0.8,
+    );
+    // mensile: 21 ott, 21 nov, 21 dic
+    expect(f.months.map((m) => m.recurring)).toEqual([100, 100, 100]);
+    // pacchetto: 1 sessione a settimana, 4 rimaste → fra 4 settimane (7 nov), poi ogni 10 settimane
+    expect(f.months.map((m) => m.packages)).toEqual([0, 400, 0]);
+    expect(f.events.find((e) => e.kind === "package")?.date).toBe("2026-11-07");
+    expect(f.total).toBe(700);
+    expect(f.prudent).toBeLessThan(f.total);
+    expect(weeklyPace([], today)).toBeNull();
+  });
+  it("calcola la quota di rinnovi dallo storico", () => {
+    const pays = [
+      { client_id: "a", paid_on: "2026-01-01", period_end: "2026-01-31" },
+      { client_id: "a", paid_on: "2026-02-01", period_end: "2026-02-28" },
+      { client_id: "b", paid_on: "2026-03-01", period_end: "2026-03-31" },
+      { client_id: "c", paid_on: "2026-04-01", period_end: "2026-04-30" },
+    ];
+    const r = renewalRateFrom(pays, today);
+    expect(r.measured).toBe(true);
+    // solo il primo periodo di "a" è stato rinnovato (1 su 4): la quota non scende sotto 0,3
+    expect(r.rate).toBe(0.3);
+  });
+});
+
+describe("bozze di risposta", () => {
+  it("riconosce domande e richieste", () => {
+    expect(looksLikeQuestion("Posso fare gli swing con il 16?")).toBe(true);
+    expect(looksLikeQuestion("domani posso spostare a sabato")).toBe(true);
+    expect(looksLikeQuestion("mi fa male il ginocchio negli affondi")).toBe(true);
+    expect(looksLikeQuestion("ok grazie")).toBe(false);
+    expect(looksLikeQuestion("Fatto anche oggi")).toBe(false);
+  });
+  it("prende solo i messaggi del cliente dopo l'ultima risposta dello staff", () => {
+    const m = (id: string, fromClient: boolean, at: string) => ({ id, fromClient, body: id, attachments: 0, createdAt: at });
+    const list = [m("a", true, "1"), m("b", false, "2"), m("c", true, "3"), m("d", true, "4")];
+    expect(pendingClientMessages(list).map((x) => x.id)).toEqual(["c", "d"]);
+    expect(pendingClientMessages([...list, m("e", false, "5")])).toEqual([]);
+  });
+  it("toglie nome, email e telefono e poi rimette il nome", () => {
+    const t = pseudonymize("Ciao Giulia Esempio, scrivi a giulia@prova.local o al 333 1234567. GIULIA brava!", ["Giulia", "Esempio"]);
+    expect(t).toBe("Ciao {nome}, scrivi a [email] o al [telefono]. {nome} brava!");
+    expect(pseudonymize("Squat 4x8 60kg, 60 65 70 75 kg", ["Giulia"])).toBe("Squat 4x8 60kg, 60 65 70 75 kg");
+    expect(fillName("Ciao {nome}! Brava", "Giulia")).toBe("Ciao Giulia! Brava");
+  });
+  it("misura quanto la risposta somiglia alla bozza", () => {
+    expect(similarity("Ciao, sì va benissimo il kettlebell da 16", "Ciao, sì va benissimo il kettlebell da 16!")).toBe(1);
+    expect(similarity("Ciao, sì va benissimo il kettlebell", "Domani ne parliamo in sessione")).toBeLessThan(0.3);
   });
 });

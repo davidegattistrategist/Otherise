@@ -253,4 +253,18 @@ describe.skipIf(!run)("permessi", () => {
     expect(ci!.flagged).toBe(true);
     expect(ci!.flag_reasons).toContain("Fastidi");
   });
+  it("bozze di risposta AI: solo lo staff che segue il cliente, mai il cliente", async () => {
+    await admin.from("ai_reply_drafts").insert({ client_id: clientAId, source: "chat", body: "Ciao, sì va bene" }).throwOnError();
+    expect((await coach.from("ai_reply_drafts").select("body").eq("client_id", clientAId)).data).toHaveLength(1);
+    expect((await clientA.from("ai_reply_drafts").select("*")).data).toEqual([]);
+    expect((await stranger.from("ai_reply_drafts").select("*")).data).toEqual([]);
+    // il cliente non può nemmeno crearne
+    expect((await clientA.from("ai_reply_drafts").insert({ client_id: clientAId, source: "chat", body: "x" })).error).not.toBeNull();
+    // il collaboratore non vede né crea bozze per clienti non suoi
+    expect((await coach.from("ai_reply_drafts").insert({ client_id: clientBId, source: "chat", body: "x" })).error).not.toBeNull();
+    // lo staff la chiude con il testo inviato
+    await coach.from("ai_reply_drafts").update({ status: "used", sent_text: "Ciao! Sì, va benissimo" }).eq("client_id", clientAId).throwOnError();
+    const { data } = await admin.from("ai_reply_drafts").select("status, sent_text").eq("client_id", clientAId).single();
+    expect(data).toEqual({ status: "used", sent_text: "Ciao! Sì, va benissimo" });
+  });
 });

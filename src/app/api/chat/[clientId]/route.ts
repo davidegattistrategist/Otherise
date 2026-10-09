@@ -6,6 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { canUseChat, loadMessages, markChatRead } from "@/lib/chat";
+import { readyChatDraft } from "@/lib/ai/reply";
 
 export const dynamic = "force-dynamic";
 
@@ -20,5 +21,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ clie
   if (messages.some((m) => !m.mine)) await markChatRead(supabase, me.id, clientId);
   // messaggi eliminati di recente (per toglierli anche dallo schermo di chi li vede)
   const { data: deleted } = await supabase.from("messages").select("id").eq("client_id", clientId).not("deleted_at", "is", null).gte("deleted_at", new Date(Date.now() - 10 * 60 * 1000).toISOString());
-  return NextResponse.json({ messages, deleted: (deleted ?? []).map((d) => d.id) }, { headers: { "cache-control": "no-store" } });
+  // allo staff anche la bozza di risposta pronta (al cliente mai)
+  const staff = me.role === "owner" || me.role === "coach";
+  const draft = staff ? await readyChatDraft(supabase, clientId) : undefined;
+  return NextResponse.json({ messages, deleted: (deleted ?? []).map((d) => d.id), ...(staff ? { draft } : {}) }, { headers: { "cache-control": "no-store" } });
 }

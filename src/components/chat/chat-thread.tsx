@@ -5,10 +5,11 @@
  * secondi mentre è aperta. Niente messaggi vocali (scelta voluta).
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { deleteMessage, prepareUpload, sendMessage } from "@/app/chat/actions";
+import { deleteMessage, dismissReplyDraft, prepareUpload, requestReplyDraft, sendMessage } from "@/app/chat/actions";
+import type { ReplyDraft } from "@/lib/ai/reply";
 import { MAX_ATTACHMENTS, attachmentKind, sizeError, type ChatAttachment, type ChatMessage } from "@/lib/chat-shared";
 import { cx } from "@/components/ui";
-import { IconPaperclip, IconPlay, IconSend, IconX } from "@/components/icons";
+import { IconPaperclip, IconPlay, IconSend, IconSparkle, IconX } from "@/components/icons";
 import { prepareImage, uploadWithProgress, videoSize } from "./media";
 
 type Pending = { id: string; file: File; kind: "image" | "video"; preview: string; progress: number; error?: string };
@@ -30,6 +31,7 @@ export function ChatThread({
   showSenderNames,
   emptyText,
   className,
+  drafts,
 }: {
   clientId: string;
   initial: ChatMessage[];
@@ -37,6 +39,8 @@ export function ChatThread({
   showSenderNames?: boolean;
   emptyText: string;
   className?: string;
+  /** Solo staff: bozze di risposta dell'assistente AI (null = nessuna pronta) */
+  drafts?: { initial: ReplyDraft | null };
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initial);
   const [text, setText] = useState("");
@@ -49,6 +53,13 @@ export function ChatThread({
   const fileRef = useRef<HTMLInputElement>(null);
   const stick = useRef(true);
   const lastAt = useRef<string | null>(initial.length ? initial[initial.length - 1].createdAt : null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [draft, setDraft] = useState<ReplyDraft | null>(drafts?.initial ?? null);
+  const [usedDraft, setUsedDraft] = useState<string | null>(null);
+  const [hiddenDraft, setHiddenDraft] = useState<string | null>(null);
+  const [draftBusy, setDraftBusy] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const draftsOn = Boolean(drafts);
 
   const merge = useCallback((incoming: ChatMessage[], deleted: string[] = []) => {
     setMessages((cur) => {
@@ -73,8 +84,9 @@ export function ChatThread({
         const q = lastAt.current ? `?after=${encodeURIComponent(lastAt.current)}` : "";
         const res = await fetch(`/api/chat/${clientId}${q}`, { cache: "no-store" });
         if (!res.ok || stop) return;
-        const data = (await res.json()) as { messages: ChatMessage[]; deleted: string[] };
+        const data = (await res.json()) as { messages: ChatMessage[]; deleted: string[]; draft?: ReplyDraft | null };
         if (data.messages.length || data.deleted.length) merge(data.messages, data.deleted);
+        if (draftsOn && data.draft !== undefined) setDraft(data.draft);
       } catch {
         /* rete assente: si riprova al giro dopo */
       }
@@ -87,7 +99,7 @@ export function ChatThread({
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [clientId, merge]);
+  }, [clientId, merge, draftsOn]);
 
   // resta in fondo quando arrivano messaggi (se si era già in fondo)
   useLayoutEffect(() => {
@@ -143,10 +155,13 @@ export function ChatThread({
         await uploadWithProgress(ticket.signedUrl, ready.blob, ready.type, (v) => setPending((cur) => cur.map((x) => (x.id === p.id ? { ...x, progress: v } : x))));
         attachments.push({ path: ticket.path, kind: p.kind, name: ready.name, size: ready.blob.size, width: ready.width, height: ready.height });
       }
-      const res = await sendMessage(clientId, { body, attachments });
+      const res = await sendMessage(clientId, { body, attachments, draftId: usedDraft });
       if (!res.ok) throw new Error(res.error);
       merge([res.message]);
       setText("");
+      if (inputRef.current) inputRef.current.style.height = "auto";
+      if (body && draft) setDraft(null);
+      setUsedDraft(null);
       pending.forEach((p) => URL.revokeObjectURL(p.preview));
       setPending([]);
     } catch (e) {
@@ -155,6 +170,51 @@ export function ChatThread({
       setSending(false);
     }
   };
+
+  const resize = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  };
+
+  const applyDraft = (d: ReplyDraft) => {
+    setText(d.body);
+    setUsedDraft(d.id);
+    setHiddenDraft(d.id);
+    requestAnimationFrame(() => {
+      resize();
+      inputRef.current?.focus();
+    });
+  };
+
+  const writeFromScratch = (d: ReplyDraft) => {
+    setHiddenDraft(d.id);
+    setUsedDraft(null);
+    void dismissReplyDraft(clientId, d.id);
+    inputRef.current?.focus();
+  };
+
+  const askDraft = async () => {
+    setDraftBusy(true);
+    setDraftError(null);
+    try {
+      const r = await requestReplyDraft(clientId);
+      if (!r.ok) setDraftError(r.error);
+      else if (r.draft) {
+        setDraft(r.draft);
+        setHiddenDraft(null);
+      }
+    } catch {
+      setDraftError("L'assistente non ha risposto, riprova tra poco.");
+    } finally {
+      setDraftBusy(false);
+    }
+  };
+
+  const lastMsg = messages[messages.length - 1];
+  const clientWaiting = Boolean(lastMsg && !lastMsg.mine && !lastMsg.senderIsStaff && !lastMsg.deleted);
+  const showDraft = draftsOn && draft && draft.id !== hiddenDraft;
 
   const remove = async (m: ChatMessage) => {
     if (!window.confirm("Eliminare questo messaggio per tutti?")) return;
@@ -222,6 +282,26 @@ export function ChatThread({
       {/* composizione */}
       <div className="border-t border-sand-deep bg-card px-3 py-3 sm:px-4">
         {error ? <p role="alert" className="mb-2 rounded-xl bg-accent-soft px-3 py-2 text-sm">{error}</p> : null}
+        {showDraft ? (
+          <div className="mb-3 rounded-2xl border border-sand-deep bg-sand/60 p-3" aria-label="Bozza di risposta">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-muted uppercase"><IconSparkle size={14} /> Bozza di risposta</span>
+              <button type="button" onClick={() => void askDraft()} disabled={draftBusy} className="text-xs font-semibold text-muted underline disabled:opacity-50">{draftBusy ? "Sto riscrivendo…" : "Rifai"}</button>
+            </div>
+            <p className="mt-1.5 max-h-40 overflow-y-auto text-[15px] leading-snug whitespace-pre-wrap">{draft.body}</p>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <button type="button" onClick={() => applyDraft(draft)} className="min-h-10 rounded-full bg-ink px-4 text-sm font-semibold text-card">Usa e modifica</button>
+              <button type="button" onClick={() => writeFromScratch(draft)} className="min-h-10 rounded-full px-4 text-sm font-semibold ring-1 ring-sand-deep">Scrivo da zero</button>
+            </div>
+          </div>
+        ) : draftsOn && clientWaiting && !text ? (
+          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <button type="button" onClick={() => void askDraft()} disabled={draftBusy} className="flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink disabled:opacity-60">
+              <IconSparkle size={15} /> {draftBusy ? "Sto scrivendo la bozza…" : "Prepara una bozza di risposta"}
+            </button>
+          </div>
+        ) : null}
+        {draftError ? <p role="alert" className="mb-2 rounded-xl bg-accent-soft px-3 py-2 text-sm">{draftError}</p> : null}
         {pending.length ? (
           <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
             {pending.map((p) => (
@@ -248,13 +328,13 @@ export function ChatThread({
           </button>
           <label htmlFor={`chat-${clientId}`} className="sr-only">Messaggio</label>
           <textarea
+            ref={inputRef}
             id={`chat-${clientId}`}
             rows={1}
             value={text}
             onChange={(e) => {
               setText(e.target.value);
-              e.target.style.height = "auto";
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
+              resize();
             }}
             onKeyDown={(e) => {
               // da computer: Invio manda, Maiusc+Invio va a capo

@@ -401,3 +401,32 @@ export async function checkinBrief(input: { clientContext: string; method: strin
   const parsed = z.object({ working: z.array(z.string()), slipping: z.array(z.string()), focus: z.array(z.string()), reply: z.string() }).parse(json);
   return { ...parsed, usage };
 }
+
+const REPLY_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["needsReply", "draft"],
+  properties: {
+    needsReply: { type: "boolean", description: "false se il cliente non chiede niente e non serve rispondere (es. \"ok grazie\")" },
+    draft: { type: "string", description: "Il messaggio da mandare al cliente, pronto da inviare. Stringa vuota se needsReply è false." },
+  },
+} as const;
+
+const REPLY_SYSTEM = `Sei un personal trainer italiano e stai rispondendo a un tuo cliente. Scrivi la BOZZA del messaggio che il trainer manderà: deve sembrare scritta da lui, di suo pugno, dal telefono. Nessuno deve capire che l'ha preparata un'intelligenza artificiale.
+
+Come scrivere:
+- Copia il modo di scrivere del trainer dagli esempi reali: lunghezza, saluti, punteggiatura, maiuscole, parole ed espressioni tipiche, emoji solo se lui le usa. Le correzioni (bozza → testo che ha davvero inviato) sono il segnale più importante: rifai come ha corretto lui, non come era la bozza.
+- Breve come una chat: di solito 1-4 frasi.
+- Se il cliente ha fatto più domande: UN SOLO messaggio che risponde a tutte, per punti brevi (un punto per domanda, con un numero o un trattino come farebbe il trainer), con al massimo una riga di apertura.
+- Dai del tu. Per chiamarlo per nome scrivi {nome}.
+- Niente frasi da assistente: niente "Ottima domanda", "Certamente!", "Spero di esserti stato utile", "Non esitare a contattarmi", "Ecco", niente grassetti, titoli o elenchi formattati.
+- Rispondi solo con quello che risulta dai dati (programma, logbook, metodo, progetto). Se la risposta dipende da una decisione del trainer o da un dato che non hai (cambiare il programma, i carichi, saltare o spostare allenamenti, prezzi e pagamenti), non inventare: rispondi in modo naturale prendendo tempo ("ci guardo stasera e ti dico", "ne parliamo alla prossima sessione").
+- Dolore o fastidio: niente diagnosi e niente esercizi nuovi. Mostra che ti importa, chiedi dove e con quale esercizio, e proponi di sentirvi o di guardarlo insieme.
+- needsReply è false solo quando i messaggi non chiedono niente e non serve una risposta (un grazie, un ok, un saluto).
+- In italiano.`;
+
+export async function writeReplyDraft(userText: string) {
+  const { json, usage } = await runJson(REPLY_SYSTEM, userText, REPLY_SCHEMA as unknown as Record<string, unknown>, [], 1500);
+  const parsed = z.object({ needsReply: z.boolean(), draft: z.string() }).parse(json);
+  return { needsReply: parsed.needsReply && Boolean(parsed.draft.trim()), draft: parsed.draft.trim().slice(0, 3900), usage };
+}

@@ -35,9 +35,12 @@ export default async function PaymentsOverviewPage() {
         eyebrow="Solo titolare"
         title="Pagamenti"
         actions={
-          <a href={`/api/pagamenti/export?anno=${year}`} className={buttonClass("secondary", "sm")}>
-            <IconDownload size={16} /> Esporta {year} per il commercialista
-          </a>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/staff/pagamenti/previsione" className={buttonClass("primary", "sm")}>Previsione dei prossimi mesi</Link>
+            <a href={`/api/pagamenti/export?anno=${year}`} className={buttonClass("secondary", "sm")}>
+              <IconDownload size={16} /> Esporta {year} per il commercialista
+            </a>
+          </div>
         }
       >
         <p className="max-w-2xl text-[15px] text-muted">I pagamenti avvengono fuori dall&apos;app. Qui segni cosa è saldato con un tocco e l&apos;app ti avvisa prima di ogni scadenza.</p>

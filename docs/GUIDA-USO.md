@@ -70,6 +70,8 @@ Nell'editor:
 ## Chat
 - **Messaggi** nel menu: una conversazione per cliente, con testo, foto e video (niente vocali). Il cliente la trova in "Chat" nell'app.
 - Il titolare vede tutte le conversazioni, il collaboratore quelle dei suoi clienti. I messaggi si aggiornano da soli mentre la chat è aperta; chi riceve un messaggio ha una notifica (al massimo una all'ora per conversazione) e un'email.
+- **Bozza di risposta**: quando un cliente ti fa una domanda, l'assistente AI ti prepara una bozza sopra la casella di scrittura, scritta come la scriveresti tu. Se le domande sono più di una, è un solo messaggio che risponde a tutte per punti. **Usa e modifica** la mette nella casella (la correggi e premi invio), **Scrivo da zero** la toglie. Se il cliente non ha fatto domande puoi chiederla tu con "Prepara una bozza di risposta". Non parte mai niente da sola: invii sempre tu.
+- Le bozze imparano da te: l'assistente legge i tuoi messaggi veri e come hai corretto o sostituito le bozze precedenti, quindi più lo usi più ti somiglia. All'AI non arrivano nome, cognome, email e telefono del cliente, né foto e video.
 - Tocca un tuo messaggio per eliminarlo. WhatsApp resta comodo per le cose al volo: la chat dell'app tiene tutto ordinato dentro la scheda del cliente, per esempio il video di un esercizio da correggere.
 
 ## Il check-up settimanale
@@ -77,12 +79,15 @@ Il cliente lo compila da venerdì a domenica (allenamenti, sonno, stress, percor
 
 **Prepara il riassunto** (nella stessa pagina): l'AI legge check-up, logbook, check e note di sessione e ti dice cosa funziona, cosa sta calando e su cosa puntare, con una bozza di risposta che puoi usare con un tocco e correggere.
 
+Se nel check-up il cliente ha scritto una **richiesta**, trovi già pronta una bozza di risposta sopra la casella (stesse regole della chat: Usa e modifica, oppure Scrivo da zero).
+
 ## Pagamenti (titolare)
 I pagamenti avvengono fuori dall'app. Qui registri cosa è saldato, nel modo più veloce possibile:
 - **Pagato**: in "Oggi" e in "Pagamenti", un tocco registra il pagamento atteso (importo del piano e periodo successivo, o le sessioni del pacchetto). Prima ti chiede conferma mostrandoti cosa registra.
 - **WhatsApp**: apre la chat del cliente con il promemoria già scritto (lo controlli e premi invio). Il testo si cambia in Impostazioni.
 - Scheda cliente → **Pagamenti → Registra un pagamento** per i casi particolari (importo diverso, pagamento a metà…).
 - **Pagamenti** nel menu: chi è scaduto e chi scade a breve, incassi per mese (grafico dell'ultimo anno), quanto entra nei prossimi 30 giorni, ricorrente stimato.
+- **Previsione dei prossimi mesi** (in fondo a Pagamenti): quanto dovrebbe entrare nei prossimi 3, 6 o 12 mesi dai clienti attivi. Gli abbonamenti si rinnovano alla scadenza allo stesso prezzo; i pacchetti quando finiscono le sessioni, al ritmo con cui le fa ogni cliente. Clienti in pausa e archiviati sono esclusi. Lo **scenario prudente** tiene conto di quanti clienti hanno rinnovato davvero nell'ultimo anno. È una stima: i pagamenti veri li registri sempre tu.
 - **Esporta per il commercialista**: un file con tutti i pagamenti dell'anno (data, cliente, importo, metodo, periodo) che si apre con Excel.
 - L'app avvisa te e il cliente prima della scadenza (giorni di preavviso in Impostazioni). I pacchetti di sessioni si scalano da soli con le sessioni PT.
 - **Pacchetto terminato**: se un pacchetto finisce secondo i vostri accordi anche con sessioni non usate, nella scheda Pagamenti premi "Segna il pacchetto come terminato" (si può annullare). Il cliente risulta da rinnovare.

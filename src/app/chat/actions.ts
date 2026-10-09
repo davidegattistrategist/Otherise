@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { customAlphabet } from "nanoid";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
@@ -10,6 +11,7 @@ import { CHAT_BUCKET, canUseChat, loadMessages, markChatRead, previewOf } from "
 import { MAX_ATTACHMENTS, attachmentKind, sizeError, type ChatAttachment, type ChatMessage } from "@/lib/chat-shared";
 import { notify, staffRecipients } from "@/lib/notify";
 import { deliverPendingEmails } from "@/lib/email";
+import { closeDrafts, generateChatDraft, type ReplyDraft } from "@/lib/ai/reply";
 
 const fileId = customAlphabet("abcdefghijkmnpqrstuvwxyz23456789", 16);
 const EXT: Record<string, string> = {
@@ -49,9 +51,10 @@ const sendSchema = z.object({
       }),
     )
     .max(MAX_ATTACHMENTS),
+  draftId: z.string().uuid().nullish(),
 });
 
-export async function sendMessage(clientId: string, input: { body: string; attachments: ChatAttachment[] }): Promise<{ ok: true; message: ChatMessage } | { ok: false; error: string }> {
+export async function sendMessage(clientId: string, input: { body: string; attachments: ChatAttachment[]; draftId?: string | null }): Promise<{ ok: true; message: ChatMessage } | { ok: false; error: string }> {
   const me = await requireUser();
   const parsed = sendSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Messaggio non valido." };
@@ -91,6 +94,12 @@ export async function sendMessage(clientId: string, input: { body: string; attac
       })),
   );
   void deliverPendingEmails().catch(() => undefined);
+  if (fromClient) {
+    // a risposta già inviata al cliente, l'assistente prepara la bozza per lo staff
+    after(() => generateChatDraft(clientId).catch(() => undefined));
+  } else if (body) {
+    await closeDrafts(supabase, { clientId, source: "chat" }, body, me.id, parsed.data.draftId);
+  }
   revalidatePath("/staff/messaggi");
 
   const recent = await loadMessages(clientId, me, { after: new Date(new Date(row.created_at).getTime() - 1000).toISOString() });
@@ -109,4 +118,22 @@ export async function deleteMessage(clientId: string, messageId: string): Promis
   const paths = ((msg.attachments as ChatAttachment[]) ?? []).map((a) => a.path);
   if (paths.length) await createAdminClient().storage.from(CHAT_BUCKET).remove(paths);
   return { ok: true };
+}
+
+/** Lo staff chiede una bozza (o una nuova bozza) di risposta all'assistente. */
+export async function requestReplyDraft(clientId: string): Promise<{ ok: true; draft: ReplyDraft | null } | { ok: false; error: string }> {
+  const me = await requireUser();
+  if (me.role !== "owner" && me.role !== "coach") return { ok: false, error: "Non autorizzato." };
+  const supabase = await createClient();
+  if (!(await canUseChat(supabase, clientId))) return { ok: false, error: "Conversazione non trovata." };
+  return generateChatDraft(clientId, { force: true });
+}
+
+/** "Scrivo da zero": la bozza sparisce. */
+export async function dismissReplyDraft(clientId: string, draftId: string): Promise<{ ok: boolean }> {
+  const me = await requireUser();
+  if (me.role !== "owner" && me.role !== "coach") return { ok: false };
+  const supabase = await createClient();
+  const { error } = await supabase.from("ai_reply_drafts").update({ status: "dismissed", closed_at: new Date().toISOString() }).eq("id", draftId).eq("client_id", clientId).eq("status", "ready");
+  return { ok: !error };
 }

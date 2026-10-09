@@ -42,7 +42,7 @@ Confronto con le app più usate dai coach (Trainerize, TrueCoach, Everfit, Train
   - in `docs/PRIVACY.md` modelli per collaboratori, registro dei trattamenti e procedura in caso di violazione.
 - **Metodo**:
   - letta una decina di tue programmazioni su Drive (senza aprire "01 GESTIONE" e "02 EX Clienti");
-  - nuova bozza in `docs/METODO-BOZZA.md`, con i punti aperti tra parentesi quadre;
+  - metodo scritto in `docs/METODO-BOZZA.md` dalle programmazioni e dalle tue risposte;
   - nell'editor la regola **doppia progressione** (4x7 16kg → 4x8 → 4x9 → 4x7 18,5kg).
 - **Guida per Diego** passo per passo, con il messaggio da incollare in Claude (documento condiviso a parte).
 - **Dalle risposte sul metodo**:
@@ -54,6 +54,9 @@ Confronto con le app più usate dai coach (Trainerize, TrueCoach, Everfit, Train
   - tempo per seduta;
   - EMOM spiegato al cliente;
   - metodo aggiornato in `docs/METODO-BOZZA.md`.
+- **Ultime due richieste**:
+  - bozze di risposta dell'AI ai clienti, in chat e nelle richieste del check-up: scritte nel tuo stile, una sola risposta per punti se le domande sono più di una, "Usa e modifica" o "Scrivo da zero"; imparano dai tuoi messaggi e dalle tue correzioni; non partono mai da sole;
+  - previsione degli incassi a 3, 6 o 12 mesi (Pagamenti → Previsione dei prossimi mesi), con scenario prudente calcolato sui rinnovi veri.
 
 ## Come l'ho provata
 - 51 test sui calcoli (anche progressioni, costanza, record, numeri WhatsApp) (pliche verificate sui valori del foglio di una cliente, prescrizioni, pagamenti, calendario, import).
@@ -67,7 +70,7 @@ Confronto con le app più usate dai coach (Trainerize, TrueCoach, Everfit, Train
 2. **Vercel Pro** è necessario per uso commerciale (~20 $/mese). In alternativa esistono altri hosting, ma la guida è scritta per Vercel.
 3. **Come passare il codice a Diego**: la guida prevede che lui crei il repository vuoto e ti aggiunga come collaboratore, tu fai il push. Così il codice è suo e tu puoi mandargli aggiornamenti. Per la tua installazione: stesso procedimento con un repository tuo (anche questo stesso).
 4. **Modello AI**: predefinito `claude-sonnet-5-5` (buon rapporto qualità/costo). Si cambia con la variabile `ANTHROPIC_MODEL` senza toccare il codice.
-5. **Metodo**: `docs/METODO-BOZZA.md` è solo una traccia con domande aperte; va riscritto da Diego (e da te per la tua installazione). È la cosa che più migliora le bozze dell'AI.
+5. **Metodo**: `docs/METODO-BOZZA.md` ora è il tuo metodo (programmazioni + risposte). Va incollato in Impostazioni della tua installazione; Diego scrive il suo partendo da questa struttura. È la cosa che più migliora le bozze dell'AI.
 6. **Privacy**: informativa, consenso e modelli pronti (`docs/PRIVACY.md`); prima dei clienti veri vanno firmati i DPA dei fornitori e fatta rileggere l'informativa a un legale.
 
 ## Domande della seconda passata (risposte di Davide)
