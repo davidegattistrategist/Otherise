@@ -122,8 +122,10 @@ describe.skipIf(!run)("permessi", () => {
     await coach.from("posture_assessments").insert({ client_id: clientAId, tight_muscles: "psoas" }).throwOnError();
 
     expect((await clientA.from("pt_sessions").select("*")).data).toEqual([]);
-    const checks = (await clientA.from("checks").select("weight_kg")).data!;
+    expect((await clientA.from("checks").select("*")).data).toEqual([]);
+    const checks = (await clientA.rpc("my_checks")).data! as Array<Record<string, unknown>>;
     expect(checks.map((c) => Number(c.weight_kg))).toEqual([59.5]);
+    expect(Object.keys(checks[0])).not.toContain("notes_next_phase");
     expect((await clientA.from("posture_assessments").select("*")).data).toEqual([]);
     const dates = await clientA.rpc("my_pt_session_dates");
     expect(dates.data).toHaveLength(1);

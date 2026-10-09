@@ -438,6 +438,11 @@ isOneToOne: false
 "monday_of":
 { Args: { "d": string }; Returns: string
                            },
+"my_checks":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "body_fat_pct": number,"check_date": string,"circumferences": Json,"fat_mass_kg": number,"id": string,"lean_mass_kg": number,"strength_tests": Json,"tests_text": string,"weight_kg": number
+            }[]
+                           },
 "my_client_id":
 { Args: Record<PropertyKey, never>; Returns: string
                            },

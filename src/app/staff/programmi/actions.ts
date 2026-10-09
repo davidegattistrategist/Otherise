@@ -159,7 +159,7 @@ export async function publishProgram(id: string): Promise<ActionState> {
   const { data: p } = await supabase.from("programs").select("id, client_id, title, start_date, is_template, clients(user_id)").eq("id", id).maybeSingle();
   if (!p || p.is_template || !p.client_id) return { error: "Solo i programmi dei clienti si pubblicano." };
   if (!p.start_date) return { error: "Scegli la data di inizio prima di pubblicare." };
-  const { error } = await supabase.from("programs").update({ status: "published", published_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.from("programs").update({ status: "published", published_at: new Date().toISOString(), ai_notes: null }).eq("id", id);
   if (error) return { error: "Pubblicazione non riuscita." };
   const userId = (p.clients as unknown as { user_id: string | null } | null)?.user_id;
   if (userId) {

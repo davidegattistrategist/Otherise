@@ -449,8 +449,8 @@ create policy pt_sessions_staff on public.pt_sessions for all to authenticated
 -- Check: lo staff gestisce, il cliente vede quelli resi visibili
 create policy checks_staff on public.checks for all to authenticated
   using (public.can_manage_client(client_id)) with check (public.can_manage_client(client_id));
-create policy checks_client_select on public.checks for select to authenticated
-  using (visible_to_client and public.is_client_self(client_id));
+-- Il cliente NON legge la tabella checks direttamente (contiene le note
+-- riservate per la prossima fase): usa la funzione my_checks() qui sotto.
 
 -- Posturale: come i check, ma nascosto al cliente se non reso visibile
 create policy posture_staff on public.posture_assessments for all to authenticated
@@ -730,6 +730,25 @@ begin
   order by p.client_id, p.created_at desc;
 end $$;
 
+-- Check visibili al cliente, senza le note riservate dello staff
+create or replace function public.my_checks()
+returns table (
+  id uuid,
+  check_date date,
+  weight_kg numeric,
+  body_fat_pct numeric,
+  fat_mass_kg numeric,
+  lean_mass_kg numeric,
+  circumferences jsonb,
+  strength_tests jsonb,
+  tests_text text
+) language sql stable security definer set search_path = public as $$
+  select id, check_date, weight_kg, body_fat_pct, fat_mass_kg, lean_mass_kg, circumferences, strength_tests, tests_text
+  from public.checks
+  where client_id = public.my_client_id() and visible_to_client
+  order by check_date
+$$;
+
 -- Sessioni PT fatte dal cliente (al cliente servono solo i conteggi,
 -- non le note dello staff)
 create or replace function public.my_pt_session_dates()
@@ -778,7 +797,7 @@ $$;
 revoke execute on all functions in schema public from anon, public;
 grant execute on function public.my_role(), public.is_owner(), public.is_staff(),
   public.can_manage_client(uuid), public.is_client_self(uuid), public.my_client_id(),
-  public.can_log_program(uuid, uuid), public.client_billing(uuid), public.billing_overview(), public.my_pt_session_dates(),
+  public.can_log_program(uuid, uuid), public.client_billing(uuid), public.billing_overview(), public.my_pt_session_dates(), public.my_checks(),
   public.last_exercise_logs(uuid, date), public.my_coach_name(), public.business_name(),
   public.monday_of(date)
   to authenticated, service_role;
