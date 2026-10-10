@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { friendlyError } from "@/lib/friendly-error";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -40,7 +41,7 @@ export async function inviteCollaborator(_: ActionState, fd: FormData): Promise<
   });
   if (error) {
     await supabase.from("staff_invites").delete().eq("email", email);
-    return { error: `Invito non inviato: ${error.message}` };
+    return { error: `Invito non inviato. ${friendlyError(error)}` };
   }
   revalidatePath("/staff/team");
   return { ok: true, message: `Invito inviato a ${email}.` };

@@ -4,7 +4,7 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { buildTodayList, getClientsOverview, type TodayItem } from "@/lib/data/staff";
 import { formatHeading, formatShort, todayISO } from "@/lib/dates";
-import { Card, Dot, Eyebrow, LinkButton, PageTitle } from "@/components/ui";
+import { Card, Dot, Eyebrow, LinkButton, Notice, PageTitle } from "@/components/ui";
 import { getBillingLines } from "@/lib/data/billing";
 import { QuickPay } from "@/components/quick-pay";
 import { markDiscomfortSeen } from "./today-actions";
@@ -29,7 +29,8 @@ function List({ items, empty }: { items: TodayItem[]; empty: string }) {
   );
 }
 
-export default async function StaffToday() {
+export default async function StaffToday({ searchParams }: { searchParams: Promise<{ "solo-titolare"?: string }> }) {
+  const sp = await searchParams;
   const me = await requireStaff();
   const supabase = await createClient();
   const today = todayISO();
@@ -60,6 +61,7 @@ export default async function StaffToday() {
         <p className="text-[15px] text-muted">{active === 1 ? "1 cliente attivo" : `${active} clienti attivi`}</p>
       </PageTitle>
 
+      {sp["solo-titolare"] ? <Notice>Quella pagina la vede solo il titolare: pagamenti, impostazioni e collaboratori sono gestiti da lui.</Notice> : null}
       <FirstSteps supabase={supabase} me={me} />
 
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">

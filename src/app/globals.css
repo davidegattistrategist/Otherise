@@ -35,9 +35,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Sotto i 768px c'è la barra di navigazione in basso: il campo che stai
+/* Sotto i 1024px c'è la barra di navigazione in basso: il campo che stai
    compilando non deve finirci sotto quando la pagina scorre */
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   html {
     scroll-padding-bottom: 104px;
     scroll-padding-top: 16px;

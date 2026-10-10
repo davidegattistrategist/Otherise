@@ -145,8 +145,23 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
     const onBefore = (e: BeforeUnloadEvent) => {
       e.preventDefault();
     };
+    // anche i link dentro l'app (menu, "indietro"): chiedi prima di perdere le modifiche
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || a.target === "_blank" || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      const url = new URL(a.href, window.location.href);
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
+      if (!window.confirm("Hai modifiche non salvate. Uscire senza salvarle?")) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
     window.addEventListener("beforeunload", onBefore);
-    return () => window.removeEventListener("beforeunload", onBefore);
+    document.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", onBefore);
+      document.removeEventListener("click", onClick, true);
+    };
   }, [dirty]);
 
   const changeWeeks = (n: number) => {
@@ -178,6 +193,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   const lastLogFor = (it: ProgramItem) => (it.exerciseId ? lastLogs[it.exerciseId] : undefined) ?? lastLogs[`n:${it.name.trim().toLowerCase()}`];
 
   const hasContent = content.days.some((d) => d.blocks.length > 0);
+  const unnamed = content.days.reduce((n, d) => n + d.blocks.reduce((m, b) => m + (b.kind === "text" ? 0 : b.items.filter((it) => !it.name.trim()).length), 0), 0);
 
   return (
     <div className="flex flex-col gap-5">
@@ -215,7 +231,10 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                 variant="secondary"
                 disabled={pending || dirty || !hasContent}
                 title={dirty ? "Salva prima di pubblicare" : undefined}
-                onClick={() => runAction(() => publishProgram(program.id), () => { setStatus("published"); setAiNotes({}); })}
+                onClick={() => {
+                  if (unnamed && !window.confirm(`${unnamed === 1 ? "C'è un esercizio senza nome" : `Ci sono ${unnamed} esercizi senza nome`}: il cliente vedrebbe righe vuote. Pubblicare lo stesso?`)) return;
+                  runAction(() => publishProgram(program.id), () => { setStatus("published"); setAiNotes({}); });
+                }}
               >
                 Pubblica
               </Button>
@@ -223,6 +242,14 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
           </div>
         </div>
       </div>
+
+      {/* sul telefono il pulsante Salva in alto sparisce scorrendo: barra fissa quando ci sono modifiche */}
+      {dirty ? (
+        <div className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-3 rounded-2xl bg-ink px-4 py-2.5 text-card shadow-xl lg:hidden">
+          <span className="text-sm">{pending ? "Salvataggio…" : "Modifiche non salvate"}</span>
+          <Button size="sm" variant="secondary" onClick={doSave} disabled={pending}>Salva le modifiche</Button>
+        </div>
+      ) : null}
 
       {message ? <Notice tone={message.tone}>{message.text}</Notice> : null}
       {unknown.length > 0 ? (
@@ -342,7 +369,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               data-large
               value={day.title}
               onChange={(e) => mutate((d) => void (d.days[dayIdx].title = e.target.value))}
-              className="min-w-0 flex-1 rounded-lg bg-transparent px-1 py-1 text-xl font-semibold hover:bg-sand focus:bg-sand focus:outline-none"
+              className="min-w-[13rem] flex-[1_1_13rem] rounded-lg bg-transparent px-1 py-1 text-xl font-semibold hover:bg-sand focus:bg-sand focus:outline-none"
             />
             <div className="flex gap-1">
               <IconBtn label="Sposta su" disabled={dayIdx === 0} onClick={() => mutate((d) => swap(d.days, dayIdx, dayIdx - 1))}><IconUp size={18} /></IconBtn>
@@ -1017,7 +1044,7 @@ function MobileBlock({
             </div>
           );
         })}
-        <button type="button" className="flex items-center gap-1.5 self-start pl-9 text-xs font-semibold text-muted" onClick={() => onBlock((b) => { b.items.push(emptyItem(weeks)); if (b.kind === "single") b.kind = "superset"; })}>
+        <button type="button" className="flex min-h-11 items-center gap-1.5 self-start pl-9 text-sm font-semibold text-muted" onClick={() => onBlock((b) => { b.items.push(emptyItem(weeks)); if (b.kind === "single") b.kind = "superset"; })}>
           <IconPlus size={14} /> {multi ? `Esercizio in ${BLOCK_KIND_LABELS[block.kind].toLowerCase()}` : "Fai superserie con un altro esercizio"}
         </button>
       </div>

@@ -15,8 +15,10 @@ const ITEMS = [
 
 export function ClientNav({ chatUnread = 0 }: { chatUnread?: number }) {
   const path = usePathname();
+  // durante l'allenamento sul telefono il menu sparisce: lo schermo serve al logbook
+  const inSession = path.startsWith("/cliente/sessione/");
   return (
-    <nav aria-label="Menu" className="fixed inset-x-0 bottom-0 z-30 border-t border-sand-deep bg-sand/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:static md:border-0 md:bg-transparent md:pb-0">
+    <nav aria-label="Menu" className={cx("fixed inset-x-0 bottom-0 z-30 border-t border-sand-deep bg-sand/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:static md:block md:border-0 md:bg-transparent md:pb-0", inSession && "hidden")}>
       <ul className="mx-auto flex max-w-xl justify-around md:max-w-none md:justify-start md:gap-1">
         {ITEMS.map(({ href, label, Icon, exact, also }) => {
           const active = exact ? path === href : path.startsWith(href) || (also ? path.startsWith(also) : false);

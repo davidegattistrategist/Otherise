@@ -99,7 +99,7 @@ export function ProjectEditor({
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                <th scope="col" className="sticky left-0 z-10 min-w-[150px] bg-card px-2 py-2 text-left text-xs tracking-wider text-muted uppercase">Mese</th>
+                <th scope="col" className="sticky left-0 z-10 min-w-[180px] bg-card px-2 py-2 text-left text-xs tracking-wider text-muted uppercase">Mese</th>
                 {months.map((m, i) => (
                   <th key={m.key} scope="col" className={cx(cell, "text-xs font-semibold tracking-wider uppercase", i === now ? "rounded-t-xl bg-accent-soft/60 text-accent-deep" : "text-muted")}>
                     {m.short}
@@ -190,6 +190,10 @@ export function ProjectEditor({
                 <IconPlus size={14} /> Alimentazione
               </button>
             ) : null}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Button onClick={() => onSave()} disabled={pending}>{pending ? "Salvataggio…" : "Salva il progetto"}</Button>
+            {dirty ? <span className="text-sm text-muted">Modifiche da salvare</span> : msg ? <span className={cx("text-sm", msg.ok ? "text-muted" : "text-accent-deep")}>{msg.ok ? "Salvato" : "Non salvato: guarda il messaggio in alto"}</span> : null}
           </div>
           <p className="mt-3 text-sm text-muted">Tocca una cella per cambiare il livello: vuoto = assente, poi mantenimento, medio, alto. Per l&apos;alimentazione: non trattata, deficit, normocalorica, surplus. Nelle note: gare, vacanze, obiettivi del mese.</p>
         </div>

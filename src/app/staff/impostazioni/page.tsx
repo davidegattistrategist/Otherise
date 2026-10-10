@@ -100,11 +100,11 @@ export default async function SettingsPage() {
             <Eyebrow>Collegamenti</Eyebrow>
             <ul className="flex flex-col gap-2">
               <Status ok={service.ok}>{service.text}</Status>
-              <Status ok={hasAi}>{hasAi ? "Assistente AI attivo" : "Assistente AI spento: manca ANTHROPIC_API_KEY su Vercel"}</Status>
-              <Status ok={hasEmail}>{hasEmail ? "Email di avviso attive" : "Email di avviso spente: mancano RESEND_API_KEY ed EMAIL_FROM (restano le notifiche in app)"}</Status>
+              <Status ok={hasAi}>{hasAi ? "Assistente AI attivo" : "Assistente AI spento: serve la chiave di Anthropic su Vercel (ANTHROPIC_API_KEY, guida di installazione passo 3)"}</Status>
+              <Status ok={hasEmail}>{hasEmail ? "Email di avviso attive" : "Email di avviso spente: serve collegare Resend (guida di installazione passo 4). Le notifiche nell'app funzionano lo stesso"}</Status>
               <Status ok={hasCron}>{hasCron ? "Controlli automatici giornalieri attivi" : "Controlli giornalieri spenti: manca CRON_SECRET"}</Status>
             </ul>
-            <p className="text-sm text-muted">Come si impostano: GUIDA-INSTALLAZIONE.md nel progetto.</p>
+            <p className="text-sm text-muted">Come si attivano: guida di installazione (file GUIDA-INSTALLAZIONE.md nel progetto su GitHub). Dopo aver cambiato una variabile su Vercel serve un nuovo deploy.</p>
           </Card>
         </div>
       </div>

@@ -31,6 +31,8 @@ export type ForecastEvent = {
   label: string;
   /** probabilità nello scenario prudente (0-1) */
   probability: number;
+  /** era già da pagare (scaduto) */
+  overdue?: boolean;
 };
 
 export type ForecastMonth = { key: string; recurring: number; packages: number; single: number; total: number; prudent: number };
@@ -50,7 +52,7 @@ export function buildForecast(plans: ForecastPlan[], today: ISODate, months: num
   const end = addMonths(start, months); // escluso
   const events: ForecastEvent[] = [];
   const push = (e: Omit<ForecastEvent, "date"> & { date: ISODate }) => {
-    if (e.date < end) events.push({ ...e, date: e.date < today ? today : e.date });
+    if (e.date < end) events.push({ ...e, date: e.date < today ? today : e.date, overdue: e.date < today });
   };
 
   for (const p of plans) {
@@ -108,10 +110,17 @@ export function buildForecast(plans: ForecastPlan[], today: ISODate, months: num
     m.prudent += e.amount * e.probability;
   }
   for (const m of monthsOut) m.prudent = Math.round(m.prudent);
-  const next30 = events.filter((e) => e.date <= addDays(today, 30)).reduce((t, e) => t + e.amount, 0);
+  // prossimi 30 giorni: solo il primo rinnovo di ogni cliente, come nella pagina Pagamenti
+  // (un secondo rinnovo nello stesso mese vale solo se il primo è stato pagato)
+  const seen = new Set<string>();
+  const first30 = events
+    .filter((e) => e.date <= addDays(today, 30))
+    .filter((e) => (seen.has(e.clientId) ? false : (seen.add(e.clientId), true)));
+  const next30 = first30.reduce((t, e) => t + e.amount, 0);
+  const overdue30 = first30.filter((e) => e.overdue).reduce((t, e) => t + e.amount, 0);
   const total = monthsOut.reduce((t, m) => t + m.total, 0);
   const prudent = monthsOut.reduce((t, m) => t + m.prudent, 0);
-  return { months: monthsOut, events, next30, total, prudent };
+  return { months: monthsOut, events, next30, overdue30, total, prudent };
 }
 
 /**

@@ -98,7 +98,32 @@ export default async function PaymentsOverviewPage() {
         </Card>
       </div>
 
-      <Card className="relative overflow-x-auto p-0">
+      {/* telefono: una scheda per cliente con tutto in vista */}
+      <Card className="flex flex-col p-0 md:hidden">
+        <ul>
+          {rows.map((l) => (
+            <li key={l.clientId} className="flex flex-col gap-2 border-t border-sand-deep px-4 py-3.5 first:border-t-0">
+              <div className="flex items-baseline justify-between gap-3">
+                <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="min-w-0 truncate font-semibold hover:underline">{l.name}</Link>
+                <span className="shrink-0 text-sm text-muted">{l.planLabel}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="inline-flex min-w-0 items-center gap-2 text-sm">
+                  <Dot tone={l.status.state === "overdue" ? "accent" : l.status.state === "due_soon" ? "deep" : l.status.state === "none" ? "muted" : "ink"} />
+                  <span className="truncate">
+                    {l.status.label}
+                    {l.status.dueDate ? ` · ${formatShort(l.status.dueDate)}` : l.status.sessionsLeft !== null ? ` · ${l.sessionsUsed}/${l.sessionsBought} sessioni` : ""}
+                    {l.paused ? " · in pausa" : ""}
+                  </span>
+                </span>
+                {l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} whatsapp={null} compact label={l.status.state === "ok" ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="shrink-0 text-sm font-semibold underline">Imposta piano</Link>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      <Card className="relative hidden overflow-x-auto p-0 md:block">
         <table className="w-full min-w-[720px] text-left text-[15px]">
           <thead>
             <tr className="text-xs tracking-wider text-muted uppercase">

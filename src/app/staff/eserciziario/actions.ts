@@ -1,6 +1,7 @@
 "use server";
 
 import { readFile } from "node:fs/promises";
+import { friendlyError } from "@/lib/friendly-error";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -31,7 +32,7 @@ async function importRows(rows: ExerciseRow[]): Promise<ActionState> {
   }
   if (toInsert.length) {
     const { error } = await supabase.from("exercises").insert(toInsert);
-    if (error) return { error: "Import non riuscito: " + error.message };
+    if (error) return { error: `Import non riuscito. ${friendlyError(error)}` };
   }
   revalidatePath("/staff/eserciziario");
   return { ok: true, message: `${toInsert.length} esercizi aggiunti${updated ? `, ${updated} completati con video o descrizione` : ""}.` };

@@ -186,7 +186,8 @@ test.describe("collaboratore", () => {
     await expect(page.getByRole("link", { name: /Luca Prova/ }).filter({ visible: true }).first()).toBeVisible();
     await expect(page.getByRole("link", { name: "Giulia Esempio" })).toHaveCount(0);
     await page.goto("/staff/pagamenti");
-    await expect(page).toHaveURL(/\/staff$/);
+    await expect(page).toHaveURL(/\/staff\?solo-titolare=1$/);
+    await expect(page.getByText("Quella pagina la vede solo il titolare")).toBeVisible();
     const base = await openClient(page, "Luca Prova");
     await expect(page.getByRole("link", { name: "Pagamenti" })).toHaveCount(0);
     await page.goto(`${base}/sessioni`);

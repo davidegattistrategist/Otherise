@@ -8,6 +8,7 @@
  * trainer le rivede e decide se salvarle.
  */
 import { useRef, useState, useSyncExternalStore } from "react";
+import { friendlyError } from "@/lib/friendly-error";
 import type { ProgramContent, ProgramItem } from "@/lib/program/types";
 import { Button, Card, Eyebrow, Notice, Textarea, cx } from "@/components/ui";
 import { IconMic, IconSparkle, IconX } from "@/components/icons";
@@ -148,7 +149,7 @@ export function AiPanel({
         await draft(questions.map((q, i) => ({ question: q.question, answer: answers[i]?.trim() ?? "" })));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Errore");
+      setError(friendlyError(e));
     } finally {
       setBusy(false);
     }
@@ -160,7 +161,7 @@ export function AiPanel({
     try {
       await draft([]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Errore");
+      setError(friendlyError(e));
     } finally {
       setBusy(false);
     }
@@ -331,7 +332,7 @@ export function RowAiButtons({
       onPrescriptions(r.prescriptions);
       setInfo(r.reason);
     } catch (e) {
-      setInfo(e instanceof Error ? e.message : "Errore");
+      setInfo(friendlyError(e));
     } finally {
       setBusy(null);
     }
@@ -343,7 +344,7 @@ export function RowAiButtons({
       const r = await post<{ alternatives: Array<{ name: string; reason: string }> }>({ mode: "alternatives", programId, item: { name: item.name } });
       setAlts(r.alternatives);
     } catch (e) {
-      setInfo(e instanceof Error ? e.message : "Errore");
+      setInfo(friendlyError(e));
     } finally {
       setBusy(null);
     }

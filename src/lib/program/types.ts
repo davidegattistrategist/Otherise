@@ -149,7 +149,8 @@ export function emptyBlock(weeks: number, kind: BlockKind = "single"): ProgramBl
     everySec: kind === "emom" ? 60 : null,
     workSec: kind === "interval" ? 40 : null,
     restSec: kind === "interval" ? 20 : null,
-    items: kind === "text" ? [] : [emptyItem(weeks)],
+    // superserie e circuiti nascono con due esercizi: con uno solo non avrebbero senso
+    items: kind === "text" ? [] : kind === "superset" || kind === "circuit" ? [emptyItem(weeks), emptyItem(weeks)] : [emptyItem(weeks)],
   };
 }
 

@@ -37,6 +37,7 @@ export default async function SessionPage({ params }: { params: Promise<{ progra
         maxes={s.maxes}
         videos={s.videos}
         backHref="/cliente"
+        barClass="bottom-[calc(0.75rem+env(safe-area-inset-bottom))] md:bottom-4"
       />
     </div>
   );

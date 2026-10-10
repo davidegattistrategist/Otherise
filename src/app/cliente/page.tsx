@@ -14,8 +14,8 @@ import { IconPlay } from "@/components/icons";
 
 export const metadata: Metadata = { title: "Oggi" };
 
-export default async function ClientHome({ searchParams }: { searchParams: Promise<{ fatto?: string }> }) {
-  const { fatto } = await searchParams;
+export default async function ClientHome({ searchParams }: { searchParams: Promise<{ fatto?: string; fastidio?: string }> }) {
+  const { fatto, fastidio } = await searchParams;
   const me = await requireClient();
   const supabase = await createClient();
   const today = todayISO();
@@ -60,7 +60,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
         <h1 className="mt-1 text-[34px] leading-tight font-normal tracking-tight">Ciao {client?.first_name}</h1>
       </div>
 
-      {fatto ? <Notice tone="success">Allenamento registrato. Ottimo lavoro!</Notice> : null}
+      {fatto ? <Notice tone="success">Allenamento registrato. Ottimo lavoro!{fastidio ? " Il tuo coach è stato avvisato del fastidio che hai segnalato: ti scrive lui come procedere." : ""}</Notice> : null}
 
       {checkinWeek && !thisCheckin ? (
         <Link href="/cliente/checkup" className="flex items-center gap-3 rounded-[24px] bg-accent px-5 py-4 text-white">
@@ -115,7 +115,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
                 <Eyebrow>La fase</Eyebrow>
                 <div className="mt-1 truncate text-lg font-semibold">{current.title}</div>
                 <div className="text-sm text-muted">
-                  {current.position.state === "finished" ? `Conclusa il ${formatShort(end!)}` : daysLeft === 0 ? "Ultimo giorno" : `Mancano ${daysLeft} giorni`}
+                  {current.position.state === "finished" ? `Conclusa il ${formatShort(end!)}` : daysLeft === 0 ? "Ultimo giorno" : daysLeft === 1 ? "Manca 1 giorno" : `Mancano ${daysLeft} giorni`}
                 </div>
               </div>
             </div>
@@ -123,7 +123,11 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
               <div className="mb-1.5 flex justify-between text-sm text-muted"><span>Allenamenti fatti</span><span className="tabular">{done} di {total}</span></div>
               <ProgressBar value={total ? (done / total) * 100 : 0} />
             </div>
-            {upcoming ? <p className="text-sm text-muted">Prossima fase dal {formatShort(upcoming.start_date)}: {upcoming.title}</p> : null}
+            {upcoming ? (
+              <p className="text-sm text-muted">Prossima fase dal {formatShort(upcoming.start_date)}: {upcoming.title}</p>
+            ) : current.position.state !== "finished" && daysLeft !== null && daysLeft <= 3 ? (
+              <p className="text-sm text-muted">La fase sta per finire: {coach ?? "il tuo coach"} prepara la prossima. Intanto continua con gli allenamenti in ordine{done < total ? ", anche se non riesci a farli tutti" : ""}.</p>
+            ) : null}
           </Card>
         ) : null}
 
@@ -154,7 +158,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
           </Card>
         ) : null}
 
-        {lastReply?.coach_reply ? (
+        {lastReply?.coach_reply && diffDays((lastReply.reviewed_at ?? lastReply.week_start).slice(0, 10), today) <= 14 ? (
           <Card className="flex flex-col gap-2">
             <Eyebrow>{coach ?? "Il coach"} ti ha risposto</Eyebrow>
             <p className="text-[15px] leading-relaxed whitespace-pre-line">{lastReply.coach_reply}</p>

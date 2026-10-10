@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { friendlyError } from "@/lib/friendly-error";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireOwner, requireStaff } from "@/lib/auth";
@@ -108,7 +109,7 @@ async function sendInvite(clientId: string): Promise<ActionState> {
       await admin.from("profiles").upsert({ id: user.id, email: client.email, role: "client" });
       return { ok: true, message: "Il cliente aveva già un account: ora è collegato. Può entrare con la sua password o usare “Password dimenticata”." };
     }
-    return { error: `Invito non inviato: ${error.message}` };
+    return { error: `Invito non inviato. ${friendlyError(error)}` };
   }
   return { ok: true, message: `Invito inviato a ${client.email}.` };
 }

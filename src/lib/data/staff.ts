@@ -126,7 +126,7 @@ export function buildTodayList(clients: ClientOverview[], today: ISODate = today
     if (comp) {
       const since = comp.daysSinceLast;
       if (c.user_id && (since === null || since >= 7) && (comp.expected ?? 0) > 0) {
-        training.push({ clientId: c.id, clientName: c.fullName, text: since === null ? "Non ha ancora registrato allenamenti" : `Nessun allenamento registrato da ${since} giorni`, href: `/staff/clienti/${c.id}`, tone: "accent" });
+        training.push({ clientId: c.id, clientName: c.fullName, text: since === null ? "Non ha ancora registrato allenamenti" : since === 1 ? "Nessun allenamento registrato da ieri" : `Nessun allenamento registrato da ${since} giorni`, href: `/staff/clienti/${c.id}`, tone: "accent" });
       } else if (comp.pct !== null && comp.pct < 50) {
         training.push({ clientId: c.id, clientName: c.fullName, text: `Costanza ${comp.pct}% nelle ultime 2 settimane`, href: `/staff/clienti/${c.id}`, tone: "ink" });
       }
@@ -138,8 +138,8 @@ export function buildTodayList(clients: ClientOverview[], today: ISODate = today
       programs.push({ clientId: c.id, clientName: c.fullName, text: c.draftCount ? "Bozza di programma da pubblicare" : "Nessun programma pubblicato", href: `/staff/clienti/${c.id}/programma`, tone: "accent" });
     } else {
       const left = diffDays(today, c.program.endDate);
-      if (c.program.state === "finished") programs.push({ clientId: c.id, clientName: c.fullName, text: `Programma finito da ${-left} giorni`, href: `/staff/clienti/${c.id}/programma`, tone: "accent" });
-      else if (left <= 7) programs.push({ clientId: c.id, clientName: c.fullName, text: left === 0 ? "Il programma finisce oggi" : `Il programma finisce tra ${left} giorni`, href: `/staff/clienti/${c.id}/programma`, tone: "ink" });
+      if (c.program.state === "finished") programs.push({ clientId: c.id, clientName: c.fullName, text: -left === 1 ? "Programma finito ieri" : `Programma finito da ${-left} giorni`, href: `/staff/clienti/${c.id}/programma`, tone: "accent" });
+      else if (left <= 7) programs.push({ clientId: c.id, clientName: c.fullName, text: left === 0 ? "Il programma finisce oggi" : left === 1 ? "Il programma finisce domani" : `Il programma finisce tra ${left} giorni`, href: `/staff/clienti/${c.id}/programma`, tone: "ink" });
     }
     const checkLimit = addDays(today, -35);
     if (!c.lastCheck || c.lastCheck < checkLimit) {

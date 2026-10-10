@@ -10,7 +10,7 @@ export const CHECKIN_QUESTIONS = [
   { key: "training", label: "Come sono andati gli allenamenti questa settimana?", short: "Allenamenti" },
   { key: "sleep", label: "Come sono andati sonno e recupero?", short: "Sonno" },
   { key: "stress", label: "Come hai gestito stress e impegni?", short: "Stress" },
-  { key: "adherence", label: "Quanto ti sei sentito in linea con il percorso (alimentazione, abitudini)?", short: "Percorso" },
+  { key: "adherence", label: "Come è andata con il percorso (alimentazione, abitudini)?", short: "Percorso" },
 ] as const;
 
 export type CheckinKey = (typeof CHECKIN_QUESTIONS)[number]["key"];

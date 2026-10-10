@@ -2,6 +2,7 @@
 
 /** Riassunto AI delle ultime settimane del cliente con bozza di risposta all'ultimo check-up. */
 import { useState } from "react";
+import { friendlyError } from "@/lib/friendly-error";
 import { Button, Card, Eyebrow, Notice } from "@/components/ui";
 import { IconSparkle } from "@/components/icons";
 
@@ -30,7 +31,7 @@ export function AiCheckinBrief({ clientId, replyTargetId }: { clientId: string; 
       if (!res.ok) throw new Error(data.error ?? "Errore");
       setBrief(data as Brief);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Errore");
+      setError(friendlyError(e));
     } finally {
       setBusy(false);
     }

@@ -83,7 +83,7 @@ export function CheckForm({
           <span className="text-sm text-muted">3 rilevazioni per plica, la media è automatica</span>
         </div>
         <div className="scroll-x">
-          <table className="w-full min-w-[520px] border-collapse text-[15px]">
+          <table className="w-full border-collapse text-[15px] sm:min-w-[520px]">
             <thead>
               <tr className="text-left text-xs text-muted">
                 <th scope="col" className="py-2 font-semibold">Plica</th>
@@ -98,7 +98,7 @@ export function CheckForm({
                 const avg = siteAverage(sf[s.key].map(toNum));
                 return (
                   <tr key={s.key} className="border-t border-sand-deep">
-                    <th scope="row" className="py-2 text-left font-semibold">{s.label}</th>
+                    <th scope="row" className="w-[28%] py-2 pr-1 text-left text-sm font-semibold break-words sm:w-auto sm:text-[15px]">{s.label}</th>
                     {[0, 1, 2].map((i) => (
                       <td key={i} className="px-1 py-1.5">
                         <input
@@ -107,11 +107,11 @@ export function CheckForm({
                           inputMode="decimal"
                           value={sf[s.key][i]}
                           onChange={(e) => setSf((v) => ({ ...v, [s.key]: v[s.key].map((x, j) => (j === i ? e.target.value : x)) }))}
-                          className="w-full rounded-lg border border-sand-deep bg-sand px-2 py-2 text-center text-base"
+                          className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-1 py-2 text-center text-base sm:px-2"
                         />
                       </td>
                     ))}
-                    <td className="py-2 pl-3 text-right font-semibold tabular">{avg !== null ? fmtNum(avg, 2) : "—"}</td>
+                    <td className="py-2 pl-2 text-right text-sm font-semibold tabular sm:pl-3 sm:text-[15px]">{avg !== null ? fmtNum(avg, 2) : "—"}</td>
                   </tr>
                 );
               })}
@@ -152,38 +152,28 @@ export function CheckForm({
       <Card>
         <Eyebrow className="mb-1">Test di forza</Eyebrow>
         <p className="mb-4 text-sm text-muted">Massimale stimato con la tabella RPE, arrotondato a 2,5 kg.</p>
-        <div className="scroll-x">
-          <table className="w-full min-w-[560px] border-collapse text-[15px]">
-            <thead>
-              <tr className="text-left text-xs text-muted">
-                <th scope="col" className="py-2 font-semibold">Esercizio</th>
-                <th scope="col" className="px-1 py-2 font-semibold">Carico kg</th>
-                <th scope="col" className="px-1 py-2 font-semibold">Ripetizioni</th>
-                <th scope="col" className="px-1 py-2 font-semibold">RPE</th>
-                <th scope="col" className="py-2 pl-3 text-right font-semibold">Massimale stimato</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tests.map((t, i) => {
-                const e = toNum(t.load) && toNum(t.reps) && toNum(t.rpe) ? estimateOneRepMax(toNum(t.load)!, toNum(t.reps)!, toNum(t.rpe)!) : null;
-                const set = (k: keyof typeof t, v: string) => setTests((arr) => arr.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
-                return (
-                  <tr key={i} className="border-t border-sand-deep">
-                    <td className="py-1.5 pr-1"><input aria-label={`Test ${i + 1}, esercizio`} name={`test_${i}_exercise`} value={t.exercise} onChange={(e) => set("exercise", e.target.value)} placeholder={i === 0 ? "Squat" : ""} className="w-full rounded-lg border border-sand-deep bg-sand px-2 py-2" /></td>
-                    <td className="px-1 py-1.5"><input aria-label={`Test ${i + 1}, carico`} name={`test_${i}_load`} inputMode="decimal" value={t.load} onChange={(e) => set("load", e.target.value)} className="w-24 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-center" /></td>
-                    <td className="px-1 py-1.5"><input aria-label={`Test ${i + 1}, ripetizioni`} name={`test_${i}_reps`} inputMode="numeric" value={t.reps} onChange={(e) => set("reps", e.target.value)} className="w-20 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-center" /></td>
-                    <td className="px-1 py-1.5">
-                      <select aria-label={`Test ${i + 1}, RPE`} name={`test_${i}_rpe`} value={t.rpe} onChange={(e) => set("rpe", e.target.value)} className="w-24 rounded-lg border border-sand-deep bg-sand px-2 py-2">
-                        <option value="">—</option>
-                        {RPE_VALUES.map((r) => <option key={r} value={r}>{String(r).replace(".", ",")}</option>)}
-                      </select>
-                    </td>
-                    <td className="py-1.5 pl-3 text-right font-semibold tabular">{e ? `${fmtNum(e, 1)} kg` : "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="flex flex-col gap-3">
+          <div className="hidden gap-2 text-xs font-semibold text-muted sm:grid sm:grid-cols-[minmax(0,1fr)_6rem_5rem_6rem_9rem]">
+            <span>Esercizio</span><span>Carico kg</span><span>Ripetizioni</span><span>RPE</span><span className="text-right">Massimale stimato</span>
+          </div>
+          {tests.map((t, i) => {
+            const e = toNum(t.load) && toNum(t.reps) && toNum(t.rpe) ? estimateOneRepMax(toNum(t.load)!, toNum(t.reps)!, toNum(t.rpe)!) : null;
+            const set = (k: keyof typeof t, v: string) => setTests((arr) => arr.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+            return (
+              <div key={i} className="grid grid-cols-3 items-center gap-2 border-t border-sand-deep pt-3 first:border-t-0 first:pt-0 sm:grid-cols-[minmax(0,1fr)_6rem_5rem_6rem_9rem] sm:border-t-0 sm:pt-0">
+                <input aria-label={`Test ${i + 1}, esercizio`} name={`test_${i}_exercise`} value={t.exercise} onChange={(e) => set("exercise", e.target.value)} placeholder={i === 0 ? "Squat" : "Esercizio"} className="col-span-3 w-full rounded-lg border border-sand-deep bg-sand px-2 py-2 sm:col-span-1" />
+                <input aria-label={`Test ${i + 1}, carico`} name={`test_${i}_load`} inputMode="decimal" value={t.load} onChange={(e) => set("load", e.target.value)} placeholder="kg" className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-center" />
+                <input aria-label={`Test ${i + 1}, ripetizioni`} name={`test_${i}_reps`} inputMode="numeric" value={t.reps} onChange={(e) => set("reps", e.target.value)} placeholder="rip." className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-center" />
+                <select aria-label={`Test ${i + 1}, RPE`} name={`test_${i}_rpe`} value={t.rpe} onChange={(e) => set("rpe", e.target.value)} className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2">
+                  <option value="">RPE</option>
+                  {RPE_VALUES.map((r) => <option key={r} value={r}>{String(r).replace(".", ",")}</option>)}
+                </select>
+                <span className="col-span-3 text-right text-sm font-semibold tabular sm:col-span-1 sm:text-[15px]">
+                  <span className="font-normal text-muted sm:hidden">Massimale stimato </span>{e ? `${fmtNum(e, 1)} kg` : "—"}
+                </span>
+              </div>
+            );
+          })}
         </div>
         <div className="mt-5">
           <Label htmlFor="tests_text" hint="corsa, cardio, HYROX, qualsiasi altro test">Altri test</Label>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { CHECKIN_QUESTIONS, SCORE_LABELS } from "@/lib/checkin";
 import { ActionMessage, SubmitButton } from "@/components/form-bits";
 import { Label, Textarea } from "@/components/ui";
@@ -10,11 +10,23 @@ type Values = Partial<Record<(typeof CHECKIN_QUESTIONS)[number]["key"], number>>
 
 export function CheckinForm({ values, coach }: { values?: Values; coach: string }) {
   const [state, action] = useActionState(submitCheckin, null);
+  const [missing, setMissing] = useState<string[]>([]);
+  // controllo nostro (non quello del browser): porta alla prima domanda senza risposta
+  const check = (e: React.FormEvent<HTMLFormElement>) => {
+    const fd = new FormData(e.currentTarget);
+    const empty = CHECKIN_QUESTIONS.filter((q) => !fd.get(q.key)).map((q) => q.key);
+    setMissing(empty);
+    if (empty.length) {
+      e.preventDefault();
+      document.getElementById(`q-${empty[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
   return (
-    <form action={action} className="flex flex-col gap-6">
+    <form action={action} onSubmit={check} noValidate className="flex flex-col gap-6">
       {CHECKIN_QUESTIONS.map((q) => (
-        <fieldset key={q.key} className="flex flex-col gap-2.5">
+        <fieldset key={q.key} id={`q-${q.key}`} onChange={() => setMissing((m) => m.filter((k) => k !== q.key))} className="flex flex-col gap-2.5">
           <legend className="mb-2.5 text-[17px] leading-snug font-semibold">{q.label}</legend>
+          {missing.includes(q.key) ? <p role="alert" className="-mt-1 text-sm font-semibold text-accent-deep">Scegli un voto da 1 a 5</p> : null}
           <div className="grid grid-cols-5 gap-1.5">
             {[1, 2, 3, 4, 5].map((v) => (
               <label key={v} className="group relative">
@@ -36,6 +48,7 @@ export function CheckinForm({ values, coach }: { values?: Values; coach: string 
         <Label htmlFor="request" hint="facoltativo">Vuoi chiedere qualcosa a {coach}?</Label>
         <Textarea id="request" name="request" rows={2} defaultValue={values?.request ?? ""} placeholder="Se scrivi qui, ricevi una risposta" />
       </div>
+      {missing.length ? <p role="alert" className="rounded-xl bg-accent-soft px-3 py-2 text-sm">{missing.length === 1 ? "Manca la risposta a una domanda." : `Mancano le risposte a ${missing.length} domande.`}</p> : null}
       <ActionMessage state={state} />
       <SubmitButton className="w-full" pendingText="Invio…">{values ? "Aggiorna il check-up" : "Invia il check-up"}</SubmitButton>
     </form>

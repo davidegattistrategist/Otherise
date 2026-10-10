@@ -127,6 +127,9 @@ export function Logbook(props: LogbookProps) {
   const [now, setNow] = useState(() => Date.now());
   const dirty = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveRef = useRef<(() => Promise<boolean>) | null>(null);
+  const finishing = useRef(false);
   const latest = useRef({ items, notes, discomfort, performedOn, completed });
   useEffect(() => {
     latest.current = { items, notes, discomfort, performedOn, completed };
@@ -149,6 +152,8 @@ export function Logbook(props: LogbookProps) {
         setPerformedOn(draft.performedOn);
         dirty.current = true;
         setStatus({ kind: "idle", text: "Ripreso da dove eri rimasto" });
+        // la bozza ripresa dal telefono va mandata subito, non al prossimo tocco
+        retryTimer.current = setTimeout(() => void saveRef.current?.(), 800);
       } else {
         localStorage.removeItem(storageKey(props));
       }
@@ -186,12 +191,41 @@ export function Logbook(props: LogbookProps) {
         setStatus({ kind: "saved", text: `Salvato alle ${t}` });
         return true;
       } catch {
-        setStatus({ kind: "error", text: "Nessuna connessione: i dati restano sul telefono, riprova tra poco." });
+        setStatus({ kind: "error", text: "Offline: salvo appena torna la rete" });
         return false;
       }
     },
     [programId, week, day],
   );
+
+  // quando torna la rete (o ogni 20 secondi finché manca) riprova da solo;
+  // se stavi chiudendo l'allenamento, lo chiude appena il salvataggio riesce
+  useEffect(() => {
+    saveRef.current = async () => {
+      const ok = await save(finishing.current ? { completed: true } : {});
+      if (ok && finishing.current) {
+        finishing.current = false;
+        router.push(`${props.backHref}?fatto=1${latest.current.discomfort.trim() ? "&fastidio=1" : ""}`);
+        router.refresh();
+      }
+      return ok;
+    };
+  });
+  useEffect(() => {
+    if (status.kind !== "error") return;
+    const retry = () => {
+      if (dirty.current || finishing.current) void saveRef.current?.();
+    };
+    window.addEventListener("online", retry);
+    const id = setInterval(retry, 20000);
+    return () => {
+      window.removeEventListener("online", retry);
+      clearInterval(id);
+    };
+  }, [status.kind]);
+  useEffect(() => () => {
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+  }, []);
 
   const touch = useCallback(() => {
     dirty.current = true;
@@ -261,9 +295,11 @@ export function Logbook(props: LogbookProps) {
   const finish = async () => {
     setCompleted(true);
     latest.current = { ...latest.current, completed: true };
+    finishing.current = true;
     const ok = await save({ completed: true });
     if (ok) {
-      router.push(`${props.backHref}?fatto=1`);
+      finishing.current = false;
+      router.push(`${props.backHref}?fatto=1${latest.current.discomfort.trim() ? "&fastidio=1" : ""}`);
       router.refresh();
     }
   };
@@ -381,12 +417,12 @@ export function Logbook(props: LogbookProps) {
                           </button>
                         </div>
                       ))}
-                      <div className="flex gap-4 pt-1 text-sm font-semibold">
-                        <button type="button" className="inline-flex items-center gap-1 text-ink-soft" onClick={() => update(it.id, (cur) => ({ ...cur, sets: [...cur.sets, { kg: cur.sets[cur.sets.length - 1]?.kg ?? null, reps: null }] }))}>
+                      <div className="flex gap-2 text-sm font-semibold">
+                        <button type="button" className="inline-flex min-h-11 items-center gap-1 pr-2 text-ink-soft" onClick={() => update(it.id, (cur) => ({ ...cur, sets: [...cur.sets, { kg: cur.sets[cur.sets.length - 1]?.kg ?? null, reps: null }] }))}>
                           <IconPlus size={16} /> serie
                         </button>
                         {st.sets.length > 1 ? (
-                          <button type="button" className="text-muted" onClick={() => update(it.id, (cur) => ({ ...cur, sets: cur.sets.slice(0, -1) }))}>− serie</button>
+                          <button type="button" className="min-h-11 px-2 text-muted" onClick={() => update(it.id, (cur) => ({ ...cur, sets: cur.sets.slice(0, -1) }))}>− serie</button>
                         ) : null}
                       </div>
                       <input
@@ -471,7 +507,7 @@ export function Logbook(props: LogbookProps) {
             <p className="text-sm text-ink-soft">Lo legge subito il tuo coach e ti dice come procedere. Nel frattempo non forzare.</p>
           </div>
         ) : (
-          <button type="button" onClick={() => setShowDiscomfort(true)} className="self-start text-sm font-semibold underline">Hai sentito dolore o fastidio? Dillo al coach</button>
+          <button type="button" onClick={() => setShowDiscomfort(true)} className="flex min-h-11 items-center self-start text-sm font-semibold underline">Hai sentito dolore o fastidio? Dillo al coach</button>
         )}
         <div className="flex flex-wrap items-center gap-3">
           <label htmlFor="performed-on" className="text-sm text-muted">Fatto il</label>
@@ -506,10 +542,10 @@ export function Logbook(props: LogbookProps) {
             {status.kind === "saving" ? "Salvataggio…" : status.text ?? (completed ? "Sessione completata" : "Si salva da solo")}
           </span>
           {status.kind === "error" ? (
-            <button type="button" onClick={() => void save()} className="h-11 rounded-full px-4 text-sm font-semibold text-card ring-1 ring-line-dark">Riprova</button>
+            <button type="button" onClick={() => void saveRef.current?.()} className="h-11 shrink-0 rounded-full px-4 text-sm font-semibold text-card ring-1 ring-line-dark">Riprova</button>
           ) : null}
           <button type="button" onClick={() => void finish()} disabled={status.kind === "saving"} className="h-11 rounded-full bg-accent px-5 text-[15px] font-bold text-white disabled:opacity-60">
-            {completed ? "Salva" : props.finishLabel ?? "Ho finito"}
+            {initial.completed ? "Salva" : props.finishLabel ?? "Ho finito"}
           </button>
         </div>
       </div>

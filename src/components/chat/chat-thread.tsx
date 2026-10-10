@@ -5,6 +5,7 @@
  * secondi mentre è aperta. Niente messaggi vocali (scelta voluta).
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { friendlyError } from "@/lib/friendly-error";
 import { deleteMessage, dismissReplyDraft, prepareUpload, requestReplyDraft, sendMessage } from "@/app/chat/actions";
 import type { ReplyDraft } from "@/lib/ai/reply";
 import { MAX_ATTACHMENTS, attachmentKind, sizeError, type ChatAttachment, type ChatMessage } from "@/lib/chat-shared";
@@ -165,7 +166,7 @@ export function ChatThread({
       pending.forEach((p) => URL.revokeObjectURL(p.preview));
       setPending([]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Invio non riuscito.");
+      setError(friendlyError(e, "Invio non riuscito: riprova."));
     } finally {
       setSending(false);
     }

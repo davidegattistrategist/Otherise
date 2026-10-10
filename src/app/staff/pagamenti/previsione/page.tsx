@@ -50,7 +50,11 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
       </PageTitle>
 
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(170px,1fr))] sm:gap-4">
-        <Card dark><Eyebrow dark>Prossimi 30 giorni</Eyebrow><BigNumber className="mt-3 text-card" value={formatEuro(f.next30)} /></Card>
+        <Card dark>
+          <Eyebrow dark>Prossimi 30 giorni</Eyebrow>
+          <BigNumber className="mt-3 text-card" value={formatEuro(f.next30)} />
+          {f.overdue30 ? <p className="mt-1 text-xs text-muted-dark">di cui {formatEuro(f.overdue30)} già scaduti</p> : null}
+        </Card>
         <Card><Eyebrow>In {months} mesi</Eyebrow><BigNumber className="mt-3" value={formatEuro(f.total)} /></Card>
         <Card><Eyebrow>Media al mese</Eyebrow><BigNumber className="mt-3" value={formatEuro(Math.round(avg))} /></Card>
         <Card>
@@ -91,13 +95,13 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
           })}
         </div>
         <div className="scroll-x -mx-1 overflow-x-auto">
-          <table className="w-full min-w-[560px] text-left text-[15px]">
+          <table className="w-full text-left text-[15px] sm:min-w-[560px]">
             <thead>
               <tr className="text-xs tracking-wider text-muted uppercase">
                 <th className="px-2 py-2 font-semibold">Mese</th>
-                <th className="px-2 py-2 text-right font-semibold">Abbonamenti</th>
-                <th className="px-2 py-2 text-right font-semibold">Pacchetti</th>
-                <th className="px-2 py-2 text-right font-semibold">A sessione</th>
+                <th className="hidden px-2 py-2 text-right font-semibold sm:table-cell">Abbonamenti</th>
+                <th className="hidden px-2 py-2 text-right font-semibold sm:table-cell">Pacchetti</th>
+                <th className="hidden px-2 py-2 text-right font-semibold sm:table-cell">A sessione</th>
                 <th className="px-2 py-2 text-right font-semibold">Totale</th>
                 <th className="px-2 py-2 text-right font-semibold">Prudente</th>
               </tr>
@@ -106,9 +110,9 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
               {f.months.map((m) => (
                 <tr key={m.key} className="border-t border-sand-deep">
                   <td className="px-2 py-2 capitalize">{monthLabel(m.key)} {m.key.slice(0, 4)}</td>
-                  <td className="px-2 py-2 text-right">{formatEuro(m.recurring)}</td>
-                  <td className="px-2 py-2 text-right">{formatEuro(m.packages)}</td>
-                  <td className="px-2 py-2 text-right">{formatEuro(m.single)}</td>
+                  <td className="hidden px-2 py-2 text-right sm:table-cell">{formatEuro(m.recurring)}</td>
+                  <td className="hidden px-2 py-2 text-right sm:table-cell">{formatEuro(m.packages)}</td>
+                  <td className="hidden px-2 py-2 text-right sm:table-cell">{formatEuro(m.single)}</td>
                   <td className="px-2 py-2 text-right font-semibold">{formatEuro(m.total)}</td>
                   <td className="px-2 py-2 text-right text-muted">{formatEuro(m.prudent)}</td>
                 </tr>

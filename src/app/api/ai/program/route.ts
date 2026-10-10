@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { friendlyError } from "@/lib/friendly-error";
 import { z } from "zod";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ alternatives: result.alternatives });
   } catch (e) {
     console.error("AI error", e);
-    const msg = e instanceof Error ? e.message : "Errore dell'assistente";
+    const msg = friendlyError(e, "L'assistente non ha risposto: riprova tra poco.");
     return NextResponse.json({ error: msg.length < 200 ? msg : "L'assistente non ha risposto correttamente. Riprova tra poco." }, { status: 502 });
   }
 }

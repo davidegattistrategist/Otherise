@@ -48,7 +48,7 @@ export async function requireStaff(): Promise<Me> {
 
 export async function requireOwner(): Promise<Me> {
   const me = await requireUser();
-  if (me.role !== "owner") redirect("/staff");
+  if (me.role !== "owner") redirect("/staff?solo-titolare=1");
   return me;
 }
 

@@ -136,7 +136,8 @@ export function billingStatus(row: BillingRow | null | undefined, today: ISODate
 
 export function formatEuro(n: number | string | null | undefined): string {
   const v = typeof n === "string" ? Number(n) : n ?? 0;
-  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: Number.isInteger(v) ? 0 : 2 }).format(v);
+  // "always": in italiano senza questa opzione 5550 € resterebbe senza punto delle migliaia
+  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: Number.isInteger(v) ? 0 : 2, useGrouping: "always" } as Intl.NumberFormatOptions).format(v);
 }
 
 /** "il tuo trimestre è saldato fino al 13 ottobre", "ti restano 2 sessioni nel pacchetto"… per i promemoria. */
