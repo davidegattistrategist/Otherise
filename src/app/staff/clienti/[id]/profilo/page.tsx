@@ -9,6 +9,7 @@ import { ClientForm } from "../../client-form";
 import { deleteClientAction, inviteClientAction, updateClientAction } from "../../actions";
 import { InviteButton } from "./invite-button";
 import { PrivacyStaffCard } from "./privacy-staff-card";
+import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Scheda cliente" };
 
@@ -39,7 +40,7 @@ export default async function ClientProfilePage({ params, searchParams }: { para
       <div className="flex flex-col gap-4">
         <Card>
           <Eyebrow className="mb-3">Accesso all&apos;app</Eyebrow>
-          {invito === "errore" ? <div className="mb-3"><Notice tone="error">Il cliente è stato creato, ma l&apos;invito non è partito. Riprova da qui.</Notice></div> : null}
+          {invito === "errore" ? <div className="mb-3"><ClearParams names={["invito"]} /><Notice tone="error">Il cliente è stato creato, ma l&apos;invito non è partito. Riprova da qui.</Notice></div> : null}
           {client.user_id && hasEntered ? (
             <p className="text-[15px] leading-relaxed text-muted">Il cliente ha già un account e può entrare con {client.email}. Se perde la password usa “Password dimenticata” nella pagina di accesso.</p>
           ) : client.user_id ? (

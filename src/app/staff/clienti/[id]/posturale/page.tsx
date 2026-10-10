@@ -6,6 +6,7 @@ import { Card, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { PostureForm } from "./posture-form";
 import { deletePosture, savePosture } from "./actions";
+import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Posturale" };
 
@@ -32,7 +33,7 @@ export default async function PosturePage({ params, searchParams }: { params: Pr
 
   return (
     <div className="flex flex-col gap-4">
-      {sp.salvato ? <Notice tone="success">Valutazione salvata.</Notice> : null}
+      {sp.salvato ? <><ClearParams names={["salvato"]} /><Notice tone="success">Valutazione salvata.</Notice></> : null}
       {showForm ? (
         <Card className="flex flex-col gap-4">
           <Eyebrow>{editing ? "Modifica valutazione" : "Nuova valutazione posturale"}</Eyebrow>

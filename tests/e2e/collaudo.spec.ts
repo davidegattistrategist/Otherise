@@ -58,8 +58,9 @@ test.describe("titolare", () => {
     }
     await expect(page.getByText(/%/).first()).toBeVisible();
     await page.getByRole("button", { name: "Salva check" }).click();
-    await page.waitForURL(/check\?salvato=1/);
     await expect(page.getByText("Check salvato.")).toBeVisible();
+    // l'avviso resta, ma l'indirizzo viene ripulito: ricaricando non ricompare
+    await expect(page).toHaveURL(/\/check$/);
     await expect(page.getByText(/Grasso \d/)).toBeVisible();
 
     // posturale
@@ -83,9 +84,11 @@ test.describe("titolare", () => {
     await page.fill("input[name=amount]", "400");
     await page.getByRole("button", { name: "Attiva il piano" }).click();
     await expect(page.getByText("Piano salvato.")).toBeVisible();
-    await page.reload();
+    await expect(page).toHaveURL(/\/pagamenti$/);
     await page.getByRole("button", { name: "Registra il pagamento" }).click();
     await expect(page.getByText(/Pagamento di .* registrato/)).toBeVisible();
+    // il vecchio avviso del piano non resta sullo schermo
+    await expect(page.getByText("Piano salvato.")).toHaveCount(0);
     await page.reload();
     await expect(page.getByText(/1 fatte su 10 pagate/)).toBeVisible();
     expect(await noHorizontalScroll(page)).toBe(true);
@@ -186,8 +189,8 @@ test.describe("collaboratore", () => {
     await expect(page.getByRole("link", { name: /Luca Prova/ }).filter({ visible: true }).first()).toBeVisible();
     await expect(page.getByRole("link", { name: "Giulia Esempio" })).toHaveCount(0);
     await page.goto("/staff/pagamenti");
-    await expect(page).toHaveURL(/\/staff\?solo-titolare=1$/);
     await expect(page.getByText("Quella pagina la vede solo il titolare")).toBeVisible();
+    await expect(page).toHaveURL(/\/staff$/);
     const base = await openClient(page, "Luca Prova");
     await expect(page.getByRole("link", { name: "Pagamenti" })).toHaveCount(0);
     await page.goto(`${base}/sessioni`);

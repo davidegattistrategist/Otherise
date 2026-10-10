@@ -6,6 +6,7 @@ import { formatShort } from "@/lib/dates";
 import { CIRCUMFERENCES } from "@/lib/body/skinfolds";
 import { LineChart } from "@/components/line-chart";
 import { Card, EmptyState, Eyebrow, LinkButton, Notice, fmtNum } from "@/components/ui";
+import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Check" };
 
@@ -26,7 +27,7 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
 
   return (
     <div className="flex flex-col gap-5">
-      {salvato ? <Notice tone="success">Check salvato.</Notice> : null}
+      {salvato ? <><ClearParams names={["salvato"]} /><Notice tone="success">Check salvato.</Notice></> : null}
       <div className="flex justify-end"><LinkButton href={`/staff/clienti/${id}/check/nuovo`}>Nuovo check</LinkButton></div>
       {list.length === 0 ? (
         <EmptyState title="Ancora nessun check">Registra pliche, circonferenze e test: i grafici si costruiscono da soli.</EmptyState>

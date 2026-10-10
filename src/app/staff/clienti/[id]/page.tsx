@@ -14,6 +14,7 @@ import { BarChart } from "@/components/bar-chart";
 import { ExerciseProgress } from "@/components/exercise-progress";
 import { getExerciseProgress, getWeeklySessions } from "@/lib/data/progress";
 import { ArrowCTA, BigNumber, Card, Dot, EmptyState, Eyebrow, LinkButton, Notice, ProgressBar, Ring, fmtNum } from "@/components/ui";
+import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Cliente" };
 
@@ -113,7 +114,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
 
   return (
     <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(300px,1fr))]">
-      {fatto ? <div className="[grid-column:1/-1]"><Notice tone="success">Allenamento registrato.</Notice></div> : null}
+      {fatto ? <div className="[grid-column:1/-1]"><ClearParams names={["fatto"]} /><Notice tone="success">Allenamento registrato.</Notice></div> : null}
       {programCard}
 
       <Card className="flex flex-col gap-3">

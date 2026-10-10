@@ -11,6 +11,7 @@ import { checkinWeekFor } from "@/lib/checkin";
 import { LineChart } from "@/components/line-chart";
 import { ArrowCTA, BigNumber, Card, Dot, Eyebrow, LinkButton, Notice, ProgressBar, Ring, fmtNum } from "@/components/ui";
 import { IconPlay } from "@/components/icons";
+import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Oggi" };
 
@@ -60,7 +61,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
         <h1 className="mt-1 text-[34px] leading-tight font-normal tracking-tight">Ciao {client?.first_name}</h1>
       </div>
 
-      {fatto ? <Notice tone="success">Allenamento registrato. Ottimo lavoro!{fastidio ? " Il tuo coach è stato avvisato del fastidio che hai segnalato: ti scrive lui come procedere." : ""}</Notice> : null}
+      {fatto ? <><ClearParams names={["fatto", "fastidio"]} /><Notice tone="success">Allenamento registrato. Ottimo lavoro!{fastidio ? " Il tuo coach è stato avvisato del fastidio che hai segnalato: ti scrive lui come procedere." : ""}</Notice></> : null}
 
       {checkinWeek && !thisCheckin ? (
         <Link href="/cliente/checkup" className="flex items-center gap-3 rounded-[24px] bg-accent px-5 py-4 text-white">

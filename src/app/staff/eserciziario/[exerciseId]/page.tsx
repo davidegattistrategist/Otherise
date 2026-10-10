@@ -8,6 +8,7 @@ import { Card, Notice, PageTitle } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { ExerciseForm } from "../exercise-form";
 import { deleteExercise, saveExercise } from "../actions";
+import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Esercizio" };
 
@@ -23,7 +24,7 @@ export default async function ExercisePage({ params, searchParams }: { params: P
   return (
     <div className="flex flex-col gap-6">
       <PageTitle eyebrow={<Link href="/staff/eserciziario" className="hover:underline">Eserciziario</Link>} title={ex.name} />
-      {nuovo ? <Notice tone="success">Esercizio creato.</Notice> : null}
+      {nuovo ? <><ClearParams names={["nuovo"]} /><Notice tone="success">Esercizio creato.</Notice></> : null}
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
         <Card><ExerciseForm action={saveExercise.bind(null, ex.id)} values={ex} /></Card>
         <div className="flex flex-col gap-4">

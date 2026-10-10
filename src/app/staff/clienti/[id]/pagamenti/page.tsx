@@ -10,6 +10,7 @@ import { Card, Dot, EmptyState, Eyebrow, Notice, buttonClass } from "@/component
 import { ConfirmButton } from "@/components/form-bits";
 import { PaymentForm, PlanForm, ReminderButton } from "./forms";
 import { closePackage, deletePayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder } from "./actions";
+import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Pagamenti" };
 
@@ -41,6 +42,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
       <div className="flex flex-col gap-4">
+        {piano === "salvato" || piano === "chiuso" ? <ClearParams names={["piano"]} /> : null}
         {piano === "salvato" ? <Notice tone="success">Piano salvato.</Notice> : null}
         {piano === "chiuso" ? <Notice tone="success">Pacchetto segnato come terminato. Quando rinnova, registra il nuovo pagamento.</Notice> : null}
         {plan && kind ? (

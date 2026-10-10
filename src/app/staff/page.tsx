@@ -9,6 +9,7 @@ import { getBillingLines } from "@/lib/data/billing";
 import { QuickPay } from "@/components/quick-pay";
 import { markDiscomfortSeen } from "./today-actions";
 import { FirstSteps } from "./first-steps";
+import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Oggi" };
 
@@ -61,7 +62,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
         <p className="text-[15px] text-muted">{active === 1 ? "1 cliente attivo" : `${active} clienti attivi`}</p>
       </PageTitle>
 
-      {sp["solo-titolare"] ? <Notice>Quella pagina la vede solo il titolare: pagamenti, impostazioni e collaboratori sono gestiti da lui.</Notice> : null}
+      {sp["solo-titolare"] ? <><ClearParams names={["solo-titolare"]} /><Notice>Quella pagina la vede solo il titolare: pagamenti, impostazioni e collaboratori sono gestiti da lui.</Notice></> : null}
       <FirstSteps supabase={supabase} me={me} />
 
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
