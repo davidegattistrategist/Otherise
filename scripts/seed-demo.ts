@@ -265,11 +265,16 @@ async function main() {
   const at = (days: number, h: number) => new Date(Date.now() - days * 864e5 + h * 36e5).toISOString();
   const chat = [
     { sender_id: giuliaUser, body: "Ciao! Oggi lo stacco rumeno mi è sembrato pesantissimo, è normale?", created_at: at(6, 0) },
-    { sender_id: owner, body: "Ciao Giulia! Sì normale, è la settimana con più volume. Tieni 40 e pensa solo a spingere il sedere indietro, poi mi dici come va", created_at: at(6, 1) },
+    { sender_id: owner, body: "Ciao Giuly! Sì normale, è la settimana con più volume. Tieni 40 e pensa solo a spingere il sedere indietro, poi mi dici come va 💪", created_at: at(6, 1) },
     { sender_id: giuliaUser, body: "Oggi molto meglio, grazie!", created_at: at(3, 0) },
-    { sender_id: owner, body: "Grande! Così si fa", created_at: at(3, 2) },
+    { sender_id: owner, body: "Grande Giuly! Così si fa", created_at: at(3, 2) },
   ];
   await db.from("messages").insert(chat.map((m) => ({ ...m, client_id: giulia }))).throwOnError();
+  // Con Marta il titolare ha un tono più formale: l'AI deve tenerne conto solo con lei
+  await db.from("messages").insert([
+    { client_id: marta, sender_id: owner, body: "Buongiorno Marta, ho caricato il programma della nuova fase. Quando riesce mi dica come vanno le prime sedute.", created_at: at(9, 0) },
+    { client_id: marta, sender_id: owner, body: "Buongiorno Marta, perfetto. Per la corsa teniamo il passo concordato, ci aggiorniamo al prossimo check.", created_at: at(4, 0) },
+  ]).throwOnError();
   await db.from("chat_reads").insert([{ user_id: owner, client_id: giulia, last_read_at: at(3, 2) }, { user_id: giuliaUser, client_id: giulia, last_read_at: at(3, 2) }]);
   // una bozza già corretta dal trainer (l'assistente impara da qui) e una pronta per il check-up
   await db.from("ai_reply_drafts").insert([

@@ -62,3 +62,79 @@ export function similarity(a: string, b: string): number {
   for (const w of A) if (B.has(w)) common++;
   return common / Math.max(A.size, B.size);
 }
+
+/**
+ * Esempi veri di come scrive il trainer, per insegnare lo stile all'AI.
+ * `text` è già pseudonimizzato. Per le correzioni `draft` è la bozza e `status`
+ * dice se l'ha usata (correggendola o no) o sostituita.
+ */
+export type StyleExample = {
+  id: string;
+  clientId: string;
+  kind: "message" | "checkin" | "correction";
+  text: string;
+  draft?: string;
+  status?: "used" | "replaced";
+  at: string;
+};
+
+const quote = (s: string) => `"${s.replace(/\s+\n/g, "\n").trim()}"`;
+
+function exampleLine(e: StyleExample): string {
+  if (e.kind === "correction" && e.draft) {
+    if (e.status === "used" && similarity(e.draft, e.text) > 0.97) return `- Bozza approvata così com'era: ${quote(e.text)}`;
+    return `- Bozza: ${quote(e.draft)}\n  ${e.status === "used" ? "L'hai corretta così" : "L'hai scartata e hai scritto"}: ${quote(e.text)}`;
+  }
+  return `- ${e.kind === "checkin" ? "(risposta al check-up) " : ""}${quote(e.text)}`;
+}
+
+/**
+ * Divide gli esempi in due livelli: come il trainer scrive a tutti (abitudini
+ * costanti, presi da più clienti diversi e raggruppati per cliente, così l'AI
+ * vede cosa si ripete) e come scrive solo a questo cliente (confidenza, saluti,
+ * soprannomi). Il secondo livello vince sul primo.
+ */
+export function styleSections(
+  examples: StyleExample[],
+  clientId: string,
+  opts: { perClient?: number; maxClients?: number; maxThis?: number } = {},
+): string {
+  const perClient = opts.perClient ?? 4;
+  const maxClients = opts.maxClients ?? 6;
+  const maxThis = opts.maxThis ?? 20;
+  const recent = [...examples].filter((e) => e.text.trim().length > 3).sort((a, b) => (a.at < b.at ? 1 : -1));
+  // un messaggio nato da una bozza compare già come correzione
+  const fromDrafts = new Set(recent.filter((e) => e.kind === "correction").map((e) => e.text.trim()));
+  const useful = recent.filter((e) => e.kind === "correction" || !fromDrafts.has(e.text.trim()));
+
+  const mine = useful.filter((e) => e.clientId === clientId).slice(0, maxThis);
+  const byClient = new Map<string, StyleExample[]>();
+  for (const e of useful) {
+    if (e.clientId === clientId) continue;
+    const list = byClient.get(e.clientId) ?? [];
+    if (list.length < perClient) list.push(e);
+    byClient.set(e.clientId, list);
+  }
+  const others = [...byClient.values()].slice(0, maxClients);
+
+  const parts: string[] = ["## Il tuo modo di scrivere\nDue livelli: le abitudini che hai con tutti i clienti e il tono che usi solo con questo cliente."];
+  if (others.length) {
+    parts.push(
+      "### Con tutti i clienti (abitudini costanti)\n" +
+        "Messaggi tuoi ad altri clienti, raggruppati per cliente. Prendi solo quello che torna con più clienti: lunghezza, saluti, punteggiatura, espressioni tipiche, emoji. Soprannomi, battute e confidenze che usi con un cliente valgono solo per lui: non portarli a questo cliente.\n" +
+        others.map((list, i) => `Cliente ${String.fromCharCode(65 + i)}:\n${list.map(exampleLine).join("\n")}`).join("\n"),
+    );
+  } else {
+    parts.push("### Con tutti i clienti (abitudini costanti)\nNon ci sono ancora esempi con altri clienti: scrivi semplice, caldo e diretto, frasi corte, come in una chat tra persone che si conoscono.");
+  }
+  if (mine.length) {
+    parts.push(
+      "### Solo con questo cliente\n" +
+        "Come scrivi proprio a lui: quanta confidenza, come lo saluti e come lo chiami (per nome o con un soprannome), tu o lei, emoji, battute. Dove questo tono e le abitudini generali non coincidono, vince questo.\n" +
+        mine.map(exampleLine).join("\n"),
+    );
+  } else {
+    parts.push("### Solo con questo cliente\nNon gli hai ancora scritto: usa le abitudini generali, con un tono cordiale ma senza confidenze o soprannomi.");
+  }
+  return parts.join("\n\n");
+}

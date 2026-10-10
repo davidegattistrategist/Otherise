@@ -1,4 +1,4 @@
-import { fillName, looksLikeQuestion, pendingClientMessages, pseudonymize, similarity } from "./reply-draft";
+import { fillName, looksLikeQuestion, pendingClientMessages, pseudonymize, similarity, styleSections, type StyleExample } from "./reply-draft";
 import { describe, expect, it } from "vitest";
 import { computeBodyComposition, protocolSites, siteAverage } from "./body/skinfolds";
 import { estimateOneRepMax } from "./strength/e1rm";
@@ -462,5 +462,38 @@ describe("bozze di risposta", () => {
   it("misura quanto la risposta somiglia alla bozza", () => {
     expect(similarity("Ciao, sì va benissimo il kettlebell da 16", "Ciao, sì va benissimo il kettlebell da 16!")).toBe(1);
     expect(similarity("Ciao, sì va benissimo il kettlebell", "Domani ne parliamo in sessione")).toBeLessThan(0.3);
+  });
+});
+
+describe("stile delle risposte su due livelli", () => {
+  const ex = (clientId: string, text: string, at: string, extra: Partial<StyleExample> = {}): StyleExample => ({ id: `${clientId}${at}`, clientId, kind: "message", text, at, ...extra });
+  it("separa le abitudini con tutti dal tono con questo cliente", () => {
+    const out = styleSections(
+      [
+        ex("giulia", "Ciao Giuly! Grande, avanti così", "3"),
+        ex("marta", "Buongiorno {nome}, ci vediamo giovedì.", "2"),
+        ex("paolo", "Ciao {nome}! Avanti così", "1"),
+      ],
+      "giulia",
+    );
+    const [general, mine] = out.split("### Solo con questo cliente");
+    expect(general).toContain("Cliente A:");
+    expect(general).toContain("Cliente B:");
+    expect(general).not.toContain("Giuly");
+    expect(mine).toContain("Ciao Giuly!");
+    expect(mine).not.toContain("Buongiorno");
+  });
+  it("senza esempi per il cliente chiede un tono cordiale senza confidenze", () => {
+    const out = styleSections([ex("marta", "Ciao {nome}, a giovedì", "1")], "nuovo");
+    expect(out).toContain("senza confidenze o soprannomi");
+  });
+  it("prende pochi esempi per cliente e mette le correzioni al posto del messaggio inviato", () => {
+    const many = Array.from({ length: 9 }, (_, i) => ex("marta", `Messaggio numero ${i}`, String(i)));
+    const corr = ex("giulia", "Ciao Giuly, sì va bene", "9", { kind: "correction", draft: "Ciao {nome}, va bene", status: "used" });
+    const sent = ex("giulia", "Ciao Giuly, sì va bene", "8");
+    const out = styleSections([...many, corr, sent], "giulia", { perClient: 3 });
+    expect(out.match(/Messaggio numero/g)).toHaveLength(3);
+    expect(out).toContain("L'hai corretta così");
+    expect(out.match(/Ciao Giuly, sì va bene/g)).toHaveLength(1);
   });
 });

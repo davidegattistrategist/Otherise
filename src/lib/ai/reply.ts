@@ -18,7 +18,7 @@ import { budgetExceeded, logAiRequest } from "./budget";
 import { buildClientContext } from "./context";
 import { CHECKIN_QUESTIONS } from "../checkin";
 import { todayISO } from "../dates";
-import { fillName, looksLikeQuestion, messageText, pendingClientMessages, pseudonymize, similarity, type DraftMessage } from "../reply-draft";
+import { fillName, looksLikeQuestion, messageText, pendingClientMessages, pseudonymize, similarity, styleSections, type DraftMessage, type StyleExample } from "../reply-draft";
 
 type Admin = ReturnType<typeof createAdminClient>;
 export type ReplyDraft = { id: string; body: string; createdAt: string };
@@ -45,51 +45,40 @@ async function canRun(admin: Admin, client: ClientRow | null): Promise<string | 
   return budgetExceeded(admin as unknown as ServerSupabase);
 }
 
-/** Esempi veri di come scrive chi risponde: correzioni alle bozze, messaggi, risposte ai check-up. */
-async function styleSection(admin: Admin, responderId: string | null): Promise<string> {
-  if (!responderId) return "";
+/**
+ * Esempi veri di come scrive chi risponde, su due livelli: con tutti i clienti
+ * (abitudini costanti) e solo con questo cliente (confidenza, saluti, soprannomi).
+ */
+async function styleSection(admin: Admin, responderId: string | null, clientId: string): Promise<string> {
+  if (!responderId) return styleSections([], clientId);
   const { data: me } = await admin.from("profiles").select("role").eq("id", responderId).maybeSingle();
   let clientsQ = admin.from("clients").select("id, first_name, last_name");
   if (me?.role !== "owner") clientsQ = clientsQ.eq("coach_id", responderId);
-  const [{ data: pairs }, { data: msgs }, { data: clients }] = await Promise.all([
-    admin.from("ai_reply_drafts").select("body, sent_text, status, client_id").eq("sent_by", responderId).in("status", ["used", "replaced"]).not("sent_text", "is", null).order("closed_at", { ascending: false }).limit(8),
-    admin.from("messages").select("body, client_id").eq("sender_id", responderId).is("deleted_at", null).neq("body", "").order("created_at", { ascending: false }).limit(30),
+  const [{ data: pairs }, { data: msgs }, { data: mineMsgs }, { data: clients }] = await Promise.all([
+    admin.from("ai_reply_drafts").select("id, body, sent_text, status, client_id, closed_at").eq("sent_by", responderId).in("status", ["used", "replaced"]).not("sent_text", "is", null).order("closed_at", { ascending: false }).limit(40),
+    // messaggi a tutti i clienti (per le abitudini costanti)
+    admin.from("messages").select("id, body, client_id, created_at").eq("sender_id", responderId).is("deleted_at", null).neq("body", "").neq("client_id", clientId).order("created_at", { ascending: false }).limit(200),
+    // messaggi a questo cliente (per il tono con lui)
+    admin.from("messages").select("id, body, client_id, created_at").eq("sender_id", responderId).is("deleted_at", null).neq("body", "").eq("client_id", clientId).order("created_at", { ascending: false }).limit(40),
     clientsQ.limit(500),
   ]);
   const ids = (clients ?? []).map((c) => c.id);
   const { data: replies } = ids.length
-    ? await admin.from("checkins").select("coach_reply, client_id").in("client_id", ids).neq("coach_reply", "").order("week_start", { ascending: false }).limit(8)
-    : { data: [] as Array<{ coach_reply: string; client_id: string }> };
+    ? await admin.from("checkins").select("id, coach_reply, client_id, reviewed_at, submitted_at").in("client_id", ids).neq("coach_reply", "").order("week_start", { ascending: false }).limit(40)
+    : { data: [] as Array<{ id: string; coach_reply: string; client_id: string; reviewed_at: string | null; submitted_at: string }> };
   const namesOf = new Map((clients ?? []).map((c) => [c.id, [c.first_name, c.last_name]]));
-  const missing = [...new Set([...(pairs ?? []), ...(msgs ?? [])].map((r) => r.client_id).filter((id) => !namesOf.has(id)))];
+  const missing = [...new Set([...(pairs ?? []), ...(msgs ?? []), ...(mineMsgs ?? [])].map((r) => r.client_id).filter((id) => !namesOf.has(id)))];
   if (missing.length) {
     const { data } = await admin.from("clients").select("id, first_name, last_name").in("id", missing);
     for (const c of data ?? []) namesOf.set(c.id, [c.first_name, c.last_name]);
   }
-  const clean = (text: string, clientId: string) => pseudonymize(text, namesOf.get(clientId) ?? []).replace(/\s+\n/g, "\n").trim();
-
-  const parts: string[] = [];
-  const corrections = (pairs ?? []).filter((p) => p.sent_text?.trim());
-  if (corrections.length) {
-    parts.push(
-      "## Le tue correzioni alle bozze (impara da qui)\n" +
-        corrections
-          .map((p) => {
-            const same = p.status === "used" && similarity(p.body, p.sent_text!) > 0.97;
-            return same
-              ? `- Bozza approvata così com'era: "${clean(p.body, p.client_id)}"`
-              : `- Bozza: "${clean(p.body, p.client_id)}"\n  ${p.status === "used" ? "L'hai corretta così" : "L'hai scartata e hai scritto"}: "${clean(p.sent_text!, p.client_id)}"`;
-          })
-          .join("\n"),
-    );
-  }
-  // i messaggi nati da una bozza sono già tra le correzioni: qui solo quelli scritti da zero
-  const fromDrafts = new Set(corrections.map((p) => p.sent_text!.trim()));
-  const real = (msgs ?? []).filter((m) => m.body.trim().length > 3 && !fromDrafts.has(m.body.trim())).slice(0, 20);
-  if (real.length) parts.push("## Messaggi che hai scritto ai clienti (dal più recente)\n" + real.map((m) => `- "${clean(m.body, m.client_id)}"`).join("\n"));
-  if (replies?.length) parts.push("## Tue risposte ai check-up settimanali\n" + replies.map((r) => `- "${clean(r.coach_reply, r.client_id)}"`).join("\n"));
-  if (!parts.length) return "## Il tuo modo di scrivere\nNon ci sono ancora esempi: scrivi semplice, caldo e diretto, frasi corte, come in una chat tra persone che si conoscono.";
-  return parts.join("\n\n");
+  const clean = (text: string, cid: string) => pseudonymize(text, namesOf.get(cid) ?? []);
+  const examples: StyleExample[] = [
+    ...(pairs ?? []).map((p) => ({ id: p.id, clientId: p.client_id, kind: "correction" as const, draft: clean(p.body, p.client_id), text: clean(p.sent_text!, p.client_id), status: p.status as "used" | "replaced", at: p.closed_at ?? "" })),
+    ...[...(msgs ?? []), ...(mineMsgs ?? [])].map((m) => ({ id: m.id, clientId: m.client_id, kind: "message" as const, text: clean(m.body, m.client_id), at: m.created_at })),
+    ...(replies ?? []).map((r) => ({ id: r.id, clientId: r.client_id, kind: "checkin" as const, text: clean(r.coach_reply, r.client_id), at: r.reviewed_at ?? r.submitted_at })),
+  ];
+  return styleSections(examples, clientId);
 }
 
 async function methodText(admin: Admin) {
@@ -150,7 +139,7 @@ export async function generateChatDraft(clientId: string, opts: { force?: boolea
   const convo = sorted.map((m) => `${senderLabel.get(m.id)}: ${pseudonymize(messageText(m), names)}`).join("\n");
   const pendingTxt = pending.map((m) => `- ${pseudonymize(messageText(m), names)}`).join("\n");
 
-  const [style, method, context] = await Promise.all([styleSection(admin, responder), methodText(admin), clientContext(admin, client)]);
+  const [style, method, context] = await Promise.all([styleSection(admin, responder, clientId), methodText(admin), clientContext(admin, client)]);
   const userText = [
     style,
     method,
@@ -200,7 +189,7 @@ export async function generateCheckinDraft(checkinId: string, opts: { force?: bo
   const responder = await responderFor(admin, client);
   const names = [client.first_name, client.last_name, client.email, client.phone];
   const scores = CHECKIN_QUESTIONS.map((q) => `${q.short} ${c[q.key]}/5`).join(", ");
-  const [style, method, context] = await Promise.all([styleSection(admin, responder), methodText(admin), clientContext(admin, client)]);
+  const [style, method, context] = await Promise.all([styleSection(admin, responder, client.id), methodText(admin), clientContext(admin, client)]);
   const userText = [
     style,
     method,

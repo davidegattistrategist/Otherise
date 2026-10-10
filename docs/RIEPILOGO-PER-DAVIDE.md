@@ -55,7 +55,7 @@ Confronto con le app più usate dai coach (Trainerize, TrueCoach, Everfit, Train
   - EMOM spiegato al cliente;
   - metodo aggiornato in `docs/METODO-BOZZA.md`.
 - **Ultime due richieste**:
-  - bozze di risposta dell'AI ai clienti, in chat e nelle richieste del check-up: scritte nel tuo stile, una sola risposta per punti se le domande sono più di una, "Usa e modifica" o "Scrivo da zero"; imparano dai tuoi messaggi e dalle tue correzioni; non partono mai da sole;
+  - bozze di risposta dell'AI ai clienti, in chat e nelle richieste del check-up: scritte nel tuo stile, una sola risposta per punti se le domande sono più di una, "Usa e modifica" o "Scrivo da zero"; imparano dai tuoi messaggi e dalle tue correzioni, distinguendo le abitudini che hai con tutti dal tono con il singolo cliente (confidenza, soprannomi); non partono mai da sole;
   - previsione degli incassi a 3, 6 o 12 mesi (Pagamenti → Previsione dei prossimi mesi), con scenario prudente calcolato sui rinnovi veri.
 
 ## Come l'ho provata

@@ -34,7 +34,7 @@ test("bozza di risposta in chat: una sola risposta per punti, si usa e si correg
   const card = owner.getByLabel("Bozza di risposta");
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(card).toContainText("Ti rispondo su tutto");
-  await expect(card).toContainText("Ciao Giulia!");
+  await expect(card).toContainText("Ciao Giuly!"); // il soprannome che il titolare usa solo con lei
   await expect(card).not.toContainText("{nome}");
 
   await card.getByRole("button", { name: "Usa e modifica" }).click();
