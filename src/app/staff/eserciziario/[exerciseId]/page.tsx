@@ -25,7 +25,7 @@ export default async function ExercisePage({ params, searchParams }: { params: P
     <div className="flex flex-col gap-6">
       <PageTitle eyebrow={<Link href="/staff/eserciziario" className="hover:underline">Eserciziario</Link>} title={ex.name} />
       {nuovo ? <><ClearParams names={["nuovo"]} /><Notice tone="success">Esercizio creato.</Notice></> : null}
-      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
         <Card><ExerciseForm action={saveExercise.bind(null, ex.id)} values={ex} /></Card>
         <div className="flex flex-col gap-4">
           {yt ? (

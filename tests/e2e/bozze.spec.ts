@@ -14,6 +14,12 @@ async function login(page: Page, email: string) {
   await Promise.all([page.waitForURL((u) => !u.pathname.startsWith("/login")), page.getByRole("button", { name: "Entra" }).click()]);
 }
 
+
+// le pagine aperte dai test precedenti continuerebbero a segnare come letti i messaggi
+test.afterEach(async ({ browser }) => {
+  for (const c of browser.contexts()) await c.close().catch(() => undefined);
+});
+
 test("bozza di risposta in chat: una sola risposta per punti, si usa e si corregge", async ({ browser }, info) => {
   const tag = `${info.project.name}-${Date.now() % 100000}`;
   const client = await (await browser.newContext(info.project.use)).newPage();

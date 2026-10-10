@@ -51,7 +51,7 @@ export default async function StaffLogPage({ params }: { params: Promise<{ id: s
         videos={s.videos}
         backHref={`/staff/clienti/${id}`}
         finishLabel="Salva come fatto"
-        barClass="bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:bottom-4"
+        barClass="bottom-[calc(var(--nav-space)+0.5rem)] lg:bottom-4"
       />
     </div>
   );

@@ -245,7 +245,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
 
       {/* sul telefono il pulsante Salva in alto sparisce scorrendo: barra fissa quando ci sono modifiche */}
       {dirty ? (
-        <div className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 flex items-center justify-between gap-3 rounded-2xl bg-ink px-4 py-2.5 text-card shadow-xl lg:hidden">
+        <div className="fixed right-[var(--edge-right)] bottom-[calc(var(--nav-space)+0.5rem)] left-[var(--edge-left)] z-40 flex items-center justify-between gap-3 rounded-2xl bg-ink px-4 py-2.5 text-card shadow-xl lg:hidden">
           <span className="text-sm">{pending ? "Salvataggio…" : "Modifiche non salvate"}</span>
           <Button size="sm" variant="secondary" onClick={doSave} disabled={pending}>Salva le modifiche</Button>
         </div>

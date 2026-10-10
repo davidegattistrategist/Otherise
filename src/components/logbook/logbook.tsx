@@ -526,7 +526,7 @@ export function Logbook(props: LogbookProps) {
         </div>
       </section>
 
-      <div className={cx("sticky z-20 flex flex-col gap-2", props.barClass ?? "bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-4")}>
+      <div className={cx("sticky z-20 flex flex-col gap-2", props.barClass ?? "bottom-[calc(var(--nav-space)+0.5rem)] md:bottom-4")}>
         {timer ? (
           <div className="flex items-center gap-3 rounded-full bg-accent px-4 py-2.5 text-white shadow-lg" role="timer" aria-live="off">
             <span className="text-sm font-semibold">Recupero</span>

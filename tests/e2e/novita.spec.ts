@@ -18,6 +18,12 @@ async function openClient(page: Page, name: string) {
   return /\/staff\/clienti\/([0-9a-f-]{36})/.exec(page.url())![1];
 }
 
+
+// le pagine aperte dai test precedenti continuerebbero a segnare come letti i messaggi
+test.afterEach(async ({ browser }) => {
+  for (const c of browser.contexts()) await c.close().catch(() => undefined);
+});
+
 test("progetto annuale: il trainer lo modifica, il cliente lo vede", async ({ page, browser }, info) => {
   await login(page, "titolare@prova.local");
   const id = await openClient(page, "Giulia Esempio");

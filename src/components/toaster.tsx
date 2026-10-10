@@ -26,7 +26,7 @@ export function Toaster() {
   }, []);
   if (!items.length) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[70] flex flex-col items-center gap-2 px-4 lg:bottom-6" role="status" aria-live="polite">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--nav-space)+0.75rem)] z-[70] flex flex-col items-center gap-2 px-4 lg:bottom-6" role="status" aria-live="polite">
       {items.map((i) => (
         <div key={i.id} className="pointer-events-auto flex max-w-md items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-sm font-semibold text-card shadow-lg">
           <IconCheck size={16} /> {i.text}

@@ -33,7 +33,7 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
         <EmptyState title="Ancora nessun check">Registra pliche, circonferenze e test: i grafici si costruiscono da soli.</EmptyState>
       ) : (
         <>
-          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
+          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
             <Card><Eyebrow className="mb-2">Peso · kg</Eyebrow><LineChart label="Peso" unit="kg" points={series((c) => (c.weight_kg === null ? null : Number(c.weight_kg)))} /></Card>
             <Card><Eyebrow className="mb-2">Massa grassa · %</Eyebrow><LineChart label="Massa grassa" unit="%" points={series((c) => (c.body_fat_pct === null ? null : Number(c.body_fat_pct)))} /></Card>
             <Card><Eyebrow className="mb-2">Massa magra · kg</Eyebrow><LineChart label="Massa magra" unit="kg" points={series((c) => (c.lean_mass_kg === null ? null : Number(c.lean_mass_kg)))} /></Card>

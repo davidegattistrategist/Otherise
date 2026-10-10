@@ -27,7 +27,7 @@ export default async function ClientProfilePage({ params, searchParams }: { para
   const account = client.user_id ? (await createAdminClient().auth.admin.getUserById(client.user_id)).data.user : null;
   const hasEntered = Boolean(account?.last_sign_in_at);
   return (
-    <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
+    <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
       <Card className="[grid-column:1/-1] lg:[grid-column:auto/span_2]">
         <Eyebrow className="mb-4">Dati del cliente</Eyebrow>
         <ClientForm

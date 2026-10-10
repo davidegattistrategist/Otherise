@@ -9,7 +9,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CHAT_BUCKET, canUseChat, loadMessages, markChatRead, previewOf } from "@/lib/chat";
 import { MAX_ATTACHMENTS, attachmentKind, sizeError, type ChatAttachment, type ChatMessage } from "@/lib/chat-shared";
-import { notify, staffRecipients } from "@/lib/notify";
+import { notify, pushLater, staffRecipients } from "@/lib/notify";
+import { sendPush } from "@/lib/push";
 import { deliverPendingEmails } from "@/lib/email";
 import { closeDrafts, generateChatDraft, type ReplyDraft } from "@/lib/ai/reply";
 
@@ -92,7 +93,13 @@ export async function sendMessage(clientId: string, input: { body: string; attac
         link: fromClient ? `/staff/messaggi/${clientId}` : "/cliente/messaggi",
         dedupe_key: `chat:${clientId}:${hour}`,
       })),
+    { push: false },
   );
+  // la push invece parte per ogni messaggio (sul telefono si sostituiscono a vicenda)
+  const pushTo = recipients.filter((r) => r !== me.id);
+  if (pushTo.length) {
+    await pushLater(() => sendPush(pushTo, { title: fromClient ? senderName : `Messaggio da ${senderName}`, body: preview, url: fromClient ? `/staff/messaggi/${clientId}` : "/cliente/messaggi", tag: `chat:${clientId}` }));
+  }
   void deliverPendingEmails().catch(() => undefined);
   if (fromClient) {
     // a risposta già inviata al cliente, l'assistente prepara la bozza per lo staff

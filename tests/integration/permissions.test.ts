@@ -267,4 +267,25 @@ describe.skipIf(!run)("permessi", () => {
     const { data } = await admin.from("ai_reply_drafts").select("status, sent_text").eq("client_id", clientAId).single();
     expect(data).toEqual({ status: "used", sent_text: "Ciao! Sì, va benissimo" });
   });
+  it("notifiche push: iscrizioni scritte solo dal server, ognuno legge solo le proprie, chiavi interne invisibili", async () => {
+    const { data: me } = await clientA.auth.getUser();
+    const { data: other } = await coach.auth.getUser();
+    await admin.from("push_subscriptions").insert([
+      { user_id: me.user!.id, endpoint: "https://push.example/a", p256dh: "k".repeat(30), auth: "a".repeat(16) },
+      { user_id: other.user!.id, endpoint: "https://push.example/b", p256dh: "k".repeat(30), auth: "a".repeat(16) },
+    ]).throwOnError();
+    const mine = (await clientA.from("push_subscriptions").select("endpoint")).data;
+    expect(mine).toEqual([{ endpoint: "https://push.example/a" }]);
+    // dal browser non si scrive e non si cancella
+    expect((await clientA.from("push_subscriptions").insert({ user_id: me.user!.id, endpoint: "https://push.example/c", p256dh: "k".repeat(30), auth: "a".repeat(16) })).error).not.toBeNull();
+    await clientA.from("push_subscriptions").delete().eq("endpoint", "https://push.example/a");
+    expect((await admin.from("push_subscriptions").select("id").eq("endpoint", "https://push.example/a")).data).toHaveLength(1);
+    expect((await stranger.from("push_subscriptions").select("*")).data ?? []).toEqual([]);
+    // le chiavi interne non le legge nessuno dal browser, nemmeno il titolare
+    await admin.from("app_secrets").upsert({ name: "vapid", value: "{}" }).throwOnError();
+    for (const c of [owner, coach, clientA, stranger]) {
+      const r = await c.from("app_secrets").select("*");
+      expect(r.data ?? []).toEqual([]);
+    }
+  });
 });

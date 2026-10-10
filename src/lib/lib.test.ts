@@ -497,3 +497,24 @@ describe("stile delle risposte su due livelli", () => {
     expect(out.match(/Ciao Giuly, sì va bene/g)).toHaveLength(1);
   });
 });
+
+describe("notifiche push", () => {
+  it("accetta solo iscrizioni valide e link interni", async () => {
+    const { parseSubscription, pushPayload } = await import("./push-shared");
+    const good = { endpoint: "https://fcm.googleapis.com/fcm/send/abc123def456", keys: { p256dh: "B".repeat(87), auth: "a".repeat(22) } };
+    expect(parseSubscription(good)).toEqual({ endpoint: good.endpoint, p256dh: good.keys.p256dh, auth: good.keys.auth });
+    expect(parseSubscription({ ...good, endpoint: "http://insicuro.example/x" })).toBeNull();
+    expect(parseSubscription({ endpoint: good.endpoint, keys: { p256dh: "<script>", auth: "x" } })).toBeNull();
+    expect(parseSubscription(null)).toBeNull();
+    expect(pushPayload({ title: "Ciao", url: "https://altro.sito" }).url).toBe("/");
+    expect(pushPayload({ title: "Ciao", url: "//altro.sito" }).url).toBe("/");
+    expect(pushPayload({ title: "Ciao", url: "/cliente/messaggi" }).url).toBe("/cliente/messaggi");
+    expect(pushPayload({ title: "x".repeat(200) }).title.length).toBe(80);
+  });
+  it("nome sotto l'icona della Home", async () => {
+    const { homeScreenName } = await import("./app-name");
+    expect(homeScreenName(null)).toBe("Otherise");
+    expect(homeScreenName("Diego Coaching")).toBe("Diego Coaching");
+    expect(homeScreenName("Diego Teoldi Personal Training")).toBe("Diego");
+  });
+});

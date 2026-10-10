@@ -4,7 +4,10 @@ import { needsConsent } from "@/lib/privacy";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { ClientNav } from "@/components/client-nav";
-import { IconBell } from "@/components/icons";
+import { LiveBell, LiveProvider } from "@/components/live";
+import { InstallGuide } from "@/components/install-guide";
+import { PushSync } from "@/components/push";
+import { homeScreenName } from "@/lib/app-name";
 
 export default async function ClientAreaLayout({ children }: { children: React.ReactNode }) {
   const me = await requireClient();
@@ -18,20 +21,21 @@ export default async function ClientAreaLayout({ children }: { children: React.R
   if (needsConsent(consent)) redirect("/consenso");
   const chatUnread = (chats ?? []).reduce((n, c) => n + c.unread, 0);
   return (
-    <div className="mx-auto flex min-h-dvh max-w-[880px] flex-col px-4 sm:px-6">
-      <header className="flex items-center justify-between gap-3 pt-5 pb-2 md:pt-7">
-        <Link href="/cliente" className="flex items-center gap-2.5">
-          <span className="h-3 w-3 rounded-full bg-accent" aria-hidden="true" />
-          <span className="text-[17px] font-bold tracking-tight">{name ?? "Otherise"}</span>
-        </Link>
-        <div className="hidden md:block"><ClientNav chatUnread={chatUnread} /></div>
-        <Link href="/cliente/notifiche" aria-label={unread ? `Notifiche, ${unread} da leggere` : "Notifiche"} className="relative flex h-11 w-11 items-center justify-center rounded-full bg-card">
-          <IconBell size={20} />
-          {unread ? <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-white">{unread}</span> : null}
-        </Link>
-      </header>
-      <main className="flex-1 pt-3 pb-28 md:pb-16">{children}</main>
-      <div className="md:hidden"><ClientNav chatUnread={chatUnread} /></div>
-    </div>
+    <LiveProvider role="client" initial={{ notifications: unread ?? 0, chats: chatUnread }}>
+      <div className="mx-auto flex min-h-dvh max-w-[880px] flex-col pr-[var(--edge-right)] pl-[var(--edge-left)] sm:px-6">
+        <header className="flex items-center justify-between gap-3 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-2 md:pt-7">
+          <Link href="/cliente" className="flex min-w-0 items-center gap-2.5">
+            <span className="h-3 w-3 shrink-0 rounded-full bg-accent" aria-hidden="true" />
+            <span className="truncate text-[17px] font-bold tracking-tight">{name ?? "Otherise"}</span>
+          </Link>
+          <div className="hidden md:block"><ClientNav chatUnread={chatUnread} /></div>
+          <LiveBell href="/cliente/notifiche" initial={unread ?? 0} />
+        </header>
+        <main className="flex-1 pt-3 pb-[calc(var(--nav-space)+1.75rem)] md:pb-16">{children}</main>
+        <div className="md:hidden"><ClientNav chatUnread={chatUnread} /></div>
+      </div>
+      <InstallGuide appName={homeScreenName(name)} />
+      <PushSync />
+    </LiveProvider>
   );
 }

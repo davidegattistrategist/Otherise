@@ -113,7 +113,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
   const lastCheckin = checkins.data?.[0];
 
   return (
-    <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(300px,1fr))]">
+    <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))]">
       {fatto ? <div className="[grid-column:1/-1]"><ClearParams names={["fatto"]} /><Notice tone="success">Allenamento registrato.</Notice></div> : null}
       {programCard}
 

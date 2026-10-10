@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "./ui";
+import { useLiveCounts } from "./live";
 import { IconBell, IconBook, IconChat, IconSettings, IconTemplate, IconToday, IconUsers, IconWallet, IconUser } from "./icons";
 
 const ICONS = { today: IconToday, users: IconUsers, chat: IconChat, template: IconTemplate, book: IconBook, wallet: IconWallet, team: IconUser, settings: IconSettings, bell: IconBell };
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number; exact?: boolean };
 
-export function StaffNav({ items }: { items: NavItem[] }) {
+export function StaffNav({ items: given }: { items: NavItem[] }) {
   const path = usePathname();
+  const items = useLiveBadges(given);
   return (
     <nav aria-label="Menu" className="flex flex-row flex-wrap gap-1 lg:flex-col">
       {items.map((it) => {
@@ -36,4 +38,13 @@ export function StaffNav({ items }: { items: NavItem[] }) {
       })}
     </nav>
   );
+}
+
+/** Numeri di Messaggi e Notifiche aggiornati dal vivo (vedi live.tsx). */
+export function useLiveBadges<T extends { href: string; badge?: number }>(items: T[]): T[] {
+  const live = useLiveCounts({
+    notifications: items.find((i) => i.href === "/staff/notifiche")?.badge ?? 0,
+    chats: items.find((i) => i.href === "/staff/messaggi")?.badge ?? 0,
+  });
+  return items.map((i) => (i.href === "/staff/notifiche" ? { ...i, badge: live.notifications } : i.href === "/staff/messaggi" ? { ...i, badge: live.chats } : i));
 }

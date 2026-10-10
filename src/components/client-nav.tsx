@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "./ui";
+import { useLiveCounts } from "./live";
 import { IconCalendar, IconChart, IconChat, IconToday, IconUser } from "./icons";
 
 const ITEMS = [
@@ -13,27 +14,36 @@ const ITEMS = [
   { href: "/cliente/profilo", label: "Percorso", Icon: IconUser },
 ];
 
-export function ClientNav({ chatUnread = 0 }: { chatUnread?: number }) {
+export function ClientNav({ chatUnread: initialChats = 0 }: { chatUnread?: number }) {
   const path = usePathname();
+  const chatUnread = useLiveCounts({ notifications: 0, chats: initialChats }).chats;
   // durante l'allenamento sul telefono il menu sparisce: lo schermo serve al logbook
   const inSession = path.startsWith("/cliente/sessione/");
   return (
-    <nav aria-label="Menu" className={cx("fixed inset-x-0 bottom-0 z-30 border-t border-sand-deep bg-sand/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:static md:block md:border-0 md:bg-transparent md:pb-0", inSession && "hidden")}>
-      <ul className="mx-auto flex max-w-xl justify-around md:max-w-none md:justify-start md:gap-1">
+    <nav
+      aria-label="Menu"
+      className={cx(
+        // telefono: barra staccata dal fondo e dai bordi arrotondati dello schermo
+        "fixed right-[var(--edge-right)] bottom-[var(--nav-gap)] left-[var(--edge-left)] z-30 rounded-[26px] bg-card/95 px-1.5 shadow-[0_10px_30px_-8px_rgba(27,26,23,0.28)] ring-1 ring-sand-deep/80 backdrop-blur",
+        "md:static md:block md:rounded-none md:bg-transparent md:px-0 md:shadow-none md:ring-0",
+        inSession && "hidden",
+      )}
+    >
+      <ul className="mx-auto flex max-w-xl justify-around py-1.5 md:max-w-none md:justify-start md:gap-1 md:py-0">
         {ITEMS.map(({ href, label, Icon, exact, also }) => {
           const active = exact ? path === href : path.startsWith(href) || (also ? path.startsWith(also) : false);
           return (
-            <li key={href} className="flex-1 md:flex-none">
+            <li key={href} className="flex-1 px-0.5 md:flex-none md:px-0">
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cx(
-                  "flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold md:min-h-10 md:flex-row md:gap-2 md:rounded-full md:px-4 md:text-sm",
-                  active ? "text-ink md:bg-card" : "text-muted hover:text-ink",
+                  "flex min-h-[54px] flex-col items-center justify-center gap-0.5 rounded-[20px] text-[11.5px] font-semibold md:min-h-10 md:flex-row md:gap-2 md:rounded-full md:px-4 md:text-sm",
+                  active ? "bg-sand-deep/60 text-ink md:bg-card" : "text-muted hover:text-ink",
                 )}
               >
                 <span className="relative">
-                  <Icon size={22} />
+                  <Icon size={23} />
                   {href === "/cliente/messaggi" && chatUnread > 0 ? (
                     <span className="absolute -top-1.5 -right-2.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">{chatUnread}</span>
                   ) : null}

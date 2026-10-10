@@ -38,7 +38,7 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
   return (
     <div className="flex flex-col gap-6">
       {/* azioni rapide */}
-      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr))]">
         {latestBase ? (
           <Card dark className="flex flex-col gap-4">
             <Eyebrow dark>Nuova fase</Eyebrow>

@@ -28,7 +28,7 @@ export default async function TemplatesPage() {
         <p className="max-w-prose text-[15px] text-muted">Programmi di partenza da assegnare a un cliente con un clic. Il cliente riceve una copia tutta sua: modificare il modello non cambia i programmi già assegnati.</p>
       </PageTitle>
       {templates?.length ? (
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr))]">
           {templates.map((t) => {
             const c = parseContent(t.content);
             const exercises = c.days.reduce((a, d) => a + d.blocks.reduce((b, bl) => b + bl.items.length, 0), 0);

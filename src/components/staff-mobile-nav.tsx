@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cx } from "./ui";
+import { useLiveBadges } from "./staff-nav";
 import { IconBell, IconBook, IconChat, IconMenu, IconSettings, IconTemplate, IconToday, IconUser, IconUsers, IconWallet, IconLogout, IconX } from "./icons";
 
 const ICONS = { today: IconToday, users: IconUsers, chat: IconChat, template: IconTemplate, book: IconBook, wallet: IconWallet, team: IconUser, settings: IconSettings, bell: IconBell };
@@ -17,8 +18,10 @@ function isActive(path: string, it: MobileItem) {
   return it.exact ? path === it.href : path === it.href || path.startsWith(it.href + "/");
 }
 
-export function StaffMobileNav({ main, more, signOut, who }: { main: MobileItem[]; more: MobileItem[]; signOut: () => Promise<void>; who: string }) {
+export function StaffMobileNav({ main: givenMain, more: givenMore, signOut, who }: { main: MobileItem[]; more: MobileItem[]; signOut: () => Promise<void>; who: string }) {
   const path = usePathname();
+  const main = useLiveBadges(givenMain);
+  const more = useLiveBadges(givenMore);
   const [open, setOpen] = useState(false);
   const [openedOn, setOpenedOn] = useState(path);
   if (openedOn !== path) {
@@ -34,7 +37,7 @@ export function StaffMobileNav({ main, more, signOut, who }: { main: MobileItem[
           <div
             role="dialog"
             aria-label="Menu"
-            className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-sand px-4 pt-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))]"
+            className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-sand px-4 pt-4 pb-[calc(var(--nav-space)+1rem)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-2 flex items-center justify-between px-2">
@@ -62,24 +65,24 @@ export function StaffMobileNav({ main, more, signOut, who }: { main: MobileItem[
           </div>
         </div>
       ) : null}
-      <nav aria-label="Menu principale" className="fixed inset-x-0 bottom-0 z-50 border-t border-sand-deep bg-sand/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-        <ul className="flex justify-around">
+      <nav aria-label="Menu principale" className="fixed right-[var(--edge-right)] bottom-[var(--nav-gap)] left-[var(--edge-left)] z-50 rounded-[26px] bg-card/95 px-1.5 shadow-[0_10px_30px_-8px_rgba(27,26,23,0.28)] ring-1 ring-sand-deep/80 backdrop-blur lg:hidden">
+        <ul className="flex justify-around py-1.5">
           {main.map((it) => {
             const Icon = ICONS[it.icon];
             const active = isActive(path, it);
             return (
-              <li key={it.href} className="flex-1">
-                <Link href={it.href} aria-current={active ? "page" : undefined} className={cx("relative flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold", active ? "text-ink" : "text-muted")}>
-                  <Icon size={22} />
+              <li key={it.href} className="flex-1 px-0.5">
+                <Link href={it.href} aria-current={active ? "page" : undefined} className={cx("relative flex min-h-[54px] flex-col items-center justify-center gap-0.5 rounded-[20px] text-[11.5px] font-semibold", active ? "bg-sand-deep/60 text-ink" : "text-muted")}>
+                  <Icon size={23} />
                   {it.label}
                   {it.badge ? <span className="absolute top-1.5 left-1/2 ml-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">{it.badge}</span> : null}
                 </Link>
               </li>
             );
           })}
-          <li className="flex-1">
-            <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className={cx("relative flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-semibold", open ? "text-ink" : "text-muted")}>
-              <IconMenu size={22} />
+          <li className="flex-1 px-0.5">
+            <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className={cx("relative flex min-h-[54px] w-full flex-col items-center justify-center gap-0.5 rounded-[20px] text-[11.5px] font-semibold", open ? "bg-sand-deep/60 text-ink" : "text-muted")}>
+              <IconMenu size={23} />
               Altro
               {moreBadge ? <span className="absolute top-1.5 left-1/2 ml-2 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-white">{moreBadge}</span> : null}
             </button>

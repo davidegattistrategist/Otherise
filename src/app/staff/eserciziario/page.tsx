@@ -37,7 +37,7 @@ export default async function ExercisesPage({ searchParams }: { searchParams: Pr
       </form>
 
       {list.length ? (
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr))]">
           {list.map((e) => {
             const thumb = youtubeThumb(e.video_url);
             return (

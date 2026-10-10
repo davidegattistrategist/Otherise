@@ -83,6 +83,18 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"app_secrets": {
+                  Row: {
+                    "created_at": string,"name": string,"value": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"name": string,"value": string
+                  }
+                  Update: {
+                    "created_at"?: string,"name"?: string,"value"?: string
+                  }
+                  Relationships: []
                 },"chat_reads": {
                   Row: {
                     "client_id": string,"last_read_at": string,"user_id": string
@@ -431,6 +443,18 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"push_subscriptions": {
+                  Row: {
+                    "auth": string,"created_at": string,"endpoint": string,"id": string,"last_used_at": string | null,"p256dh": string,"user_agent": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "auth": string,"created_at"?: string,"endpoint": string,"id"?: string,"last_used_at"?: string | null,"p256dh": string,"user_agent"?: string,"user_id": string
+                  }
+                  Update: {
+                    "auth"?: string,"created_at"?: string,"endpoint"?: string,"id"?: string,"last_used_at"?: string | null,"p256dh"?: string,"user_agent"?: string,"user_id"?: string
+                  }
+                  Relationships: []
                 },"pt_sessions": {
                   Row: {
                     "client_id": string,"counts_toward_package": boolean,"created_at": string,"created_by": string | null,"id": string,"notes": string,"session_date": string

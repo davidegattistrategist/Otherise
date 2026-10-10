@@ -25,6 +25,13 @@
 
 :root {
   color-scheme: light;
+  /* Margini sicuri del telefono (notch, angoli arrotondati, barra Home):
+     mai meno di 16px ai lati, e la barra del menu staccata dal fondo */
+  --edge-left: max(1rem, env(safe-area-inset-left));
+  --edge-right: max(1rem, env(safe-area-inset-right));
+  --nav-gap: max(0.75rem, env(safe-area-inset-bottom));
+  /* spazio occupato dal menu in basso (barra alta 66px + distanza dal fondo) */
+  --nav-space: calc(var(--nav-gap) + 66px);
 }
 
 html,
@@ -39,7 +46,7 @@ body {
    compilando non deve finirci sotto quando la pagina scorre */
 @media (max-width: 1023px) {
   html {
-    scroll-padding-bottom: 104px;
+    scroll-padding-bottom: calc(var(--nav-space) + 24px);
     scroll-padding-top: 16px;
   }
 }

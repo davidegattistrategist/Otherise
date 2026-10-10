@@ -10,6 +10,7 @@ import { QuickPay } from "@/components/quick-pay";
 import { markDiscomfortSeen } from "./today-actions";
 import { FirstSteps } from "./first-steps";
 import { ClearParams } from "@/components/clear-param";
+import { PushPrompt } from "@/components/push";
 
 export const metadata: Metadata = { title: "Oggi" };
 
@@ -64,8 +65,9 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
 
       {sp["solo-titolare"] ? <><ClearParams names={["solo-titolare"]} /><Notice>Quella pagina la vede solo il titolare: pagamenti, impostazioni e collaboratori sono gestiti da lui.</Notice></> : null}
       <FirstSteps supabase={supabase} me={me} />
+      <PushPrompt text="Ti avviso quando un cliente ti scrive, segnala un dolore o compila il check-up." />
 
-      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
         <Card>
           <div className="mb-3 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Check-up da guardare</Eyebrow></div>
           {checkins && checkins.length > 0 ? (

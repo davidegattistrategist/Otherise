@@ -3,7 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { StaffNav, type NavItem } from "@/components/staff-nav";
 import { StaffMobileNav, type MobileItem } from "@/components/staff-mobile-nav";
 import Link from "next/link";
-import { IconBell } from "@/components/icons";
+import { LiveBell, LiveProvider } from "@/components/live";
+import { InstallGuide } from "@/components/install-guide";
+import { PushSync } from "@/components/push";
+import { homeScreenName } from "@/lib/app-name";
 import { Toaster } from "@/components/toaster";
 import { IconLogout } from "@/components/icons";
 import { signOut } from "../login/actions";
@@ -41,17 +44,15 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   ];
   const moreMobile = items.filter((i) => !mainMobile.some((m) => m.href === i.href)) as MobileItem[];
   return (
+    <LiveProvider role="staff" initial={{ notifications: unread ?? 0, chats: unreadChats }}>
     <div className="flex min-h-dvh flex-wrap content-start items-stretch">
       {/* telefono: barra in alto e menu in basso */}
-      <header className="flex w-full items-center justify-between px-4 pt-4 lg:hidden">
-        <Link href="/staff" className="flex items-center gap-2.5">
-          <span className="h-3 w-3 rounded-full bg-accent" aria-hidden="true" />
-          <span className="text-[17px] font-bold tracking-tight">{name ?? "Otherise"}</span>
+      <header className="flex w-full items-center justify-between gap-3 pt-[calc(1rem+env(safe-area-inset-top))] pr-[var(--edge-right)] pl-[var(--edge-left)] sm:px-8 lg:hidden">
+        <Link href="/staff" className="flex min-w-0 items-center gap-2.5">
+          <span className="h-3 w-3 shrink-0 rounded-full bg-accent" aria-hidden="true" />
+          <span className="truncate text-[17px] font-bold tracking-tight">{name ?? "Otherise"}</span>
         </Link>
-        <Link href="/staff/notifiche" aria-label={unread ? `Notifiche, ${unread} da leggere` : "Notifiche"} className="relative flex h-11 w-11 items-center justify-center rounded-full bg-card">
-          <IconBell size={20} />
-          {unread ? <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-white">{unread}</span> : null}
-        </Link>
+        <LiveBell href="/staff/notifiche" initial={unread ?? 0} />
       </header>
       <Toaster />
       <StaffMobileNav main={mainMobile} more={moreMobile} signOut={signOut} who={`${me.fullName} · ${owner ? "Titolare" : "Collaboratore"}`} />
@@ -73,9 +74,12 @@ export default async function StaffLayout({ children }: { children: React.ReactN
           </form>
         </div>
       </aside>
-      <main className="box-border min-w-0 flex-[999_1_560px] px-4 pt-4 pb-28 sm:px-8 lg:px-10 lg:pt-8 lg:pb-16">
+      <main className="box-border min-w-0 flex-[999_1_560px] pt-4 pr-[var(--edge-right)] pb-[calc(var(--nav-space)+1.75rem)] pl-[var(--edge-left)] sm:px-8 lg:px-10 lg:pt-8 lg:pb-16">
         <div className="mx-auto max-w-[1180px]">{children}</div>
       </main>
     </div>
+      <InstallGuide appName={homeScreenName(name)} />
+      <PushSync />
+    </LiveProvider>
   );
 }
