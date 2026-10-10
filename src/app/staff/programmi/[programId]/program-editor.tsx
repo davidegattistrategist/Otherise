@@ -856,9 +856,35 @@ function SaveAsTemplate({ onSave, defaultTitle, disabled }: { onSave: (title: st
  */
 function ProgressionMenu({ label, onApply, wide }: { label: string; onApply: (rule: ProgressionRule, deloadLast: boolean) => void; wide?: boolean }) {
   const [deloadLast, setDeloadLast] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLDetailsElement>(null);
+  // Il menu è "fixed": così non viene tagliato dalla tabella che scorre di lato
+  // né coperto dai pulsanti sotto l'ultima riga. Si apre verso l'alto se sotto non c'è posto.
+  const place = () => {
+    const el = ref.current;
+    if (!el?.open) return setPos(null);
+    const r = el.querySelector("summary")!.getBoundingClientRect();
+    const W = 288, H = 300, gap = 4;
+    const left = Math.min(Math.max(8, wide ? r.left : r.right - W), window.innerWidth - W - 8);
+    const below = r.bottom + gap + H < window.innerHeight - 80;
+    setPos({ top: below ? r.bottom + gap : Math.max(8, r.top - gap - H), left });
+  };
+  useEffect(() => {
+    if (!pos) return;
+    const close = (e: Event) => {
+      if (e.target instanceof Node && ref.current?.contains(e.target)) return;
+      ref.current?.removeAttribute("open");
+      setPos(null);
+    };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [pos]);
   return (
-    <details ref={ref} className="relative">
+    <details ref={ref} className="relative" onToggle={place}>
       <summary
         aria-label={label}
         title={label}
@@ -870,7 +896,10 @@ function ProgressionMenu({ label, onApply, wide }: { label: string; onApply: (ru
         <IconTrend size={16} />
         {wide ? "Progressione" : null}
       </summary>
-      <div className={cx("absolute z-30 mt-1 w-72 rounded-2xl bg-card p-3 shadow-xl ring-1 ring-sand-deep", wide ? "left-0" : "right-0")}>
+      <div
+        className={cx("z-50 w-72 rounded-2xl bg-card p-3 shadow-xl ring-1 ring-sand-deep", pos ? "fixed" : cx("absolute mt-1", wide ? "left-0" : "right-0"))}
+        style={pos ? { top: pos.top, left: pos.left, maxHeight: 300, overflowY: "auto" } : undefined}
+      >
         <p className="mb-2 px-1 text-xs text-muted">Parte dalla prima settimana scritta e compila le altre.</p>
         <div className="flex flex-col">
           {PROGRESSION_RULES.map((r) => (

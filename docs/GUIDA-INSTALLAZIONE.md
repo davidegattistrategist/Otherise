@@ -54,10 +54,7 @@ Da quel momento il codice è tuo. Quando Davide migliora l'app, può mandarti gl
 5. **Indirizzi dell'app**: **Authentication → URL Configuration**
    - Site URL: `https://app.tuodominio.it` (l'indirizzo che userai; se non hai ancora il dominio metti per ora quello che ti darà Vercel al passo 5 e cambialo dopo)
    - Redirect URLs → Add URL: `https://app.tuodominio.it/**`
-6. **Email in italiano**: **Authentication → Emails** (o "Email Templates"):
-   - **Invite user** → oggetto `Il tuo accesso all'app` → incolla il testo del file `supabase/email-templates/invito.html`
-   - **Reset password** → oggetto `Scegli una nuova password` → incolla il testo di `supabase/email-templates/nuova-password.html`
-   - Salva entrambi.
+6. **Email in italiano**: si fa al passo 4, dopo aver collegato Resend. Supabase permette di cambiare il testo delle email solo quando usi un servizio email tuo; fino ad allora inviti e "password dimenticata" arrivano in inglese.
 7. **Le chiavi**: **Project Settings → API Keys** (o "API"). Copia nelle note:
    - **Project URL** (es. `https://abcd1234.supabase.co`)
    - la chiave **publishable** (o "anon public")
@@ -89,6 +86,10 @@ Senza questo passo l'app funziona lo stesso, ma inviti e avvisi via email parton
    - Host: `smtp.resend.com` · Port: `465`
    - Username: `resend` · Password: la chiave API di Resend
    - Save.
+5. **Email in italiano**: in Supabase **Authentication → Emails → Templates** (ora si possono modificare):
+   - **Invite user** → oggetto `Il tuo accesso all'app` → incolla il testo del file `supabase/email-templates/invito.html`
+   - **Reset password** → oggetto `Scegli una nuova password` → incolla il testo di `supabase/email-templates/nuova-password.html`
+   - Salva entrambi.
 
 ---
 
@@ -108,6 +109,11 @@ Senza questo passo l'app funziona lo stesso, ma inviti e avvisi via email parton
 | `RESEND_API_KEY` | chiave di Resend |
 | `EMAIL_FROM` | `Nome Attività <avvisi@tuodominio.it>` |
 | `CRON_SECRET` | una frase lunga a caso, es. 40 lettere e numeri inventati |
+
+   **Tipo di ogni variabile** (Vercel lo chiede quando la aggiungi):
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` e `NEXT_PUBLIC_SITE_URL` → **Config**. Sono pubbliche per natura: se le salvi come Secret l'app non riesce a entrare ("email o password non corrette" anche se sono giuste). Se Vercel mostra l'avviso giallo, premi **Mark as Safe**.
+   - Tutte le altre (chiave secret di Supabase, Anthropic, Resend, `CRON_SECRET`) → **Secret**.
+   - Copia le chiavi con il pulsante di copia accanto, non selezionando il testo: la chiave a schermo è accorciata con i puntini.
 
    Facoltative: `ANTHROPIC_MODEL` se un giorno vuoi cambiare il modello dell'assistente (senza, usa quello predefinito); `NEXT_PUBLIC_CHAT_MAX_VIDEO_MB` se con Supabase Pro alzi il limite dei file (vedi sotto).
 

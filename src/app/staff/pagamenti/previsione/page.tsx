@@ -45,7 +45,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
         }
       >
         <p className="max-w-3xl text-[15px] leading-relaxed text-muted">
-          Quanto dovrebbe entrare nei prossimi mesi dai {f.clients} clienti attivi con un piano: gli abbonamenti si rinnovano alla scadenza, i pacchetti quando finiscono le sessioni al ritmo con cui le fa ogni cliente. Clienti in pausa e archiviati sono esclusi.
+          Quanto dovrebbe entrare nei prossimi mesi {f.clients === 1 ? "dall'unico cliente attivo" : `dai ${f.clients} clienti attivi`} con un piano: gli abbonamenti si rinnovano alla scadenza, i pacchetti quando finiscono le sessioni al ritmo con cui le fa ogni cliente. Clienti in pausa e archiviati sono esclusi.
         </p>
       </PageTitle>
 
@@ -122,11 +122,11 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
         <Eyebrow>Prossimi incassi attesi</Eyebrow>
         {f.events.length ? (
           <>
-            <EventList events={soon} />
+            {soon.length ? <EventList events={soon} /> : <p className="text-[15px] text-muted">Nessun incasso previsto nei prossimi 60 giorni.</p>}
             {later.length ? (
               <details className="group">
                 <summary className="cursor-pointer list-none border-t border-sand-deep py-3 text-sm font-semibold underline">
-                  <span className="group-open:hidden">Mostra anche i {later.length} incassi successivi</span>
+                  <span className="group-open:hidden">{later.length === 1 ? "Mostra anche l'incasso successivo" : `Mostra anche i ${later.length} incassi successivi`}</span>
                   <span className="hidden group-open:inline">Nascondi gli incassi successivi</span>
                 </summary>
                 <EventList events={later} />

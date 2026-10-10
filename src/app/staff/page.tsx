@@ -8,6 +8,7 @@ import { Card, Dot, Eyebrow, LinkButton, PageTitle } from "@/components/ui";
 import { getBillingLines } from "@/lib/data/billing";
 import { QuickPay } from "@/components/quick-pay";
 import { markDiscomfortSeen } from "./today-actions";
+import { FirstSteps } from "./first-steps";
 
 export const metadata: Metadata = { title: "Oggi" };
 
@@ -56,8 +57,10 @@ export default async function StaffToday() {
   return (
     <div className="flex flex-col gap-6">
       <PageTitle eyebrow={formatHeading(today)} title={`Ciao, ${me.fullName.split(" ")[0] || "coach"}`} actions={<LinkButton href="/staff/clienti/nuovo">Nuovo cliente</LinkButton>}>
-        <p className="text-[15px] text-muted">{active} clienti attivi</p>
+        <p className="text-[15px] text-muted">{active === 1 ? "1 cliente attivo" : `${active} clienti attivi`}</p>
       </PageTitle>
+
+      <FirstSteps supabase={supabase} me={me} />
 
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]">
         <Card>

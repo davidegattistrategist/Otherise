@@ -78,7 +78,7 @@ export default async function SettingsPage() {
             <SettingsForm action={saveSettings} values={s} defaultMessage={DEFAULT_PAYMENT_MESSAGE} />
           </Card>
 
-          <Card className="flex flex-col gap-4">
+          <Card id="privacy" className="flex scroll-mt-6 flex-col gap-4">
             <div>
               <Eyebrow>Privacy</Eyebrow>
               <p className="mt-2 text-sm leading-relaxed text-muted">
