@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -12,14 +11,6 @@ import type { ActionState } from "@/components/form-bits";
 async function clientName(clientId: string) {
   const { data } = await createAdminClient().from("clients").select("first_name, last_name").eq("id", clientId).maybeSingle();
   return data ? `${data.first_name} ${data.last_name}`.trim() : "Un cliente";
-}
-
-/** Attiva o disattiva l'assistente AI sui dati del cliente. */
-export async function setAiPreference(optOut: boolean) {
-  await requireClient();
-  const supabase = await createClient();
-  await supabase.rpc("set_ai_opt_out", { opt_out: optOut });
-  revalidatePath("/cliente/profilo");
 }
 
 /** Revoca del consenso sui dati di salute: avvisa lo staff e torna alla pagina del consenso. */

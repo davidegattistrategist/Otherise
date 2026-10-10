@@ -19,8 +19,7 @@ export default async function StaffChatPage({ params }: { params: Promise<{ clie
   if (!client) notFound();
   const messages = await loadMessages(clientId, me);
   await markChatRead(supabase, me.id, clientId);
-  const { data: opt } = await supabase.from("clients").select("ai_opt_out").eq("id", clientId).maybeSingle();
-  const draftsOn = aiEnabled() && !opt?.ai_opt_out && Boolean(client.user_id);
+  const draftsOn = aiEnabled() && Boolean(client.user_id);
   const draft = draftsOn ? await readyChatDraft(supabase, clientId) : null;
   return (
     <div className="flex flex-col gap-3">
@@ -31,12 +30,12 @@ export default async function StaffChatPage({ params }: { params: Promise<{ clie
         </div>
         <Link href={`/staff/clienti/${clientId}`} className="shrink-0 text-sm font-semibold underline">Scheda</Link>
       </div>
-      {!client.user_id ? <p className="text-sm text-muted">Non ha ancora l&apos;app: leggerà i messaggi quando entrerà. Invitalo dalla scheda.</p> : null}
+      {!client.user_id ? <p className="text-sm text-muted">Non ha ancora l&apos;app: leggerà i messaggi quando entrerà. Invitalo dalla scheda.{aiEnabled() ? " Le bozze di risposta dell'AI arrivano quando ti scrive dall'app." : ""}</p> : null}
       <ChatThread
         clientId={clientId}
         initial={messages}
         showSenderNames
-        drafts={draftsOn ? { initial: draft } : undefined}
+        drafts={draftsOn ? { initial: draft, clientName: client.first_name } : undefined}
         emptyText="Ancora nessun messaggio. Puoi mandare testo, foto e video (per esempio un video dell'esecuzione)."
         className="h-[calc(100dvh-260px)] min-h-[420px] lg:h-[calc(100dvh-170px)]"
       />

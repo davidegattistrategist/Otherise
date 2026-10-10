@@ -18,10 +18,6 @@ export function ConsentForm({ healthText }: { healthText: string }) {
         <input type="checkbox" name="health" required className={box} />
         <span>{healthText}</span>
       </label>
-      <label className="flex gap-3 text-sm leading-relaxed text-muted">
-        <input type="checkbox" name="no_ai" className={box} />
-        <span>Facoltativo: preferisco che l&apos;assistente AI non venga usato con i miei dati (puoi cambiare idea quando vuoi da Percorso → Privacy).</span>
-      </label>
       <ActionMessage state={state} />
       <SubmitButton pendingText="Un attimo…" className="w-full sm:w-auto">Conferma e continua</SubmitButton>
     </form>

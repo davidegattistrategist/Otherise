@@ -12,7 +12,7 @@ App web per personal trainer: clienti, programmi di allenamento, check corporei,
 - Ruoli: titolare (vede tutto) e collaboratori (solo i clienti assegnati, niente pagamenti).
 - Pagamenti fuori dall'app: "Pagato" in un tocco, promemoria WhatsApp già scritti, scadenze e pacchetti automatici, incassi per mese, export per il commercialista.
 - Chat con i clienti (testo, foto e video), costanza degli allenamenti, record, progressioni automatiche (anche doppia progressione), prescrizioni in % del massimale, riassunto AI dei check-up, email di riepilogo ogni mattina.
-- Privacy GDPR: informativa con i dati del titolare, consenso esplicito al primo accesso (o modulo cartaceo), AI disattivabile dal cliente, export e cancellazione dei dati, promemoria di cancellazione dopo 24 mesi.
+- Privacy GDPR: informativa con i dati del titolare, consenso esplicito al primo accesso (o modulo cartaceo), uso dell'AI dichiarato nell'informativa e compreso nel consenso, export e cancellazione dei dati, promemoria di cancellazione dopo 24 mesi.
 
 **Per il cliente**
 - Prossimo allenamento, avanzamento della fase, stato del percorso.

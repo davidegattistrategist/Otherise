@@ -219,11 +219,11 @@ describe.skipIf(!run)("permessi", () => {
     expect(a!.consent_source).toBe("app");
     // non può cambiare altri campi della scheda, nemmeno passando dai consensi
     expect((await clientA.from("clients").update({ goals: "x" }).eq("id", clientAId).select("id")).data ?? []).toEqual([]);
-    await clientA.rpc("set_ai_opt_out", { opt_out: true }).throwOnError();
+    // l'assistente AI fa parte del servizio: il cliente non può spegnerlo
+    expect((await clientA.rpc("set_ai_opt_out" as never, { opt_out: true } as never)).error).not.toBeNull();
     await clientA.rpc("withdraw_health_consent").throwOnError();
-    const { data: b } = await admin.from("clients").select("health_consent_at, ai_opt_out, goals").eq("id", clientAId).single();
+    const { data: b } = await admin.from("clients").select("health_consent_at, goals").eq("id", clientAId).single();
     expect(b!.health_consent_at).toBeNull();
-    expect(b!.ai_opt_out).toBe(true);
     expect(b!.goals).toBe(a!.goals);
     // il consenso del cliente B non cambia
     const { data: other } = await admin.from("clients").select("health_consent_at").eq("id", clientBId).single();

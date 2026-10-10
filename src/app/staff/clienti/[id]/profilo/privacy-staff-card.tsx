@@ -7,7 +7,7 @@ import { recordPaperConsent } from "./privacy-actions";
 type Props = {
   clientId: string;
   isOwner: boolean;
-  consent: { health_consent_at: string | null; consent_source: string | null; ai_opt_out: boolean };
+  consent: { health_consent_at: string | null; consent_source: string | null };
 };
 
 export function PrivacyStaffCard({ clientId, isOwner, consent }: Props) {
@@ -21,7 +21,6 @@ export function PrivacyStaffCard({ clientId, isOwner, consent }: Props) {
           ? `Consenso dati salute: ${formatLong(consent.health_consent_at!.slice(0, 10))}${consent.consent_source === "paper" ? " (su carta)" : " (nell'app)"}`
           : "Consenso sui dati di salute non ancora dato"}
       </div>
-      {consent.ai_opt_out ? <p className="text-sm text-muted">Il cliente ha chiesto di non usare l&apos;assistente AI con i suoi dati: per lui l&apos;AI è disattivata.</p> : null}
       {!ok ? (
         <>
           <p className="text-sm leading-relaxed text-muted">

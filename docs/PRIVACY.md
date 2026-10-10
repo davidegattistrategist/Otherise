@@ -20,7 +20,7 @@ Questo file mette insieme tutto quello che serve sulla privacy (GDPR) per usare 
 - **Consenso su carta** per chi inizia di persona, prima di avere l'app:
   - nella scheda del cliente → Scheda → Privacy → "Modulo da stampare" (oppure `/privacy/modulo`);
   - lo fai firmare, lo conservi e premi "Firmato su carta".
-- **Assistente AI disattivabile.** Il cliente può dire di non usarlo, al primo accesso o in Percorso → Privacy. Per quel cliente l'AI si blocca e i suoi programmi non vengono usati come esempi. In ogni caso all'AI non arrivano mai nome, cognome, email o telefono. Per le bozze di risposta riceve anche il testo degli ultimi messaggi della chat (niente foto o video); le risposte le manda sempre il trainer.
+- **Assistente AI compreso nel servizio.** L'informativa dice che il coach usa strumenti di intelligenza artificiale (punto 4) e su quale base: il contratto e, per i dati relativi alla salute, il consenso esplicito che il cliente dà al primo accesso (il testo del consenso cita l'assistente). Non c'è un interruttore per il singolo cliente: chi non è d'accordo ne parla con il coach prima di confermare, e revocando il consenso smette di usare l'app. In ogni caso all'AI non arrivano mai nome, cognome, email o telefono. Per le bozze di risposta riceve anche il testo degli ultimi messaggi della chat (niente foto o video); le risposte le manda sempre il trainer.
 - **Diritti del cliente.** Da Percorso → Privacy il cliente:
   - chiede una copia dei suoi dati;
   - chiede la cancellazione;
@@ -59,7 +59,6 @@ I trasferimenti verso gli USA sono coperti dalle clausole contrattuali standard 
 > - non copiare dati fuori dall'app (niente screenshot, fogli o chat personali con dati di salute), salvo quanto strettamente necessario e da me autorizzato;
 > - custodire la propria password, non condividerla e avvisarmi subito in caso di smarrimento o di accesso sospetto;
 > - segnalarmi entro 24 ore qualsiasi possibile violazione dei dati (ad esempio un telefono perso con l'app aperta);
-> - non usare l'assistente AI con i dati dei clienti che lo hanno disattivato (l'app lo blocca comunque).
 >
 > L'autorizzazione termina con la fine della collaborazione: da quel momento l'accesso all'app viene revocato.
 >

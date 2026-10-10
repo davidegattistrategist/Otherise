@@ -209,14 +209,14 @@ isOneToOne: false
                   ]
                 },"clients": {
                   Row: {
-                    "ai_opt_out": boolean,"archived_at": string | null,"birth_date": string | null,"coach_id": string | null,"consent_source": string | null,"created_at": string,"email": string | null,"first_name": string,"goals": string,"health_consent_at": string | null,"id": string,"last_name": string,"phase_weeks": number,"phone": string | null,"privacy_accepted_at": string | null,"privacy_version": string | null,"sex": string,"start_date": string,"status": string,"user_id": string | null,"weekly_checkin": boolean
+                    "archived_at": string | null,"birth_date": string | null,"coach_id": string | null,"consent_source": string | null,"created_at": string,"email": string | null,"first_name": string,"goals": string,"health_consent_at": string | null,"id": string,"last_name": string,"phase_weeks": number,"phone": string | null,"privacy_accepted_at": string | null,"privacy_version": string | null,"sex": string,"start_date": string,"status": string,"user_id": string | null,"weekly_checkin": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_opt_out"?: boolean,"archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name": string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex": string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                    "archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name": string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex": string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
                   }
                   Update: {
-                    "ai_opt_out"?: boolean,"archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name"?: string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex"?: string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                    "archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name"?: string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex"?: string,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
                   }
                   Relationships: [
                     {
@@ -590,9 +590,6 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: {
               "client_id": string,"last_at": string,"unread": number
             }[]
-                           },
-"set_ai_opt_out":
-{ Args: { "opt_out": boolean }; Returns: undefined
                            },
 "withdraw_health_consent":
 { Args: Record<PropertyKey, never>; Returns: undefined

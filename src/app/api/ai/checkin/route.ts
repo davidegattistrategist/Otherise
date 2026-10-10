@@ -4,7 +4,7 @@ import { z } from "zod";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { aiEnabled, checkinBrief } from "@/lib/ai/claude";
-import { AI_OPT_OUT_MESSAGE, buildClientContext, buildMethodContext } from "@/lib/ai/context";
+import { buildClientContext, buildMethodContext } from "@/lib/ai/context";
 import { budgetExceeded, logAiRequest } from "@/lib/ai/budget";
 
 export const maxDuration = 120;
@@ -16,9 +16,8 @@ export async function POST(req: NextRequest) {
   const parsed = z.object({ clientId: z.string().uuid() }).safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Richiesta non valida" }, { status: 400 });
   const supabase = await createClient();
-  const { data: client } = await supabase.from("clients").select("id, ai_opt_out").eq("id", parsed.data.clientId).maybeSingle();
+  const { data: client } = await supabase.from("clients").select("id").eq("id", parsed.data.clientId).maybeSingle();
   if (!client) return NextResponse.json({ error: "Cliente non trovato" }, { status: 404 });
-  if (client.ai_opt_out) return NextResponse.json({ error: AI_OPT_OUT_MESSAGE }, { status: 403 });
   const over = await budgetExceeded(supabase);
   if (over) return NextResponse.json({ error: over }, { status: 429 });
   try {

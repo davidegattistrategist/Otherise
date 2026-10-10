@@ -30,7 +30,6 @@ export function programToText(title: string, weeks: number, content: ProgramCont
   return lines.join("\n");
 }
 
-export const AI_OPT_OUT_MESSAGE = "Questo cliente ha chiesto di non usare l'assistente AI con i suoi dati: per lui l'AI è disattivata.";
 
 export async function buildClientContext(supabase: ServerSupabase, clientId: string, excludeProgramId?: string) {
   const today = todayISO();
@@ -129,16 +128,12 @@ export async function buildClientContext(supabase: ServerSupabase, clientId: str
 export async function buildMethodContext(supabase: ServerSupabase) {
   const [{ data: settings }, { data: examples }, { data: exercises }] = await Promise.all([
     supabase.from("app_settings").select("coaching_method").maybeSingle(),
-    supabase.from("programs").select("title, weeks, content, clients(ai_opt_out)").eq("is_ai_example", true).order("updated_at", { ascending: false }).limit(6),
+    supabase.from("programs").select("title, weeks, content").eq("is_ai_example", true).order("updated_at", { ascending: false }).limit(3),
     supabase.from("exercises").select("id, name").eq("archived", false).order("name"),
   ]);
   return {
     method: settings?.coaching_method?.trim() || "",
-    // i programmi dei clienti che hanno chiesto di non usare l'AI non fanno da esempio
-    examples: (examples ?? [])
-      .filter((e) => !(e.clients as unknown as { ai_opt_out: boolean } | null)?.ai_opt_out)
-      .slice(0, 3)
-      .map((e) => programToText(e.title, e.weeks, parseContent(e.content))),
+    examples: (examples ?? []).map((e) => programToText(e.title, e.weeks, parseContent(e.content))),
     exercises: exercises ?? [],
   };
 }

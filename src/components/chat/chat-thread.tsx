@@ -41,7 +41,7 @@ export function ChatThread({
   emptyText: string;
   className?: string;
   /** Solo staff: bozze di risposta dell'assistente AI (null = nessuna pronta) */
-  drafts?: { initial: ReplyDraft | null };
+  drafts?: { initial: ReplyDraft | null; clientName?: string };
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initial);
   const [text, setText] = useState("");
@@ -301,6 +301,10 @@ export function ChatThread({
               <IconSparkle size={15} /> {draftBusy ? "Sto scrivendo la bozza…" : "Prepara una bozza di risposta"}
             </button>
           </div>
+        ) : draftsOn && !text && !draftBusy ? (
+          <p className="mb-2 flex items-center gap-1.5 text-xs text-muted" data-testid="draft-hint">
+            <IconSparkle size={13} /> Quando {drafts?.clientName || "il cliente"} ti scrive, qui trovi una bozza di risposta dell&apos;AI.
+          </p>
         ) : null}
         {draftError ? <p role="alert" className="mb-2 rounded-xl bg-accent-soft px-3 py-2 text-sm">{draftError}</p> : null}
         {pending.length ? (

@@ -24,10 +24,10 @@ type Admin = ReturnType<typeof createAdminClient>;
 export type ReplyDraft = { id: string; body: string; createdAt: string };
 type Result = { ok: true; draft: ReplyDraft | null } | { ok: false; error: string };
 
-type ClientRow = { id: string; first_name: string; last_name: string; email: string | null; phone: string | null; user_id: string | null; coach_id: string | null; ai_opt_out: boolean; archived_at: string | null };
+type ClientRow = { id: string; first_name: string; last_name: string; email: string | null; phone: string | null; user_id: string | null; coach_id: string | null; archived_at: string | null };
 
 async function loadClient(admin: Admin, clientId: string) {
-  const { data } = await admin.from("clients").select("id, first_name, last_name, email, phone, user_id, coach_id, ai_opt_out, archived_at").eq("id", clientId).maybeSingle();
+  const { data } = await admin.from("clients").select("id, first_name, last_name, email, phone, user_id, coach_id, archived_at").eq("id", clientId).maybeSingle();
   return data as ClientRow | null;
 }
 
@@ -41,7 +41,6 @@ async function responderFor(admin: Admin, client: ClientRow): Promise<string | n
 async function canRun(admin: Admin, client: ClientRow | null): Promise<string | null> {
   if (!aiEnabled()) return "L'assistente AI non è attivo: manca la chiave di Anthropic.";
   if (!client) return "Cliente non trovato.";
-  if (client.ai_opt_out) return "Questo cliente ha chiesto di non usare l'assistente AI con i suoi dati.";
   return budgetExceeded(admin as unknown as ServerSupabase);
 }
 

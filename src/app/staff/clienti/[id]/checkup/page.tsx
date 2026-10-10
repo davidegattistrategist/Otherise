@@ -27,7 +27,7 @@ export default async function CheckupPage({ params }: { params: Promise<{ id: st
     .order("week_start", { ascending: false })
     .limit(26);
   const list = data ?? [];
-  const draftsOn = aiEnabled() && !client.ai_opt_out;
+  const draftsOn = aiEnabled();
   const { data: drafts } = draftsOn && list.length
     ? await supabase.from("ai_reply_drafts").select("id, body, checkin_id").in("checkin_id", list.map((c) => c.id)).eq("status", "ready")
     : { data: [] as Array<{ id: string; body: string; checkin_id: string | null }> };

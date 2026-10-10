@@ -47,6 +47,7 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
       <ul>
         <li><strong>Seguirti nel percorso di allenamento</strong>: preparare e aggiornare i programmi, leggere i tuoi allenamenti, fare check e sessioni, risponderti in chat e ai check-up. Base: il contratto con te (art. 6.1.b GDPR).</li>
         <li><strong>Usare i dati relativi alla salute</strong> per valutare il tuo stato e programmare in modo sicuro ed efficace. Base: il tuo <strong>consenso esplicito</strong> (art. 9.2.a GDPR), che ti chiediamo nell&apos;app o su carta.</li>
+        <li><strong>Farci aiutare dall&apos;assistente AI</strong> a preparare bozze di programmi, riassunti dei check-up e risposte (punto 4). Base: il contratto (art. 6.1.b) e, per i dati relativi alla salute, il tuo consenso esplicito (art. 9.2.a).</li>
         <li><strong>Gestire l&apos;abbonamento</strong>: tenere il registro dei pagamenti e ricordarti le scadenze. Base: il contratto (art. 6.1.b). I documenti fiscali li gestiamo fuori dall&apos;app per obbligo di legge (art. 6.1.c).</li>
         <li><strong>Mandarti avvisi di servizio</strong> nell&apos;app e per email (nuovo programma, risposta al check-up, messaggi, scadenze). Base: il contratto (art. 6.1.b).</li>
         <li><strong>Tenere l&apos;app sicura</strong> e prevenire accessi non autorizzati. Base: il nostro legittimo interesse (art. 6.1.f).</li>
@@ -59,7 +60,7 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
       <p>
         Per preparare più in fretta le bozze dei programmi, i riassunti dei check-up e le bozze delle risposte ai tuoi messaggi e alle tue richieste, il coach può usare un assistente basato su intelligenza artificiale (Claude, di Anthropic). All&apos;assistente <strong>non mandiamo mai nome, cognome, email o telefono</strong>: solo i dati di allenamento e di salute utili a programmare e il testo degli ultimi messaggi della chat, cioè dati pseudonimizzati (le foto e i video non vengono inviati). L&apos;assistente propone e basta: <strong>ogni decisione la prende il tuo coach</strong>, che rilegge e corregge tutto, e ogni risposta che ricevi la manda lui. Non c&apos;è alcuna decisione automatizzata ai sensi dell&apos;art. 22 GDPR. Anthropic agisce come nostro responsabile del trattamento e, per contratto, non usa questi dati per addestrare i suoi modelli.
       </p>
-      <p>Se preferisci che l&apos;assistente non venga usato con i tuoi dati, puoi disattivarlo quando vuoi dall&apos;app (Percorso → Privacy) o chiedendolo al coach.</p>
+      <p>L&apos;uso dell&apos;assistente fa parte del servizio e di come il coach lavora: è compreso in quello che confermi all&apos;inizio (contratto e consenso sui dati relativi alla salute). Se hai dubbi, parlane con il tuo coach prima di confermare.</p>
 
       <H>5. Cosa succede se non ci dai i dati o il consenso</H>
       <p>

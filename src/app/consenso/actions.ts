@@ -13,6 +13,5 @@ export async function acceptPrivacy(_: ActionState, fd: FormData): Promise<Actio
   const supabase = await createClient();
   const { error } = await supabase.rpc("accept_privacy", { version: PRIVACY_VERSION });
   if (error) return { error: "Non sono riuscito a salvare. Riprova tra poco." };
-  if (fd.get("no_ai") === "on") await supabase.rpc("set_ai_opt_out", { opt_out: true });
   redirect("/cliente");
 }

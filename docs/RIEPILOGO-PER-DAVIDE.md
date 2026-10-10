@@ -36,7 +36,7 @@ Confronto con le app più usate dai coach (Trainerize, TrueCoach, Everfit, Train
 - **Privacy completa**:
   - informativa definitiva (da far rileggere a un legale) con i dati del titolare dalle Impostazioni;
   - consenso esplicito al primo accesso o modulo cartaceo;
-  - AI disattivabile dal cliente;
+  - uso dell'AI dichiarato nell'informativa e compreso nel consenso iniziale;
   - richieste di copia o cancellazione, export dei dati, cancellazione anche di foto e video della chat;
   - promemoria dopo 24 mesi di archiviazione;
   - in `docs/PRIVACY.md` modelli per collaboratori, registro dei trattamenti e procedura in caso di violazione.
