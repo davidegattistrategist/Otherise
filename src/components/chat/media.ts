@@ -4,6 +4,8 @@
  * video restano com'erano. Il caricamento va diretto allo storage con un
  * link firmato e mostra l'avanzamento.
  */
+import { supabaseAnonKey } from "@/lib/supabase/env";
+
 export type Prepared = { blob: Blob; type: string; name: string; width: number | null; height: number | null };
 
 export async function prepareImage(file: File): Promise<Prepared> {
@@ -50,7 +52,7 @@ export function uploadWithProgress(signedUrl: string, blob: Blob, type: string, 
     xhr.open("PUT", signedUrl);
     xhr.setRequestHeader("content-type", type);
     xhr.setRequestHeader("x-upsert", "false");
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const anon = supabaseAnonKey();
     if (anon) xhr.setRequestHeader("apikey", anon);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress(e.loaded / e.total);

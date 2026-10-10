@@ -20,7 +20,8 @@ export default async function TeamPage() {
   const signedIn = new Map<string, boolean>();
   await Promise.all((staff ?? []).map(async (s) => {
     const { data } = await admin.auth.admin.getUserById(s.id);
-    signedIn.set(s.id, Boolean(data.user?.last_sign_in_at));
+    // chi sta guardando la pagina è entrato di sicuro
+    signedIn.set(s.id, s.id === me.id || Boolean(data.user?.last_sign_in_at));
   }));
   const count = (id: string) => (clients ?? []).filter((c) => c.coach_id === id).length;
   const unassigned = (clients ?? []).filter((c) => !c.coach_id).length;

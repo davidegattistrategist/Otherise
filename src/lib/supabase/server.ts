@@ -2,11 +2,12 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "./database.types";
+import { supabaseAnonKey, supabaseUrl } from "./env";
 
 /** Client Supabase per Server Components e Server Actions: agisce come l'utente collegato (rispetta i permessi). */
 export async function createClient() {
   const cookieStore = await cookies();
-  return createServerClient<Database>(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  return createServerClient<Database>(supabaseUrl(), supabaseAnonKey(), {
     cookies: {
       getAll() {
         return cookieStore.getAll();

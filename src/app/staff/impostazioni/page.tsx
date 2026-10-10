@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { supabaseServiceKey } from "@/lib/supabase/env";
 import { DEFAULT_MODEL } from "@/lib/ai/claude";
 import { formatEuro } from "@/lib/billing";
 import { DEFAULT_PAYMENT_MESSAGE } from "@/lib/whatsapp";
@@ -12,6 +14,21 @@ import { saveMethod, savePrivacy, saveSettings } from "./actions";
 export const metadata: Metadata = { title: "Impostazioni" };
 
 const METHOD_PLACEHOLDER_HINT = `Esempi di cosa scrivere: come imposti le fasi (es. intensificazione, volume, scarico), come progredisci di settimana in settimana, quante sessioni e che split usi, come scrivi le prescrizioni, il riscaldamento tipo, il lavoro posturale e di core, cosa eviti con chi ha dolori.`;
+
+/** La chiave secret di Supabase funziona? (serve a inviti, notifiche, foto della chat) */
+async function serviceKeyStatus(): Promise<{ ok: boolean; text: string }> {
+  const key = supabaseServiceKey();
+  const fix = "Ricopiala da Supabase → Project Settings → API Keys → Secret keys (inizia con sb_secret_), incollala su Vercel in SUPABASE_SERVICE_ROLE_KEY e rifai il deploy.";
+  if (!key) return { ok: false, text: `Manca la chiave secret di Supabase. ${fix}` };
+  if (key.startsWith("sb_publishable_")) return { ok: false, text: `In SUPABASE_SERVICE_ROLE_KEY c'è la chiave publishable al posto della secret. ${fix}` };
+  try {
+    const { error } = await createAdminClient().auth.admin.listUsers({ page: 1, perPage: 1 });
+    if (error) return { ok: false, text: `La chiave secret di Supabase non funziona (${error.message}). ${fix}` };
+  } catch (e) {
+    return { ok: false, text: `La chiave secret di Supabase non funziona (${e instanceof Error ? e.message : "errore"}). ${fix}` };
+  }
+  return { ok: true, text: "Collegamento completo a Supabase attivo (inviti, avvisi, foto e video della chat)" };
+}
 
 function Status({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return (
@@ -38,6 +55,7 @@ export default async function SettingsPage() {
   const hasAi = Boolean(process.env.ANTHROPIC_API_KEY);
   const hasEmail = Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
   const hasCron = Boolean(process.env.CRON_SECRET);
+  const service = await serviceKeyStatus();
 
   return (
     <div className="flex flex-col gap-6">
@@ -81,6 +99,7 @@ export default async function SettingsPage() {
           <Card className="flex flex-col gap-3">
             <Eyebrow>Collegamenti</Eyebrow>
             <ul className="flex flex-col gap-2">
+              <Status ok={service.ok}>{service.text}</Status>
               <Status ok={hasAi}>{hasAi ? "Assistente AI attivo" : "Assistente AI spento: manca ANTHROPIC_API_KEY su Vercel"}</Status>
               <Status ok={hasEmail}>{hasEmail ? "Email di avviso attive" : "Email di avviso spente: mancano RESEND_API_KEY ed EMAIL_FROM (restano le notifiche in app)"}</Status>
               <Status ok={hasCron}>{hasCron ? "Controlli automatici giornalieri attivi" : "Controlli giornalieri spenti: manca CRON_SECRET"}</Status>
