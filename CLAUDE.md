@@ -31,7 +31,7 @@ App per personal trainer: staff (titolare + collaboratori) gestisce clienti, pro
 - Pliche e composizione corporea: `src/lib/body/skinfolds.ts`. Uomo Jackson-Pollock 7 pliche; donna 5 pliche (senza pettorale e ascellare) riportate a 7 (×7/5) nella formula JP7 femminile; Siri. **Se manca una plica del protocollo non si calcola la percentuale.** Massimale stimato: tabella RPE in `src/lib/strength/e1rm.ts`.
 - Pagamenti (fuori dall'app, qui solo il registro): `src/lib/billing.ts`, funzioni SQL `client_billing()` e `billing_overview()`.
 - Check-up: soglie di avviso nella funzione SQL `flag_checkin` (voto ≤ 2, calo di 2 punti, richiesta scritta).
-- Notifiche: tabella `notifications` (+ email via Resend in `src/lib/email.ts`); controlli giornalieri in `src/lib/daily-checks.ts` chiamati da `/api/cron/daily` (Vercel Cron, `vercel.json`, header `Authorization: Bearer CRON_SECRET`).
+- Notifiche: tabella `notifications` (+ email via Resend in `src/lib/email.ts`; + push in `src/lib/push.ts`, inviate da `notify()` e per ogni messaggio da `sendMessage`); controlli giornalieri in `src/lib/daily-checks.ts` chiamati da `/api/cron/daily` (Vercel Cron, `vercel.json`, header `Authorization: Bearer CRON_SECRET`).
 - Chat: tabelle `messages` e `chat_reads`, funzione `my_unread_chats()`. Allegati (solo foto e video, niente audio) nel bucket privato `chat` di Supabase Storage: il browser carica direttamente con un link firmato (`prepareUpload` in `src/app/chat/actions.ts`), i link di lettura sono firmati e temporanei (`src/lib/chat.ts`). Aggiornamento ogni 4 secondi da `/api/chat/[clientId]`.
 - Logbook condiviso tra cliente e staff: `src/components/logbook/` (+ `src/lib/data/session.ts` per i dati: ultima volta, record, massimali per le prescrizioni in %).
 - Progressioni senza AI: `src/lib/program/progression.ts`; record e massimali dal logbook (Epley): `src/lib/strength/records.ts`; costanza: `src/lib/compliance.ts`; grafici esercizi e allenamenti per settimana: `src/lib/data/progress.ts`.
@@ -45,6 +45,8 @@ App per personal trainer: staff (titolare + collaboratori) gestisce clienti, pro
 - Dolori nel logbook: `workout_logs.discomfort` (+ `discomfort_seen_at`), avviso allo staff in `src/components/logbook/actions.ts`, card "Dolori e fastidi" in Oggi. L'AI non interviene sui dolori (regole in `SYSTEM` di `src/lib/ai/claude.ts`).
 - Domande dell'AI prima della bozza: `askQuestions` (mode "questions" in `/api/ai/program`), da 0 a 5.
 - Pacchetti chiusi a mano: `payment_plans.sessions_written_off` (sommate alle usate in `client_billing`/`billing_overview`).
+- Aggiornamento dal vivo: `/api/live` (conteggi e ultima notifica) chiamato ogni 20 s da `LiveProvider` in `src/components/live.tsx` (campanella, badge chat, avviso a comparsa).
+- PWA: `public/sw.js` (push e clic sulle notifiche), `src/app/manifest.ts`, icone PNG in `public/`. Iscrizioni push in `push_subscriptions` (le scrive solo il server, `src/app/push/actions.ts`), chiavi VAPID generate da sole in `app_secrets` (o `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`). Guida "Metti l'app sulla Home" al primo accesso da telefono: `src/components/install-guide.tsx`. Margini sicuri del telefono: variabili `--edge-left/right`, `--nav-gap`, `--nav-space` in `globals.css` (usale per tutto ciò che è fisso in basso).
 - Variabili d'ambiente: vedi `docs/GUIDA-INSTALLAZIONE.md` passo 5.
 
 ## Prima di dire "fatto"

@@ -49,7 +49,7 @@ Da quel momento il codice è tuo. Quando Davide migliora l'app, può mandarti gl
    - Database password: generane una e salvala nelle note
    - Region: **Central EU (Frankfurt)** — i dati restano in Europa
    - **Create new project** e aspetta un paio di minuti.
-3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Apri sul tuo GitHub il file `supabase/migrations/20261009120000_schema.sql`, premi il pulsante "Copy raw file", incolla tutto nell'editor di Supabase e premi **Run**. Deve comparire "Success. No rows returned". Lo stesso script prepara anche lo spazio privato per le foto e i video della chat: in **Storage** deve comparire un contenitore chiamato `chat`.
+3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Nella cartella `supabase/migrations/` del tuo GitHub ci sono uno o più file `.sql`: vanno eseguiti **tutti, uno alla volta, in ordine di nome** (il primo è `20261009120000_schema.sql`). Per ognuno: apri il file, premi il pulsante "Copy raw file", incolla tutto in una **New query** di Supabase e premi **Run** (se chiede conferma per una "destructive operation", conferma). Deve comparire "Success. No rows returned". Lo stesso script prepara anche lo spazio privato per le foto e i video della chat: in **Storage** deve comparire un contenitore chiamato `chat`.
 4. **Chiudi le iscrizioni libere** (nell'app si entra solo su invito): **Authentication → Sign In / Providers** → disattiva **Allow new users to sign up** → Save.
 5. **Indirizzi dell'app**: **Authentication → URL Configuration**
    - Site URL: `https://app.tuodominio.it` (l'indirizzo che userai; se non hai ancora il dominio metti per ora quello che ti darà Vercel al passo 5 e cambialo dopo)
