@@ -37,7 +37,7 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
       <ul>
         <li><strong>Dati anagrafici e di contatto</strong>: nome, cognome, sesso, data di nascita, email, telefono.</li>
         <li><strong>Dati relativi alla salute</strong> (categoria particolare, art. 9 GDPR): peso, pliche, composizione corporea, circonferenze, valutazioni posturali, test di forza e di performance, dolori o fastidi che ci segnali, qualità del sonno, stress e andamento del percorso, eventuali foto e video che ci mandi in chat.</li>
-        <li><strong>Dati di allenamento</strong>: obiettivi, programmi, allenamenti registrati (carichi, ripetizioni, tempi), sessioni con il coach, check-up settimanali, messaggi della chat.</li>
+        <li><strong>Dati di allenamento</strong>: obiettivi, programmi, allenamenti registrati (carichi, ripetizioni, tempi), sessioni con il coach, check-up settimanali, messaggi della chat (anche vocali, con la loro trascrizione scritta).</li>
         <li><strong>Dati amministrativi</strong>: tipo di abbonamento, importi e date dei pagamenti. Nell&apos;app non trattiamo mai dati di carte o conti: i pagamenti avvengono fuori.</li>
         <li><strong>Dati tecnici</strong>: account, data degli accessi e registri tecnici necessari a far funzionare l&apos;app in sicurezza.</li>
       </ul>
@@ -70,7 +70,7 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
       <H>6. Chi può vedere i tuoi dati</H>
       <ul>
         <li>Il titolare e i <strong>collaboratori</strong> che ti seguono, autorizzati per iscritto e tenuti alla riservatezza (art. 29 GDPR). Un collaboratore vede solo i clienti che segue.</li>
-        <li>I <strong>fornitori</strong> che ci permettono di far funzionare l&apos;app, nominati responsabili del trattamento (art. 28 GDPR): Supabase (database e archivio dei file, con server nell&apos;Unione europea, a Francoforte), Vercel (pubblicazione dell&apos;app), Anthropic (intelligenza artificiale), Resend (invio delle email).</li>
+        <li>I <strong>fornitori</strong> che ci permettono di far funzionare l&apos;app, nominati responsabili del trattamento (art. 28 GDPR): Supabase (database e archivio dei file, con server nell&apos;Unione europea, a Francoforte), Vercel (pubblicazione dell&apos;app), Anthropic (intelligenza artificiale), Groq (trascrizione dei messaggi vocali), Resend (invio delle email).</li>
         <li>Il nostro commercialista, solo per i dati amministrativi necessari.</li>
         <li>Le autorità, solo se la legge lo impone.</li>
       </ul>
@@ -78,14 +78,14 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
 
       <H>7. Trasferimenti fuori dall&apos;Unione europea</H>
       <p>
-        Il database si trova nell&apos;Unione europea. Alcuni fornitori (Vercel, Anthropic, Resend e la società che gestisce Supabase) hanno sede negli Stati Uniti e possono trattare alcuni dati anche lì. In questi casi il trasferimento avviene con le garanzie previste dal GDPR: la decisione di adeguatezza della Commissione europea (EU-US Data Privacy Framework) per i fornitori aderenti, oppure le clausole contrattuali standard approvate dalla Commissione (art. 46 GDPR). Puoi chiederci una copia delle garanzie scrivendo all&apos;indirizzo del punto 1.
+        Il database si trova nell&apos;Unione europea. Alcuni fornitori (Vercel, Anthropic, Groq, Resend e la società che gestisce Supabase) hanno sede negli Stati Uniti e possono trattare alcuni dati anche lì. In questi casi il trasferimento avviene con le garanzie previste dal GDPR: la decisione di adeguatezza della Commissione europea (EU-US Data Privacy Framework) per i fornitori aderenti, oppure le clausole contrattuali standard approvate dalla Commissione (art. 46 GDPR). Puoi chiederci una copia delle garanzie scrivendo all&apos;indirizzo del punto 1.
       </p>
 
       <H>8. Come proteggiamo i dati</H>
       <ul>
         <li>Si entra nell&apos;app solo su invito e con password personale.</li>
         <li>I permessi sono controllati direttamente dal database: ognuno vede solo quello che deve vedere.</li>
-        <li>Le connessioni sono cifrate; foto e video della chat stanno in un archivio privato e si aprono solo con link temporanei.</li>
+        <li>Le connessioni sono cifrate; foto, video e vocali della chat stanno in un archivio privato e si aprono solo con link temporanei.</li>
         <li>Agli strumenti di intelligenza artificiale non arrivano nome, cognome e contatti.</li>
       </ul>
 

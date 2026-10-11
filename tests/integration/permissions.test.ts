@@ -211,6 +211,19 @@ describe.skipIf(!run)("permessi", () => {
     expect(gone!.body).toBe("");
     expect(gone!.deleted_at).not.toBeNull();
   });
+  it("trascrizioni dei vocali: le leggono il cliente e chi lo segue, le scrive solo il server", async () => {
+    const clientUid = (await clientA.auth.getUser()).data.user!.id;
+    const msg = await clientA.from("messages").insert({ client_id: clientAId, sender_id: clientUid, body: "", attachments: [{ path: `${clientAId}/2026-10/a.m4a`, kind: "audio", name: "Vocale", size: 10 }] }).select("id").single();
+    await admin.from("message_transcripts").insert({ message_id: msg.data!.id, client_id: clientAId, status: "done", text: "ciao coach" }).throwOnError();
+    expect((await clientA.from("message_transcripts").select("text").eq("message_id", msg.data!.id)).data).toEqual([{ text: "ciao coach" }]);
+    expect((await coach.from("message_transcripts").select("text").eq("message_id", msg.data!.id)).data).toEqual([{ text: "ciao coach" }]);
+    expect((await stranger.from("message_transcripts").select("*")).data ?? []).toEqual([]);
+    // nessuno dal browser la scrive o la cambia
+    await clientA.from("message_transcripts").update({ text: "cambiata" }).eq("message_id", msg.data!.id);
+    await coach.from("message_transcripts").update({ text: "cambiata" }).eq("message_id", msg.data!.id);
+    expect((await admin.from("message_transcripts").select("text").eq("message_id", msg.data!.id).single()).data!.text).toBe("ciao coach");
+    expect((await clientA.from("message_transcripts").insert({ message_id: msg.data!.id, client_id: clientAId, text: "x" })).error).not.toBeNull();
+  });
   it("privacy: il cliente dà e revoca solo i propri consensi, nient'altro", async () => {
     await clientA.rpc("accept_privacy", { version: "test" }).throwOnError();
     const { data: a } = await admin.from("clients").select("health_consent_at, privacy_version, consent_source, goals").eq("id", clientAId).single();

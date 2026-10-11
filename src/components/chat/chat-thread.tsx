@@ -1,17 +1,24 @@
 "use client";
 
 /**
- * Conversazione: messaggi, foto e video. Si aggiorna da sola ogni pochi
- * secondi mentre è aperta. Niente messaggi vocali (scelta voluta).
+ * Conversazione: messaggi, foto, video e vocali (con la trascrizione sotto).
+ * Si aggiorna da sola ogni pochi secondi mentre è aperta.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { friendlyError } from "@/lib/friendly-error";
 import { deleteMessage, dismissReplyDraft, prepareUpload, requestReplyDraft, sendMessage } from "@/app/chat/actions";
 import type { ReplyDraft } from "@/lib/ai/reply";
-import { MAX_ATTACHMENTS, attachmentKind, sizeError, type ChatAttachment, type ChatMessage } from "@/lib/chat-shared";
+import { MAX_ATTACHMENTS, attachmentKind, sizeError, voiceLength, type ChatAttachment, type ChatMessage, type Transcript } from "@/lib/chat-shared";
 import { cx } from "@/components/ui";
 import { IconPaperclip, IconPlay, IconSend, IconSparkle, IconX } from "@/components/icons";
 import { prepareImage, uploadWithProgress, videoSize } from "./media";
+import { VoicePlayer, useVoiceRecorder, voiceSupported } from "./voice";
+
+const MicIcon = () => (
+  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0" /><path d="M12 17.5V21" />
+  </svg>
+);
 
 type Pending = { id: string; file: File; kind: "image" | "video"; preview: string; progress: number; error?: string };
 
@@ -61,11 +68,21 @@ export function ChatThread({
   const [draftBusy, setDraftBusy] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
   const draftsOn = Boolean(drafts);
+  const [canVoice, setCanVoice] = useState(false);
+  const voice = useVoiceRecorder(() => void sendVoice());
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- dipende dal browser: si sa solo dopo il caricamento
+    setCanVoice(voiceSupported());
+  }, []);
 
-  const merge = useCallback((incoming: ChatMessage[], deleted: string[] = []) => {
+  const merge = useCallback((incoming: ChatMessage[], deleted: string[] = [], transcripts: Record<string, Transcript> = {}) => {
     setMessages((cur) => {
       const byId = new Map(cur.map((m) => [m.id, m]));
       for (const m of incoming) byId.set(m.id, m);
+      for (const [id, t] of Object.entries(transcripts)) {
+        const m = byId.get(id);
+        if (m && (m.transcript?.status !== t.status || m.transcript?.text !== t.text)) byId.set(id, { ...m, transcript: t });
+      }
       for (const id of deleted) {
         const m = byId.get(id);
         if (m) byId.set(id, { ...m, deleted: true, body: "", attachments: [] });
@@ -85,8 +102,8 @@ export function ChatThread({
         const q = lastAt.current ? `?after=${encodeURIComponent(lastAt.current)}` : "";
         const res = await fetch(`/api/chat/${clientId}${q}`, { cache: "no-store" });
         if (!res.ok || stop) return;
-        const data = (await res.json()) as { messages: ChatMessage[]; deleted: string[]; draft?: ReplyDraft | null };
-        if (data.messages.length || data.deleted.length) merge(data.messages, data.deleted);
+        const data = (await res.json()) as { messages: ChatMessage[]; deleted: string[]; transcripts?: Record<string, Transcript>; draft?: ReplyDraft | null };
+        if (data.messages.length || data.deleted.length || Object.keys(data.transcripts ?? {}).length) merge(data.messages, data.deleted, data.transcripts ?? {});
         if (draftsOn && data.draft !== undefined) setDraft(data.draft);
       } catch {
         /* rete assente: si riprova al giro dopo */
@@ -119,8 +136,8 @@ export function ChatThread({
     const next: Pending[] = [];
     for (const f of Array.from(files)) {
       const kind = attachmentKind(f.type);
-      if (!kind) {
-        setError("Si possono mandare solo foto e video.");
+      if (!kind || kind === "audio") {
+        setError(kind === "audio" ? "Per i vocali tocca il microfono accanto alla casella del messaggio." : "Si possono mandare solo foto e video.");
         continue;
       }
       const tooBig = sizeError(kind, f.size);
@@ -171,6 +188,39 @@ export function ChatThread({
       setSending(false);
     }
   };
+
+  const startVoice = async () => {
+    setError(null);
+    try {
+      await voice.start();
+    } catch {
+      setError("Per mandare un vocale consenti all'app di usare il microfono (te lo chiede il telefono). Se l'hai negato, riattivalo nelle impostazioni del browser.");
+    }
+  };
+
+  async function sendVoice() {
+    const rec = await voice.stop(true);
+    if (!rec) return;
+    if (rec.seconds < 1) {
+      setError("Vocale troppo corto.");
+      return;
+    }
+    setSending(true);
+    setError(null);
+    stick.current = true;
+    try {
+      const ticket = await prepareUpload(clientId, { type: rec.type, size: rec.blob.size });
+      if ("error" in ticket) throw new Error(ticket.error);
+      await uploadWithProgress(ticket.signedUrl, rec.blob, rec.type, () => undefined);
+      const res = await sendMessage(clientId, { body: "", attachments: [{ path: ticket.path, kind: "audio", name: "Vocale", size: rec.blob.size, seconds: Math.round(rec.seconds) }] });
+      if (!res.ok) throw new Error(res.error);
+      merge([res.message]);
+    } catch (e) {
+      setError(friendlyError(e, "Vocale non inviato: riprova."));
+    } finally {
+      setSending(false);
+    }
+  }
 
   const resize = () => {
     const el = inputRef.current;
@@ -237,9 +287,12 @@ export function ChatThread({
               {showDay ? <div className="my-3 self-center rounded-full bg-sand px-3 py-1 text-xs font-semibold text-muted first-letter:uppercase">{dayLabel(m.createdAt)}</div> : null}
               {showName && m.senderName ? <div className="mt-1 mb-0.5 px-2 text-xs font-semibold text-muted">{m.senderName}</div> : null}
               <div className={cx("flex max-w-[85%] flex-col gap-1 sm:max-w-[70%]", m.mine ? "items-end self-end" : "items-start self-start")}>
-                {m.attachments.length ? (
-                  <div className={cx("grid gap-1", m.attachments.length > 1 ? "grid-cols-2" : "grid-cols-1")}>
-                    {m.attachments.map((a) =>
+                {m.attachments.filter((a) => a.kind === "audio").map((a) => (
+                  <VoicePlayer key={a.path} url={a.url} seconds={a.seconds} transcript={m.transcript} mine={m.mine} />
+                ))}
+                {m.attachments.some((a) => a.kind !== "audio") ? (
+                  <div className={cx("grid gap-1", m.attachments.filter((a) => a.kind !== "audio").length > 1 ? "grid-cols-2" : "grid-cols-1")}>
+                    {m.attachments.filter((a) => a.kind !== "audio").map((a) =>
                       !a.url ? (
                         <div key={a.path} className="flex h-32 w-40 items-center justify-center rounded-2xl bg-sand text-xs text-muted">Non disponibile</div>
                       ) : a.kind === "image" ? (
@@ -326,6 +379,17 @@ export function ChatThread({
             ))}
           </div>
         ) : null}
+        {voice.recording ? (
+          <div className="flex items-center gap-2" aria-label="Registrazione del vocale">
+            <button type="button" aria-label="Annulla il vocale" onClick={() => void voice.stop(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sand text-ink"><IconX size={20} /></button>
+            <div className="flex h-11 flex-1 items-center gap-2.5 rounded-[22px] bg-accent-soft px-4" role="timer">
+              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+              <span className="text-[16px] font-semibold tabular">{voiceLength(voice.seconds)}</span>
+              <span className="truncate text-sm text-ink-soft">Sto registrando…</span>
+            </div>
+            <button type="button" aria-label="Manda il vocale" onClick={() => void sendVoice()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white"><IconSend size={19} /></button>
+          </div>
+        ) : (
         <div className="flex items-end gap-2">
           <input ref={fileRef} type="file" accept="image/*,video/*" multiple className="sr-only" aria-label="Allega foto o video" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
           <button type="button" aria-label="Allega foto o video" disabled={sending || pending.length >= MAX_ATTACHMENTS} onClick={() => fileRef.current?.click()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sand text-ink disabled:opacity-40">
@@ -352,10 +416,17 @@ export function ChatThread({
             maxLength={4000}
             className="max-h-40 min-h-11 flex-1 resize-none rounded-[22px] border border-sand-deep bg-sand px-4 py-2.5 text-[16px] leading-snug focus:border-ink focus:outline-none"
           />
-          <button type="button" aria-label="Invia" onClick={() => void send()} disabled={sending || (!text.trim() && pending.length === 0)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white disabled:opacity-40">
-            {sending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <IconSend size={19} />}
-          </button>
+          {canVoice && !text.trim() && pending.length === 0 && !sending ? (
+            <button type="button" aria-label="Registra un vocale" onClick={() => void startVoice()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white">
+              <MicIcon />
+            </button>
+          ) : (
+            <button type="button" aria-label="Invia" onClick={() => void send()} disabled={sending || (!text.trim() && pending.length === 0)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white disabled:opacity-40">
+              {sending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <IconSend size={19} />}
+            </button>
+          )}
         </div>
+        )}
       </div>
 
       {viewer ? (

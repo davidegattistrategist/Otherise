@@ -3,7 +3,16 @@
  * usate dal generatore in src/lib/ai/reply.ts e dai test.
  */
 
-export type DraftMessage = { id: string; fromClient: boolean; body: string; attachments: number; createdAt: string };
+export type DraftMessage = {
+  id: string;
+  fromClient: boolean;
+  body: string;
+  /** foto e video */
+  attachments: number;
+  createdAt: string;
+  /** trascrizione del vocale (stringa vuota se non c'è ancora); null se non è un vocale */
+  voice?: string | null;
+};
 
 /** Il testo sembra una domanda o una richiesta a cui rispondere? */
 export function looksLikeQuestion(text: string): boolean {
@@ -45,11 +54,12 @@ export function fillName(text: string, firstName: string): string {
   return text.replace(/\{nome\}/g, firstName.trim() || "").replace(/[ \t]{2,}/g, " ").trim();
 }
 
-/** Testo di un messaggio per il prompt: "[foto]" se c'è solo un allegato. */
-export function messageText(m: { body: string; attachments: number }): string {
+/** Testo di un messaggio per il prompt: "[foto]" per gli allegati, "[vocale] …" con la trascrizione. */
+export function messageText(m: { body: string; attachments: number; voice?: string | null }): string {
   const body = m.body.trim();
   const att = m.attachments ? `[${m.attachments === 1 ? "1 foto o video" : `${m.attachments} foto o video`}]` : "";
-  return [att, body].filter(Boolean).join(" ");
+  const voice = m.voice === undefined || m.voice === null ? "" : m.voice.trim() ? `[vocale] ${m.voice.trim()}` : "[vocale non trascritto]";
+  return [att, voice, body].filter(Boolean).join(" ");
 }
 
 /** Quanto la risposta inviata somiglia alla bozza (0-1), per capire se è stata usata. */

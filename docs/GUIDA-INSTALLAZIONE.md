@@ -107,13 +107,16 @@ Senza questo passo l'app funziona lo stesso, ma inviti e avvisi via email parton
 | `NEXT_PUBLIC_SITE_URL` | `https://app.tuodominio.it` (senza `/` finale) |
 | `ANTHROPIC_API_KEY` | chiave di Anthropic |
 | `RESEND_API_KEY` | chiave di Resend |
+| `GROQ_API_KEY` | chiave di Groq, per la trascrizione dei vocali (vedi sotto) |
 | `EMAIL_FROM` | `Nome Attività <avvisi@tuodominio.it>` |
 | `CRON_SECRET` | una frase lunga a caso, es. 40 lettere e numeri inventati |
 
    **Tipo di ogni variabile** (Vercel lo chiede quando la aggiungi):
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` e `NEXT_PUBLIC_SITE_URL` → **Config**. Sono pubbliche per natura: se le salvi come Secret l'app non riesce a entrare ("email o password non corrette" anche se sono giuste). Se Vercel mostra l'avviso giallo, premi **Mark as Safe**.
-   - Tutte le altre (chiave secret di Supabase, Anthropic, Resend, `CRON_SECRET`) → **Secret**.
+   - Tutte le altre (chiave secret di Supabase, Anthropic, Resend, Groq, `CRON_SECRET`) → **Secret**.
    - Copia le chiavi con il pulsante di copia accanto, non selezionando il testo: la chiave a schermo è accorciata con i puntini.
+
+   **Groq (trascrizione dei vocali)**: crea un account gratuito su console.groq.com, poi API Keys → Create API Key e copia la chiave. Costa circa 0,04 $ per ora di audio (mille vocali da un minuto ≈ 0,60 €) e non usa l'assistente AI. Senza questa chiave i vocali funzionano lo stesso, solo senza trascrizione.
 
    Facoltative: `ANTHROPIC_MODEL` se un giorno vuoi cambiare il modello dell'assistente (senza, usa quello predefinito); `NEXT_PUBLIC_CHAT_MAX_VIDEO_MB` se con Supabase Pro alzi il limite dei file (vedi sotto).
 

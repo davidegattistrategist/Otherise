@@ -8,7 +8,8 @@ import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CHAT_BUCKET, canUseChat, loadMessages, markChatRead, previewOf } from "@/lib/chat";
-import { MAX_ATTACHMENTS, attachmentKind, sizeError, type ChatAttachment, type ChatMessage } from "@/lib/chat-shared";
+import { MAX_ATTACHMENTS, MAX_VOICE_SECONDS, attachmentKind, baseType, sizeError, type ChatAttachment, type ChatMessage } from "@/lib/chat-shared";
+import { startTranscript, transcribeMessage } from "@/lib/transcribe";
 import { notify, pushLater, staffRecipients } from "@/lib/notify";
 import { sendPush } from "@/lib/push";
 import { deliverPendingEmails } from "@/lib/email";
@@ -18,6 +19,7 @@ const fileId = customAlphabet("abcdefghijkmnpqrstuvwxyz23456789", 16);
 const EXT: Record<string, string> = {
   "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/heic": "heic", "image/heif": "heif",
   "video/mp4": "mp4", "video/quicktime": "mov", "video/webm": "webm", "video/3gpp": "3gp",
+  "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/webm": "webm", "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/aac": "aac", "audio/wav": "wav",
 };
 
 export type UploadTicket = { path: string; signedUrl: string; token: string } | { error: string };
@@ -28,11 +30,11 @@ export async function prepareUpload(clientId: string, file: { type: string; size
   const supabase = await createClient();
   if (!(await canUseChat(supabase, clientId))) return { error: "Conversazione non trovata." };
   const kind = attachmentKind(file.type);
-  if (!kind) return { error: "Si possono mandare solo foto e video." };
+  if (!kind) return { error: "Si possono mandare solo foto, video e vocali." };
   const tooBig = sizeError(kind, file.size);
   if (tooBig) return { error: tooBig };
   const month = new Date().toISOString().slice(0, 7);
-  const path = `${clientId}/${month}/${fileId()}.${EXT[file.type.toLowerCase()] ?? "bin"}`;
+  const path = `${clientId}/${month}/${fileId()}.${EXT[baseType(file.type)] ?? "bin"}`;
   const { data, error } = await createAdminClient().storage.from(CHAT_BUCKET).createSignedUploadUrl(path);
   if (error || !data) return { error: "Caricamento non disponibile in questo momento. Riprova tra poco." };
   return { path, signedUrl: data.signedUrl, token: data.token };
@@ -44,11 +46,12 @@ const sendSchema = z.object({
     .array(
       z.object({
         path: z.string().min(10).max(200),
-        kind: z.enum(["image", "video"]),
+        kind: z.enum(["image", "video", "audio"]),
         name: z.string().max(200),
         size: z.number().int().nonnegative(),
         width: z.number().int().positive().nullish(),
         height: z.number().int().positive().nullish(),
+        seconds: z.number().nonnegative().max(MAX_VOICE_SECONDS + 30).nullish(),
       }),
     )
     .max(MAX_ATTACHMENTS),
@@ -73,6 +76,8 @@ export async function sendMessage(clientId: string, input: { body: string; attac
     .select("id, created_at")
     .single();
   if (error || !row) return { ok: false, error: "Messaggio non inviato. Controlla la connessione e riprova." };
+  const voice = attachments.some((a) => a.kind === "audio");
+  if (voice) await startTranscript(row.id, clientId);
   await markChatRead(supabase, me.id, clientId);
 
   // Avviso a chi deve leggere (al massimo uno all'ora per conversazione)
@@ -102,9 +107,15 @@ export async function sendMessage(clientId: string, input: { body: string; attac
   }
   void deliverPendingEmails().catch(() => undefined);
   if (fromClient) {
-    // a risposta già inviata al cliente, l'assistente prepara la bozza per lo staff
-    after(() => generateChatDraft(clientId).catch(() => undefined));
-  } else if (body) {
+    // a risposta già inviata al cliente: prima la trascrizione del vocale, poi la bozza per lo staff
+    after(async () => {
+      if (voice) await transcribeMessage(row.id);
+      await generateChatDraft(clientId).catch(() => undefined);
+    });
+  } else if (voice) {
+    after(() => transcribeMessage(row.id));
+  }
+  if (!fromClient && body) {
     await closeDrafts(supabase, { clientId, source: "chat" }, body, me.id, parsed.data.draftId);
   }
   revalidatePath("/staff/messaggi");

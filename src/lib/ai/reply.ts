@@ -123,16 +123,21 @@ export async function generateChatDraft(clientId: string, opts: { force?: boolea
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(16);
+  const atts = (r: { attachments: unknown }) => (Array.isArray(r.attachments) ? (r.attachments as Array<{ kind?: string }>) : []);
+  const voiceIds = (rows ?? []).filter((r) => atts(r).some((a) => a.kind === "audio")).map((r) => r.id);
+  const { data: transcripts } = voiceIds.length ? await admin.from("message_transcripts").select("message_id, text").in("message_id", voiceIds) : { data: [] };
+  const textOf = new Map((transcripts ?? []).map((t) => [t.message_id, t.text]));
   const messages: DraftMessage[] = (rows ?? []).map((r) => ({
     id: r.id,
     fromClient: r.sender_id === client.user_id,
     body: r.body,
-    attachments: Array.isArray(r.attachments) ? r.attachments.length : 0,
+    attachments: atts(r).filter((a) => a.kind !== "audio").length,
     createdAt: r.created_at,
+    voice: voiceIds.includes(r.id) ? textOf.get(r.id) ?? "" : null,
   }));
   const pending = pendingClientMessages(messages);
   if (!pending.length) return opts.force ? { ok: false, error: "Non ci sono messaggi del cliente a cui rispondere." } : { ok: true, draft: null };
-  if (!opts.force && !pending.some((m) => looksLikeQuestion(m.body))) return { ok: true, draft: null };
+  if (!opts.force && !pending.some((m) => looksLikeQuestion(`${m.body} ${m.voice ?? ""}`))) return { ok: true, draft: null };
   const last = pending[pending.length - 1];
 
   if (!opts.force) {

@@ -72,7 +72,7 @@ Nell'editor:
 - Nella panoramica del cliente vedi l'**andamento degli esercizi** (massimale stimato nel tempo) e gli **allenamenti per settimana**; il cliente vede gli stessi grafici e i suoi record nei Progressi.
 
 ## Chat
-- **Messaggi** nel menu: una conversazione per cliente, con testo, foto e video (niente vocali). Il cliente la trova in "Chat" nell'app.
+- **Messaggi** nel menu: una conversazione per cliente, con testo, foto, video e **vocali**: con la casella vuota il tasto in basso a destra è il microfono (un tocco per registrare, la freccia per mandare, la X per annullare; massimo 5 minuti). Sotto ogni vocale c'è **Visualizza trascrizione** per leggerlo invece di ascoltarlo, e la bozza di risposta dell'AI parte dalla trascrizione. Il cliente la trova in "Chat" nell'app.
 - Il titolare vede tutte le conversazioni, il collaboratore quelle dei suoi clienti. I messaggi si aggiornano da soli mentre la chat è aperta; chi riceve un messaggio ha una notifica (al massimo una all'ora per conversazione) e un'email. Con le notifiche push attive, sul telefono arriva un avviso per ogni messaggio, anche ad app chiusa.
 
 ## Notifiche e app sul telefono

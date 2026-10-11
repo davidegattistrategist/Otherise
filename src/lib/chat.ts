@@ -1,12 +1,13 @@
 import "server-only";
 /**
  * Chat tra il cliente e chi lo segue (titolare e collaboratore assegnato).
- * Testo, foto e video: niente audio. Gli allegati stanno nel bucket privato
- * "chat" di Supabase Storage e si vedono con link temporanei.
+ * Testo, foto, video e vocali (con trascrizione, src/lib/transcribe.ts). Gli
+ * allegati stanno nel bucket privato "chat" di Supabase Storage e si vedono
+ * con link temporanei.
  */
 import { createClient, type ServerSupabase } from "./supabase/server";
 import { createAdminClient } from "./supabase/admin";
-import { CHAT_BUCKET, type ChatAttachment, type ChatMessage } from "./chat-shared";
+import { CHAT_BUCKET, type ChatAttachment, type ChatMessage, type Transcript } from "./chat-shared";
 
 export { CHAT_BUCKET };
 
@@ -35,10 +36,13 @@ async function toMessages(rows: Row[], myId: string): Promise<ChatMessage[]> {
   const admin = createAdminClient();
   const senderIds = [...new Set(rows.map((r) => r.sender_id).filter((x): x is string => !!x))];
   const paths = rows.flatMap((r) => (r.deleted_at ? [] : ((r.attachments as ChatAttachment[]) ?? []).map((a) => a.path)));
-  const [{ data: profiles }, signed] = await Promise.all([
+  const voiceIds = rows.filter((r) => !r.deleted_at && ((r.attachments as ChatAttachment[]) ?? []).some((a) => a.kind === "audio")).map((r) => r.id);
+  const [{ data: profiles }, signed, { data: transcripts }] = await Promise.all([
     admin.from("profiles").select("id, full_name, role").in("id", senderIds),
     paths.length ? admin.storage.from(CHAT_BUCKET).createSignedUrls(paths, 60 * 60 * 6) : Promise.resolve({ data: [] as Array<{ path: string | null; signedUrl: string | null }> }),
+    voiceIds.length ? admin.from("message_transcripts").select("message_id, status, text").in("message_id", voiceIds) : Promise.resolve({ data: [] as Array<{ message_id: string; status: string; text: string }> }),
   ]);
+  const transcriptOf = new Map((transcripts ?? []).map((t) => [t.message_id, { status: t.status as Transcript["status"], text: t.text }]));
   const nameOf = new Map((profiles ?? []).map((p) => [p.id, { name: p.full_name, staff: p.role === "owner" || p.role === "coach" }]));
   const urlOf = new Map((signed.data ?? []).filter((s) => s.path && s.signedUrl).map((s) => [s.path!, s.signedUrl!]));
   return rows.map((r) => ({
@@ -52,7 +56,18 @@ async function toMessages(rows: Row[], myId: string): Promise<ChatMessage[]> {
     attachments: r.deleted_at
       ? []
       : ((r.attachments as ChatAttachment[]) ?? []).map((a) => ({ ...a, url: urlOf.get(a.path) ?? null })),
+    transcript: voiceIds.includes(r.id) ? transcriptOf.get(r.id) ?? { status: "off", text: "" } : null,
   }));
+}
+
+/** Trascrizioni cambiate di recente (per aggiornare lo schermo di chi ha la chat aperta). */
+export async function recentTranscripts(supabase: ServerSupabase, clientId: string): Promise<Record<string, Transcript>> {
+  const { data } = await supabase
+    .from("message_transcripts")
+    .select("message_id, status, text")
+    .eq("client_id", clientId)
+    .gte("updated_at", new Date(Date.now() - 10 * 60 * 1000).toISOString());
+  return Object.fromEntries((data ?? []).map((t) => [t.message_id, { status: t.status as Transcript["status"], text: t.text }]));
 }
 
 /** Segna come letta la conversazione e le relative notifiche. */
@@ -68,6 +83,7 @@ export async function markChatRead(supabase: ServerSupabase, userId: string, cli
 export function previewOf(body: string, attachments: ChatAttachment[]) {
   const text = body.trim().replace(/\s+/g, " ");
   if (text) return text.length > 90 ? `${text.slice(0, 88)}…` : text;
+  if (attachments.some((a) => a.kind === "audio")) return "Messaggio vocale";
   const videos = attachments.filter((a) => a.kind === "video").length;
   const photos = attachments.length - videos;
   if (videos && photos) return "Foto e video";

@@ -319,6 +319,33 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"message_transcripts": {
+                  Row: {
+                    "client_id": string,"created_at": string,"message_id": string,"status": string,"text": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"created_at"?: string,"message_id": string,"status"?: string,"text"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "client_id"?: string,"created_at"?: string,"message_id"?: string,"status"?: string,"text"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "message_transcripts_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },
+                    {
+      foreignKeyName: "message_transcripts_message_id_fkey"
+      columns: ["message_id"]
+isOneToOne: true
+      referencedRelation: "messages"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"notifications": {
                   Row: {
                     "body": string,"client_id": string | null,"created_at": string,"dedupe_key": string | null,"emailed_at": string | null,"id": string,"kind": string,"link": string | null,"read_at": string | null,"recipient_id": string,"title": string

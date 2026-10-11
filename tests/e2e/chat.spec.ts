@@ -29,9 +29,9 @@ test("chat con foto e video tra cliente e titolare", async ({ browser }, info) =
   await login(client, "giulia@prova.local");
   await client.goto("/cliente/messaggi");
   await client.waitForLoadState("networkidle");
-  // l'audio non si può mandare
+  // un file audio dalla graffetta no: i vocali si registrano con il microfono
   await client.setInputFiles('input[type=file][aria-label="Allega foto o video"]', path.join(FIX, "audio.mp3"));
-  await expect(client.getByText("Si possono mandare solo foto e video.")).toBeVisible();
+  await expect(client.getByText("Per i vocali tocca il microfono accanto alla casella del messaggio.")).toBeVisible();
   // testo + foto + video
   await client.fill("textarea", `Ciao, ecco il mio squat ${tag}`);
   await client.setInputFiles('input[type=file][aria-label="Allega foto o video"]', [path.join(FIX, "foto.jpg"), path.join(FIX, "video.mp4")]);

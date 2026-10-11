@@ -3,7 +3,7 @@
  * Se cambi in modo sostanziale il testo di `components/privacy-notice.tsx`,
  * aggiorna PRIVACY_VERSION: ai clienti verrà chiesto di rileggerla.
  */
-export const PRIVACY_VERSION = "2026-10-11";
+export const PRIVACY_VERSION = "2026-10-11-vocali";
 
 export type PrivacyOwner = {
   businessName: string;

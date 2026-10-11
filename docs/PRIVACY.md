@@ -44,6 +44,7 @@ Per ognuno accetta o scarica il **DPA** (Data Processing Agreement, "accordo sul
 | Supabase | database, accessi, foto e video della chat | UE (Francoforte) | supabase.com/legal/dpa (si firma online) |
 | Vercel | pubblicazione dell'app | UE/USA | vercel.com/legal/dpa |
 | Anthropic | assistente AI | USA | anthropic.com/legal (il DPA è incluso nei termini commerciali delle API) |
+| Groq | trascrizione dei messaggi vocali | USA | groq.com (termini e DPA per le API) |
 | Resend | invio delle email | USA/UE | resend.com/legal/dpa |
 
 I trasferimenti verso gli USA sono coperti dalle clausole contrattuali standard contenute nei DPA o, per i fornitori aderenti, dall'EU-US Data Privacy Framework. Il testo dell'informativa li descrive già.
