@@ -65,15 +65,6 @@ export function ClientForm({
             </Select>
           </Field>
         ) : null}
-        {!isNew ? (
-          <Field label="Stato">
-            <Select name="status" defaultValue={values.status ?? "active"}>
-              <option value="active">Attivo</option>
-              <option value="paused">In pausa</option>
-              <option value="archived">Archiviato (ex cliente)</option>
-            </Select>
-          </Field>
-        ) : null}
       </div>
       <Field label="Obiettivi" hint="li vede anche il cliente"><Textarea name="goals" defaultValue={values.goals} rows={3} /></Field>
       {!isNew ? (

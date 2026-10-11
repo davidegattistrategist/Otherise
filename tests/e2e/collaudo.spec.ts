@@ -146,7 +146,7 @@ test.describe("titolare", () => {
 
   test("nuova fase con l'AI, modello, eserciziario", async ({ page }, info) => {
     const errors = await login(page, "titolare@prova.local");
-    const base = await openClient(page, "Giulia Esempio");
+    const base = await openClient(page, "Esempio Giulia");
     await page.goto(`${base}/programma`);
     await page.getByRole("button", { name: "Crea la nuova fase" }).click();
     await page.waitForURL(/\/staff\/programmi\//);
@@ -229,7 +229,7 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: "Salva", exact: true }).click();
     await expect(page.getByText("Impostazioni salvate.")).toBeVisible();
     await page.goto("/staff/clienti?q=Giulia");
-    await expect(page.getByRole("link", { name: /Giulia Esempio/ }).filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /Esempio Giulia/ }).filter({ visible: true }).first()).toBeVisible();
     expect(errors).toEqual([]);
   });
 });
@@ -238,12 +238,12 @@ test.describe("collaboratore", () => {
   test("vede solo i suoi clienti e niente pagamenti", async ({ page }) => {
     const errors = await login(page, "collaboratore@prova.local");
     await page.goto("/staff/clienti");
-    await expect(page.getByRole("link", { name: /Luca Prova/ }).filter({ visible: true }).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: "Giulia Esempio" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Prova Luca/ }).filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "Esempio Giulia" })).toHaveCount(0);
     await page.goto("/staff/pagamenti");
     await expect(page.getByText("Quella pagina la vede solo il titolare")).toBeVisible();
     await expect(page).toHaveURL(/\/staff$/);
-    const base = await openClient(page, "Luca Prova");
+    const base = await openClient(page, "Prova Luca");
     await expect(page.getByRole("link", { name: "Pagamenti" })).toHaveCount(0);
     await page.goto(`${base}/sessioni`);
     await page.fill("textarea[name=notes]", "Nota del collaboratore");

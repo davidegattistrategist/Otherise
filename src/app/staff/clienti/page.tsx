@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { nameMatches } from "@/lib/names";
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -16,7 +17,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const needle = q.trim().toLowerCase();
   const clients = all
     .filter((c) => (archivio === "1" ? c.status === "archived" : c.status !== "archived"))
-    .filter((c) => !needle || c.fullName.toLowerCase().includes(needle) || (c.email ?? "").includes(needle));
+    .filter((c) => !needle || nameMatches(c, needle) || (c.email ?? "").includes(needle));
   const year = Number(todayISO().slice(0, 4));
 
   return (
@@ -106,7 +107,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                           {c.billing.label}
                         </span>
                       ) : (
-                        <span className="text-sm text-muted">{c.free ? "Gratis" : "Nessun piano"}</span>
+                        <span className="text-sm text-muted">{c.status === "paused" ? "In pausa" : c.free ? "Gratis" : "Nessun piano"}</span>
                       )}
                     </td>
                   ) : null}

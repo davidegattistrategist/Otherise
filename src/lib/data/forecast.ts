@@ -1,5 +1,6 @@
 import "server-only";
 import type { ServerSupabase } from "../supabase/server";
+import { listName } from "../names";
 import { addDays, todayISO } from "../dates";
 import { buildForecast, renewalRateFrom, type ForecastPlan } from "../forecast";
 import type { PlanKind } from "../billing";
@@ -23,7 +24,7 @@ export async function getForecast(supabase: ServerSupabase, months: number) {
     const b = billBy.get(c.id);
     input.push({
       clientId: c.id,
-      name: `${c.first_name} ${c.last_name}`.trim(),
+      name: listName(c),
       kind: plan.kind as PlanKind,
       amount: Number(plan.amount),
       paidUntil: b?.paid_until ?? null,

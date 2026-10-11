@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { requireClient } from "@/lib/auth";
+import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { loadSession } from "@/lib/data/session";
 import { IconArrowLeft } from "@/components/icons";
@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Allenamento" };
 
 export default async function SessionPage({ params }: { params: Promise<{ programId: string; week: string; dayId: string }> }) {
   const { programId, week, dayId } = await params;
-  const me = await requireClient();
+  const me = await requireActiveClient();
   const supabase = await createClient();
   const s = await loadSession(supabase, programId, week, dayId, "client");
   if (!s || s.program.client_id !== me.clientId) notFound();

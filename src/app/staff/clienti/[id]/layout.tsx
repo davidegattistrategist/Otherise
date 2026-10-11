@@ -42,7 +42,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
           </h1>
           <div className="flex flex-wrap gap-2">
             <Pill>{client.sex === "F" ? "Donna" : "Uomo"}{age !== null ? ` · ${age} anni` : ""}</Pill>
-            {client.status !== "active" ? <Pill>{client.status === "paused" ? "In pausa" : "Archiviato"}</Pill> : null}
+            {client.status !== "active" ? <Pill>{client.status === "paused" ? "In pausa" : "Percorso terminato"}</Pill> : null}
             {!client.user_id ? <Pill>Da invitare</Pill> : null}
             {client.free ? <Pill>Gratis</Pill> : null}
           </div>

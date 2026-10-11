@@ -1,6 +1,6 @@
 import "server-only";
 import type { ServerSupabase } from "../supabase/server";
-import { bySurname } from "../names";
+import { bySurname, listName } from "../names";
 import { billingStatus, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PLAN_LABELS, situationText, type BillingStatus, type PlanKind } from "../billing";
 import { addDays, addMonths, formatLong, formatShort, todayISO, type ISODate } from "../dates";
 import { DEFAULT_PAYMENT_MESSAGE, fillTemplate } from "../whatsapp";
@@ -38,7 +38,11 @@ export async function getBillingLines(supabase: ServerSupabase): Promise<{ lines
     const b = byClient.get(c.id);
     const plan = planBy.get(c.id);
     const kind = (b?.kind ?? null) as PlanKind | null;
-    const status = billingStatus(b && kind ? { ...b, kind } : null, today, reminderDays);
+    const paused = c.status === "paused";
+    // in pausa: non è tra i pagamenti da incassare (quando rinnova si registra e si riattiva)
+    const status: BillingStatus = paused
+      ? { state: "none", label: "In pausa", clientLabel: "", dueDate: null, daysLeft: null, sessionsLeft: null }
+      : billingStatus(b && kind ? { ...b, kind } : null, today, reminderDays);
     let proposal: string | null = null;
     if (plan) {
       const p = nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, b?.paid_until ?? null);
@@ -47,9 +51,9 @@ export async function getBillingLines(supabase: ServerSupabase): Promise<{ lines
     const reminder = kind && (status.state === "due_soon" || status.state === "overdue") ? reminderChatLink(c.id) : null;
     return {
       clientId: c.id,
-      name: `${c.first_name} ${c.last_name}`.trim(),
+      name: listName(c),
       firstName: c.first_name,
-      paused: c.status === "paused",
+      paused,
       planKind: kind,
       planLabel: kind ? `${PLAN_LABELS[kind]} · ${formatEuro(b?.amount ?? 0)}` : "—",
       amount: Number(b?.amount ?? 0),

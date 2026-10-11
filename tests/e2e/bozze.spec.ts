@@ -32,7 +32,7 @@ test("bozza di risposta in chat: una sola risposta per punti, si usa e si correg
   const owner = await (await browser.newContext(info.project.use)).newPage();
   await login(owner, "titolare@prova.local");
   await owner.goto("/staff/messaggi");
-  await owner.getByRole("link", { name: /Giulia Esempio/ }).click();
+  await owner.getByRole("link", { name: /Esempio Giulia/ }).click();
   await owner.waitForURL(/\/staff\/messaggi\//);
   const clientId = owner.url().split("/").pop()!;
 
@@ -76,7 +76,7 @@ test("su richiesta: 'Scrivo da zero' toglie la bozza, 'Prepara una bozza' la rif
   const owner = await (await browser.newContext(info.project.use)).newPage();
   await login(owner, "titolare@prova.local");
   await owner.goto("/staff/messaggi");
-  await owner.getByRole("link", { name: /Giulia Esempio/ }).click();
+  await owner.getByRole("link", { name: /Esempio Giulia/ }).click();
   await owner.waitForURL(/\/staff\/messaggi\//);
   // non è una domanda: niente bozza automatica, ma si può chiedere
   await expect(owner.getByLabel("Bozza di risposta")).toHaveCount(0);
@@ -95,7 +95,7 @@ test("su richiesta: 'Scrivo da zero' toglie la bozza, 'Prepara una bozza' la rif
     await expect(owner.locator("#ai_reply_lessons")).toHaveValue(/festeggia e basta/, { timeout: 1000 });
   }).toPass({ timeout: 20_000 });
   await owner.goto("/staff/clienti");
-  await owner.getByRole("link", { name: /Giulia Esempio/ }).filter({ visible: true }).first().click();
+  await owner.getByRole("link", { name: /Esempio Giulia/ }).filter({ visible: true }).first().click();
   await owner.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}/);
   await owner.goto(`${owner.url()}/programma`);
   await expect(owner.locator("#ai-reply")).toHaveValue(/Saluta con Ciao/);
@@ -104,7 +104,7 @@ test("su richiesta: 'Scrivo da zero' toglie la bozza, 'Prepara una bozza' la rif
 test("check-up con una richiesta: la bozza riempie la risposta", async ({ page }) => {
   await login(page, "titolare@prova.local");
   await page.goto("/staff/clienti");
-  await page.getByRole("link", { name: /Giulia Esempio/ }).filter({ visible: true }).first().click();
+  await page.getByRole("link", { name: /Esempio Giulia/ }).filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}/);
   const id = page.url().split("/")[5];
   await page.goto(`/staff/clienti/${id}/checkup`);

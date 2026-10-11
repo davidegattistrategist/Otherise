@@ -13,7 +13,7 @@ import { PrivacyCard } from "./privacy-card";
 import { ProjectTimeline } from "@/components/project-timeline";
 import { parseProject } from "@/lib/project";
 
-export const metadata: Metadata = { title: "Percorso" };
+export const metadata: Metadata = { title: "Il tuo percorso" };
 
 export default async function ClientProfilePage() {
   const me = await requireClient();
@@ -30,14 +30,23 @@ export default async function ClientProfilePage() {
   const { data: projectRow } = await supabase.from("client_projects").select("data").eq("client_id", me.clientId).maybeSingle();
   const project = parseProject(projectRow?.data);
   const row = (billing as BillingRow[] | null)?.[0];
-  const pay = row ? billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7) : null;
+  const ended = me.clientStatus === "archived";
+  // in pausa: nessun promemoria di rinnovo
+  const pay = row && me.clientStatus !== "paused" ? billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7) : null;
   const phases = [current, upcoming, ...past].filter(Boolean).length;
   const months = client ? Math.max(0, Math.round(diffDays(client.start_date, today) / 30.44)) : 0;
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-[30px] leading-tight font-normal tracking-tight">Il tuo percorso</h1>
+      <h1 className="text-[30px] leading-tight font-normal tracking-tight">{ended ? "Il tuo account" : "Il tuo percorso"}</h1>
 
+      {ended ? (
+        <Card className="flex flex-col gap-2">
+          <p className="text-[15px] leading-relaxed">Il percorso con {coach ?? "il tuo coach"} è terminato. Puoi sempre scrivergli in chat, per chiedere un dato o per ripartire insieme.</p>
+        </Card>
+      ) : null}
+
+      {!ended ? (
       <Card dark className="flex flex-col gap-4">
         <div className="grid grid-cols-3 gap-3">
           <div><div className="text-xs text-muted-dark">Insieme da</div><div className="mt-1 text-[26px] font-light tabular">{months < 1 ? "poco" : months}</div><div className="text-xs text-muted-dark">{months === 1 ? "mese" : months < 1 ? "" : "mesi"}</div></div>
@@ -46,8 +55,9 @@ export default async function ClientProfilePage() {
         </div>
         <p className="text-sm text-muted-dark">Ti segue {coach ?? "il tuo coach"} · dal {client ? formatLong(client.start_date) : "—"}</p>
       </Card>
+      ) : null}
 
-      {project ? (
+      {project && !ended ? (
         <Card id="progetto" className="flex scroll-mt-6 flex-col gap-3">
           <Eyebrow>Il tuo progetto</Eyebrow>
           {project.goal.trim() ? <p className="text-lg leading-snug font-semibold">{project.goal}</p> : null}
@@ -86,7 +96,7 @@ export default async function ClientProfilePage() {
         </Card>
       ) : null}
 
-      {client?.goals ? (
+      {client?.goals && !ended ? (
         <Card className="flex flex-col gap-2">
           <Eyebrow>Obiettivi</Eyebrow>
           <p className="text-[15px] leading-relaxed whitespace-pre-line">{client.goals}</p>

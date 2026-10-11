@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { requireClient } from "@/lib/auth";
+import { requireActiveClient } from "@/lib/auth";
 import { getMyLogs, getMyMaxes, getMyPrograms, getVideoMap, type MyProgram } from "@/lib/data/me";
 import { addDays, formatShort, todayISO } from "@/lib/dates";
 import { nextWorkout, programEndDate } from "@/lib/program/schedule";
@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Programma" };
 
 export default async function ClientProgramPage({ searchParams }: { searchParams: Promise<{ settimana?: string; programma?: string }> }) {
   const sp = await searchParams;
-  const me = await requireClient();
+  const me = await requireActiveClient();
   const { current, upcoming, past } = await getMyPrograms(me.clientId);
   const all = [current, upcoming, ...past].filter((p): p is MyProgram => Boolean(p));
   const program = all.find((p) => p.id === sp.programma) ?? current ?? upcoming;

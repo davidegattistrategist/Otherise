@@ -375,4 +375,27 @@ describe.skipIf(!run)("permessi", () => {
     expect((await admin.from("clients").select("skinfold_formula").eq("id", clientAId).single()).data!.skinfold_formula).toBe("f3_tsa");
     await coach.from("clients").update({ skinfold_formula: null }).eq("id", clientAId).throwOnError();
   });
+  it("pausa e fine percorso: in pausa vede tutto; a fine percorso gli resta solo la chat", async () => {
+    // in pausa (lo decide anche il collaboratore che lo segue): il cliente vede tutto come prima
+    await coach.from("clients").update({ status: "paused" }).eq("id", clientAId).throwOnError();
+    expect((await clientA.from("programs").select("id")).data!.length).toBeGreaterThan(0);
+    // percorso terminato
+    await coach.from("clients").update({ status: "archived" }).eq("id", clientAId).throwOnError();
+    expect((await clientA.from("programs").select("id")).data ?? []).toEqual([]);
+    expect((await clientA.from("workout_logs").select("id")).data ?? []).toEqual([]);
+    expect((await clientA.rpc("my_checks")).data ?? []).toEqual([]);
+    expect((await clientA.rpc("client_billing", { cid: clientAId })).data ?? []).toEqual([]);
+    const { error: logErr } = await clientA.from("workout_logs").insert({ client_id: clientAId, program_id: publishedId, week: 1, day_id: "d1", performed_on: "2026-10-06" });
+    expect(logErr).not.toBeNull();
+    // la chat resta: legge e scrive
+    const uid = (await clientA.auth.getUser()).data.user!.id;
+    await clientA.from("messages").insert({ client_id: clientAId, sender_id: uid, body: "Ciao, posso avere i miei massimali?" }).throwOnError();
+    expect(((await clientA.from("messages").select("body")).data ?? []).some((m) => m.body.includes("massimali"))).toBe(true);
+    // e può ancora gestire i propri consensi
+    await clientA.rpc("accept_privacy", { version: "test" }).throwOnError();
+    // il trainer vede ancora tutto
+    expect((await coach.from("programs").select("id").eq("client_id", clientAId)).data!.length).toBeGreaterThan(0);
+    await owner.from("clients").update({ status: "active" }).eq("id", clientAId).throwOnError();
+    expect((await clientA.from("programs").select("id")).data!.length).toBeGreaterThan(0);
+  });
 });

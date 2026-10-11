@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireClient } from "@/lib/auth";
+import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { addDays, formatShort, isoWeekday, todayISO } from "@/lib/dates";
 import { CHECKIN_OPENS_ON, CHECKIN_QUESTIONS, checkinWeekFor } from "@/lib/checkin";
@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Check-up" };
 
 export default async function ClientCheckupPage({ searchParams }: { searchParams: Promise<{ inviato?: string }> }) {
   const { inviato } = await searchParams;
-  const me = await requireClient();
+  const me = await requireActiveClient();
   const supabase = await createClient();
   const today = todayISO();
   const week = checkinWeekFor(today);

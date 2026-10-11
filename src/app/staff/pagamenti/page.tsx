@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { listName } from "@/lib/names";
 import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -86,7 +87,7 @@ export default async function PaymentsOverviewPage() {
                 const c = p.clients as unknown as { first_name: string; last_name: string } | null;
                 return (
                   <li key={p.id} className="flex items-baseline justify-between gap-2 border-t border-sand-deep py-2.5 first:border-t-0">
-                    <span className="min-w-0 truncate"><span className="font-semibold">{c ? `${c.first_name} ${c.last_name}` : "Cliente eliminato"}</span> <span className="text-sm text-muted">· {formatShort(p.paid_on)} · {METHOD_LABELS[p.method as PaymentMethod]}</span></span>
+                    <span className="min-w-0 truncate"><span className="font-semibold">{c ? listName(c) : "Cliente eliminato"}</span> <span className="text-sm text-muted">· {formatShort(p.paid_on)} · {METHOD_LABELS[p.method as PaymentMethod]}</span></span>
                     <span className="shrink-0 font-semibold tabular">{formatEuro(p.amount)}</span>
                   </li>
                 );
@@ -113,10 +114,9 @@ export default async function PaymentsOverviewPage() {
                   <span className="truncate">
                     {l.status.label}
                     {l.status.dueDate ? ` · ${formatShort(l.status.dueDate)}` : l.status.sessionsLeft !== null ? ` · ${l.sessionsUsed}/${l.sessionsBought} sessioni` : ""}
-                    {l.paused ? " · in pausa" : ""}
                   </span>
                 </span>
-                {l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="shrink-0 text-sm font-semibold underline">Imposta piano</Link>}
+                {l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" || l.paused ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="shrink-0 text-sm font-semibold underline">Imposta piano</Link>}
               </div>
             </li>
           ))}
@@ -137,7 +137,7 @@ export default async function PaymentsOverviewPage() {
           <tbody>
             {rows.map((l) => (
               <tr key={l.clientId} className="border-t border-sand-deep hover:bg-white/60">
-                <td className="px-5 py-3"><Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="font-semibold hover:underline">{l.name}</Link>{l.paused ? <span className="ml-2 text-xs text-muted">in pausa</span> : null}</td>
+                <td className="px-5 py-3"><Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="font-semibold hover:underline">{l.name}</Link></td>
                 <td className="px-3 py-3 text-muted">{l.planLabel}</td>
                 <td className="px-3 py-3">
                   <span className="inline-flex items-center gap-2">
@@ -146,7 +146,7 @@ export default async function PaymentsOverviewPage() {
                   </span>
                 </td>
                 <td className="px-3 py-3 text-right text-muted tabular">{l.status.dueDate ? formatShort(l.status.dueDate) : l.status.sessionsLeft !== null ? `${l.sessionsUsed}/${l.sessionsBought} sessioni` : "—"}</td>
-                <td className="px-5 py-3 text-right">{l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="text-sm font-semibold underline">Imposta piano</Link>}</td>
+                <td className="px-5 py-3 text-right">{l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" || l.paused ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="text-sm font-semibold underline">Imposta piano</Link>}</td>
               </tr>
             ))}
           </tbody>

@@ -11,6 +11,8 @@ export type Me = {
   fullName: string;
   role: Role;
   clientId: string | null;
+  /** Solo per i clienti: active, paused (in pausa) o archived (percorso terminato) */
+  clientStatus: string | null;
 };
 
 /** L'utente collegato con il suo ruolo (una sola lettura per richiesta). */
@@ -21,9 +23,11 @@ export const getMe = cache(async (): Promise<Me | null> => {
   const { data: profile } = await supabase.from("profiles").select("full_name, role, email").eq("id", data.user.id).maybeSingle();
   const role = (profile?.role ?? "none") as Role;
   let clientId: string | null = null;
+  let clientStatus: string | null = null;
   if (role === "client") {
-    const { data: c } = await supabase.from("clients").select("id").eq("user_id", data.user.id).maybeSingle();
+    const { data: c } = await supabase.from("clients").select("id, status").eq("user_id", data.user.id).maybeSingle();
     clientId = c?.id ?? null;
+    clientStatus = c?.status ?? null;
   }
   return {
     id: data.user.id,
@@ -31,6 +35,7 @@ export const getMe = cache(async (): Promise<Me | null> => {
     fullName: profile?.full_name ?? "",
     role,
     clientId,
+    clientStatus,
   };
 });
 
@@ -56,6 +61,16 @@ export async function requireClient(): Promise<Me & { clientId: string }> {
   const me = await requireUser();
   if (me.role !== "client" || !me.clientId) redirect("/");
   return me as Me & { clientId: string };
+}
+
+/**
+ * Pagine del percorso (programma, allenamenti, progressi, check-up): a chi ha
+ * terminato il percorso resta solo la chat.
+ */
+export async function requireActiveClient(): Promise<Me & { clientId: string }> {
+  const me = await requireClient();
+  if (me.clientStatus === "archived") redirect("/cliente/messaggi");
+  return me;
 }
 
 export function homeFor(role: Role): string {

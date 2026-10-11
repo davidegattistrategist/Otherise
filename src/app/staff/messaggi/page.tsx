@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { bySurname } from "@/lib/names";
+import { bySurname, listName, nameMatches } from "@/lib/names";
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -23,7 +23,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
   await requireStaff();
   const supabase = await createClient();
   const [{ data: clients }, { data: recent }, { data: unread }] = await Promise.all([
-    supabase.from("clients").select("id, first_name, last_name, user_id, status").neq("status", "archived").order("last_name").order("first_name"),
+    supabase.from("clients").select("id, first_name, last_name, user_id, status").order("last_name").order("first_name"),
     supabase.from("messages").select("client_id, body, attachments, created_at, deleted_at, sender_id").order("created_at", { ascending: false }).limit(500),
     supabase.rpc("my_unread_chats"),
   ]);
@@ -35,7 +35,9 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
   const unreadBy = new Map((unread ?? []).map((u) => [u.client_id, u.unread]));
   const needle = (q ?? "").trim().toLowerCase();
   const rows = (clients ?? [])
-    .filter((c) => !needle || `${c.first_name} ${c.last_name}`.toLowerCase().includes(needle))
+    .filter((c) => !needle || nameMatches(c, needle))
+    // ex clienti: solo se c'è già una conversazione o se li cerchi
+    .filter((c) => c.status !== "archived" || last.has(c.id) || needle)
     .map((c) => ({ ...c, last: last.get(c.id), unread: unreadBy.get(c.id) ?? 0 }))
     .sort((a, b) => (b.last?.at ?? "").localeCompare(a.last?.at ?? "") || bySurname(a, b));
 
@@ -57,7 +59,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
               <Link href={`/staff/messaggi/${c.id}`} className="flex min-h-16 items-center gap-3 px-5 py-3 hover:bg-white">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sand text-sm font-bold">{c.first_name[0]}{c.last_name[0] ?? ""}</span>
                 <span className="min-w-0 flex-1">
-                  <span className={c.unread ? "block font-bold" : "block font-semibold"}>{c.first_name} {c.last_name}</span>
+                  <span className={c.unread ? "block font-bold" : "block font-semibold"}>{listName(c)}{c.status === "archived" ? <span className="ml-2 text-xs font-normal text-muted">percorso terminato</span> : c.status === "paused" ? <span className="ml-2 text-xs font-normal text-muted">in pausa</span> : null}</span>
                   <span className="block truncate text-sm text-muted">{c.last ? c.last.preview : c.user_id ? "Nessun messaggio: scrivigli tu per primo" : "Non ha ancora l'app: invitalo dalla scheda"}</span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1">

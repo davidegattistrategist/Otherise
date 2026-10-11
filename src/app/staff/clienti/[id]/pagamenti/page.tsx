@@ -24,7 +24,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
     supabase.from("payments").select("id, plan_id, paid_on, amount, method, period_start, period_end, sessions, notes").eq("client_id", id).order("paid_on", { ascending: false }),
     supabase.rpc("client_billing", { cid: id }),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
-    supabase.from("clients").select("free").eq("id", id).maybeSingle(),
+    supabase.from("clients").select("free, status").eq("id", id).maybeSingle(),
   ]);
   if (client?.free) {
     return (
@@ -39,7 +39,11 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
   }
   const plan = (plans ?? []).find((p) => p.active) ?? null;
   const row = (billing as BillingRow[] | null)?.[0] ?? null;
-  const status = billingStatus(row ? { ...row, kind: row.kind as PlanKind } : null, today, settings?.reminder_days ?? 7);
+  // in pausa o a fine percorso non è tra i pagamenti da incassare
+  const paused = client?.status === "paused" || client?.status === "archived";
+  const status: ReturnType<typeof billingStatus> = paused
+    ? { ...billingStatus(row ? { ...row, kind: row.kind as PlanKind } : null, today, settings?.reminder_days ?? 7), state: "none", label: client?.status === "paused" ? "In pausa" : "Percorso terminato" }
+    : billingStatus(row ? { ...row, kind: row.kind as PlanKind } : null, today, settings?.reminder_days ?? 7);
   const kind = plan?.kind as PlanKind | undefined;
   const suggestion = plan && kind ? suggestNextPeriod(kind, plan.start_date, row?.paid_until ?? null) : null;
   const totalYear = (payments ?? []).filter((p) => p.paid_on.slice(0, 4) === today.slice(0, 4)).reduce((s, p) => s + Number(p.amount), 0);
@@ -65,6 +69,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
               {kind === "package" && row ? ` · ${row.sessions_used - plan.sessions_written_off} fatte su ${row.sessions_bought} pagate` : ""}
               {kind === "package" && plan.sessions_written_off ? ` · ${plan.sessions_written_off} non usate (pacchetto chiuso)` : ""}
             </p>
+            {paused ? <p className="text-sm text-muted-dark">Non è tra i pagamenti da incassare. Se rinnova, registra il pagamento e {client?.status === "paused" ? "riattivalo" : "riprendi il percorso"} dalla Scheda.</p> : null}
             {plan.notes ? <p className="text-sm text-muted-dark">{plan.notes}</p> : null}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1 text-sm font-semibold">
               <a href={`/staff/clienti/${id}/pagamenti?piano=modifica`} className="underline">Modifica il piano</a>
@@ -122,7 +127,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
       </div>
 
       <div className="flex flex-col gap-4">
-        {plan ? (
+        {plan && !paused ? (
           <Card className="flex flex-col gap-3">
             <Eyebrow>Promemoria</Eyebrow>
             <p className="text-sm text-muted">L&apos;app avvisa già in automatico te e il cliente {settings?.reminder_days ?? 7} giorni prima della scadenza. Da qui puoi mandare un promemoria subito: in chat (il messaggio è già scritto, lo controlli e premi invio) o come notifica.</p>

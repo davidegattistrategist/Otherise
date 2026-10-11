@@ -1,5 +1,5 @@
 import "server-only";
-import { bySurname } from "../names";
+import { bySurname, listName } from "../names";
 import type { ServerSupabase } from "../supabase/server";
 import type { Me } from "../auth";
 import { billingStatus, type BillingRow, type BillingStatus, type PlanKind } from "../billing";
@@ -33,8 +33,9 @@ export type ClientOverview = ClientRow & {
   compliance: Compliance | null;
 };
 
+/** Nome negli elenchi dello staff: prima il cognome. */
 export function fullName(c: { first_name: string; last_name: string }) {
-  return `${c.first_name} ${c.last_name}`.trim();
+  return listName(c);
 }
 
 /** Tutti i clienti visibili allo staff collegato, con programma in corso, ultimo check, ultima sessione e pagamenti. */
@@ -111,7 +112,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
       lastCheck: lastCheck.get(c.id)?.check_date ?? null,
       lastLog: lastLog.get(c.id)?.performed_on ?? null,
       compliance: comp,
-      billing: me.role === "owner" ? billingStatus(b ? ({ ...b, kind: b.kind as PlanKind } as BillingRow) : null, today, reminderDays) : null,
+      billing: me.role === "owner" && c.status !== "paused" ? billingStatus(b ? ({ ...b, kind: b.kind as PlanKind } as BillingRow) : null, today, reminderDays) : null,
     };
   });
 }

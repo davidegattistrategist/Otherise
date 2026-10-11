@@ -69,8 +69,6 @@ export async function updateClientAction(clientId: string, _: ActionState, fd: F
   const supabase = await createClient();
   const update: TablesUpdate<"clients"> = { ...parsed.data };
   if (me.role === "owner") update.coach_id = String(fd.get("coach_id") ?? "") || null;
-  const status = String(fd.get("status") ?? "");
-  if (status === "active" || status === "paused" || status === "archived") update.status = status;
   const { error } = await supabase.from("clients").update(update).eq("id", clientId);
   if (error) return { error: dbError(error.message) };
   const notes = fd.get("private_notes");
@@ -138,4 +136,16 @@ export async function deleteClientAction(clientId: string) {
   }
   revalidatePath("/staff");
   redirect("/staff/clienti");
+}
+
+/**
+ * Stato del percorso: in corso, in pausa (usa l'app come sempre ma non è tra i
+ * pagamenti da incassare) o terminato (ex cliente: gli resta solo la chat).
+ */
+export async function setClientStatus(clientId: string, status: "active" | "paused" | "archived") {
+  await requireStaff();
+  const supabase = await createClient();
+  await supabase.from("clients").update({ status }).eq("id", clientId);
+  revalidatePath("/staff", "layout");
+  redirect(`/staff/clienti/${clientId}/profilo?stato=${status}`);
 }

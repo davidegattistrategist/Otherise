@@ -19,20 +19,21 @@ export default async function ClientAreaLayout({ children }: { children: React.R
     supabase.from("clients").select("privacy_accepted_at, privacy_version, health_consent_at").eq("id", me.clientId).single(),
   ]);
   if (needsConsent(consent)) redirect("/consenso");
+  const ended = me.clientStatus === "archived";
   const chatUnread = (chats ?? []).reduce((n, c) => n + c.unread, 0);
   return (
     <LiveProvider role="client" initial={{ notifications: unread ?? 0, chats: chatUnread }}>
       <div className="mx-auto flex min-h-dvh max-w-[880px] flex-col pr-[var(--edge-right)] pl-[var(--edge-left)] sm:px-6">
         <header className="flex items-center justify-between gap-3 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-2 md:pt-7">
-          <Link href="/cliente" className="flex min-w-0 items-center gap-2.5">
+          <Link href={ended ? "/cliente/messaggi" : "/cliente"} className="flex min-w-0 items-center gap-2.5">
             <span className="h-3 w-3 shrink-0 rounded-full bg-accent" aria-hidden="true" />
             <span className="truncate text-[17px] font-bold tracking-tight">{name ?? "Otherise"}</span>
           </Link>
-          <div className="hidden md:block"><ClientNav chatUnread={chatUnread} /></div>
+          <div className="hidden md:block"><ClientNav chatUnread={chatUnread} ended={ended} /></div>
           <LiveBell href="/cliente/notifiche" initial={unread ?? 0} />
         </header>
         <main className="flex-1 pt-3 pb-[calc(var(--nav-space)+1.75rem)] md:pb-16">{children}</main>
-        <div className="md:hidden"><ClientNav chatUnread={chatUnread} /></div>
+        <div className="md:hidden"><ClientNav chatUnread={chatUnread} ended={ended} /></div>
       </div>
       <InstallGuide appName={homeScreenName(name)} />
       <PushSync />

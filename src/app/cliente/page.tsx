@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { requireClient } from "@/lib/auth";
+import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getMyLogs, getMyPrograms } from "@/lib/data/me";
 import { diffDays, formatHeading, formatLong, formatShort, todayISO } from "@/lib/dates";
@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: "Oggi" };
 
 export default async function ClientHome({ searchParams }: { searchParams: Promise<{ fatto?: string; fastidio?: string }> }) {
   const { fatto, fastidio } = await searchParams;
-  const me = await requireClient();
+  const me = await requireActiveClient();
   const supabase = await createClient();
   const today = todayISO();
   const [{ current, upcoming }, { data: client }, { data: billing }, { data: checks }, { data: coach }, { data: lastReply }] = await Promise.all([
@@ -36,7 +36,8 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
     : { data: null };
 
   const row = (billing as BillingRow[] | null)?.[0];
-  const pay = row ? billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7) : null;
+  // in pausa: nessun promemoria di rinnovo (il cliente usa l'app come sempre)
+  const pay = row && me.clientStatus !== "paused" ? billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7) : null;
   const bf = (checks ?? []).filter((c) => c.body_fat_pct !== null).map((c) => ({ date: c.check_date, value: Number(c.body_fat_pct) }));
   const weight = (checks ?? []).filter((c) => c.weight_kg !== null).map((c) => ({ date: c.check_date, value: Number(c.weight_kg) }));
   const lastCheck = checks?.length ? checks[checks.length - 1] : null;

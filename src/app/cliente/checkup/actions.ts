@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { redirect } from "next/navigation";
-import { requireClient } from "@/lib/auth";
+import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/dates";
 import { CHECKIN_QUESTIONS, checkinWeekFor } from "@/lib/checkin";
@@ -12,7 +12,7 @@ import { generateCheckinDraft } from "@/lib/ai/reply";
 import type { ActionState } from "@/components/form-bits";
 
 export async function submitCheckin(_: ActionState, fd: FormData): Promise<ActionState> {
-  const me = await requireClient();
+  const me = await requireActiveClient();
   const week = checkinWeekFor(todayISO());
   if (!week) return { error: "Il check-up si compila da venerdì a domenica." };
   const scores: Record<string, number> = {};

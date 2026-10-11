@@ -47,7 +47,7 @@ test("chat con foto e video tra cliente e titolare", async ({ browser }, info) =
   owner.on("pageerror", (e) => errors.push(e.message));
   await login(owner, "titolare@prova.local");
   await owner.goto("/staff/messaggi");
-  const row = owner.getByRole("link", { name: /Giulia Esempio/ });
+  const row = owner.getByRole("link", { name: /Esempio Giulia/ });
   await expect(row).toContainText(`squat ${tag}`);
   await row.click();
   await owner.waitForURL(/\/staff\/messaggi\//);
@@ -65,6 +65,6 @@ test("chat con foto e video tra cliente e titolare", async ({ browser }, info) =
 test("il collaboratore non vede le chat dei clienti non suoi", async ({ page }) => {
   await login(page, "collaboratore@prova.local");
   await page.goto("/staff/messaggi");
-  await expect(page.getByRole("link", { name: /Luca Prova/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Giulia Esempio/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Prova Luca/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Esempio Giulia/ })).toHaveCount(0);
 });

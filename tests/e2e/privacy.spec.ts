@@ -52,7 +52,7 @@ test("il cliente revoca il consenso e lo ridà", async ({ page }) => {
 
 test("il titolare scarica i dati di un cliente, il collaboratore no", async ({ page, browser }) => {
   await login(page, "titolare@prova.local");
-  const id = await openClient(page, "Giulia Esempio");
+  const id = await openClient(page, "Esempio Giulia");
   await page.goto(`/staff/clienti/${id}/profilo`);
   await expect(page.getByText(/Consenso dati salute:/)).toBeVisible();
   const res = await page.request.get(`/api/clienti/${id}/export`);
@@ -69,7 +69,7 @@ test("il titolare scarica i dati di un cliente, il collaboratore no", async ({ p
 
 test("il titolare chiude a mano un pacchetto e può annullare", async ({ page }) => {
   await login(page, "titolare@prova.local");
-  const id = await openClient(page, "Luca Prova");
+  const id = await openClient(page, "Prova Luca");
   await page.goto(`/staff/clienti/${id}/pagamenti`);
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: "Segna il pacchetto come terminato" }).click();

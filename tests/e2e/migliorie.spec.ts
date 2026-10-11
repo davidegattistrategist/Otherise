@@ -26,7 +26,7 @@ test("promemoria di pagamento già scritto nella chat dell'app (niente WhatsApp)
 test("cliente gratis: sparisce da pagamenti e previsioni, si può togliere", async ({ page }) => {
   await login(page, "titolare@prova.local");
   await page.goto("/staff/clienti");
-  await page.locator('a[href^="/staff/clienti/"]', { hasText: "Marta Demo" }).filter({ visible: true }).first().click();
+  await page.locator('a[href^="/staff/clienti/"]', { hasText: "Demo Marta" }).filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
   const base = page.url();
   await page.goto(`${base}/pagamenti`);
@@ -35,23 +35,71 @@ test("cliente gratis: sparisce da pagamenti e previsioni, si può togliere", asy
   await expect(page.getByText("Gratis", { exact: true }).first()).toBeVisible();
   await page.goto("/staff/pagamenti");
   await expect(page.getByText("Incassi per mese")).toBeVisible();
-  await expect(page.getByText("Marta Demo")).toHaveCount(0);
+  await expect(page.getByText("Demo Marta")).toHaveCount(0);
   await page.goto(`${base}/pagamenti`);
   await page.getByRole("button", { name: "Non è più gratis" }).click();
   await expect(page.getByRole("button", { name: "Metti gratis" })).toBeVisible();
   await page.goto("/staff/pagamenti");
-  await expect(page.getByText("Marta Demo").first()).toBeVisible();
+  await expect(page.getByText("Demo Marta").first()).toBeVisible();
 });
 
-test("i clienti sono in ordine alfabetico per cognome", async ({ page }) => {
+test("i clienti sono in ordine alfabetico per cognome, con il cognome davanti", async ({ page }) => {
   await login(page, "titolare@prova.local");
   await page.goto("/staff/clienti");
   await page.waitForLoadState("networkidle");
   // nome e cognome di ogni cliente nell'elenco (telefono: elenco, computer: tabella)
-  const names = await page.locator("main a.font-semibold, main a span.font-semibold").filter({ visible: true }).allInnerTexts();
-  const surnames = names.map((n) => n.trim().split(" ").slice(1).join(" "));
-  expect(surnames.length).toBeGreaterThan(2);
-  expect(surnames).toEqual([...surnames].sort((a, b) => a.localeCompare(b, "it", { sensitivity: "base" })));
+  const names = await page.locator("main a.font-semibold, main a span.font-semibold").filter({ visible: true }).evaluateAll((els) =>
+    els.filter((e) => /^\/staff\/clienti\/[0-9a-f-]{36}$/.test(e.closest("a")?.getAttribute("href") ?? "")).map((e) => (e as HTMLElement).innerText),
+  );
+  // negli elenchi si legge prima il cognome: "Esempio Giulia"
+  const list = names.map((n) => n.trim());
+  expect(list.length).toBeGreaterThan(2);
+  expect(list).toContain("Esempio Giulia");
+  expect(list).toEqual([...list].sort((a, b) => a.localeCompare(b, "it", { sensitivity: "base" })));
+});
+
+test("pausa: il cliente esce dai pagamenti da sistemare; fine percorso: al cliente resta solo la chat", async ({ page, browser }, info) => {
+  await login(page, "titolare@prova.local");
+  // pausa
+  await page.goto("/staff/clienti");
+  await page.locator('a[href^="/staff/clienti/"]', { hasText: "Demo Marta" }).filter({ visible: true }).first().click();
+  await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
+  const marta = page.url();
+  await page.goto(`${marta}/profilo`);
+  await page.getByRole("button", { name: "Metti in pausa" }).click();
+  await expect(page.getByText("Cliente in pausa.")).toBeVisible();
+  await page.goto("/staff/pagamenti");
+  const fix = page.locator("section", { hasText: "Da sistemare" });
+  if (await fix.count()) await expect(fix.getByText("Demo Marta")).toHaveCount(0);
+  await expect(page.getByText("In pausa").filter({ visible: true }).first()).toBeVisible();
+  await page.goto(`${marta}/profilo`);
+  await page.getByRole("button", { name: "Riattiva" }).click();
+  await expect(page.getByText("Cliente di nuovo attivo.")).toBeVisible();
+
+  // fine percorso
+  await page.goto("/staff/clienti");
+  await page.locator('a[href^="/staff/clienti/"]', { hasText: "Prova Luca" }).filter({ visible: true }).first().click();
+  await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
+  const luca = page.url();
+  await page.goto(`${luca}/profilo`);
+  await page.getByRole("button", { name: "Termina il percorso" }).click();
+  await expect(page.getByText("Percorso terminato: al cliente resta solo la chat.")).toBeVisible();
+  const client = await (await browser.newContext(info.project.use)).newPage();
+  try {
+    await login(client, "luca@prova.local");
+    await client.goto("/cliente");
+    await client.waitForURL(/\/cliente\/messaggi$/);
+    await expect(client.getByText(/Il percorso è terminato/)).toBeVisible();
+    await expect(client.getByRole("link", { name: "Programma" })).toHaveCount(0);
+    await client.goto("/cliente/progressi");
+    await client.waitForURL(/\/cliente\/messaggi$/);
+    await client.goto("/cliente/profilo");
+    await expect(client.getByRole("heading", { name: "Il tuo account" })).toBeVisible();
+  } finally {
+    await page.goto(`${luca}/profilo`);
+    await page.getByRole("button", { name: "Riprendi il percorso" }).click();
+    await expect(page.getByText("Cliente di nuovo attivo.")).toBeVisible();
+  }
 });
 
 test("pagamenti: segna pagato in un tocco ed export CSV", async ({ page }) => {
@@ -59,7 +107,7 @@ test("pagamenti: segna pagato in un tocco ed export CSV", async ({ page }) => {
   await page.goto("/staff/pagamenti");
   await page.waitForLoadState("networkidle");
   await expect(page.getByText("Incassi per mese")).toBeVisible();
-  const box = page.locator("li", { hasText: /Sara Test|Giulia Esempio/ }).first();
+  const box = page.locator("li", { hasText: /Test Sara|Esempio Giulia/ }).first();
   if (await box.getByRole("button", { name: "Pagato" }).count()) {
     await box.getByRole("button", { name: "Pagato" }).click();
     await expect(page.getByRole("status").filter({ hasText: /Registrato .*€/ }).first()).toBeVisible();
@@ -97,7 +145,7 @@ test("progressione automatica nell'editor", async ({ page }, info) => {
 test("lo staff registra l'allenamento per il cliente e vede il riassunto AI", async ({ page }) => {
   await login(page, "titolare@prova.local");
   await page.goto("/staff/clienti");
-  await page.locator('a[href^="/staff/clienti/"]', { hasText: "Giulia Esempio" }).filter({ visible: true }).first().click();
+  await page.locator('a[href^="/staff/clienti/"]', { hasText: "Esempio Giulia" }).filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
   const base = page.url();
   await page.getByRole("link", { name: "Registra l'allenamento" }).click();

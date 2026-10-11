@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { listName } from "@/lib/names";
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -79,7 +80,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
                 return (
                   <li key={c.id} className="border-t border-sand-deep first:border-t-0">
                     <Link href={`/staff/clienti/${c.client_id}/checkup`} className="flex min-h-12 flex-col justify-center py-2.5 hover:opacity-70">
-                      <span className="font-semibold">{cl ? `${cl.first_name} ${cl.last_name}` : "Cliente"}</span>
+                      <span className="font-semibold">{cl ? listName(cl) : "Cliente"}</span>
                       <span className="text-sm text-muted">{c.flag_reasons.join(", ")}{c.request ? ` · “${c.request.slice(0, 80)}”` : ""}</span>
                     </Link>
                   </li>
@@ -117,7 +118,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
                 return (
                   <li key={p.id} className="flex items-start gap-3 border-t border-sand-deep py-2.5 first:border-t-0">
                     <Link href={`/staff/clienti/${p.client_id}`} className="min-w-0 flex-1 hover:opacity-70">
-                      <span className="block font-semibold">{cl ? `${cl.first_name} ${cl.last_name}` : "Cliente"}</span>
+                      <span className="block font-semibold">{cl ? listName(cl) : "Cliente"}</span>
                       <span className="block text-sm text-muted">{formatShort(p.performed_on)} · settimana {p.week} · “{p.discomfort.slice(0, 140)}”</span>
                     </Link>
                     <form action={markDiscomfortSeen.bind(null, p.id)}>

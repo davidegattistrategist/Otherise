@@ -56,7 +56,7 @@ test("vocale: si registra, si manda, arriva la trascrizione e la bozza di rispos
   const owner = await (await browser.newContext(info.project.use)).newPage();
   await login(owner, "titolare@prova.local");
   await owner.goto("/staff/messaggi");
-  await owner.getByRole("link", { name: /Giulia Esempio/ }).first().click();
+  await owner.getByRole("link", { name: /Esempio Giulia/ }).first().click();
   await owner.waitForURL(/\/staff\/messaggi\//);
   const theirs = owner.getByTestId("voice-message").last();
   await theirs.getByRole("button", { name: "Visualizza trascrizione" }).click();

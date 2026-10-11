@@ -3,19 +3,19 @@ import { requireStaff } from "@/lib/auth";
 import { getStaffClient } from "@/lib/data/client";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Card, Eyebrow, Notice } from "@/components/ui";
+import { Button, Card, Eyebrow, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { ClientForm } from "../../client-form";
-import { deleteClientAction, inviteClientAction, updateClientAction } from "../../actions";
+import { deleteClientAction, inviteClientAction, setClientStatus, updateClientAction } from "../../actions";
 import { InviteButton } from "./invite-button";
 import { PrivacyStaffCard } from "./privacy-staff-card";
 import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Scheda cliente" };
 
-export default async function ClientProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ invito?: string }> }) {
+export default async function ClientProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ invito?: string; stato?: string }> }) {
   const { id } = await params;
-  const { invito } = await searchParams;
+  const { invito, stato } = await searchParams;
   const me = await requireStaff();
   const client = await getStaffClient(id);
   const supabase = await createClient();
@@ -28,6 +28,34 @@ export default async function ClientProfilePage({ params, searchParams }: { para
   const hasEntered = Boolean(account?.last_sign_in_at);
   return (
     <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
+      <Card className="flex flex-col gap-3 [grid-column:1/-1]">
+        <Eyebrow>Percorso</Eyebrow>
+        {stato ? <><ClearParams names={["stato"]} /><Notice tone="success">{stato === "paused" ? "Cliente in pausa." : stato === "archived" ? "Percorso terminato: al cliente resta solo la chat." : "Cliente di nuovo attivo."}</Notice></> : null}
+        {client.status === "paused" ? (
+          <p className="text-[15px] leading-relaxed text-muted">In pausa: usa l&apos;app come sempre, ma non compare tra i pagamenti da incassare, nelle previsioni e nei promemoria. Quando rinnova, riattivalo.</p>
+        ) : client.status === "archived" ? (
+          <p className="text-[15px] leading-relaxed text-muted">Percorso terminato: entrando nell&apos;app il cliente vede solo la chat con te. Programmi, misure e pagamenti restano salvati e li vedi tu. Lo trovi in Clienti → Ex clienti.</p>
+        ) : (
+          <p className="text-[15px] leading-relaxed text-muted">Percorso in corso. Se si ferma per un po&apos; mettilo in pausa; se finite, termina il percorso.</p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          {client.status !== "active" ? (
+            <form action={setClientStatus.bind(null, id, "active")}>
+              <Button type="submit" size="sm">{client.status === "paused" ? "Riattiva" : "Riprendi il percorso"}</Button>
+            </form>
+          ) : null}
+          {client.status === "active" ? (
+            <form action={setClientStatus.bind(null, id, "paused")}>
+              <ConfirmButton variant="secondary" message={`Mettere in pausa ${client.first_name}? Continua a usare l'app, ma non comparirà tra i pagamenti da incassare.`}>Metti in pausa</ConfirmButton>
+            </form>
+          ) : null}
+          {client.status !== "archived" ? (
+            <form action={setClientStatus.bind(null, id, "archived")}>
+              <ConfirmButton variant="secondary" message={`Terminare il percorso con ${client.first_name}? Entrando nell'app vedrà solo la chat con te. I suoi dati restano salvati e puoi riprendere il percorso quando vuoi.`}>Termina il percorso</ConfirmButton>
+            </form>
+          ) : null}
+        </div>
+      </Card>
       <Card className="[grid-column:1/-1] lg:[grid-column:auto/span_2]">
         <Eyebrow className="mb-4">Dati del cliente</Eyebrow>
         <ClientForm
@@ -61,7 +89,7 @@ export default async function ClientProfilePage({ params, searchParams }: { para
         {me.role === "owner" ? (
           <Card>
             <Eyebrow className="mb-3">Elimina cliente</Eyebrow>
-            <p className="mb-4 text-[15px] leading-relaxed text-muted">Cancella per sempre il cliente con programmi, check, logbook e pagamenti. Per un ex cliente è meglio impostare lo stato “Archiviato”.</p>
+            <p className="mb-4 text-[15px] leading-relaxed text-muted">Cancella per sempre il cliente con programmi, check, logbook e pagamenti. Per un ex cliente è meglio “Termina il percorso”: i dati restano.</p>
             <form action={deleteClientAction.bind(null, id)}>
               <ConfirmButton message={`Eliminare per sempre ${client.first_name} ${client.last_name} e tutti i suoi dati?`}>Elimina per sempre</ConfirmButton>
             </form>

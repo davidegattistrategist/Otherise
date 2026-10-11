@@ -26,7 +26,7 @@ test.afterEach(async ({ browser }) => {
 
 test("progetto annuale: il trainer lo modifica, il cliente lo vede", async ({ page, browser }, info) => {
   await login(page, "titolare@prova.local");
-  const id = await openClient(page, "Giulia Esempio");
+  const id = await openClient(page, "Esempio Giulia");
   await page.goto(`/staff/clienti/${id}/progetto`);
   await page.waitForLoadState("networkidle");
   const goal = `Più forza nelle gambe (${info.project.name})`;
@@ -76,7 +76,7 @@ test("dolore nel logbook: arriva al trainer in Oggi", async ({ page, browser }, 
 
 test("l'AI fa qualche domanda prima della bozza", async ({ page }) => {
   await login(page, "titolare@prova.local");
-  const id = await openClient(page, "Giulia Esempio");
+  const id = await openClient(page, "Esempio Giulia");
   await page.goto(`/staff/clienti/${id}/programma`);
   await page.waitForLoadState("networkidle");
   await page.locator("a[href^='/staff/programmi/']").filter({ visible: true }).first().click();
@@ -106,7 +106,7 @@ test("previsione incassi: solo il titolare, con orizzonte 3/6/12 mesi", async ({
   await expect(page.locator("tbody tr")).toHaveCount(6);
   await page.getByRole("link", { name: "12 mesi" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(12);
-  await expect(page.getByText("Luca Prova").first()).toBeVisible();
+  await expect(page.getByText("Prova Luca").first()).toBeVisible();
   // il collaboratore non ci entra
   const coach = await (await browser.newContext(info.project.use)).newPage();
   await login(coach, "collaboratore@prova.local");

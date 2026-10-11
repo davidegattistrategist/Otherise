@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { requireClient } from "@/lib/auth";
+import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong, formatShort } from "@/lib/dates";
 import { CIRCUMFERENCES } from "@/lib/body/skinfolds";
@@ -16,7 +16,7 @@ type Test = { exercise?: string; load?: number | null; reps?: number | null; rpe
 
 export default async function ProgressPage({ searchParams }: { searchParams: Promise<{ misura?: string; esercizio?: string }> }) {
   const { misura, esercizio } = await searchParams;
-  const me = await requireClient();
+  const me = await requireActiveClient();
   const supabase = await createClient();
   const [{ data: checks }, { data: posture }, { data: checkins }, { data: sessions }] = await Promise.all([
     supabase.rpc("my_checks"),
