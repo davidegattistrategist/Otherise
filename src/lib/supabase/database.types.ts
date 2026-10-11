@@ -181,6 +181,26 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"client_ai_profiles": {
+                  Row: {
+                    "auto_note": string,"client_id": string,"intensity_techniques": boolean | null,"notes": string,"running_level": string | null,"session_minutes": number | null,"squat_share": number | null,"strength_level": string | null,"updated_at": string,"vertical_push": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "auto_note"?: string,"client_id": string,"intensity_techniques"?: boolean | null,"notes"?: string,"running_level"?: string | null,"session_minutes"?: number | null,"squat_share"?: number | null,"strength_level"?: string | null,"updated_at"?: string,"vertical_push"?: string | null
+                  }
+                  Update: {
+                    "auto_note"?: string,"client_id"?: string,"intensity_techniques"?: boolean | null,"notes"?: string,"running_level"?: string | null,"session_minutes"?: number | null,"squat_share"?: number | null,"strength_level"?: string | null,"updated_at"?: string,"vertical_push"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "client_ai_profiles_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: true
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"client_projects": {
                   Row: {
                     "client_id": string,"data": NonNullable<Json>,"updated_at": string,"updated_by": string | null,"visible": boolean

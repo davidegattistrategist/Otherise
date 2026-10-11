@@ -518,3 +518,101 @@ describe("notifiche push", () => {
     expect(homeScreenName("Diego Teoldi Personal Training")).toBe("Diego");
   });
 });
+
+describe("bilanciamento del programma", async () => {
+  const { patternOf, isFundamental, restSeconds, programBalance, estimateDayMinutes } = await import("./program/balance");
+  it("riconosce i movimenti dai nomi", () => {
+    expect(patternOf("Squat bulgaro - Manubri")).toBe("accosciata");
+    expect(patternOf("Stacco rumeno con bilanciere")).toBe("hinge");
+    expect(patternOf("Leg curl seduto")).toBe("hinge");
+    expect(patternOf("Hip thrust - Macchina")).toBe("hinge");
+    expect(patternOf("Lat Machine, Presa Prona")).toBe("tirata_verticale");
+    expect(patternOf("Rematore singolo")).toBe("tirata_orizzontale");
+    expect(patternOf("Panca piana")).toBe("spinta_orizzontale");
+    expect(patternOf("Military press")).toBe("spinta_verticale");
+    expect(patternOf("Alzate laterali")).toBe("spalle");
+    expect(patternOf("Curl manubri")).toBe("braccia");
+    expect(patternOf("Dead bug incrociato")).toBe("core");
+    expect(patternOf("Wall ball")).toBe("condizionamento");
+    expect(patternOf("Vogatore")).toBe("condizionamento");
+    expect(patternOf("Stretching")).toBe("altro");
+  });
+  it("fondamentali e recuperi", () => {
+    expect(isFundamental("Squat")).toBe(true);
+    expect(isFundamental("Panca piana")).toBe(true);
+    expect(isFundamental("Goblet squat")).toBe(false);
+    expect(isFundamental("Hip thrust")).toBe(false);
+    expect(isFundamental("Hip thrust con bilanciere")).toBe(true);
+    expect(restSeconds("90\"")).toBe(90);
+    expect(restSeconds("60-90\"")).toBe(75);
+    expect(restSeconds("2'")).toBe(120);
+    expect(restSeconds("1'30\"")).toBe(90);
+    expect(restSeconds("EMOM 1,5")).toBe(90);
+    expect(restSeconds("libero")).toBeNull();
+  });
+  it("serie, rapporto accosciata/hinge e tempo stimato", () => {
+    const item = (name: string, p: string, rest = "") => ({ id: name, exerciseId: null, name, rest, notes: "", prescriptions: [p] });
+    const single = (it: ReturnType<typeof item>) => ({ id: it.id + "b", kind: "single" as const, title: "", notes: "", rounds: null, durationMin: null, everySec: null, workSec: null, restSec: null, items: [it] });
+    const day = { id: "d1", title: "Giorno 1", notes: "", blocks: [
+      single(item("Dead bug", "3x10")),
+      single(item("Squat", "4x5 80kg", "2'")),
+      single(item("Stacco rumeno - Manubri", "4x8/10", "75\"")),
+      single(item("Lat machine", "4x8/10", "75\"")),
+      single(item("Panca piana con manubri", "3x10", "60\"")),
+    ] };
+    const b = programBalance({ days: [day] });
+    expect(b.sets.accosciata).toBe(4);
+    expect(b.sets.hinge).toBe(4);
+    expect(b.squatShare).toBe(50);
+    expect(b.pullPerPush).toBe(1.3);
+    expect(b.fundamentals).toEqual(["Squat"]);
+    const min = estimateDayMinutes(day);
+    expect(min).toBeGreaterThan(45);
+    expect(min).toBeLessThan(75);
+  });
+});
+
+describe("indicazioni per l'AI", async () => {
+  const { autoUpdate, minutesFromAnswer, parseProfileForm, profileText, EMPTY_PROFILE } = await import("./ai-profile");
+  const { programBalance } = await import("./program/balance");
+  const it_ = (name: string, p: string) => ({ id: name, exerciseId: null, name, rest: "", notes: "", prescriptions: [p] });
+  const blk = (name: string, p: string) => ({ id: name + "b", kind: "single" as const, title: "", notes: "", rounds: null, durationMin: null, everySec: null, workSec: null, restSec: null, items: [it_(name, p)] });
+  const content = { days: [{ id: "d", title: "Giorno 1", notes: "", blocks: [blk("Squat", "4x5"), blk("Hip thrust - Macchina", "2x10"), blk("Military press", "3x8")] }] };
+  it("tempo dalle risposte", () => {
+    expect(minutesFromAnswer("60 minuti")).toBe(60);
+    expect(minutesFromAnswer("un'ora e mezza")).toBe(90);
+    expect(minutesFromAnswer("un'ora")).toBe(60);
+    expect(minutesFromAnswer("boh")).toBeNull();
+  });
+  it("si riallinea al programma pubblicato, senza dogmi", () => {
+    const b = programBalance(content);
+    expect(b.squatShare).toBe(67);
+    const p = { ...EMPTY_PROFILE, squat_share: 30, vertical_push: "no", session_minutes: 60 };
+    const patch = autoUpdate(p, b, 75, "Fase 2")!;
+    expect(patch.squat_share).toBe(70);
+    expect(patch.vertical_push).toBe("poche");
+    expect(patch.session_minutes).toBe(75);
+    expect(patch.auto_note).toContain("Fase 2");
+    // indicazioni coerenti: niente da cambiare
+    expect(autoUpdate({ ...EMPTY_PROFILE, squat_share: 60, vertical_push: "si" }, b, null, "x")).toBeNull();
+    // "segui il programma" (null) non viene mai riempito da solo
+    expect(autoUpdate({ ...EMPTY_PROFILE }, b, null, "x")).toBeNull();
+  });
+  it("modulo e testo per l'AI", () => {
+    const fd = new FormData();
+    fd.set("session_minutes", "75");
+    fd.set("strength_level", "avanzato");
+    fd.set("running_level", "hackerato");
+    fd.set("vertical_push", "no");
+    fd.set("squat_share", "34");
+    fd.set("intensity_techniques", "si");
+    const v = parseProfileForm(fd);
+    expect(v).toMatchObject({ session_minutes: 75, strength_level: "avanzato", running_level: null, vertical_push: "no", squat_share: 30, intensity_techniques: true });
+    fd.set("squat_auto", "on");
+    expect(parseProfileForm(fd).squat_share).toBeNull();
+    const txt = profileText({ ...EMPTY_PROFILE, ...v });
+    expect(txt).toContain("75 minuti");
+    expect(txt).toContain("non regole fisse");
+    expect(profileText(EMPTY_PROFILE)).toBe("");
+  });
+});

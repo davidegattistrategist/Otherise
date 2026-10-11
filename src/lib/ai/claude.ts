@@ -40,9 +40,11 @@ const nullableStr = { anyOf: [{ type: "string" }, { type: "null" }] };
 const PROGRAM_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["summary", "title", "description", "weeks", "days"],
+  required: ["summary", "title", "description", "weeks", "sessionMinutes", "timeFromTrainer", "days"],
   properties: {
     summary: { type: "string", description: "Riassunto in italiano, 2-5 frasi, di cosa hai cambiato e perché" },
+    sessionMinutes: nullableInt,
+    timeFromTrainer: { type: "boolean" },
     title: { type: "string" },
     description: { type: "string", description: "Note del programma visibili al cliente" },
     weeks: { type: "integer", description: "Numero di settimane, da 1 a 12" },
@@ -100,6 +102,8 @@ const PROGRAM_JSON_SCHEMA = {
 
 const aiProgramSchema = z.object({
   summary: z.string(),
+  sessionMinutes: z.number().int().nullable().catch(null),
+  timeFromTrainer: z.boolean().catch(false),
   title: z.string(),
   description: z.string(),
   weeks: z.number().int(),
@@ -138,21 +142,25 @@ const aiProgramSchema = z.object({
 
 const SYSTEM = `Sei l'assistente di programmazione di un personal trainer italiano. Prepari BOZZE di programmi di allenamento che il trainer poi rivede: non parli mai con il cliente.
 
-Regole:
-- Segui il metodo del trainer e lo stile dei suoi esempi: stesso modo di scrivere le prescrizioni ("4x8 65kg", "4x8/10", "3x20\\"", "5x800m"), stessa progressione tra le settimane, stesso tipo di indicazioni.
+Come ragioni:
+- Il metodo del trainer e le indicazioni sul cliente sono un modo di ragionare, non regole fisse. Quello che il trainer ha scritto davvero (programma di partenza, programmi precedenti, richiesta, risposte) vale più del metodo e delle indicazioni.
 - Parti dal programma attuale: cambia solo ciò che serve per la richiesta del trainer e per i dati del cliente. Mantieni gli id di giorni, blocchi ed esercizi che restano; usa id nuovi brevi (8 lettere minuscole) solo per elementi nuovi.
-- Usa i carichi e le ripetizioni che il cliente ha fatto davvero (logbook) per decidere i carichi. Se un dato manca, non inventarlo: lascia il carico libero ("4x8/10") e scrivilo nel campo change.
+- Mantieni la struttura del trainer (vedi "Com'è fatto il programma di partenza"): stessi rapporti tra i gruppi muscolari, stesso sbilanciamento tra accosciata e hinge, stesso lavoro di braccia se c'è. Cambia al massimo ±4 serie a settimana per gruppo muscolare, salvo che cambi il numero di giornate o che il trainer chieda altro. Non correggere e non segnalare squilibri rispetto al metodo: il trainer sa cosa sta facendo.
+- Fondamentali (squat, panca, stacco e ciò che il trainer usa come tale): non toglierli, non sostituirli e non introdurre varianti (pin squat, panca dai pin, fermi…) se il trainer non lo chiede. Su di loro lavori con ripetizioni e carichi.
+- Varietà: quando serve, cambia al massimo circa un esercizio per giornata, preferibilmente tra i complementari o sui muscoli piccoli; il resto progredisce su ripetizioni e carichi secondo la fase.
+- Tempo: ogni giornata deve stare nel tempo per seduta. Stima: fondamentale con bilanciere da 4-5 serie circa 25 minuti (avvicinamento e caricamento compresi), complementare da 4 serie circa 10-12 minuti, accessori 6-8 minuti, 2-3 minuti per ogni cambio di esercizio, blocco iniziale di addome/posturale 10-15 minuti, stretching finale 5 minuti. Se il tempo non è indicato, usa 75 minuti e scrivilo nel riassunto.
+- Carichi: usa quelli che il cliente ha fatto davvero (logbook) e i test. Per i fondamentali con un test o un massimale stimato, decidi l'obiettivo dell'ultima settimana (per esempio 4x5 o 5x5 all'80% del massimale stimato, sempre qualche ripetizione sotto il massimo possibile) e costruisci la progressione a ritroso. Se non c'è nessun dato, non inventare: lascia il carico libero ("4x8/10") e scrivilo nel campo change.
 - Usa gli esercizi dell'eserciziario quando esistono (con il loro exerciseId); per esercizi nuovi metti exerciseId null.
 - Ogni esercizio ha esattamente una prescrizione per settimana (array lungo quanto "weeks"). Per gli stretching e i lavori posturali va bene la stessa prescrizione tutte le settimane.
 - Note posturali e infortuni noti: tienine conto nella scelta degli esercizi.
 - Dolori o fastidi recenti (logbook, check-up, note): NON cambiare il programma di tua iniziativa per questo motivo. Decide il trainer: segnalali nel riassunto. Se la richiesta del trainer dice cosa fare, segui quella.
-- Non proporre mai di tua iniziativa settimane di scarico, programmi estivi o "da viaggio", fasi di reset o test: li inserisci solo se il trainer lo chiede.
-- Se c'è un progetto annuale, segui la fase prevista per il mese: intensificazione = aumentano soprattutto i carichi; volumizzazione = aumentano soprattutto serie e ripetizioni; transizione = fase breve di passaggio. Rispetta anche quanto spingere sugli stimoli (forza, aerobico, Vo2Max…).
+- Non proporre mai di tua iniziativa settimane di scarico, programmi estivi o "da viaggio", fasi di reset, test o simulazioni di gara: li inserisci solo se il trainer lo chiede.
+- Se c'è un progetto annuale, segui la fase prevista per il mese: intensificazione = aumentano soprattutto i carichi su ripetizioni più basse; volumizzazione = aumentano soprattutto serie e ripetizioni a carichi simili; transizione = fase breve di passaggio. Rispetta anche quanto spingere sugli stimoli (forza, aerobico, Vo2Max…).
 - La durata della fase è quella del programma (dipende dal piano del cliente): non cambiarla se il trainer non lo chiede.
-- Se è indicato il tempo per seduta, ogni giornata deve starci dentro.
 - Complementari: di solito un intervallo di ripetizioni ("4x8/10") con il carico scelto dal cliente, che sale quando completa il massimo delle ripetizioni in tutte le serie.
 - Non usare RPE o RIR nelle prescrizioni, salvo richiesta del trainer (al massimo nelle indicazioni).
 - Non indicare giorni della settimana: gli allenamenti si fanno in sequenza.
+- Campo sessionMinutes: i minuti per seduta su cui hai costruito il programma. timeFromTrainer = true solo se il tempo l'ha scritto il trainer nella richiesta o nelle risposte (per esempio "ora ha solo 45 minuti").
 - Scrivi tutto in italiano.`;
 
 function client() {
@@ -210,7 +218,7 @@ function contextText(input: ReviseInput) {
     `# Eserciziario (id | nome)\n${exerciseList}`,
     `# Dati del cliente\n${input.clientContext}`,
     `# Programma attuale (JSON) da cui partire\n${JSON.stringify({ title: input.current.title, description: input.current.description, weeks: input.current.weeks, days: input.current.content.days })}`,
-    input.sessionMinutes ? `# Tempo a disposizione per seduta\n${input.sessionMinutes} minuti` : "",
+    input.sessionMinutes ? `# Tempo a disposizione per seduta\n${input.sessionMinutes} minuti` : "# Tempo a disposizione per seduta\nNon indicato.",
     input.images?.length ? "# Allegati\nIn allegato ci sono immagini con i risultati dei test o appunti del trainer." : "",
     `# Richiesta del trainer\n${input.instruction}`,
     input.answers?.length ? `# Risposte del trainer alle tue domande\n${input.answers.map((a) => `- ${a.question} → ${a.answer}`).join("\n")}` : "",
@@ -236,13 +244,19 @@ const QUESTIONS_SCHEMA = {
   },
 } as const;
 
-const QUESTIONS_SYSTEM = `Sei l'assistente di programmazione di un personal trainer italiano. Prima di preparare la bozza di un programma controlli se ti manca qualcosa di importante per farla bene.
+const QUESTIONS_SYSTEM = `Sei l'assistente di programmazione di un personal trainer italiano. Prima di preparare la bozza di un programma controlli se ti manca qualcosa di davvero importante.
 Regole:
-- Fai da 1 a 5 domande SOLO se ti manca un'informazione che cambia davvero il programma (per esempio il passo di corsa di partenza, i carichi di un test, quanti giorni a settimana, il tempo per seduta, il focus della fase, cosa fare con un fastidio segnalato).
-- Se hai già tutto nei dati o nella richiesta, restituisci zero domande.
+- Meno domande fai, meglio è. Nella maggior parte dei casi zero: il metodo, i dati del cliente e la richiesta bastano.
+- Fai domande (al massimo 5, di solito 1-2) SOLO se hai un dubbio forte che cambia davvero il programma: per esempio il passo di corsa di partenza per chi corre ad andature precise, un carico di partenza su un fondamentale senza test né logbook, il focus della fase se il progetto e la richiesta si contraddicono, cosa fare con un fastidio segnalato.
+- Non chiedere il tempo per seduta: se manca lo chiede già l'app.
+- Non chiedere cose già scritte nei dati del cliente, nel metodo o nella richiesta, e non chiedere conferme su cose che il metodo decide già.
 - Domande brevi, mirate, facili da rispondere: quando puoi proponi 2-4 risposte pronte (options), altrimenti options vuoto.
-- Non chiedere cose già scritte nei dati del cliente, nel metodo o nella richiesta.
 - In italiano, dando del tu al trainer.`;
+
+/** Domanda fissa sul tempo, se il cliente non ha un tempo per seduta di riferimento. */
+export const TIME_QUESTION = "Quanto tempo ha a disposizione per ogni seduta?";
+const TIME_OPTIONS = ["45 minuti", "60 minuti", "75 minuti", "90 minuti"];
+
 
 /** Da 0 a 5 domande al trainer prima di preparare la bozza. */
 export async function askQuestions(input: ReviseInput) {
@@ -251,10 +265,10 @@ export async function askQuestions(input: ReviseInput) {
   const parsed = z
     .object({ questions: z.array(z.object({ question: z.string(), options: z.array(z.string()) })) })
     .parse(json);
-  const questions = parsed.questions
-    .filter((q) => q.question.trim())
-    .slice(0, 5)
+  const fromAi = parsed.questions
+    .filter((q) => q.question.trim() && !/tempo|minuti/i.test(q.question))
     .map((q) => ({ question: q.question.trim().slice(0, 300), options: q.options.map((o) => o.trim()).filter(Boolean).slice(0, 4) }));
+  const questions = (input.sessionMinutes ? fromAi : [{ question: TIME_QUESTION, options: TIME_OPTIONS }, ...fromAi]).slice(0, 5);
   return { questions, usage };
 }
 
@@ -305,7 +319,8 @@ export async function reviseProgram(input: ReviseInput) {
       })),
     })),
   });
-  return { summary: parsed.summary, title: parsed.title, description: parsed.description, weeks, content, notes, usage };
+  const minutes = parsed.sessionMinutes && parsed.sessionMinutes >= 15 && parsed.sessionMinutes <= 240 ? parsed.sessionMinutes : null;
+  return { summary: parsed.summary, title: parsed.title, description: parsed.description, weeks, content, notes, usage, sessionMinutes: minutes, timeFromTrainer: parsed.timeFromTrainer };
 }
 
 const PROGRESS_SCHEMA = {

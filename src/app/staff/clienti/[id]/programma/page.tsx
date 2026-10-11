@@ -11,6 +11,11 @@ import { IconSparkle } from "@/components/icons";
 import { createEmptyProgram, createFromTemplate, createNextPhase, importFromSheet } from "../../../programmi/actions";
 import { aiEnabled } from "@/lib/ai/claude";
 import { ImportForm } from "./import-form";
+import { AiProfileForm } from "./ai-profile-form";
+import { saveAiProfileAction } from "./actions";
+import { getAiProfile } from "@/lib/data/ai-profile";
+import { programBalance } from "@/lib/program/balance";
+import { parseContent } from "@/lib/program/types";
 
 export const metadata: Metadata = { title: "Programma" };
 
@@ -34,6 +39,12 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
   const current = published.find((p) => p.start_date! <= today) ?? published[published.length - 1] ?? null;
   const latestBase = current ?? all.find((p) => p.status !== "draft") ?? null;
   const ai = aiEnabled();
+  const [profile, { data: baseContent }] = await Promise.all([
+    getAiProfile(supabase, id),
+    latestBase ? supabase.from("programs").select("content").eq("id", latestBase.id).single() : Promise.resolve({ data: null }),
+  ]);
+  const balance = baseContent ? programBalance(parseContent(baseContent.content)) : null;
+  const hasBalance = balance && Object.values(balance.sets).some((n) => n > 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -120,6 +131,34 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
           })}
         </div>
       )}
+
+      {ai ? (
+        <Card className="flex flex-col gap-4" id="indicazioni-ai">
+          <div>
+            <Eyebrow>Indicazioni per l&apos;AI</Eyebrow>
+            <p className="mt-2 text-[15px] leading-relaxed text-muted">
+              Un punto di partenza per le bozze di {client.first_name}, non regole fisse: l&apos;AI segue sempre il programma più recente che hai scritto tu.
+              Quando pubblichi un programma che va in un&apos;altra direzione, tempo, gambe e spinte verticali si aggiornano da sole.
+            </p>
+          </div>
+          {profile.auto_note ? <p className="rounded-xl bg-accent-soft/60 px-3 py-2 text-sm">{profile.auto_note}</p> : null}
+          {hasBalance && latestBase ? (
+            <div className="rounded-2xl bg-sand/70 px-4 py-3 text-sm" data-testid="program-balance">
+              <div className="font-semibold">Com&apos;è fatto “{latestBase.title}” (serie a settimana)</div>
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-muted">
+                <span>Dorso {balance.sets.tirata_verticale + balance.sets.tirata_orizzontale}</span>
+                <span>Gambe {balance.sets.accosciata + balance.sets.hinge}{balance.squatShare !== null ? ` (${balance.squatShare}% accosciata)` : ""}</span>
+                <span>Spinte orizzontali {balance.sets.spinta_orizzontale}</span>
+                <span>Spinte verticali {balance.sets.spinta_verticale}</span>
+                {balance.sets.braccia ? <span>Braccia {balance.sets.braccia}</span> : null}
+                <span>Addome {balance.sets.core}</span>
+              </div>
+              <div className="mt-1 text-muted">Durata stimata: {balance.minutes.map((m) => `${m.title} ~${m.minutes}'`).join(" · ")}</div>
+            </div>
+          ) : null}
+          <AiProfileForm action={saveAiProfileAction.bind(null, id)} values={profile} actualSquat={balance?.squatShare ?? null} />
+        </Card>
+      ) : null}
 
       <Card>
         <Eyebrow className="mb-4">Importa dal foglio Google</Eyebrow>

@@ -37,6 +37,7 @@ import {
   unpublishProgram,
 } from "../actions";
 import { AiPanel, RowAiButtons } from "./ai-tools";
+import { estimateDayMinutes } from "@/lib/program/balance";
 
 export type EditorProgram = {
   id: string;
@@ -347,8 +348,9 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
           programId={program.id}
           disabled={pending}
           dirty={dirty}
-          onApply={(next, notes, nextWeeks) => {
+          onApply={(next, notes, nextWeeks, nextMinutes) => {
             if (nextWeeks && nextWeeks !== weeks) setWeeks(nextWeeks);
+            if (nextMinutes) setMinutes(String(nextMinutes));
             setContent(normalizeWeeks(next, nextWeeks ?? weeks));
             setAiNotes(notes);
             setDirty(true);
@@ -371,6 +373,15 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               onChange={(e) => mutate((d) => void (d.days[dayIdx].title = e.target.value))}
               className="min-w-[13rem] flex-[1_1_13rem] rounded-lg bg-transparent px-1 py-1 text-xl font-semibold hover:bg-sand focus:bg-sand focus:outline-none"
             />
+            {(() => {
+              const est = estimateDayMinutes(day);
+              const limit = Number(minutes) || null;
+              return est > 0 ? (
+                <span title="Stima con cambi esercizio, serie di avvicinamento e recuperi" className={cx("shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold tabular", limit && est > limit + 5 ? "bg-accent-soft text-accent-deep" : "bg-sand text-muted")} data-testid="day-minutes">
+                  ~{est} min{limit && est > limit + 5 ? ` · oltre i ${limit}` : ""}
+                </span>
+              ) : null;
+            })()}
             <div className="flex gap-1">
               <IconBtn label="Sposta su" disabled={dayIdx === 0} onClick={() => mutate((d) => swap(d.days, dayIdx, dayIdx - 1))}><IconUp size={18} /></IconBtn>
               <IconBtn label="Sposta giù" disabled={dayIdx === content.days.length - 1} onClick={() => mutate((d) => swap(d.days, dayIdx, dayIdx + 1))}><IconDown size={18} /></IconBtn>

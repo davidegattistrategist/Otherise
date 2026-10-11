@@ -288,4 +288,17 @@ describe.skipIf(!run)("permessi", () => {
       expect(r.data ?? []).toEqual([]);
     }
   });
+  it("indicazioni per l'AI: solo lo staff che segue il cliente, mai il cliente", async () => {
+    await coach.from("client_ai_profiles").upsert({ client_id: clientAId, session_minutes: 60, strength_level: "intermedio", notes: "Solo manubri" }).throwOnError();
+    expect((await coach.from("client_ai_profiles").select("session_minutes").eq("client_id", clientAId)).data).toEqual([{ session_minutes: 60 }]);
+    expect((await owner.from("client_ai_profiles").select("client_id").eq("client_id", clientAId)).data).toHaveLength(1);
+    // il cliente non le vede e non le scrive
+    expect((await clientA.from("client_ai_profiles").select("*")).data ?? []).toEqual([]);
+    expect((await clientA.from("client_ai_profiles").insert({ client_id: clientAId, notes: "x" })).error).not.toBeNull();
+    // il collaboratore non tocca clienti non suoi, gli estranei non vedono niente
+    expect((await coach.from("client_ai_profiles").insert({ client_id: clientBId, notes: "x" })).error).not.toBeNull();
+    expect((await stranger.from("client_ai_profiles").select("*")).data ?? []).toEqual([]);
+    // valori fuori dai limiti rifiutati dal database
+    expect((await coach.from("client_ai_profiles").update({ squat_share: 150 }).eq("client_id", clientAId)).error).not.toBeNull();
+  });
 });

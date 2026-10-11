@@ -139,7 +139,18 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: /Chiedi all.AI/ }).click();
     await page.fill("#ai-instruction", "Più volume sui fondamentali");
     await page.getByRole("button", { name: "Prepara la bozza" }).click();
-    await expect(page.getByText("Cosa ha cambiato l'AI")).toBeVisible({ timeout: 30_000 });
+    // se il cliente non ha ancora un tempo per seduta, l'app lo chiede prima della bozza
+    const timeQ = page.getByText("Quanto tempo ha a disposizione per ogni seduta?");
+    const done = page.getByText("Cosa ha cambiato l'AI");
+    await expect(timeQ.or(done)).toBeVisible({ timeout: 30_000 });
+    if (await timeQ.isVisible()) {
+      await page.getByRole("button", { name: "60 minuti" }).click();
+      await page.getByRole("button", { name: "Prepara la bozza con queste risposte" }).click();
+    }
+    await expect(done).toBeVisible({ timeout: 30_000 });
+    // il tempo scelto finisce nel programma e la stima per giornata compare
+    await expect(page.getByLabel(/Tempo per seduta/)).toHaveValue("60");
+    await expect(page.getByTestId("day-minutes").first()).toBeVisible();
     await page.getByRole("button", { name: "Salva", exact: true }).click();
     await expect(page.getByText(/Salvato alle/)).toBeVisible();
     // salva come modello
@@ -149,6 +160,17 @@ test.describe("titolare", () => {
     await expect(page.getByText("Salvato tra i modelli.")).toBeVisible();
     await page.goto("/staff/modelli");
     await expect(page.getByText(`Modello ${info.project.name}`)).toBeVisible();
+
+    // indicazioni per l'AI: il tempo detto all'AI è diventato il riferimento del cliente
+    await page.goto(`${base}/programma`);
+    await expect(page.getByText("Indicazioni per l'AI", { exact: true })).toBeVisible();
+    await expect(page.locator("#ai-minutes")).toHaveValue("60");
+    await expect(page.getByTestId("program-balance")).toBeVisible();
+    await page.selectOption("#ai-strength", "intermedio");
+    await page.getByLabel("Segui il programma").uncheck();
+    await page.getByRole("button", { name: "Salva le indicazioni" }).click();
+    await expect(page.getByText("Indicazioni salvate")).toBeVisible();
+    expect(await noHorizontalScroll(page)).toBe(true);
 
     // eserciziario: nuovo, cerca, import csv
     await page.goto("/staff/eserciziario/nuovo");

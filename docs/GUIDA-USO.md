@@ -55,7 +55,10 @@ Nell'editor:
 - Sopra la casella ci sono le **richieste rapide** (es. "Stessa struttura, progressione secondo il mio metodo", "Ultima settimana di scarico"): un tocco le aggiunge, poi completi a voce.
 - Sulla singola riga: **Progredisci** (propone la progressione delle settimane) e **Alternative** (esercizi sostitutivi).
 - Nell'editor, la spunta **"Usa come esempio del mio stile per l'AI"** sui programmi che ti rappresentano meglio: l'AI li usa come riferimento.
-- Se ha dubbi, prima della bozza l'AI ti fa **da 1 a 5 domande** brevi (per esempio il passo di corsa di partenza), spesso con le risposte pronte da toccare. Puoi anche saltarle.
+- Prima della bozza l'AI fa domande **solo se ha un dubbio forte** (al massimo 5, spesso nessuna), con le risposte pronte da toccare. Puoi anche saltarle. Se il cliente non ha ancora un **tempo per seduta**, la prima domanda è sempre quella: la risposta diventa il tempo di riferimento del cliente. Se nella richiesta scrivi che il tempo è cambiato ("ora ha 45 minuti"), si aggiorna da solo.
+- **Indicazioni per l'AI** (scheda cliente → Programma): tempo per seduta, livello di forza e di corsa, spinte verticali sì/poche/no, gambe accosciata↔hinge (cursore oppure "Segui il programma"), tecniche di intensità, note libere. Sopra vedi com'è fatto l'ultimo programma: serie a settimana per gruppo, % di accosciata e durata stimata di ogni giornata. Non sono regole fisse: l'AI segue sempre il programma più recente che hai scritto tu, e quando pubblichi un programma che va in un'altra direzione tempo, gambe e spinte verticali si aggiornano da sole (compare una riga che lo dice).
+- Nell'editor, accanto al nome di ogni giornata c'è la **durata stimata** (cambi esercizio, avvicinamento sui fondamentali e recuperi compresi): diventa arancione se supera il tempo per seduta.
+- L'AI mantiene la tua struttura: stessi rapporti tra gruppi muscolari, al massimo ±4 serie a settimana per gruppo, fondamentali e varianti come li hai messi tu, varietà soprattutto sui muscoli piccoli. Non corregge e non commenta le tue scelte.
 - L'AI non propone mai di sua iniziativa scarichi, programmi estivi, reset o test, e non cambia il programma per un dolore: lo segnala e decidi tu. Non pubblica mai: rivedi sempre tu.
 - Il nome del cliente non viene mai mandato all'AI. La spesa del mese e il tetto sono in Impostazioni.
 
@@ -100,7 +103,7 @@ I pagamenti avvengono fuori dall'app. Qui registri cosa è saldato, nel modo pi�
 
 ## Privacy
 - Al primo accesso il cliente legge l'informativa e dà il consenso sui dati di salute: senza consenso non entra nella sua area. Chi inizia di persona prima di avere l'app firma il **modulo da stampare** (scheda → Scheda → Privacy) e tu premi "Firmato su carta".
-- Il cliente può chiedere di **non usare l'assistente AI** con i suoi dati: per lui l'AI si blocca.
+- L'uso dell'assistente AI è scritto nell'informativa e compreso nel consenso iniziale: non c'è un interruttore per il cliente.
 - Richieste di copia o cancellazione dei dati ti arrivano come notifica: "Scarica tutti i suoi dati" ed "Elimina per sempre" sono nella scheda del cliente. Rispondi entro un mese.
 - Un cliente archiviato da 2 anni: l'app ti ricorda di cancellarne i dati. Tutto il resto è in `docs/PRIVACY.md`.
 

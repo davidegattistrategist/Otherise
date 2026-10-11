@@ -4,7 +4,9 @@ import { z } from "zod";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { aiEnabled, askQuestions, progressRow, reviseProgram, suggestAlternatives, type AiUsage } from "@/lib/ai/claude";
+import { aiEnabled, askQuestions, progressRow, reviseProgram, suggestAlternatives, TIME_QUESTION, type AiUsage } from "@/lib/ai/claude";
+import { minutesFromAnswer } from "@/lib/ai-profile";
+import { getAiProfile, saveAiProfile } from "@/lib/data/ai-profile";
 import { buildClientContext, buildMethodContext } from "@/lib/ai/context";
 import { programContentSchema } from "@/lib/program/types";
 import { summarizeSets, type SetLog } from "@/lib/program/prescription";
@@ -81,18 +83,40 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    if (body.mode === "questions") {
-      const [method, clientContext] = await Promise.all([buildMethodContext(supabase), buildClientContext(supabase, program.client_id, program.id)]);
-      const result = await askQuestions({ instruction: body.instruction, ...method, clientContext, current: body.current, sessionMinutes: program.session_minutes, images: body.images });
-      await log("questions", result.usage);
-      return NextResponse.json({ questions: result.questions });
-    }
-    if (body.mode === "revise") {
-      const [method, clientContext] = await Promise.all([buildMethodContext(supabase), buildClientContext(supabase, program.client_id, program.id)]);
+    if (body.mode === "questions" || body.mode === "revise") {
+      const [method, clientContext, profile] = await Promise.all([
+        buildMethodContext(supabase),
+        buildClientContext(supabase, program.client_id, program.id, body.current.content),
+        getAiProfile(supabase, program.client_id),
+      ]);
+      // tempo per seduta: quello del programma, altrimenti quello di riferimento del cliente
+      let sessionMinutes = program.session_minutes ?? profile.session_minutes;
+      if (body.mode === "questions") {
+        const result = await askQuestions({ instruction: body.instruction, ...method, clientContext, current: body.current, sessionMinutes, images: body.images });
+        await log("questions", result.usage);
+        return NextResponse.json({ questions: result.questions });
+      }
       const answers = body.answers.filter((a) => a.answer);
-      const result = await reviseProgram({ instruction: body.instruction, ...method, clientContext, current: body.current, sessionMinutes: program.session_minutes, answers, images: body.images });
+      const timeAnswer = answers.find((a) => a.question === TIME_QUESTION);
+      const answeredMinutes = timeAnswer ? minutesFromAnswer(timeAnswer.answer) : null;
+      if (answeredMinutes) sessionMinutes = answeredMinutes;
+      const result = await reviseProgram({ instruction: body.instruction, ...method, clientContext, current: body.current, sessionMinutes, answers, images: body.images });
       await log("revise", result.usage);
-      return NextResponse.json({ summary: result.summary, title: result.title, description: result.description, weeks: result.weeks, content: result.content, notes: result.notes });
+      // il tempo detto dal trainer (risposta o richiesta) diventa il nuovo riferimento del cliente
+      const newMinutes = answeredMinutes ?? (result.timeFromTrainer ? result.sessionMinutes : null);
+      if (newMinutes && newMinutes !== profile.session_minutes) {
+        await saveAiProfile(supabase, program.client_id, { session_minutes: newMinutes });
+      }
+      // nel programma lo mette l'editor (campo "Tempo per seduta"), che poi salva: niente conflitti di versione
+      return NextResponse.json({
+        summary: result.summary,
+        title: result.title,
+        description: result.description,
+        weeks: result.weeks,
+        content: result.content,
+        notes: result.notes,
+        sessionMinutes: newMinutes ?? sessionMinutes ?? null,
+      });
     }
     if (body.mode === "progress") {
       const method = await buildMethodContext(supabase);

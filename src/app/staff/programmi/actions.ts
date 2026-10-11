@@ -14,6 +14,9 @@ import { notify } from "@/lib/notify";
 import { deliverPendingEmails } from "@/lib/email";
 import type { ActionState } from "@/components/form-bits";
 import type { Json } from "@/lib/supabase/database.types";
+import { autoUpdate } from "@/lib/ai-profile";
+import { getAiProfile, saveAiProfile } from "@/lib/data/ai-profile";
+import { programBalance } from "@/lib/program/balance";
 
 const asJson = (c: ProgramContent) => c as unknown as NonNullable<Json>;
 
@@ -54,6 +57,7 @@ export async function createEmptyProgram(clientId: string | null) {
       title: clientId ? "Nuovo programma" : "Nuovo modello",
       weeks,
       start_date: clientId ? await suggestedStart(clientId) : null,
+      session_minutes: clientId ? (await getAiProfile(supabase, clientId)).session_minutes : null,
       content: asJson(content),
       created_by: me.id,
     })
@@ -78,6 +82,7 @@ export async function createFromTemplate(clientId: string, fd: FormData) {
       description: tpl.description,
       weeks: tpl.weeks,
       start_date: await suggestedStart(clientId),
+      session_minutes: (await getAiProfile(supabase, clientId)).session_minutes,
       content: asJson(cloneWithNewIds(parseContent(tpl.content))),
       source: "template",
       created_by: me.id,
@@ -109,7 +114,8 @@ export async function createNextPhase(previousId: string, fd?: FormData) {
       start_date: start < todayISO() ? todayISO() : start,
       content: asJson(content),
       previous_program_id: prev.id,
-      session_minutes: prev.session_minutes,
+      // il tempo di riferimento del cliente, se c'è; altrimenti quello della fase prima
+      session_minutes: (await getAiProfile(supabase, prev.client_id)).session_minutes ?? prev.session_minutes,
       source: "copy",
       created_by: me.id,
     })
@@ -172,11 +178,15 @@ export async function saveProgram(id: string, input: unknown): Promise<SaveResul
 export async function publishProgram(id: string): Promise<ActionState> {
   await requireStaff();
   const supabase = await createClient();
-  const { data: p } = await supabase.from("programs").select("id, client_id, title, start_date, is_template, clients(user_id)").eq("id", id).maybeSingle();
+  const { data: p } = await supabase.from("programs").select("id, client_id, title, start_date, is_template, content, session_minutes, clients(user_id)").eq("id", id).maybeSingle();
   if (!p || p.is_template || !p.client_id) return { error: "Solo i programmi dei clienti si pubblicano." };
   if (!p.start_date) return { error: "Scegli la data di inizio prima di pubblicare." };
   const { error } = await supabase.from("programs").update({ status: "published", published_at: new Date().toISOString(), ai_notes: null }).eq("id", id);
   if (error) return { error: "Pubblicazione non riuscita." };
+  // le indicazioni per l'AI che questo programma smentisce si riallineano da sole
+  const profile = await getAiProfile(supabase, p.client_id);
+  const patch = autoUpdate(profile, programBalance(parseContent(p.content)), p.session_minutes, p.title);
+  if (patch) await saveAiProfile(supabase, p.client_id, patch);
   const userId = (p.clients as unknown as { user_id: string | null } | null)?.user_id;
   if (userId) {
     await notify([{ recipient_id: userId, client_id: p.client_id, kind: "program_published", title: "Il tuo nuovo programma è pronto", body: p.title, link: "/cliente/programma", dedupe_key: `published:${id}` }]);

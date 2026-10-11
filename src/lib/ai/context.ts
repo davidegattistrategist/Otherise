@@ -9,6 +9,9 @@ import { addDays, ageOn, todayISO } from "../dates";
 import { blockSummary, BLOCK_KIND_LABELS, itemLabel, parseContent, type ProgramContent } from "../program/types";
 import { summarizeSets, type SetLog } from "../program/prescription";
 import { parseProject, projectForAI } from "../project";
+import { balanceText, programBalance } from "../program/balance";
+import { profileText } from "../ai-profile";
+import { getAiProfile } from "../data/ai-profile";
 
 /** Programma in testo leggibile e compatto (per esempi e storico). */
 export function programToText(title: string, weeks: number, content: ProgramContent): string {
@@ -31,10 +34,14 @@ export function programToText(title: string, weeks: number, content: ProgramCont
 }
 
 
-export async function buildClientContext(supabase: ServerSupabase, clientId: string, excludeProgramId?: string) {
+/**
+ * @param reference il programma da cui parte la bozza: se ha esercizi, l'AI riceve
+ *   anche "com'è fatto" (serie per gruppo, accosciata/hinge, minuti stimati).
+ */
+export async function buildClientContext(supabase: ServerSupabase, clientId: string, excludeProgramId?: string, reference?: ProgramContent) {
   const today = todayISO();
   const since = addDays(today, -16 * 7);
-  const [client, programs, logs, checks, posture, checkins, pt, project] = await Promise.all([
+  const [client, programs, logs, checks, posture, checkins, pt, project, aiProfile] = await Promise.all([
     supabase.from("clients").select("sex, birth_date, goals, start_date, phase_weeks").eq("id", clientId).single(),
     supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", clientId).neq("status", "draft").order("start_date", { ascending: false }).limit(3),
     supabase.from("exercise_logs").select("exercise_name, performed_on, week, sets, result_text").eq("client_id", clientId).gte("performed_on", since).order("performed_on"),
@@ -43,6 +50,7 @@ export async function buildClientContext(supabase: ServerSupabase, clientId: str
     supabase.from("checkins").select("week_start, training, sleep, stress, adherence, issues, request").eq("client_id", clientId).order("week_start", { ascending: false }).limit(4),
     supabase.from("pt_sessions").select("session_date, notes").eq("client_id", clientId).order("session_date", { ascending: false }).limit(6),
     supabase.from("client_projects").select("data").eq("client_id", clientId).maybeSingle(),
+    getAiProfile(supabase, clientId),
   ]);
 
   const parts: string[] = [];
@@ -51,12 +59,21 @@ export async function buildClientContext(supabase: ServerSupabase, clientId: str
     const age = ageOn(c.birth_date, today);
     parts.push(`## Cliente\nSesso: ${c.sex === "F" ? "donna" : "uomo"}${age ? `, ${age} anni` : ""}. In percorso dal ${c.start_date}.\nObiettivi: ${c.goals || "non indicati"}\nDurata delle fasi del suo piano: ${c.phase_weeks} settimane.`);
   }
+  const indications = profileText(aiProfile);
+  if (indications) parts.push(`## Indicazioni del trainer per questo cliente\n${indications}`);
+
   const plan = parseProject(project.data?.data);
   if (plan) {
     parts.push(`## Progetto annuale scritto dal trainer (segui la fase e gli stimoli del mese)\n${projectForAI(plan, today)}`);
   }
 
   const past = (programs.data ?? []).filter((p) => p.id !== excludeProgramId);
+  // com'è fatto il programma di partenza (o, se è vuoto, l'ultimo pubblicato)
+  const hasItems = (c?: ProgramContent | null) => Boolean(c?.days.some((d) => d.blocks.some((b) => b.items.some((it) => it.name.trim()))));
+  const base = hasItems(reference) ? reference! : past[0] ? parseContent(past[0].content) : null;
+  if (base && hasItems(base)) {
+    parts.push(`## Com'è fatto il programma di partenza (mantieni questi rapporti)\n${balanceText(programBalance(base))}`);
+  }
   if (past.length) {
     parts.push(
       "## Programmi precedenti (dal più recente)\n" +

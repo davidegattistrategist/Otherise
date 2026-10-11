@@ -74,7 +74,7 @@ export function AiPanel({
   weeks: number;
   disabled: boolean;
   dirty: boolean;
-  onApply: (content: ProgramContent, notes: Record<string, string>, weeks?: number) => void;
+  onApply: (content: ProgramContent, notes: Record<string, string>, weeks?: number, sessionMinutes?: number | null) => void;
 }) {
   const [open, setOpen] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("ai") === "1");
   const [instruction, setInstruction] = useState("");
@@ -124,8 +124,8 @@ export function AiPanel({
   };
 
   const draft = async (qa: Array<{ question: string; answer: string }>) => {
-    const res = await post<{ summary: string; content: ProgramContent; notes: Record<string, string>; weeks: number }>({ mode: "revise", ...request(), answers: qa });
-    onApply(res.content, res.notes, res.weeks);
+    const res = await post<{ summary: string; content: ProgramContent; notes: Record<string, string>; weeks: number; sessionMinutes?: number | null }>({ mode: "revise", ...request(), answers: qa });
+    onApply(res.content, res.notes, res.weeks, res.sessionMinutes);
     setSummary(res.summary);
     setQuestions(null);
     setAnswers([]);
