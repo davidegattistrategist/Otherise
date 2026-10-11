@@ -48,7 +48,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
   const suggestion = plan && kind ? suggestNextPeriod(kind, plan.start_date, row?.paid_until ?? null) : null;
   const totalYear = (payments ?? []).filter((p) => p.paid_on.slice(0, 4) === today.slice(0, 4)).reduce((s, p) => s + Number(p.amount), 0);
   const editingPlan = piano === "modifica" && plan;
-  const newPlan = piano === "nuovo" || !plan;
+  const newPlan = !plan;
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
@@ -73,7 +73,6 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
             {plan.notes ? <p className="text-sm text-muted-dark">{plan.notes}</p> : null}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1 text-sm font-semibold">
               <a href={`/staff/clienti/${id}/pagamenti?piano=modifica`} className="underline">Modifica il piano</a>
-              <a href={`/staff/clienti/${id}/pagamenti?piano=nuovo`} className="underline">Cambia piano</a>
               {kind === "package" && status.sessionsLeft !== null && status.sessionsLeft > 0 ? (
                 <form action={closePackage.bind(null, id, plan.id)}>
                   <ConfirmButton variant="ghost" className="!min-h-0 !p-0 !text-card underline" message={`Segnare il pacchetto come terminato?\nLe ${status.sessionsLeft} sessioni rimaste non saranno più disponibili.`}>Segna il pacchetto come terminato</ConfirmButton>
@@ -91,7 +90,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
           </Card>
         ) : null}
 
-        {plan && kind && !editingPlan && piano !== "nuovo" ? (
+        {plan && kind && !editingPlan ? (
           <Card className="flex flex-col gap-4">
             <div>
               <Eyebrow>Registra un pagamento</Eyebrow>
@@ -115,12 +114,12 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
         {editingPlan || newPlan ? (
           <Card className="flex flex-col gap-4">
             <div>
-              <Eyebrow>{editingPlan ? "Modifica il piano" : plan ? "Nuovo piano" : "Imposta il piano di pagamento"}</Eyebrow>
+              <Eyebrow>{editingPlan ? "Modifica il piano" : "Imposta il piano di pagamento"}</Eyebrow>
               <p className="mt-1.5 text-sm text-muted">
-                {editingPlan ? "Le modifiche valgono anche per i pagamenti già registrati su questo piano." : plan ? "Il piano attuale resta nello storico; da qui in poi vale quello nuovo." : "Il pagamento avviene fuori dall'app: qui tieni traccia di cosa è saldato e l'app ti avvisa quando scade."}
+                {editingPlan ? "Cambia quello che serve, poi scegli se vale da una certa data (il piano di prima resta nello storico) o se stai correggendo un errore." : "Il pagamento avviene fuori dall'app: qui tieni traccia di cosa è saldato e l'app ti avvisa quando scade."}
               </p>
             </div>
-            <PlanForm action={savePlan.bind(null, id, editingPlan ? plan.id : null)} values={editingPlan ? plan : undefined} today={today} submitLabel={editingPlan ? "Salva il piano" : "Attiva il piano"} />
+            <PlanForm action={savePlan.bind(null, id, editingPlan ? plan.id : null)} values={editingPlan ? plan : undefined} today={today} submitLabel={editingPlan ? "Salva il piano" : "Attiva il piano"} editing={Boolean(editingPlan)} />
             {plan ? <a href={`/staff/clienti/${id}/pagamenti`} className="text-sm font-semibold underline">Annulla</a> : null}
           </Card>
         ) : null}

@@ -136,20 +136,47 @@ export async function runDailyChecks(today = todayISO()) {
     }
   }
 
-  // 6) Privacy: dati di clienti archiviati da più di 24 mesi (come scritto nell'informativa)
+  // 6) Clienti che non senti in chat da più di 10 giorni (solo dopo che la chat è iniziata):
+  //    un promemoria per chiedere come va; si può scrivere o ignorare (segnandola come letta)
+  const { data: msgs } = await admin.from("messages").select("client_id, created_at").is("deleted_at", null).order("created_at", { ascending: false }).limit(5000);
+  const lastMsg = new Map<string, string>();
+  for (const m of msgs ?? []) if (!lastMsg.has(m.client_id)) lastMsg.set(m.client_id, m.created_at);
+  for (const c of clients ?? []) {
+    const at = lastMsg.get(c.id);
+    if (!at || !c.user_id) continue;
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(at));
+    const since = diffDays(day, today);
+    if (since <= 10) continue;
+    const recipients = new Set(ownerIds);
+    if (c.coach_id) recipients.add(c.coach_id);
+    for (const r of recipients) {
+      out.push({
+        recipient_id: r,
+        client_id: c.id,
+        kind: "chat_silence",
+        title: `Non senti ${name(c)} da ${since} giorni`,
+        body: `Ultimo messaggio in chat il ${formatLong(day)}. Scrivigli per chiedere come sta andando, oppure segna la notifica come letta per ignorarla.`,
+        link: `/staff/messaggi/${c.id}?promemoria=saluto`,
+        // una sola volta per ogni silenzio: se vi scrivete, il conteggio riparte
+        dedupe_key: `silence:${c.id}:${day}`,
+      });
+    }
+  }
+
+  // 7) Privacy: ex clienti da più di 5 anni (come scritto nell'informativa per i dati sulla salute)
   const { data: oldArchived } = await admin
     .from("clients")
     .select("id, first_name, last_name")
     .eq("status", "archived")
-    .lt("archived_at", `${addDays(today, -730)}T00:00:00Z`);
+    .lt("archived_at", `${addDays(today, -1826)}T00:00:00Z`);
   for (const c of oldArchived ?? []) {
     for (const o of ownerIds) {
       out.push({
         recipient_id: o,
         client_id: c.id,
         kind: "privacy_retention",
-        title: `Privacy: ${name(c)} è archiviato da 2 anni`,
-        body: "L'informativa prevede di cancellare i dati dopo 24 mesi dalla fine del percorso. Se non ti servono più, eliminalo dalla sua scheda.",
+        title: `Privacy: ${name(c)} ha finito il percorso da 5 anni`,
+        body: "L'informativa prevede di cancellare i dati sulla salute 5 anni dopo la fine del percorso. Se non ti servono più, eliminalo dalla sua scheda (i dati fiscali restano nei tuoi documenti contabili).",
         link: `/staff/clienti/${c.id}/profilo`,
         dedupe_key: `retention:${c.id}`,
       });
@@ -182,11 +209,11 @@ async function sendStaffDigests(today: string): Promise<number> {
       .select("id, kind, title, body")
       .eq("recipient_id", s.id)
       .is("emailed_at", null)
-      .in("kind", ["birthday", "payment_due", "program_ending", "inactive"])
+      .in("kind", ["birthday", "payment_due", "program_ending", "inactive", "chat_silence"])
       .gte("created_at", since)
       .order("kind");
     if (!items?.length) continue;
-    const groups: Array<[string, string]> = [["birthday", "Compleanni"], ["payment_due", "Pagamenti"], ["program_ending", "Programmi da preparare"], ["inactive", "Clienti da sentire"]];
+    const groups: Array<[string, string]> = [["birthday", "Compleanni"], ["payment_due", "Pagamenti"], ["program_ending", "Programmi da preparare"], ["inactive", "Clienti da sentire"], ["chat_silence", "Da sentire in chat"]];
     const lines: string[] = [`Ciao ${s.full_name.split(" ")[0] || ""}, ecco il riepilogo di ${formatHeading(today).toLowerCase()}.`, ""];
     for (const [kind, label] of groups) {
       const g = items.filter((i) => i.kind === kind);

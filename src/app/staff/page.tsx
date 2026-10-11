@@ -167,7 +167,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
 
         <Card>
           <div className="mb-3"><Eyebrow>Check da fare</Eyebrow></div>
-          <List items={checks} empty="Tutti i clienti hanno un check nelle ultime 5 settimane." />
+          <List items={checks} empty="Nessun check in scadenza. Qui compare chi fa i check con l'app, nell'ultima settimana della fase." />
         </Card>
 
         {noBirth.length > 0 ? (

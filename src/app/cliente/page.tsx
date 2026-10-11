@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { DailyQuote } from "@/components/daily-quote";
+import { QUOTES, quoteOfDay } from "@/lib/quotes";
 import type { Metadata } from "next";
 import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -21,14 +23,16 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
   const me = await requireActiveClient();
   const supabase = await createClient();
   const today = todayISO();
-  const [{ current, upcoming }, { data: client }, { data: billing }, { data: checks }, { data: coach }, { data: lastReply }] = await Promise.all([
+  const [{ current, upcoming }, { data: client }, { data: billing }, { data: checks }, { data: coach }, { data: lastReply }, { data: brand }] = await Promise.all([
     getMyPrograms(me.clientId),
     supabase.from("clients").select("first_name, weekly_checkin").eq("id", me.clientId).single(),
     supabase.rpc("client_billing", { cid: me.clientId }),
     supabase.rpc("my_checks"),
     supabase.rpc("my_coach_name"),
     supabase.from("checkins").select("week_start, coach_reply, reviewed_at").eq("client_id", me.clientId).neq("coach_reply", "").order("week_start", { ascending: false }).limit(1).maybeSingle(),
+    supabase.rpc("business_name"),
   ]);
+  const quote = quoteOfDay(today);
   const logs = current ? await getMyLogs(current.id) : [];
   const checkinWeek = client?.weekly_checkin ? checkinWeekFor(today) : null;
   const { data: thisCheckin } = checkinWeek
@@ -171,6 +175,8 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
           </Card>
         ) : null}
       </div>
+      {/* la frase del giorno: a tutto schermo alla prima apertura, poi qui in fondo */}
+      <DailyQuote quote={quote.quote} n={quote.n} total={QUOTES.length} today={today} dateLabel={formatHeading(today)} brand={brand ?? "Otherise"} />
     </div>
   );
 }

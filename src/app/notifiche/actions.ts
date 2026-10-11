@@ -21,3 +21,11 @@ export async function markAllRead() {
   await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("recipient_id", me.id).is("read_at", null);
   revalidatePath("/", "layout");
 }
+
+/** Segna come letta senza aprirla: va nell'archivio. */
+export async function markRead(id: string) {
+  const me = await requireUser();
+  const supabase = await createClient();
+  await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", id).eq("recipient_id", me.id).is("read_at", null);
+  revalidatePath("/", "layout");
+}

@@ -7,11 +7,11 @@ import { defineConfig, devices } from "@playwright/test";
 
 const launchOptions = process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : undefined;
 const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
-// la guida "Metti l'app sulla Home" e l'invito alle notifiche risultano già visti
+// la guida "Metti l'app sulla Home", l'invito alle notifiche e la frase del giorno risultano già visti
 // (hanno i loro test in installazione.spec.ts, che li riaccende)
 const storageState = {
   cookies: [],
-  origins: [{ origin: new URL(baseURL).origin, localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }] }],
+  origins: [{ origin: new URL(baseURL).origin, localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }] }],
 };
 
 export default defineConfig({

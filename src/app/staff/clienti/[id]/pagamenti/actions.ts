@@ -50,7 +50,8 @@ export async function savePlan(clientId: string, planId: string | null, _: Actio
     package_sessions: kind === "package" ? pkg : null,
     notes: String(fd.get("notes") ?? "").trim(),
   };
-  if (planId) {
+  // modifica "da una data": nuovo piano, quello di prima resta nello storico
+  if (planId && fd.get("mode") !== "from") {
     const { error } = await supabase.from("payment_plans").update(row).eq("id", planId).eq("client_id", clientId);
     if (error) return { error: "Salvataggio non riuscito." };
   } else {

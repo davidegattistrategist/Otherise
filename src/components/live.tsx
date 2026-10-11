@@ -1,10 +1,13 @@
 "use client";
 
 /**
- * Campanella, numeri della chat e avvisi a comparsa che si aggiornano da soli:
- * ogni 20 secondi (e appena si torna sull'app o arriva una push) la pagina
- * chiede /api/live. Se è arrivato qualcosa di nuovo mostra un avviso in alto
- * e aggiorna le pagine di riepilogo (Oggi, Notifiche, Messaggi).
+ * Campanella, numeri della chat e avvisi a comparsa che si aggiornano da soli,
+ * senza notifiche del browser: ogni 12 secondi con la pagina in vista (ogni
+ * minuto quando è dietro altre finestre, e subito quando si torna sull'app o
+ * arriva una push) la pagina chiede /api/live. Se è arrivato qualcosa di nuovo
+ * mostra un avviso che allo staff resta finché non lo chiude (così lo vede
+ * anche se in quel momento lavorava su altro), aggiorna il titolo della scheda
+ * del browser con il numero da leggere e ricarica le pagine di riepilogo.
  */
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -24,9 +27,11 @@ export function useLiveCounts(fallback: Counts): Counts {
   return useContext(LiveContext) ?? fallback;
 }
 
-const EVERY_MS = 20_000;
+const EVERY_MS = 12_000;
+const HIDDEN_EVERY_MS = 60_000;
+const MAX_BANNERS = 3;
 // pagine di riepilogo che si possono ricaricare senza disturbare chi scrive
-const REFRESH = [/^\/cliente$/, /^\/cliente\/notifiche$/, /^\/staff$/, /^\/staff\/notifiche$/, /^\/staff\/messaggi$/];
+const REFRESH = [/^\/cliente$/, /^\/cliente\/notifiche$/, /^\/staff$/, /^\/staff\/notifiche$/, /^\/staff\/messaggi$/, /^\/staff\/clienti$/, /^\/staff\/pagamenti$/];
 
 export function LiveProvider({ initial, role, children }: { initial: Counts; role: "client" | "staff"; children: React.ReactNode }) {
   const router = useRouter();
@@ -38,7 +43,9 @@ export function LiveProvider({ initial, role, children }: { initial: Counts; rol
     setSeen(initial);
     setCounts(initial);
   }
-  const [banner, setBanner] = useState<Banner | null>(null);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const push = useCallback((b: Banner) => setBanners((list) => [b, ...list.filter((x) => x.key !== b.key && x.link !== b.link)].slice(0, MAX_BANNERS)), []);
+  const lastPoll = useRef(0);
   const last = useRef<{ latestId: string | null; chatAt: string | null; counts: Counts } | null>(null);
   const pathRef = useRef(path);
   useEffect(() => {
@@ -46,7 +53,9 @@ export function LiveProvider({ initial, role, children }: { initial: Counts; rol
   }, [path]);
 
   const check = useCallback(async () => {
-    if (document.visibilityState !== "visible") return;
+    // dietro altre finestre basta un controllo al minuto (per il titolo della scheda)
+    if (document.visibilityState !== "visible" && Date.now() - lastPoll.current < HIDDEN_EVERY_MS - 1000) return;
+    lastPoll.current = Date.now();
     let d: Live;
     try {
       const r = await fetch("/api/live", { cache: "no-store" });
@@ -64,13 +73,13 @@ export function LiveProvider({ initial, role, children }: { initial: Counts; rol
     const newNotif = d.latest && d.latest.id !== prev.latestId;
     const chatLink = role === "client" ? "/cliente/messaggi" : d.chat ? `/staff/messaggi/${d.chat.clientId}` : "/staff/messaggi";
     if (newChat && here !== chatLink) {
-      setBanner({ key: `c${d.chat!.at}`, chat: true, title: role === "client" ? "Nuovo messaggio" : `Nuovo messaggio${d.chat!.from ? ` da ${d.chat!.from}` : ""}`, body: "Tocca per leggerlo.", link: chatLink });
+      push({ key: `c${d.chat!.at}`, chat: true, title: role === "client" ? "Nuovo messaggio" : `Nuovo messaggio${d.chat!.from ? ` da ${d.chat!.from}` : ""}`, body: "Tocca per leggerlo.", link: chatLink });
     } else if (newNotif && d.latest!.kind !== "chat" && d.latest!.link !== here) {
-      setBanner({ key: d.latest!.id, title: d.latest!.title, body: d.latest!.body, link: d.latest!.link ?? "", notificationId: d.latest!.id });
+      push({ key: d.latest!.id, title: d.latest!.title, body: d.latest!.body, link: d.latest!.link ?? "", notificationId: d.latest!.id });
     }
     const changed = newChat || newNotif || prev.counts.notifications !== d.notifications || prev.counts.chats !== d.chats;
     if (changed && REFRESH.some((re) => re.test(here))) router.refresh();
-  }, [role, router]);
+  }, [role, router, push]);
 
   useEffect(() => {
     const first = setTimeout(check, 1500);
@@ -93,17 +102,38 @@ export function LiveProvider({ initial, role, children }: { initial: Counts; rol
     };
   }, [check]);
 
-  // l'avviso sparisce da solo dopo qualche secondo
+  // sul telefono del cliente l'avviso sparisce da solo; allo staff resta finché non lo chiude
   useEffect(() => {
-    if (!banner) return;
-    const t = setTimeout(() => setBanner(null), 9000);
+    if (role !== "client" || !banners.length) return;
+    const t = setTimeout(() => setBanners([]), 9000);
     return () => clearTimeout(t);
-  }, [banner]);
+  }, [banners, role]);
 
+  // numero da leggere nel titolo della scheda del browser: "(2) Oggi · Otherise"
+  useEffect(() => {
+    const n = counts.notifications + counts.chats;
+    const apply = () => {
+      const base = document.title.replace(/^\(\d+\) /, "");
+      const next = n > 0 ? `(${n}) ${base}` : base;
+      if (document.title !== next) document.title = next;
+    };
+    apply();
+    // il titolo cambia a ogni pagina: lo riapplichiamo
+    const obs = new MutationObserver(apply);
+    const el = document.querySelector("title");
+    if (el) obs.observe(el, { childList: true });
+    return () => obs.disconnect();
+  }, [counts, path]);
+
+  const close = (key: string) => setBanners((list) => list.filter((b) => b.key !== key));
   return (
     <LiveContext.Provider value={counts}>
       {children}
-      {banner ? <LiveBanner banner={banner} onClose={() => setBanner(null)} /> : null}
+      {banners.length ? (
+        <div className="fixed inset-x-0 top-[calc(0.75rem+env(safe-area-inset-top))] z-[80] flex flex-col items-center gap-2 px-4 md:inset-x-auto md:right-5 md:items-end">
+          {banners.map((b) => <LiveBanner key={b.key} banner={b} onClose={() => close(b.key)} />)}
+        </div>
+      ) : null}
     </LiveContext.Provider>
   );
 }
@@ -121,8 +151,8 @@ function LiveBanner({ banner, onClose }: { banner: Banner; onClose: () => void }
   );
   const cls = "flex min-w-0 flex-1 items-center gap-3 py-1";
   return (
-    <div role="status" aria-live="polite" className="fixed inset-x-0 top-[calc(0.75rem+env(safe-area-inset-top))] z-[80] flex justify-center px-4">
-      <div className="flex w-full max-w-md items-center gap-2 rounded-[22px] bg-ink py-2 pr-2 pl-3 text-card shadow-xl">
+    <div role="status" aria-live="polite" className="flex w-full max-w-md justify-center">
+      <div className="flex w-full items-center gap-2 rounded-[22px] bg-ink py-2 pr-2 pl-3 text-card shadow-xl">
         {banner.notificationId ? (
           <form action={openNotification.bind(null, banner.notificationId)} className="flex min-w-0 flex-1" onSubmit={onClose}>
             <button type="submit" className={cls}>{content}</button>

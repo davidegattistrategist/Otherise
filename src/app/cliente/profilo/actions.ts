@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -50,4 +51,26 @@ export async function requestData(kind: "copy" | "delete", _: ActionState, __: F
     dedupe_key: `privacy:${kind}:${me.clientId}:${todayISO()}`,
   })));
   return { ok: true, message: "Richiesta inviata. Ti rispondiamo entro un mese." };
+}
+
+/** Permesso facoltativo per Instagram: il cliente lo dà o lo toglie quando vuoi; se lo toglie avvisiamo lo staff. */
+export async function setInstagramConsent(consent: boolean) {
+  const me = await requireClient();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_instagram_consent", { consent });
+  if (error) return;
+  if (!consent) {
+    const name = await clientName(me.clientId);
+    const ids = await staffRecipients(me.clientId);
+    await notify(ids.map((id) => ({
+      recipient_id: id,
+      client_id: me.clientId,
+      kind: "privacy_request",
+      title: `Privacy: ${name} non vuole più comparire sui social`,
+      body: "Ha tolto il permesso di pubblicare video e foto su Instagram: da ora non pubblicare nuovi contenuti con lui. Quelli già pubblicati possono restare, salvo sua richiesta.",
+      link: `/staff/clienti/${me.clientId}/profilo`,
+      dedupe_key: `privacy:instagram:${me.clientId}:${todayISO()}`,
+    })));
+  }
+  revalidatePath("/cliente/profilo");
 }

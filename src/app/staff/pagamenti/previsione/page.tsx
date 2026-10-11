@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getForecast } from "@/lib/data/forecast";
 import { monthLabel } from "@/lib/data/billing";
 import { formatEuro } from "@/lib/billing";
-import { addDays, formatShort, todayISO } from "@/lib/dates";
+import { formatShort } from "@/lib/dates";
 import type { ForecastEvent } from "@/lib/forecast";
 import { BigNumber, Card, Eyebrow, PageTitle, cx } from "@/components/ui";
 
@@ -13,9 +13,10 @@ export const metadata: Metadata = { title: "Previsione incassi" };
 
 const HORIZONS = [3, 6, 12] as const;
 const COLORS = { recurring: "#1b1a17", packages: "#e2622a", single: "#b8a98f" };
+const monthName = (ym: string) => new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${ym}-15T00:00:00Z`));
 const k = (v: number) => (v >= 1000 ? `${(v / 1000).toLocaleString("it-IT", { maximumFractionDigits: 1 })}k` : String(Math.round(v)));
 
-export default async function ForecastPage({ searchParams }: { searchParams: Promise<{ mesi?: string }> }) {
+export default async function ForecastPage({ searchParams }: { searchParams: Promise<{ mesi?: string; mese?: string }> }) {
   await requireOwner();
   const sp = await searchParams;
   const months = HORIZONS.includes(Number(sp.mesi) as 3 | 6 | 12) ? Number(sp.mesi) : 6;
@@ -24,10 +25,11 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
   const max = Math.max(1, ...f.months.map((m) => m.total));
   const avg = f.total / months;
   const pct = Math.round(f.renewal.rate * 100);
-  // in vista i prossimi 60 giorni, il resto si apre a richiesta
-  const limit = addDays(todayISO(), 60);
-  const soon = f.events.filter((e) => e.date <= limit);
-  const later = f.events.filter((e) => e.date > limit);
+  // il mese aperto (tocca una barra o una riga): chi deve pagare in quel mese
+  const selected = f.months.find((m) => m.key === sp.mese) ?? f.months[0];
+  const monthEvents = f.events.filter((e) => e.date.slice(0, 7) === selected.key);
+  const overdue = selected.key === f.months[0].key ? f.events.filter((e) => e.date.slice(0, 7) < selected.key) : [];
+  const monthHref = (key: string) => `/staff/pagamenti/previsione?mesi=${months}&mese=${key}#dettaglio`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,7 +39,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
         actions={
           <div className="flex gap-1.5" role="group" aria-label="Orizzonte">
             {HORIZONS.map((h) => (
-              <Link key={h} href={`/staff/pagamenti/previsione?mesi=${h}`} aria-current={h === months ? "page" : undefined} className={cx("flex min-h-10 items-center rounded-full px-4 text-sm font-semibold", h === months ? "bg-ink text-card" : "bg-card")}>
+              <Link key={h} href={`/staff/pagamenti/previsione?mesi=${h}${sp.mese ? `&mese=${sp.mese}` : ""}`} aria-current={h === months ? "page" : undefined} className={cx("flex min-h-10 items-center rounded-full px-4 text-sm font-semibold", h === months ? "bg-ink text-card" : "bg-card")}>
                 {h} mesi
               </Link>
             ))}
@@ -66,7 +68,10 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
 
       <Card className="flex flex-col gap-4">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <Eyebrow>Mese per mese</Eyebrow>
+          <div>
+            <Eyebrow>Mese per mese</Eyebrow>
+            <p className="mt-1 text-sm text-muted">Tocca un mese per vedere chi deve pagare.</p>
+          </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
             <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm" style={{ background: COLORS.recurring }} /> Abbonamenti</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm" style={{ background: COLORS.packages }} /> Pacchetti</span>
@@ -77,8 +82,9 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
         <div role="img" aria-label={`Previsione: ${f.months.map((m) => `${monthLabel(m.key)} ${formatEuro(m.total)}`).join(", ")}`} className="flex items-end gap-2 sm:gap-3" style={{ height: 230 }}>
           {f.months.map((m) => {
             const h = (v: number) => Math.round((v / max) * 180);
+            const on = m.key === selected.key;
             return (
-              <div key={m.key} className="flex min-w-0 flex-1 flex-col items-center gap-1" title={`${monthLabel(m.key)}: ${formatEuro(m.total)} (prudente ${formatEuro(m.prudent)})`}>
+              <Link key={m.key} href={monthHref(m.key)} scroll={false} aria-current={on ? "true" : undefined} className={cx("flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg pb-1 hover:bg-sand", on && "bg-sand")} title={`${monthLabel(m.key)}: ${formatEuro(m.total)} (prudente ${formatEuro(m.prudent)})`}>
                 <span className={cx("text-[11px] leading-none text-ink-soft tabular", months > 6 && "hidden sm:inline")}>{m.total ? k(m.total) : ""}</span>
                 <div className="relative flex w-full max-w-14 flex-col-reverse overflow-hidden rounded-t-md" style={{ height: Math.max(h(m.total), 3) }}>
                   <div style={{ height: h(m.recurring), background: COLORS.recurring }} />
@@ -89,11 +95,29 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
                 <div className="relative h-0 w-full max-w-14">
                   {m.prudent ? <div className="absolute right-0 left-0 h-0.5 bg-accent-deep" style={{ bottom: h(m.prudent) - 1 }} /> : null}
                 </div>
-                <span className="truncate text-[11px] text-muted">{monthLabel(m.key)}</span>
-              </div>
+                <span className={cx("truncate text-[11px]", on ? "font-bold text-ink" : "text-muted")}>{monthLabel(m.key)}</span>
+              </Link>
             );
           })}
         </div>
+      </Card>
+
+      <Card id="dettaglio" className="flex scroll-mt-6 flex-col gap-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <Eyebrow>Chi deve pagare a {monthName(selected.key)}</Eyebrow>
+          <span className="font-semibold tabular">{formatEuro(selected.total)}</span>
+        </div>
+        {overdue.length ? (
+          <div className="rounded-2xl bg-accent-soft px-4 py-3">
+            <div className="text-sm font-semibold">Già scaduti, da sistemare</div>
+            <EventList events={overdue} />
+          </div>
+        ) : null}
+        {monthEvents.length ? <EventList events={monthEvents} /> : <p className="text-[15px] text-muted">Nessun incasso previsto in questo mese.</p>}
+        <p className="mt-2 text-sm text-muted">È una stima: un cliente che smette o cambia piano cambia i numeri. I pagamenti veri li registri sempre tu.</p>
+      </Card>
+      <Card className="flex flex-col gap-2">
+        <Eyebrow>Tabella</Eyebrow>
         <div className="scroll-x -mx-1 overflow-x-auto">
           <table className="w-full text-left text-[15px] sm:min-w-[560px]">
             <thead>
@@ -108,8 +132,8 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
             </thead>
             <tbody className="tabular">
               {f.months.map((m) => (
-                <tr key={m.key} className="border-t border-sand-deep">
-                  <td className="px-2 py-2 capitalize">{monthLabel(m.key)} {m.key.slice(0, 4)}</td>
+                <tr key={m.key} className={cx("border-t border-sand-deep", m.key === selected.key && "bg-sand")}>
+                  <td className="px-2 py-2 capitalize"><Link href={monthHref(m.key)} scroll={false} className="font-semibold underline-offset-4 hover:underline">{monthLabel(m.key)} {m.key.slice(0, 4)}</Link></td>
                   <td className="hidden px-2 py-2 text-right sm:table-cell">{formatEuro(m.recurring)}</td>
                   <td className="hidden px-2 py-2 text-right sm:table-cell">{formatEuro(m.packages)}</td>
                   <td className="hidden px-2 py-2 text-right sm:table-cell">{formatEuro(m.single)}</td>
@@ -120,27 +144,6 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
             </tbody>
           </table>
         </div>
-      </Card>
-
-      <Card className="flex flex-col gap-2">
-        <Eyebrow>Prossimi incassi attesi</Eyebrow>
-        {f.events.length ? (
-          <>
-            {soon.length ? <EventList events={soon} /> : <p className="text-[15px] text-muted">Nessun incasso previsto nei prossimi 60 giorni.</p>}
-            {later.length ? (
-              <details className="group">
-                <summary className="cursor-pointer list-none border-t border-sand-deep py-3 text-sm font-semibold underline">
-                  <span className="group-open:hidden">{later.length === 1 ? "Mostra anche l'incasso successivo" : `Mostra anche i ${later.length} incassi successivi`}</span>
-                  <span className="hidden group-open:inline">Nascondi gli incassi successivi</span>
-                </summary>
-                <EventList events={later} />
-              </details>
-            ) : null}
-          </>
-        ) : (
-          <p className="text-[15px] text-muted">Nessun incasso previsto: imposta il piano di pagamento dei clienti attivi.</p>
-        )}
-        <p className="mt-2 text-sm text-muted">È una stima: un cliente che smette o cambia piano cambia i numeri. I pagamenti veri li registri sempre tu.</p>
       </Card>
     </div>
   );

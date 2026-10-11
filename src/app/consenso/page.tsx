@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getPrivacyOwner } from "@/lib/data/privacy";
-import { healthConsentText, needsConsent, PRIVACY_VERSION } from "@/lib/privacy";
+import { healthConsentText, instagramConsentText, needsConsent, PRIVACY_VERSION } from "@/lib/privacy";
 import { PrivacyNotice } from "@/components/privacy-notice";
 import { Card } from "@/components/ui";
 import { ConsentForm } from "./consent-form";
@@ -28,14 +28,14 @@ export default async function ConsentPage() {
       <div>
         <h1 className="text-[30px] leading-tight font-normal tracking-tight">{updated ? "Abbiamo aggiornato l'informativa" : `Ciao ${c?.first_name ?? ""}, prima di iniziare`}</h1>
         <p className="mt-2 text-[15px] leading-relaxed text-muted">
-          Nell&apos;app registriamo anche dati sulla tua salute (misure, pliche, postura, come ti senti). Per legge ci serve il tuo consenso esplicito. In breve: i dati li vedete solo tu e chi ti allena, stanno su server nell&apos;Unione europea, non li usiamo per pubblicità e puoi chiederne copia o cancellazione quando vuoi.
+          Nell&apos;app registriamo anche dati sulla tua salute (misure, pliche, postura, come ti senti) e a volte foto e video degli allenamenti. Per legge ci serve il tuo consenso esplicito. In breve: i dati li vedete solo tu e chi ti allena, stanno su server nell&apos;Unione europea, non li vendiamo a nessuno e puoi chiederne copia o cancellazione quando vuoi. Pubblichiamo qualcosa sui social solo se ce lo permetti, con la seconda casella.
         </p>
       </div>
       <Card className="max-h-[46dvh] overflow-y-auto">
         <PrivacyNotice owner={owner} />
       </Card>
       <Card>
-        <ConsentForm healthText={healthConsentText(owner)} />
+        <ConsentForm consentText={healthConsentText(owner)} instagramText={instagramConsentText(owner)} />
       </Card>
     </main>
   );

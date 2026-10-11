@@ -71,14 +71,14 @@ isOneToOne: false
                   ]
                 },"app_settings": {
                   Row: {
-                    "ai_lessons": string,"ai_lessons_updated_at": string | null,"ai_monthly_budget_eur": number,"ai_reply_lessons": string,"ai_reply_lessons_updated_at": string | null,"business_name": string,"coaching_method": string,"id": number,"legal_address": string,"legal_name": string,"legal_tax_id": string,"payment_message": string,"privacy_email": string,"reminder_days": number,"updated_at": string
+                    "ai_lessons": string,"ai_lessons_updated_at": string | null,"ai_monthly_budget_eur": number,"ai_reply_lessons": string,"ai_reply_lessons_updated_at": string | null,"business_name": string,"coaching_method": string,"id": number,"legal_address": string,"legal_name": string,"legal_tax_id": string,"payment_message": string,"privacy_pec": string, "privacy_email": string,"reminder_days": number,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"ai_reply_lessons"?: string,"ai_reply_lessons_updated_at"?: string | null,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
+                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"ai_reply_lessons"?: string,"ai_reply_lessons_updated_at"?: string | null,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_pec"?: string, "privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
                   }
                   Update: {
-                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"ai_reply_lessons"?: string,"ai_reply_lessons_updated_at"?: string | null,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
+                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"ai_reply_lessons"?: string,"ai_reply_lessons_updated_at"?: string | null,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_pec"?: string, "privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -137,14 +137,14 @@ isOneToOne: false
                   ]
                 },"checks": {
                   Row: {
-                    "age_years": number | null,"body_fat_pct": number | null,"body_fat_formula": string | null,"check_date": string | null,"circumferences": NonNullable<Json>,"client_id": string,"created_at": string,"created_by": string | null,"fat_mass_kg": number | null,"id": string,"lean_mass_kg": number | null,"notes_next_phase": string,"order_hint": string | null,"sequence": number | null,"sex": string | null,"skinfold_sum_mm": number | null,"skinfolds": NonNullable<Json>,"strength_tests": NonNullable<Json>,"tests_text": string,"visible_to_client": boolean,"weight_kg": number | null
+                    "age_years": number | null,"body_fat_pct": number | null,"imported": boolean, "body_fat_formula": string | null,"check_date": string | null,"circumferences": NonNullable<Json>,"client_id": string,"created_at": string,"created_by": string | null,"fat_mass_kg": number | null,"id": string,"lean_mass_kg": number | null,"notes_next_phase": string,"order_hint": string | null,"sequence": number | null,"sex": string | null,"skinfold_sum_mm": number | null,"skinfolds": NonNullable<Json>,"strength_tests": NonNullable<Json>,"tests_text": string,"visible_to_client": boolean,"weight_kg": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "age_years"?: number | null,"body_fat_pct"?: number | null,"body_fat_formula"?: string | null,"check_date"?: string | null,"circumferences"?: NonNullable<Json>,"client_id": string,"created_at"?: string,"created_by"?: string | null,"fat_mass_kg"?: number | null,"id"?: string,"lean_mass_kg"?: number | null,"notes_next_phase"?: string,"order_hint"?: string | null,"sequence"?: number | null,"sex"?: string | null,"skinfold_sum_mm"?: number | null,"skinfolds"?: NonNullable<Json>,"strength_tests"?: NonNullable<Json>,"tests_text"?: string,"visible_to_client"?: boolean,"weight_kg"?: number | null
+                    "age_years"?: number | null,"body_fat_pct"?: number | null,"imported"?: boolean, "body_fat_formula"?: string | null,"check_date"?: string | null,"circumferences"?: NonNullable<Json>,"client_id": string,"created_at"?: string,"created_by"?: string | null,"fat_mass_kg"?: number | null,"id"?: string,"lean_mass_kg"?: number | null,"notes_next_phase"?: string,"order_hint"?: string | null,"sequence"?: number | null,"sex"?: string | null,"skinfold_sum_mm"?: number | null,"skinfolds"?: NonNullable<Json>,"strength_tests"?: NonNullable<Json>,"tests_text"?: string,"visible_to_client"?: boolean,"weight_kg"?: number | null
                   }
                   Update: {
-                    "age_years"?: number | null,"body_fat_pct"?: number | null,"body_fat_formula"?: string | null,"check_date"?: string | null,"circumferences"?: NonNullable<Json>,"client_id"?: string,"created_at"?: string,"created_by"?: string | null,"fat_mass_kg"?: number | null,"id"?: string,"lean_mass_kg"?: number | null,"notes_next_phase"?: string,"order_hint"?: string | null,"sequence"?: number | null,"sex"?: string | null,"skinfold_sum_mm"?: number | null,"skinfolds"?: NonNullable<Json>,"strength_tests"?: NonNullable<Json>,"tests_text"?: string,"visible_to_client"?: boolean,"weight_kg"?: number | null
+                    "age_years"?: number | null,"body_fat_pct"?: number | null,"imported"?: boolean, "body_fat_formula"?: string | null,"check_date"?: string | null,"circumferences"?: NonNullable<Json>,"client_id"?: string,"created_at"?: string,"created_by"?: string | null,"fat_mass_kg"?: number | null,"id"?: string,"lean_mass_kg"?: number | null,"notes_next_phase"?: string,"order_hint"?: string | null,"sequence"?: number | null,"sex"?: string | null,"skinfold_sum_mm"?: number | null,"skinfolds"?: NonNullable<Json>,"strength_tests"?: NonNullable<Json>,"tests_text"?: string,"visible_to_client"?: boolean,"weight_kg"?: number | null
                   }
                   Relationships: [
                     {
@@ -229,14 +229,14 @@ isOneToOne: false
                   ]
                 },"clients": {
                   Row: {
-                    "archived_at": string | null,"birth_date": string | null,"coach_id": string | null,"consent_source": string | null,"created_at": string,"email": string | null,"first_name": string,"goals": string,"health_consent_at": string | null,"id": string,"last_name": string,"phase_weeks": number,"phone": string | null,"privacy_accepted_at": string | null,"privacy_version": string | null,"sex": string,"free": boolean, "skinfold_formula": string | null,"start_date": string,"status": string,"user_id": string | null,"weekly_checkin": boolean
+                    "archived_at": string | null,"birth_date": string | null,"coach_id": string | null,"consent_source": string | null,"created_at": string,"email": string | null,"first_name": string,"goals": string,"health_consent_at": string | null,"id": string,"last_name": string,"phase_weeks": number,"phone": string | null,"privacy_accepted_at": string | null,"privacy_version": string | null,"sex": string,"instagram_consent_at": string | null, "free": boolean, "skinfold_formula": string | null,"start_date": string,"status": string,"user_id": string | null,"weekly_checkin": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name": string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex": string,"free"?: boolean, "skinfold_formula"?: string | null,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                    "archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name": string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex": string,"instagram_consent_at"?: string | null, "free"?: boolean, "skinfold_formula"?: string | null,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
                   }
                   Update: {
-                    "archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name"?: string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex"?: string,"free"?: boolean, "skinfold_formula"?: string | null,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                    "archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name"?: string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex"?: string,"instagram_consent_at"?: string | null, "free"?: boolean, "skinfold_formula"?: string | null,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
                   }
                   Relationships: [
                     {
@@ -587,7 +587,7 @@ isOneToOne: false
           }
           Functions: {
             "accept_privacy":
-{ Args: { "version": string }; Returns: undefined
+{ Args: { "version": string; "instagram"?: boolean }; Returns: undefined
                            },
 "billing_overview":
 { Args: Record<PropertyKey, never>; Returns: {
@@ -652,6 +652,9 @@ isOneToOne: false
                            },
 "withdraw_health_consent":
 { Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"set_instagram_consent":
+{ Args: { "consent": boolean }; Returns: undefined
                            }
           }
           Enums: {

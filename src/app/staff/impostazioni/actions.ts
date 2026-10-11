@@ -43,7 +43,7 @@ export async function savePrivacy(_: ActionState, fd: FormData): Promise<ActionS
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "L'email per la privacy non sembra valida." };
   const { error } = await supabase
     .from("app_settings")
-    .update({ legal_name: v("legal_name"), legal_address: v("legal_address"), legal_tax_id: v("legal_tax_id"), privacy_email: email, updated_at: new Date().toISOString() })
+    .update({ legal_name: v("legal_name"), legal_address: v("legal_address"), legal_tax_id: v("legal_tax_id"), privacy_email: email, privacy_pec: v("privacy_pec"), updated_at: new Date().toISOString() })
     .eq("id", 1);
   if (error) return { error: "Salvataggio non riuscito." };
   revalidatePath("/privacy");

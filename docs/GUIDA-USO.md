@@ -106,7 +106,7 @@ I pagamenti avvengono fuori dall'app. Qui registri cosa è saldato, nel modo pi�
 - Al primo accesso il cliente legge l'informativa e dà il consenso sui dati di salute: senza consenso non entra nella sua area. Chi inizia di persona prima di avere l'app firma il **modulo da stampare** (scheda → Scheda → Privacy) e tu premi "Firmato su carta".
 - L'uso dell'assistente AI è scritto nell'informativa e compreso nel consenso iniziale: non c'è un interruttore per il cliente.
 - Richieste di copia o cancellazione dei dati ti arrivano come notifica: "Scarica tutti i suoi dati" ed "Elimina per sempre" sono nella scheda del cliente. Rispondi entro un mese.
-- Un cliente archiviato da 2 anni: l'app ti ricorda di cancellarne i dati. Tutto il resto è in `docs/PRIVACY.md`.
+- Un ex cliente che ha finito il percorso da 5 anni: l'app ti ricorda di cancellarne i dati sulla salute. Tutto il resto è in `docs/PRIVACY.md`.
 
 ## Eserciziario
 Nome, link al video YouTube, indicazioni. Quando scrivi un programma i nomi si completano da soli e il cliente vede il video. Se in un programma usi un esercizio che non c'è, l'editor ti propone di aggiungerlo.

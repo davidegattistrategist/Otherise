@@ -28,6 +28,8 @@ test("primo accesso dal telefono: la guida mostra tutti i passi e poi lascia un 
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await login(page, "giulia@prova.local");
+  // qui si prova solo la guida: la frase del giorno ha il suo test
+  await page.evaluate(() => localStorage.setItem("otherise:quote-day", "off"));
   const guide = page.getByRole("dialog", { name: "Metti l'app sulla schermata Home" });
   await expect(guide).toBeVisible();
   await expect(guide.getByText("Che telefono hai?")).toBeVisible();
@@ -122,4 +124,23 @@ test("menu in basso staccato dai bordi e nessuna pagina tagliata", async ({ page
     expect(vh - (box.y + box.height), p).toBeGreaterThanOrEqual(10);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1), p).toBe(true);
   }
+});
+
+test("frase del giorno: a tutto schermo la prima volta del giorno, poi resta nella home", async ({ page }) => {
+  await login(page, "giulia@prova.local");
+  await page.evaluate(() => localStorage.removeItem("otherise:quote-day"));
+  await page.goto("/cliente");
+  const stage = page.getByRole("dialog", { name: "La frase del giorno" });
+  await expect(stage).toBeVisible();
+  await expect(stage.getByText(/N° \d+/)).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+  await stage.getByRole("button", { name: "Inizia la giornata" }).click();
+  await expect(stage).toHaveCount(0);
+  // nello stesso giorno non riappare da sola, ma si riapre dalla scheda
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(800);
+  await expect(stage).toHaveCount(0);
+  await page.getByRole("button", { name: "Apri la frase del giorno" }).click();
+  await expect(stage).toBeVisible();
 });

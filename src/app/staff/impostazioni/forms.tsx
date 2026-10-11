@@ -47,7 +47,7 @@ export function MethodForm({ action, value }: { action: Action; value: string })
   );
 }
 
-export function PrivacyForm({ action, values }: { action: Action; values: { legal_name: string; legal_address: string; legal_tax_id: string; privacy_email: string } }) {
+export function PrivacyForm({ action, values }: { action: Action; values: { legal_name: string; legal_address: string; legal_tax_id: string; privacy_email: string; privacy_pec?: string } }) {
   const [state, formAction] = useActionState(action, null);
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -63,6 +63,9 @@ export function PrivacyForm({ action, values }: { action: Action; values: { lega
         </Field>
         <Field label="Email per la privacy">
           <Input name="privacy_email" type="email" defaultValue={values.privacy_email} />
+        </Field>
+        <Field label="PEC" hint="facoltativa">
+          <Input name="privacy_pec" type="email" defaultValue={values.privacy_pec ?? ""} />
         </Field>
       </div>
       <ActionMessage state={state} />

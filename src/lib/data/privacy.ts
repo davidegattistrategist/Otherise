@@ -7,7 +7,7 @@ import type { PrivacyOwner } from "@/lib/privacy";
 export const getPrivacyOwner = cache(async (): Promise<PrivacyOwner> => {
   const { data } = await createAdminClient()
     .from("app_settings")
-    .select("business_name, legal_name, legal_address, legal_tax_id, privacy_email")
+    .select("business_name, legal_name, legal_address, legal_tax_id, privacy_email, privacy_pec")
     .eq("id", 1)
     .maybeSingle();
   return {
@@ -16,5 +16,6 @@ export const getPrivacyOwner = cache(async (): Promise<PrivacyOwner> => {
     legalAddress: data?.legal_address ?? "",
     legalTaxId: data?.legal_tax_id ?? "",
     privacyEmail: data?.privacy_email ?? "",
+    privacyPec: data?.privacy_pec ?? "",
   };
 });

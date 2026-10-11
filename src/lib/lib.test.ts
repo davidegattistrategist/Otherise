@@ -3,10 +3,12 @@ import { prescriptionRule, setDifferences, workoutVsPlan } from "./reply-context
 import { describe, expect, it } from "vitest";
 import { commonSites, computeBodyComposition, formulaById, formulaUpgrade, protocolSites, referenceFormula, siteAverage } from "./body/skinfolds";
 import { sortChecks } from "./check-order";
+import { checkDue } from "./check-due";
+import { QUOTES, quoteOfDay } from "./quotes";
 import { estimateOneRepMax } from "./strength/e1rm";
 import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
 import { billingStatus, periodEnd, suggestNextPeriod } from "./billing";
-import { addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
+import { addDays, addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
 import { displayWeek, nextDay, nextWorkout, programEndDate, weekPosition } from "./program/schedule";
 import { buildNextPhase, copyWeekToOthers } from "./program/next-phase";
 import { blockLetter, blockSummary, emptyBlock, itemLabel, normalizeWeeks, parseContent, type ProgramContent } from "./program/types";
@@ -120,6 +122,32 @@ describe("plicometria", () => {
 
   it("protocollo donna senza pettorale e ascellare", () => {
     expect(protocolSites("F")).toEqual(["tricipite", "sottoscapolare", "soprailiaca", "addominale", "coscia"]);
+  });
+});
+
+describe("frase del giorno", () => {
+  it("100 frasi in sequenza, uguale per tutti nello stesso giorno, poi ricomincia", () => {
+    expect(QUOTES).toHaveLength(100);
+    expect(quoteOfDay("2026-10-12").n).toBe(1);
+    expect(quoteOfDay("2026-10-13").n).toBe(2);
+    expect(quoteOfDay(addDays("2026-10-12", 99)).n).toBe(100);
+    expect(quoteOfDay(addDays("2026-10-12", 100)).n).toBe(1);
+    expect(quoteOfDay("2026-10-11").n).toBe(100);
+    expect(quoteOfDay("2026-10-13").quote).toEqual({ text: "Chi ha cominciato è a metà dell'opera.", author: "Orazio" });
+  });
+});
+
+describe("check da fare", () => {
+  const prog = (endDate: string) => ({ endDate, state: "running" });
+  it("solo per chi fa i check nell'app, dall'ultima settimana della fase", () => {
+    expect(checkDue({ checksInApp: false, lastCheck: "2026-09-01", program: prog("2026-10-14") }, "2026-10-12")).toBeNull();
+    expect(checkDue({ checksInApp: true, lastCheck: "2026-09-01", program: prog("2026-10-30") }, "2026-10-12")).toBeNull();
+    expect(checkDue({ checksInApp: true, lastCheck: "2026-09-01", program: prog("2026-10-15") }, "2026-10-12")?.text).toBe("La fase finisce tra 3 giorni");
+    expect(checkDue({ checksInApp: true, lastCheck: "2026-09-01", program: prog("2026-10-10") }, "2026-10-12")).toEqual({ text: "Fase finita da 2 giorni", late: true });
+  });
+  it("sparisce quando il check di fine fase è fatto, e senza programma non c'è", () => {
+    expect(checkDue({ checksInApp: true, lastCheck: "2026-10-11", program: prog("2026-10-15") }, "2026-10-12")).toBeNull();
+    expect(checkDue({ checksInApp: true, lastCheck: "2026-09-01", program: null }, "2026-10-12")).toBeNull();
   });
 });
 
@@ -509,9 +537,17 @@ describe("whatsapp e record", () => {
   });
 });
 
-import { emptyProject, projectForAI, projectNowText } from "./project";
+import { emptyProject, isProjectEmpty, projectForAI, projectNowText } from "./project";
 
 describe("progetto annuale", () => {
+  it("vuoto finché il trainer non scrive qualcosa; senza la riga massa magra", () => {
+    const p = emptyProject("2026-10");
+    expect(isProjectEmpty(p)).toBe(true);
+    expect(p.rows.map((r) => r.label)).not.toContain("Massa magra");
+    expect(isProjectEmpty({ ...p, goal: "Mezza maratona" })).toBe(false);
+    expect(isProjectEmpty({ ...p, rows: p.rows.map((r, i) => (i === 0 ? { ...r, values: [1, ...r.values.slice(1)] } : r)) })).toBe(false);
+  });
+
   it("riassume la fase attuale e la prossima, e il testo per l'AI", () => {
     const p = emptyProject("2026-10");
     p.phases = ["volume", "volume", "transition", "intensity", "intensity", "", "", "", "", "", "", ""];

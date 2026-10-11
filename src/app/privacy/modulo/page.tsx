@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getPrivacyOwner } from "@/lib/data/privacy";
-import { healthConsentText } from "@/lib/privacy";
+import { healthConsentText, instagramConsentText } from "@/lib/privacy";
 import { PrivacyNotice } from "@/components/privacy-notice";
 import { PrintButton } from "./print-button";
 
@@ -30,9 +30,10 @@ export default async function PrivacyFormPage() {
           <div>Nome e cognome<div className={line} /></div>
           <div>Data di nascita<div className={line} /></div>
         </div>
-        <p className="mt-4">Dichiaro di aver ricevuto e letto l&apos;informativa qui sopra.</p>
-        <p className="mt-3">{healthConsentText(owner)}</p>
+        <p className="mt-4">{healthConsentText(owner)}</p>
         <p className="mt-2 flex gap-8"><span>☐ Do il consenso</span><span>☐ Non do il consenso</span></p>
+        <p className="mt-4">{instagramConsentText(owner)}</p>
+        <p className="mt-2 flex gap-8"><span>☐ Do il permesso</span><span>☐ Non do il permesso</span></p>
         <p className="mt-4 text-[13px] text-muted">Se il cliente ha meno di 18 anni firma un genitore o chi ne fa le veci, indicando qui sotto il proprio nome.</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>Luogo e data<div className={line} /></div>

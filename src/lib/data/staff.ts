@@ -1,9 +1,10 @@
 import "server-only";
 import { bySurname, listName } from "../names";
+import { checkDue } from "../check-due";
 import type { ServerSupabase } from "../supabase/server";
 import type { Me } from "../auth";
 import { billingStatus, type BillingRow, type BillingStatus, type PlanKind } from "../billing";
-import { addDays, diffDays, todayISO, type ISODate } from "../dates";
+import { diffDays, todayISO, type ISODate } from "../dates";
 import { displayWeek, programEndDate, weekPosition } from "../program/schedule";
 import { compliance, type Compliance } from "../compliance";
 
@@ -27,6 +28,8 @@ export type ClientOverview = ClientRow & {
   program: { id: string; title: string; week: number; weeks: number; endDate: ISODate; state: "running" | "not_started" | "finished" } | null;
   draftCount: number;
   lastCheck: ISODate | null;
+  /** Almeno un check registrato nell'app (non importato dallo storico) */
+  checksInApp: boolean;
   lastLog: ISODate | null;
   billing: BillingStatus | null;
   /** Allenamenti registrati sugli attesi negli ultimi 14 giorni (null se non c'è un programma in corso da almeno una settimana) */
@@ -54,7 +57,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
 
   const [programs, checks, logs, coaches, billing, settings] = await Promise.all([
     supabase.from("programs").select("id, client_id, title, weeks, start_date, status, content").in("client_id", ids).in("status", ["published", "draft"]).order("start_date", { ascending: false }),
-    supabase.from("checks").select("client_id, check_date").in("client_id", ids).not("check_date", "is", null).order("check_date", { ascending: false }),
+    supabase.from("checks").select("client_id, check_date, imported").in("client_id", ids).not("check_date", "is", null).order("check_date", { ascending: false }),
     supabase.from("workout_logs").select("client_id, performed_on, completed").in("client_id", ids).order("performed_on", { ascending: false }).limit(2000),
     supabase.from("profiles").select("id, full_name").in("role", ["owner", "coach"]),
     me.role === "owner" ? supabase.rpc("billing_overview") : Promise.resolve({ data: null }),
@@ -68,6 +71,8 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
     return m;
   };
   const lastCheck = firstBy(checks.data);
+  // con chi i check si fanno nell'app (lo storico importato non conta)
+  const appChecks = new Set((checks.data ?? []).filter((k) => !k.imported).map((k) => k.client_id));
   const lastLog = firstBy(logs.data);
   const billingBy = new Map((billing.data ?? []).map((b) => [b.client_id, b]));
 
@@ -110,6 +115,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
       program,
       draftCount: progs.filter((p) => p.status === "draft").length,
       lastCheck: lastCheck.get(c.id)?.check_date ?? null,
+      checksInApp: appChecks.has(c.id),
       lastLog: lastLog.get(c.id)?.performed_on ?? null,
       compliance: comp,
       billing: me.role === "owner" && c.status !== "paused" ? billingStatus(b ? ({ ...b, kind: b.kind as PlanKind } as BillingRow) : null, today, reminderDays) : null,
@@ -146,10 +152,8 @@ export function buildTodayList(clients: ClientOverview[], today: ISODate = today
       if (c.program.state === "finished") programs.push({ clientId: c.id, clientName: c.fullName, text: -left === 1 ? "Programma finito ieri" : `Programma finito da ${-left} giorni`, href: `/staff/clienti/${c.id}/programma`, tone: "accent" });
       else if (left <= 7) programs.push({ clientId: c.id, clientName: c.fullName, text: left === 0 ? "Il programma finisce oggi" : left === 1 ? "Il programma finisce domani" : `Il programma finisce tra ${left} giorni`, href: `/staff/clienti/${c.id}/programma`, tone: "ink" });
     }
-    const checkLimit = addDays(today, -35);
-    if (!c.lastCheck || c.lastCheck < checkLimit) {
-      checks.push({ clientId: c.id, clientName: c.fullName, text: c.lastCheck ? `Ultimo check ${diffDays(c.lastCheck, today)} giorni fa` : "Nessun check registrato", href: `/staff/clienti/${c.id}/check`, tone: "ink" });
-    }
+    const due = checkDue(c, today);
+    if (due) checks.push({ clientId: c.id, clientName: c.fullName, text: due.text, href: `/staff/clienti/${c.id}/check/nuovo`, tone: due.late ? "accent" : "ink" });
   }
   return { payments, programs, checks, training };
 }

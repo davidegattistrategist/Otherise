@@ -16,3 +16,11 @@ export async function recordPaperConsent(clientId: string) {
     .eq("id", clientId);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
 }
+
+/** Permesso per Instagram dato (o tolto) su carta o a voce: lo segna lo staff. */
+export async function setInstagramFromStaff(clientId: string, consent: boolean) {
+  await requireStaff();
+  const supabase = await createClient();
+  await supabase.from("clients").update({ instagram_consent_at: consent ? new Date().toISOString() : null }).eq("id", clientId);
+  revalidatePath(`/staff/clienti/${clientId}`, "layout");
+}

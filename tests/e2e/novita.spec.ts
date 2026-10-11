@@ -106,7 +106,18 @@ test("previsione incassi: solo il titolare, con orizzonte 3/6/12 mesi", async ({
   await expect(page.locator("tbody tr")).toHaveCount(6);
   await page.getByRole("link", { name: "12 mesi" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(12);
-  await expect(page.getByText("Prova Luca").first()).toBeVisible();
+  // toccando i mesi si vede chi deve pagare: Luca ha un rinnovo in uno dei 12 mesi
+  await expect(page.getByText(/Chi deve pagare a /)).toBeVisible();
+  const months = page.locator("tbody tr a");
+  let found = false;
+  for (let i = 0; i < 12 && !found; i++) {
+    const href = (await months.nth(i).getAttribute("href"))!;
+    await months.nth(i).click();
+    await page.waitForURL((u) => href.includes(`mese=${u.searchParams.get("mese")}`));
+    await expect(page.locator("#dettaglio").getByText(/Chi deve pagare a /)).toBeVisible();
+    found = (await page.locator("#dettaglio").getByText("Prova Luca").count()) > 0;
+  }
+  expect(found).toBe(true);
   // il collaboratore non ci entra
   const coach = await (await browser.newContext(info.project.use)).newPage();
   await login(coach, "collaboratore@prova.local");

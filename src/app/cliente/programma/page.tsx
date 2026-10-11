@@ -6,7 +6,7 @@ import { addDays, formatShort, todayISO } from "@/lib/dates";
 import { nextWorkout, programEndDate } from "@/lib/program/schedule";
 import { Card, EmptyState, Eyebrow, cx } from "@/components/ui";
 import { ProgramDayView } from "@/components/program-day";
-import { IconCheck } from "@/components/icons";
+import { IconCheck, IconDown } from "@/components/icons";
 
 export const metadata: Metadata = { title: "Programma" };
 
@@ -30,6 +30,7 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
   const weekStart = addDays(program.start_date, (week - 1) * 7);
   const base = `/cliente/programma?${program.id !== current?.id ? `programma=${program.id}&` : ""}settimana=`;
   const canLog = program.status === "published" && program.start_date <= todayISO();
+  const pastOthers = past.filter((p) => p.id !== program.id);
 
   return (
     <div className="flex flex-col gap-4">
@@ -77,16 +78,36 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
         );
       })}
 
-      {past.length || (upcoming && program.id !== upcoming.id) || (current && program.id !== current.id) ? (
+      {/* altre fasi: in corso e prossima in vista, quelle passate nell'archivio */}
+      {[current, upcoming].some((p) => p && p.id !== program.id) ? (
         <Card className="flex flex-col gap-2">
           <Eyebrow>Altre fasi</Eyebrow>
-          {[current, upcoming, ...past].filter((p): p is MyProgram => Boolean(p) && p!.id !== program.id).map((p) => (
+          {[current, upcoming].filter((p): p is MyProgram => Boolean(p) && p!.id !== program.id).map((p) => (
             <Link key={p.id} href={`/cliente/programma?programma=${p.id}&settimana=1`} className="flex items-baseline justify-between gap-3 border-t border-sand-deep py-2.5 first:border-t-0 hover:opacity-70">
               <span className="font-semibold">{p.title}</span>
               <span className="text-sm text-muted">{p.id === current?.id ? "in corso" : `dal ${formatShort(p.start_date)}`}</span>
             </Link>
           ))}
         </Card>
+      ) : null}
+      {pastOthers.length ? (
+        <details className="group rounded-[24px] bg-card">
+          <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+            <span>
+              <span className="font-semibold">Archivio</span>
+              <span className="ml-2 text-sm text-muted">{pastOthers.length === 1 ? "1 fase passata" : `${pastOthers.length} fasi passate`}</span>
+            </span>
+            <IconDown size={18} className="shrink-0 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="flex flex-col px-5 pb-3">
+            {pastOthers.map((p) => (
+              <Link key={p.id} href={`/cliente/programma?programma=${p.id}&settimana=1`} className="flex items-baseline justify-between gap-3 border-t border-sand-deep py-2.5 hover:opacity-70">
+                <span className="font-semibold">{p.title}</span>
+                <span className="text-sm text-muted">dal {formatShort(p.start_date)}</span>
+              </Link>
+            ))}
+          </div>
+        </details>
       ) : null}
     </div>
   );

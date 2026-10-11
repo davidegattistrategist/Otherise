@@ -2,12 +2,12 @@ import { formatLong } from "@/lib/dates";
 import { Card, Dot, Eyebrow, buttonClass } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { IconDownload } from "@/components/icons";
-import { recordPaperConsent } from "./privacy-actions";
+import { recordPaperConsent, setInstagramFromStaff } from "./privacy-actions";
 
 type Props = {
   clientId: string;
   isOwner: boolean;
-  consent: { health_consent_at: string | null; consent_source: string | null };
+  consent: { health_consent_at: string | null; consent_source: string | null; instagram_consent_at: string | null };
 };
 
 export function PrivacyStaffCard({ clientId, isOwner, consent }: Props) {
@@ -21,6 +21,23 @@ export function PrivacyStaffCard({ clientId, isOwner, consent }: Props) {
           ? `Consenso dati salute: ${formatLong(consent.health_consent_at!.slice(0, 10))}${consent.consent_source === "paper" ? " (su carta)" : " (nell'app)"}`
           : "Consenso sui dati di salute non ancora dato"}
       </div>
+      {ok ? (
+        <div className="flex items-center gap-2 text-[15px]">
+          <Dot tone={consent.instagram_consent_at ? "ink" : "muted"} />
+          {consent.instagram_consent_at ? `Video su Instagram: sì, dal ${formatLong(consent.instagram_consent_at.slice(0, 10))}` : "Video su Instagram: no, non pubblicare contenuti con lui"}
+        </div>
+      ) : null}
+      {ok ? (
+        <form action={setInstagramFromStaff.bind(null, clientId, !consent.instagram_consent_at)}>
+          <ConfirmButton
+            variant="ghost"
+            className="!min-h-0 !px-0 text-sm underline"
+            message={consent.instagram_consent_at ? "Il cliente ti ha chiesto di togliere il permesso per Instagram?" : "Il cliente ti ha dato il permesso per Instagram su carta (modulo firmato)? Conserva il foglio."}
+          >
+            {consent.instagram_consent_at ? "Ha tolto il permesso" : "Ha firmato il permesso su carta"}
+          </ConfirmButton>
+        </form>
+      ) : null}
       {!ok ? (
         <>
           <p className="text-sm leading-relaxed text-muted">

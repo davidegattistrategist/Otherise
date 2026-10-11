@@ -398,4 +398,16 @@ describe.skipIf(!run)("permessi", () => {
     await owner.from("clients").update({ status: "active" }).eq("id", clientAId).throwOnError();
     expect((await clientA.from("programs").select("id")).data!.length).toBeGreaterThan(0);
   });
+  it("permesso per Instagram: lo dà e lo toglie il cliente, lo vede lo staff; check importati segnati", async () => {
+    await clientA.rpc("accept_privacy", { version: "test", instagram: true }).throwOnError();
+    expect((await coach.from("clients").select("instagram_consent_at").eq("id", clientAId).single()).data!.instagram_consent_at).not.toBeNull();
+    await clientA.rpc("set_instagram_consent", { consent: false }).throwOnError();
+    expect((await admin.from("clients").select("instagram_consent_at").eq("id", clientAId).single()).data!.instagram_consent_at).toBeNull();
+    // un cliente non può cambiare il permesso di un altro né scriverlo direttamente insieme ad altri dati
+    await clientA.from("clients").update({ instagram_consent_at: new Date().toISOString(), goals: "altro" }).eq("id", clientAId);
+    expect((await admin.from("clients").select("goals").eq("id", clientAId).single()).data!.goals).not.toBe("altro");
+    expect((await stranger.rpc("set_instagram_consent", { consent: true })).error).not.toBeNull();
+    const { data: k } = await coach.from("checks").insert({ client_id: clientAId, check_date: "2026-10-01", sex: "F" }).select("imported").single().throwOnError();
+    expect(k!.imported).toBe(false);
+  });
 });

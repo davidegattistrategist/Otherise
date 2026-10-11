@@ -45,13 +45,13 @@ export default async function SettingsPage() {
   const supabase = await createClient();
   const monthStart = `${todayISO().slice(0, 7)}-01`;
   const [{ data: settings }, { data: usage }, { count: examples }, { data: learned }, trend] = await Promise.all([
-    supabase.from("app_settings").select("business_name, coaching_method, reminder_days, ai_monthly_budget_eur, payment_message, legal_name, legal_address, legal_tax_id, privacy_email").maybeSingle(),
+    supabase.from("app_settings").select("business_name, coaching_method, reminder_days, ai_monthly_budget_eur, payment_message, legal_name, legal_address, legal_tax_id, privacy_email, privacy_pec").maybeSingle(),
     supabase.from("ai_requests").select("cost_eur, kind").gte("created_at", `${monthStart}T00:00:00Z`),
     supabase.from("programs").select("id", { count: "exact", head: true }).eq("is_ai_example", true),
     supabase.from("app_settings").select("ai_lessons, ai_lessons_updated_at, ai_reply_lessons, ai_reply_lessons_updated_at").maybeSingle(),
     correctionTrend(supabase),
   ]);
-  const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20, payment_message: "", legal_name: "", legal_address: "", legal_tax_id: "", privacy_email: "" };
+  const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20, payment_message: "", legal_name: "", legal_address: "", legal_tax_id: "", privacy_email: "", privacy_pec: "" };
   const privacyMissing = !s.legal_name || !s.legal_address || !s.legal_tax_id || !s.privacy_email;
   const spent = (usage ?? []).reduce((t, u) => t + Number(u.cost_eur), 0);
   const budget = Number(s.ai_monthly_budget_eur);

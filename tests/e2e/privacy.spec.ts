@@ -39,10 +39,17 @@ test("il cliente revoca il consenso e lo ridà", async ({ page }) => {
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: "Conferma e continua" }).click();
   await expect(page).toHaveURL(/\/consenso/);
-  await page.getByLabel("Ho letto l'informativa sul trattamento dei miei dati.").check();
-  await page.getByLabel(/Acconsento al trattamento dei miei dati relativi alla salute/).check();
+  // un solo consenso obbligatorio; il permesso per Instagram è a parte e facoltativo
+  await page.getByLabel(/Ho letto l'informativa e acconsento/).check();
+  await expect(page.getByLabel(/Facoltativo: autorizzo/)).not.toBeChecked();
   await page.getByRole("button", { name: "Conferma e continua" }).click();
   await page.waitForURL((u) => u.pathname === "/cliente");
+  // il permesso per Instagram si può dare anche dopo, dalla privacy
+  await page.goto("/cliente/profilo");
+  await page.getByRole("button", { name: "Dai il permesso" }).click();
+  await expect(page.getByText(/Ci hai dato il permesso di pubblicare su Instagram/)).toBeVisible();
+  await page.getByRole("button", { name: "Togli il permesso" }).click();
+  await expect(page.getByText(/non pubblichiamo nulla di te/)).toBeVisible();
   // richiesta di una copia dei dati
   await page.goto("/cliente/profilo");
   await page.waitForLoadState("networkidle");

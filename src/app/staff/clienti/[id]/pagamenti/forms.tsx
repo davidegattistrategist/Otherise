@@ -13,14 +13,18 @@ export function PlanForm({
   values,
   today,
   submitLabel,
+  editing = false,
 }: {
   action: Action;
   values?: { kind: string; amount: number | string; method: string; start_date: string; package_sessions: number | null; notes: string };
   today: string;
   submitLabel: string;
+  /** modifica di un piano esistente: si sceglie se vale da una data o se è una correzione */
+  editing?: boolean;
 }) {
   const [state, formAction] = useActionState(action, null);
   const [kind, setKind] = useState<PlanKind>((values?.kind as PlanKind) ?? "monthly");
+  const [mode, setMode] = useState<"from" | "fix">("from");
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -43,9 +47,22 @@ export function PlanForm({
           </Select>
         </Field>
         <Field label="In vigore dal" hint={kind === "package" ? "le sessioni PT da questa data scalano il pacchetto" : undefined}>
-          <Input name="start_date" type="date" defaultValue={values?.start_date ?? today} required />
+          <Input key={mode} name="start_date" type="date" defaultValue={editing && mode === "from" ? today : values?.start_date ?? today} required />
         </Field>
       </div>
+      {editing ? (
+        <fieldset className="flex flex-col gap-2 rounded-2xl bg-sand p-4">
+          <legend className="sr-only">Come vale la modifica</legend>
+          <label className="flex items-start gap-3 text-[15px]">
+            <input type="radio" name="mode" value="from" checked={mode === "from"} onChange={() => setMode("from")} className="mt-1 h-5 w-5 accent-[#1b1a17]" />
+            <span><strong>Cambia da una data</strong><span className="block text-sm text-muted">Per esempio un nuovo prezzo o un altro tipo di abbonamento. Il piano di prima resta nello storico con i suoi pagamenti.</span></span>
+          </label>
+          <label className="flex items-start gap-3 text-[15px]">
+            <input type="radio" name="mode" value="fix" checked={mode === "fix"} onChange={() => setMode("fix")} className="mt-1 h-5 w-5 accent-[#1b1a17]" />
+            <span><strong>Correggi un errore</strong><span className="block text-sm text-muted">Il piano era stato scritto male: la correzione vale anche per i pagamenti già registrati.</span></span>
+          </label>
+        </fieldset>
+      ) : null}
       <Field label="Note" hint="facoltative">
         <Textarea name="notes" rows={2} defaultValue={values?.notes ?? ""} placeholder="Es. sconto amici, paga a inizio mese" />
       </Field>

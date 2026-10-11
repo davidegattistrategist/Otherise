@@ -30,7 +30,9 @@ export default async function StaffChatPage({ params, searchParams }: { params: 
       ? await paymentReminderText(supabase, clientId)
       : promemoria === "compleanno"
         ? `Tanti auguri ${client.first_name}! 🎉`
-        : null;
+        : promemoria === "saluto"
+          ? `Ciao ${client.first_name}! Come sta andando?`
+          : null;
   return (
     <div className="flex flex-col gap-3">
       {promemoria ? <ClearParams names={["promemoria"]} /> : null}

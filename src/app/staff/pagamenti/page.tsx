@@ -3,7 +3,7 @@ import { listName } from "@/lib/names";
 import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatShort, todayISO } from "@/lib/dates";
+import { addMonths, formatShort, todayISO } from "@/lib/dates";
 import { formatEuro, METHOD_LABELS, type BillingStatus, type PaymentMethod } from "@/lib/billing";
 import { getBillingLines, getRevenue, monthLabel } from "@/lib/data/billing";
 import { BarChart } from "@/components/bar-chart";
@@ -15,16 +15,22 @@ export const metadata: Metadata = { title: "Pagamenti" };
 
 const ORDER: Record<BillingStatus["state"], number> = { overdue: 0, due_soon: 1, none: 2, ok: 3 };
 
-export default async function PaymentsOverviewPage() {
+export default async function PaymentsOverviewPage({ searchParams }: { searchParams: Promise<{ incassi?: string }> }) {
   await requireOwner();
+  const sp = await searchParams;
   const supabase = await createClient();
   const today = todayISO();
   const year = today.slice(0, 4);
   const { lines } = await getBillingLines(supabase);
+  // mese aperto nel grafico degli incassi (di base quello in corso)
+  const month = /^\d{4}-\d{2}$/.test(sp.incassi ?? "") ? sp.incassi! : today.slice(0, 7);
+  const nextMonth = addMonths(`${month}-01`, 1);
   const [revenue, { data: recent }] = await Promise.all([
     getRevenue(supabase, lines),
-    supabase.from("payments").select("id, client_id, paid_on, amount, method, clients!inner(first_name, last_name, free)").eq("clients.free", false).order("paid_on", { ascending: false }).order("created_at", { ascending: false }).limit(12),
+    supabase.from("payments").select("id, client_id, paid_on, amount, method, clients!inner(first_name, last_name, free)").eq("clients.free", false).gte("paid_on", `${month}-01`).lt("paid_on", nextMonth).order("paid_on", { ascending: false }).order("created_at", { ascending: false }),
   ]);
+  const monthTotal = (recent ?? []).reduce((t, p) => t + Number(p.amount), 0);
+  const monthIndex = revenue.buckets.findIndex((b) => b.month === month);
   const rows = [...lines].sort((a, z) => ORDER[a.status.state] - ORDER[z.status.state] || (a.status.daysLeft ?? 999) - (z.status.daysLeft ?? 999));
   const attention = rows.filter((r) => r.status.state === "overdue" || r.status.state === "due_soon");
   const thisMonth = revenue.buckets[revenue.buckets.length - 1]?.total ?? 0;
@@ -77,10 +83,14 @@ export default async function PaymentsOverviewPage() {
             <Eyebrow>Incassi per mese</Eyebrow>
             <span className="text-sm text-muted">ricorrente stimato {formatEuro(Math.round(revenue.recurring))} / mese</span>
           </div>
-          <BarChart label="Incassi per mese" bars={revenue.buckets.map((b) => ({ label: monthLabel(b.month), value: b.total }))} format={(v) => (v >= 1000 ? `${(v / 1000).toLocaleString("it-IT", { maximumFractionDigits: 1 })}k` : String(Math.round(v)))} />
+          <p className="-mt-2 text-sm text-muted">Tocca un mese per vedere chi ha pagato.</p>
+          <BarChart label="Incassi per mese" selected={monthIndex >= 0 ? monthIndex : undefined} bars={revenue.buckets.map((b) => ({ label: monthLabel(b.month), value: b.total, href: `/staff/pagamenti?incassi=${b.month}#incassi-mese` }))} format={(v) => (v >= 1000 ? `${(v / 1000).toLocaleString("it-IT", { maximumFractionDigits: 1 })}k` : String(Math.round(v)))} />
         </Card>
-        <Card className="flex flex-col gap-2">
-          <Eyebrow>Ultimi pagamenti</Eyebrow>
+        <Card id="incassi-mese" className="flex scroll-mt-6 flex-col gap-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <Eyebrow>Incassati a {new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-15T00:00:00Z`))}</Eyebrow>
+            <span className="font-semibold tabular">{formatEuro(monthTotal)}</span>
+          </div>
           {recent?.length ? (
             <ul className="flex flex-col">
               {recent.map((p) => {
@@ -94,7 +104,7 @@ export default async function PaymentsOverviewPage() {
               })}
             </ul>
           ) : (
-            <p className="text-[15px] text-muted">Nessun pagamento registrato. Apri un cliente → Pagamenti per impostare il piano.</p>
+            <p className="text-[15px] text-muted">Nessun pagamento registrato in questo mese.</p>
           )}
         </Card>
       </div>

@@ -12,9 +12,8 @@ Questo file mette insieme tutto quello che serve sulla privacy (GDPR) per usare 
 
 ## Cosa fa già l'app
 - **Informativa pubblica** su `/privacy`, con i tuoi dati presi dalle Impostazioni.
-- **Consenso al primo accesso.** Il cliente non entra nella sua area finché non:
-  - conferma di aver letto l'informativa;
-  - dà il consenso esplicito sui dati relativi alla salute (art. 9 GDPR).
+- **Consenso al primo accesso.** Il cliente non entra nella sua area finché non spunta **una sola casella** che vale per: informativa letta, consenso esplicito sui dati relativi alla salute (art. 9 GDPR) e foto e video fatti durante gli allenamenti, usati solo per il servizio (mai pubblicati).
+  - Una seconda casella, **facoltativa**, è il permesso di pubblicare su Instagram (e sugli altri social del brand) alcuni video delle sedute di personal training fatte insieme, gratis, revocabile per il futuro. Il cliente può darlo o toglierlo anche dopo, da Percorso → Privacy; nella sua scheda (Scheda → Privacy) vedi se l'ha dato.
 
   La data del consenso resta registrata. Se in futuro cambi l'informativa in modo importante, l'app gliela ripropone (chi sviluppa aggiorna `PRIVACY_VERSION` in `src/lib/privacy.ts`).
 - **Consenso su carta** per chi inizia di persona, prima di avere l'app:
@@ -29,7 +28,7 @@ Questo file mette insieme tutto quello che serve sulla privacy (GDPR) per usare 
   Le richieste ti arrivano come notifica (ed email). Di solito si ha **un mese** per rispondere.
 - **Copia dei dati**: scheda del cliente → Scheda → "Scarica tutti i suoi dati" (solo titolare). Scarica un file con tutto quello che l'app conserva su quel cliente.
 - **Cancellazione**: scheda del cliente → Scheda → "Elimina per sempre". Cancella dati, account, foto e video della chat.
-- **Conservazione**: quando un cliente è archiviato da 24 mesi, l'app ti avvisa che è il momento di cancellarlo, come scritto nell'informativa.
+- **Conservazione**: quando un ex cliente ha finito il percorso da 5 anni, l'app ti avvisa che è il momento di cancellarne i dati sulla salute, come scritto nell'informativa.
 - **Sicurezza**:
   - si entra solo su invito;
   - i permessi sono controllati dal database (il collaboratore vede solo i suoi clienti);
@@ -75,10 +74,10 @@ Il registro è obbligatorio quando si trattano dati relativi alla salute in modo
 | Finalità | Programmazione e monitoraggio degli allenamenti; valutazioni corporee e posturali; comunicazioni con il cliente; gestione amministrativa degli abbonamenti; sicurezza dell'app |
 | Categorie di interessati | Clienti (anche potenziali); collaboratori |
 | Categorie di dati | Anagrafici e di contatto; dati relativi alla salute (misure, pliche, composizione corporea, postura, test, dolori, sonno, stress, foto e video); dati di allenamento; messaggi; dati amministrativi (importi e date dei pagamenti); dati tecnici di accesso |
-| Basi giuridiche | Contratto (art. 6.1.b); consenso esplicito per i dati relativi alla salute (art. 9.2.a); obbligo legale per i documenti fiscali (art. 6.1.c); legittimo interesse per la sicurezza (art. 6.1.f) |
+| Basi giuridiche | Contratto (art. 6.1.b); consenso esplicito per i dati relativi alla salute (art. 9.2.a); consenso facoltativo per la pubblicazione sui social (art. 6.1.a); obbligo legale per i documenti fiscali (art. 6.1.c); legittimo interesse per sicurezza, tutela dei diritti e email su servizi simili (art. 6.1.f e art. 130 c.4 Codice privacy) |
 | Destinatari | Collaboratori autorizzati; responsabili: Supabase, Vercel, Anthropic, Resend; commercialista (solo dati amministrativi) |
 | Trasferimenti extra UE | USA (Vercel, Anthropic, Resend, Supabase Inc.), con clausole contrattuali standard o Data Privacy Framework |
-| Conservazione | Durata del percorso + 24 mesi dall'archiviazione, poi cancellazione; documenti fiscali 10 anni (fuori dall'app) |
+| Conservazione | Dati sulla salute, foto e video: durata del percorso + 5 anni; anagrafica e contratto: 10 anni; documenti fiscali 10 anni (fuori dall'app); contenuti social: fino a revoca |
 | Misure di sicurezza | Accesso solo su invito con password personale; permessi a livello di database; cifratura delle connessioni; archivio privato per i file; pseudonimizzazione verso l'AI; backup giornalieri (Supabase Pro); revoca immediata degli accessi dei collaboratori |
 
 ## Se succede qualcosa (violazione dei dati)

@@ -28,7 +28,6 @@ export const DEFAULT_ROWS: Array<{ label: string; kind: "training" | "nutrition"
   { label: "Posturale", kind: "training" },
   { label: "Forza massima", kind: "training" },
   { label: "Forza resistente", kind: "training" },
-  { label: "Massa magra", kind: "training" },
   { label: "Aerobico", kind: "training" },
   { label: "Vo2Max", kind: "training" },
   { label: "Alimentazione", kind: "nutrition" },
@@ -63,6 +62,11 @@ export function emptyProject(startMonth: string): Project {
     notes: Array(MONTHS).fill(""),
     rows: DEFAULT_ROWS.map((r, i) => ({ id: `d${i}`, label: r.label, kind: r.kind, values: Array(MONTHS).fill(0) })),
   };
+}
+
+/** Progetto senza niente di scritto (né obiettivo, né fasi, né note, né stimoli): al cliente non si mostra. */
+export function isProjectEmpty(p: Project): boolean {
+  return !p.goal.trim() && p.phases.every((x) => !x) && p.notes.every((x) => !x.trim()) && p.rows.every((r) => r.values.every((v) => v === 0));
 }
 
 /** Il progetto salvato, oppure null se manca o non è valido. */

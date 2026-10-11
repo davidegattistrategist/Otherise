@@ -7,7 +7,7 @@ import { formatShort, todayISO } from "@/lib/dates";
 import { displayWeek, programEndDate, weekPosition } from "@/lib/program/schedule";
 import { Card, Dot, EmptyState, Eyebrow, Pill, ProgressBar, Select, buttonClass } from "@/components/ui";
 import { SubmitButton } from "@/components/form-bits";
-import { IconSparkle } from "@/components/icons";
+import { IconDown, IconSparkle } from "@/components/icons";
 import { createEmptyProgram, createFromTemplate, createNextPhase, importFromSheet } from "../../../programmi/actions";
 import { aiEnabled } from "@/lib/ai/claude";
 import { ImportForm } from "./import-form";
@@ -40,6 +40,10 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
   const published = all.filter((p) => p.status === "published" && p.start_date);
   const current = published.find((p) => p.start_date! <= today) ?? published[published.length - 1] ?? null;
   const latestBase = current ?? all.find((p) => p.status !== "draft") ?? null;
+  // in vista: bozze, fase in corso e quelle che devono ancora iniziare
+  const isActive = (p: (typeof all)[number]) => p.status === "draft" || p.id === current?.id || (p.status === "published" && Boolean(p.start_date) && p.start_date! > today);
+  const active = all.filter(isActive);
+  const archived = all.filter((p) => !isActive(p));
   const ai = aiEnabled();
   const [profile, { data: baseContent }] = await Promise.all([
     getAiProfile(supabase, id),
@@ -95,42 +99,26 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
         </Card>
       </div>
 
-      {/* elenco programmi */}
+      {/* elenco programmi: bozze, fase in corso e prossime; le fasi passate nell'archivio */}
       {all.length === 0 ? (
         <EmptyState title="Ancora nessun programma">Crealo da zero, da un modello, oppure importa la scheda dal foglio Google qui sotto.</EmptyState>
       ) : (
         <div className="flex flex-col gap-3">
-          {all.map((p) => {
-            const isCurrent = current?.id === p.id;
-            const pos = p.start_date ? weekPosition(p.start_date, p.weeks, today) : null;
-            const week = p.start_date ? displayWeek(p.start_date, p.weeks, today) : null;
-            return (
-              <Link key={p.id} href={`/staff/programmi/${p.id}`} className="block rounded-[24px] bg-card p-5 hover:bg-white">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-lg font-semibold">{p.title}</span>
-                      <Pill active={p.status === "published"}>{STATUS[p.status as keyof typeof STATUS]}</Pill>
-                      {isCurrent ? <Pill><Dot tone="accent" /> In corso</Pill> : null}
-                      {p.source === "ai" ? <Pill><IconSparkle size={13} /> AI</Pill> : null}
-                    </div>
-                    <div className="mt-1 text-sm text-muted">
-                      {p.weeks} settimane
-                      {p.start_date ? ` · dal ${formatShort(p.start_date)} al ${formatShort(programEndDate(p.start_date, p.weeks))}` : ""}
-                      {doneBy.get(p.id) ? ` · ${doneBy.get(p.id)} sessioni registrate` : ""}
-                    </div>
-                  </div>
-                  <span className={buttonClass("secondary", "sm")}>Apri</span>
-                </div>
-                {isCurrent && pos?.state === "running" && week ? (
-                  <div className="mt-4 flex items-center gap-3">
-                    <span className="shrink-0 text-sm font-semibold">Settimana {week} di {p.weeks}</span>
-                    <ProgressBar value={(week / p.weeks) * 100} />
-                  </div>
-                ) : null}
-              </Link>
-            );
-          })}
+          {active.map((p) => <ProgramRow key={p.id} p={p} isCurrent={current?.id === p.id} today={today} done={doneBy.get(p.id) ?? 0} />)}
+          {archived.length ? (
+            <details className="group rounded-[24px] bg-card" open={active.length === 0}>
+              <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+                <span>
+                  <span className="text-lg font-semibold">Archivio</span>
+                  <span className="ml-2 text-sm text-muted">{archived.length === 1 ? "1 fase passata" : `${archived.length} fasi passate`}</span>
+                </span>
+                <IconDown size={18} className="shrink-0 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="flex flex-col gap-2 px-2 pb-2">
+                {archived.map((p) => <ProgramRow key={p.id} p={p} isCurrent={false} today={today} done={doneBy.get(p.id) ?? 0} compact />)}
+              </div>
+            </details>
+          ) : null}
         </div>
       )}
 
@@ -167,5 +155,38 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
         <ImportForm action={importFromSheet.bind(null, id)} />
       </Card>
     </div>
+  );
+}
+
+type ProgramItem = { id: string; title: string; weeks: number; start_date: string | null; status: string; source: string | null };
+
+function ProgramRow({ p, isCurrent, today, done, compact }: { p: ProgramItem; isCurrent: boolean; today: string; done: number; compact?: boolean }) {
+  const pos = p.start_date ? weekPosition(p.start_date, p.weeks, today) : null;
+  const week = p.start_date ? displayWeek(p.start_date, p.weeks, today) : null;
+  return (
+    <Link href={`/staff/programmi/${p.id}`} className={compact ? "block rounded-[18px] px-3 py-3 hover:bg-white" : "block rounded-[24px] bg-card p-5 hover:bg-white"}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={compact ? "font-semibold" : "text-lg font-semibold"}>{p.title}</span>
+            {!compact ? <Pill active={p.status === "published"}>{STATUS[p.status as keyof typeof STATUS]}</Pill> : null}
+            {isCurrent ? <Pill><Dot tone="accent" /> In corso</Pill> : null}
+            {p.source === "ai" ? <Pill><IconSparkle size={13} /> AI</Pill> : null}
+          </div>
+          <div className="mt-1 text-sm text-muted">
+            {p.weeks} settimane
+            {p.start_date ? ` · dal ${formatShort(p.start_date)} al ${formatShort(programEndDate(p.start_date, p.weeks))}` : ""}
+            {done ? ` · ${done} sessioni registrate` : ""}
+          </div>
+        </div>
+        {!compact ? <span className={buttonClass("secondary", "sm")}>Apri</span> : null}
+      </div>
+      {isCurrent && pos?.state === "running" && week ? (
+        <div className="mt-4 flex items-center gap-3">
+          <span className="shrink-0 text-sm font-semibold">Settimana {week} di {p.weeks}</span>
+          <ProgressBar value={(week / p.weeks) * 100} />
+        </div>
+      ) : null}
+    </Link>
   );
 }
