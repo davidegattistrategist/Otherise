@@ -131,6 +131,19 @@ describe.skipIf(!run)("permessi", () => {
     expect(dates.data).toHaveLength(1);
   });
 
+  it("storico importato: fasi passate e check senza data; il cliente non vede i check senza data", async () => {
+    // una fase passata può non avere la data, un programma pubblicato no
+    const old = await coach.from("programs").insert({ client_id: clientAId, title: "01 Fase importata", weeks: 4, status: "archived", source: "import" }).select("id").single();
+    expect(old.error).toBeNull();
+    expect((await coach.from("programs").insert({ client_id: clientAId, title: "Senza data", weeks: 4, status: "published" })).error).not.toBeNull();
+    // check dello storico: numero ma niente data, visibile solo allo staff per scelta dell'import
+    await coach.from("checks").insert({ client_id: clientAId, check_date: null, sequence: 1, notes_next_phase: "Check 1 importato", visible_to_client: true }).throwOnError();
+    const mine = (await clientA.rpc("my_checks")).data! as Array<Record<string, unknown>>;
+    expect(mine.every((c) => c.check_date !== null)).toBe(true);
+    expect((await coach.from("checks").select("sequence").eq("client_id", clientAId).not("sequence", "is", null)).data).toEqual([{ sequence: 1 }]);
+    await admin.from("programs").delete().eq("id", old.data!.id);
+  });
+
   it("il cliente non può modificare la propria scheda né il proprio ruolo", async () => {
     await clientA.from("clients").update({ first_name: "Hacker" }).eq("id", clientAId);
     const { data } = await admin.from("clients").select("first_name").eq("id", clientAId).single();

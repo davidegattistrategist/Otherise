@@ -28,13 +28,15 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
   const supabase = await createClient();
   const today = todayISO();
   const [{ data: programs }, { data: templates }, { data: logs }] = await Promise.all([
-    supabase.from("programs").select("id, title, weeks, start_date, status, source, updated_at").eq("client_id", id).order("start_date", { ascending: false, nullsFirst: true }),
+    supabase.from("programs").select("id, title, weeks, start_date, status, source, updated_at, created_at").eq("client_id", id).order("start_date", { ascending: false, nullsFirst: true }),
     supabase.from("programs").select("id, title, weeks").eq("is_template", true).order("title"),
     supabase.from("workout_logs").select("program_id, completed").eq("client_id", id).eq("completed", true),
   ]);
   const doneBy = new Map<string, number>();
   (logs ?? []).forEach((l) => doneBy.set(l.program_id, (doneBy.get(l.program_id) ?? 0) + 1));
-  const all = programs ?? [];
+  // bozze in cima, poi le fasi con la data (dalla più recente), poi quelle importate senza data (dalla più recente)
+  const rank = (p: { status: string; start_date: string | null }) => (p.status === "draft" ? 0 : p.start_date ? 1 : 2);
+  const all = [...(programs ?? [])].sort((a, b) => rank(a) - rank(b) || (b.start_date ?? "").localeCompare(a.start_date ?? "") || b.created_at.localeCompare(a.created_at));
   const published = all.filter((p) => p.status === "published" && p.start_date);
   const current = published.find((p) => p.start_date! <= today) ?? published[published.length - 1] ?? null;
   const latestBase = current ?? all.find((p) => p.status !== "draft") ?? null;

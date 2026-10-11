@@ -1,3 +1,4 @@
+import { checkLabel, sortChecks } from "@/lib/check-order";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
@@ -26,9 +27,10 @@ export default async function ProgramEditorPage({ params }: { params: Promise<{ 
     supabase.from("exercises").select("id, name, video_url").eq("archived", false).order("name"),
     program.client_id ? supabase.rpc("last_exercise_logs", { cid: program.client_id }) : Promise.resolve({ data: [] as Array<{ exercise_id: string | null; exercise_name: string; performed_on: string; sets: unknown; result_text: string }> }),
     program.client_id
-      ? supabase.from("checks").select("check_date, notes_next_phase").eq("client_id", program.client_id).neq("notes_next_phase", "").order("check_date", { ascending: false }).limit(1).maybeSingle()
-      : Promise.resolve({ data: null }),
+      ? supabase.from("checks").select("check_date, sequence, created_at, notes_next_phase").eq("client_id", program.client_id).neq("notes_next_phase", "").limit(200)
+      : Promise.resolve({ data: [] as Array<{ check_date: string | null; sequence: number | null; created_at: string; notes_next_phase: string }> }),
   ]);
+  const lastNotes = sortChecks(checkRes.data ?? []).pop() ?? null;
 
   const lastLogs: Record<string, string> = {};
   for (const l of lastLogsRes.data ?? []) {
@@ -47,7 +49,7 @@ export default async function ProgramEditorPage({ params }: { params: Promise<{ 
       initialContent={parseContent(program.content)}
       exercises={exercises ?? []}
       lastLogs={lastLogs}
-      nextPhaseNotes={checkRes.data ? { date: checkRes.data.check_date, text: checkRes.data.notes_next_phase } : null}
+      nextPhaseNotes={lastNotes ? { label: checkLabel(lastNotes), text: lastNotes.notes_next_phase } : null}
       clientName={clientName}
       aiEnabled={aiEnabled()}
       backHref={program.client_id ? `/staff/clienti/${program.client_id}/programma` : "/staff/modelli"}

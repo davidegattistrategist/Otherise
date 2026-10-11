@@ -44,7 +44,7 @@ export async function loadSession(supabase: ServerSupabase, programId: string, w
     supabase.rpc("last_exercise_logs", { cid, before_date: before }),
     supabase.from("exercise_logs").select("exercise_name, exercise_id, performed_on, sets, workout_log_id").eq("client_id", cid).lt("performed_on", before).order("performed_on", { ascending: false }).limit(1500),
     viewer === "staff"
-      ? supabase.from("checks").select("check_date, strength_tests").eq("client_id", cid).order("check_date", { ascending: true })
+      ? supabase.from("checks").select("check_date, strength_tests").eq("client_id", cid).not("check_date", "is", null).order("check_date", { ascending: true })
       : supabase.rpc("my_checks"),
     getVideoMap(),
   ]);

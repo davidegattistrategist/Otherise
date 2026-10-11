@@ -49,7 +49,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
 
   const [programs, checks, logs, coaches, billing, settings] = await Promise.all([
     supabase.from("programs").select("id, client_id, title, weeks, start_date, status, content").in("client_id", ids).in("status", ["published", "draft"]).order("start_date", { ascending: false }),
-    supabase.from("checks").select("client_id, check_date").in("client_id", ids).order("check_date", { ascending: false }),
+    supabase.from("checks").select("client_id, check_date").in("client_id", ids).not("check_date", "is", null).order("check_date", { ascending: false }),
     supabase.from("workout_logs").select("client_id, performed_on, completed").in("client_id", ids).order("performed_on", { ascending: false }).limit(2000),
     supabase.from("profiles").select("id, full_name").in("role", ["owner", "coach"]),
     me.role === "owner" ? supabase.rpc("billing_overview") : Promise.resolve({ data: null }),

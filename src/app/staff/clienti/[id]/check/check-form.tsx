@@ -67,7 +67,7 @@ export function CheckForm({
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <Label htmlFor="check_date">Data</Label>
-            <Input id="check_date" name="check_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            <Input id="check_date" name="check_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required={Boolean(values.check_date)} />
           </div>
           <div>
             <Label htmlFor="weight_kg" hint="kg">Peso</Label>

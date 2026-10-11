@@ -11,6 +11,7 @@ import { summarizeSets, type SetLog } from "../program/prescription";
 import { parseProject, projectForAI } from "../project";
 import { balanceText, programBalance } from "../program/balance";
 import { profileText } from "../ai-profile";
+import { checkLabel, sortChecks } from "../check-order";
 import { getAiProfile } from "../data/ai-profile";
 
 /** Programma in testo leggibile e compatto (per esempi e storico). */
@@ -50,9 +51,9 @@ export async function buildClientContext(
   const since = addDays(today, -16 * 7);
   const [client, programs, logs, checks, posture, checkins, pt, project, aiProfile] = await Promise.all([
     supabase.from("clients").select("sex, birth_date, goals, start_date, phase_weeks").eq("id", clientId).single(),
-    supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", clientId).neq("status", "draft").order("start_date", { ascending: false }).limit(3),
+    supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", clientId).neq("status", "draft").order("start_date", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(3),
     supabase.from("exercise_logs").select("exercise_name, performed_on, week, sets, result_text").eq("client_id", clientId).gte("performed_on", since).order("performed_on"),
-    supabase.from("checks").select("check_date, weight_kg, body_fat_pct, lean_mass_kg, fat_mass_kg, circumferences, strength_tests, tests_text, notes_next_phase").eq("client_id", clientId).order("check_date", { ascending: false }).limit(3),
+    supabase.from("checks").select("check_date, sequence, created_at, weight_kg, body_fat_pct, lean_mass_kg, fat_mass_kg, circumferences, strength_tests, tests_text, notes_next_phase").eq("client_id", clientId).limit(300),
     supabase.from("posture_assessments").select("assessed_on, tight_muscles, what_works, posture_work, notes").eq("client_id", clientId).order("assessed_on", { ascending: false }).limit(2),
     supabase.from("checkins").select("week_start, training, sleep, stress, adherence, issues, request").eq("client_id", clientId).order("week_start", { ascending: false }).limit(4),
     supabase.from("pt_sessions").select("session_date, notes").eq("client_id", clientId).order("session_date", { ascending: false }).limit(6),
@@ -70,10 +71,12 @@ export async function buildClientContext(
   if (indications) parts.push(`## Indicazioni del trainer per questo cliente\n${indications}`);
 
   // prima di tutto: cosa il trainer ha già deciso di fare in questa fase
-  const lastNotes = (checks.data ?? []).find((k) => k.notes_next_phase?.trim());
+  // dal più recente: lo storico importato (anche senza data) e poi i check dell'app
+  const recentChecks = sortChecks(checks.data ?? []).reverse().slice(0, 4);
+  const lastNotes = recentChecks.find((k) => k.notes_next_phase?.trim());
   const lastPosture = (posture.data ?? [])[0];
   const todo = [
-    lastNotes ? `- Note prese all'ultimo check (${lastNotes.check_date}) per la fase successiva, cioè QUESTA: ${lastNotes.notes_next_phase!.trim()}` : "",
+    lastNotes ? `- Note prese all'ultimo check (${lastNotes.check_date ?? checkLabel(lastNotes)}) per la fase successiva, cioè QUESTA: ${lastNotes.notes_next_phase!.trim()}` : "",
     lastPosture?.posture_work?.trim() ? `- Lavori posturali dall'ultima valutazione (${lastPosture.assessed_on}), inseriscili come indicato (se non è indicato dove, nel blocco iniziale): ${lastPosture.posture_work.trim()}` : "",
   ].filter(Boolean);
   if (todo.length) parts.push(`## Da applicare in questo programma (deciso dal trainer)\n${todo.join("\n")}`);
@@ -95,7 +98,7 @@ export async function buildClientContext(
   if (past.length) {
     parts.push(
       "## Programmi precedenti (dal più recente)\n" +
-        past.map((p) => `Inizio ${p.start_date}\n${programToText(p.title, p.weeks, parseContent(p.content))}`).join("\n\n"),
+        past.map((p) => `${p.start_date ? `Inizio ${p.start_date}` : "Fase passata (data non registrata)"}\n${programToText(p.title, p.weeks, parseContent(p.content))}`).join("\n\n"),
     );
   }
 
@@ -116,15 +119,15 @@ export async function buildClientContext(
     parts.push("## Logbook\nIl cliente non ha registrato sessioni di recente.");
   }
 
-  if (checks.data?.length) {
+  if (recentChecks.length) {
     parts.push(
       "## Check (dal più recente)\n" +
-        checks.data
+        recentChecks
           .map((k) => {
             const tests = (k.strength_tests as Array<{ exercise?: string; load?: number; reps?: number; rpe?: number; e1rm?: number }> | null) ?? [];
             const testTxt = tests.filter((t) => t.exercise).map((t) => `${t.exercise} ${t.load ?? "?"}kg×${t.reps ?? "?"}${t.rpe ? ` @RPE${t.rpe}` : ""}${t.e1rm ? ` (e1RM ${t.e1rm})` : ""}`).join(", ");
             return [
-              `- ${k.check_date}: peso ${k.weight_kg ?? "—"} kg, massa grassa ${k.body_fat_pct ?? "—"}%, massa magra ${k.lean_mass_kg ?? "—"} kg`,
+              `- ${k.check_date ?? checkLabel(k)}: peso ${k.weight_kg ?? "—"} kg, massa grassa ${k.body_fat_pct ?? "—"}%, massa magra ${k.lean_mass_kg ?? "—"} kg`,
               testTxt ? `  Test di forza: ${testTxt}` : "",
               k.tests_text ? `  Altri test: ${k.tests_text}` : "",
               k.notes_next_phase ? `  Note per la fase successiva: ${k.notes_next_phase}` : "",

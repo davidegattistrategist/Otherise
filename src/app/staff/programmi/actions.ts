@@ -34,7 +34,7 @@ async function suggestedStart(clientId: string): Promise<string> {
     .select("start_date, weeks")
     .eq("client_id", clientId)
     .eq("status", "published")
-    .order("start_date", { ascending: false })
+    .order("start_date", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
   if (data?.start_date) {
@@ -153,7 +153,7 @@ export async function saveProgram(id: string, input: unknown): Promise<SaveResul
   if (v.expected_updated_at && current.updated_at !== v.expected_updated_at) {
     return { ok: false, conflict: true, error: "Qualcun altro ha modificato questo programma nel frattempo. Ricarica la pagina per vedere la versione aggiornata (le tue modifiche non salvate andrebbero perse: copiale prima)." };
   }
-  if (current.status !== "draft" && !v.start_date) return { ok: false, error: "Un programma pubblicato deve avere la data di inizio" };
+  if (current.status === "published" && !v.start_date) return { ok: false, error: "Un programma pubblicato deve avere la data di inizio" };
   const content = normalizeWeeks(v.content, v.weeks);
   const { data, error } = await supabase
     .from("programs")

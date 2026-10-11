@@ -1,8 +1,8 @@
+import { checkLabel, sortChecks } from "@/lib/check-order";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatShort } from "@/lib/dates";
 import { CIRCUMFERENCES } from "@/lib/body/skinfolds";
 import { LineChart } from "@/components/line-chart";
 import { Card, EmptyState, Eyebrow, LinkButton, Notice, fmtNum } from "@/components/ui";
@@ -17,13 +17,13 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
   const supabase = await createClient();
   const { data: checks } = await supabase
     .from("checks")
-    .select("id, check_date, weight_kg, body_fat_pct, fat_mass_kg, lean_mass_kg, circumferences, strength_tests, tests_text, notes_next_phase, visible_to_client")
+    .select("id, check_date, sequence, created_at, weight_kg, body_fat_pct, fat_mass_kg, lean_mass_kg, circumferences, strength_tests, tests_text, notes_next_phase, visible_to_client")
     .eq("client_id", id)
     .order("check_date", { ascending: true });
-  const list = checks ?? [];
+  const list = sortChecks(checks ?? []);
   const circKey = CIRCUMFERENCES.find((c) => c.key === misura)?.key ?? "vita";
   const series = (pick: (c: (typeof list)[number]) => number | null) =>
-    list.map((c) => ({ date: c.check_date, value: pick(c) })).filter((p): p is { date: string; value: number } => p.value !== null && p.value !== undefined);
+    list.map((c) => ({ date: c.check_date, value: pick(c) })).filter((p): p is { date: string; value: number } => Boolean(p.date) && p.value !== null && p.value !== undefined);
 
   return (
     <div className="flex flex-col gap-5">
@@ -57,7 +57,7 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
               return (
                 <Link key={c.id} href={`/staff/clienti/${id}/check/${c.id}`} className="block rounded-[24px] bg-card p-5 hover:bg-white">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-lg font-semibold">{formatShort(c.check_date, 0)}</span>
+                    <span className="text-lg font-semibold">{checkLabel(c, 0)}</span>
                     <span className="text-sm text-muted">{c.visible_to_client ? "Visibile al cliente" : "Solo staff"}</span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-x-6 gap-y-1 text-[15px]">
@@ -67,7 +67,7 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
                   </div>
                   {tests.length ? <div className="mt-1.5 text-sm text-muted">{tests.map((t) => `${t.exercise}${t.e1rm ? ` ≈ ${fmtNum(t.e1rm)} kg` : t.load ? ` ${fmtNum(t.load)}×${t.reps ?? "?"}` : ""}`).join(" · ")}</div> : null}
                   {c.tests_text ? <div className="mt-1 text-sm whitespace-pre-line text-muted">{c.tests_text}</div> : null}
-                  {c.notes_next_phase ? <div className="mt-2 line-clamp-2 text-sm text-ink-soft">Prossima fase: {c.notes_next_phase}</div> : null}
+                  {c.notes_next_phase ? <div className="mt-2 line-clamp-3 text-sm whitespace-pre-line text-ink-soft">Prossima fase: {c.notes_next_phase}</div> : null}
                 </Link>
               );
             })}

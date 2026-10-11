@@ -1,3 +1,4 @@
+import { sortChecks } from "@/lib/check-order";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
@@ -40,7 +41,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
 
   const [programs, checks, sessions, checkins, recentLogs, notes, billing, settings] = await Promise.all([
     supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", id).in("status", ["published", "draft"]).order("start_date", { ascending: false, nullsFirst: true }),
-    supabase.from("checks").select("check_date, weight_kg, body_fat_pct, lean_mass_kg, notes_next_phase").eq("client_id", id).order("check_date", { ascending: true }),
+    supabase.from("checks").select("check_date, sequence, created_at, weight_kg, body_fat_pct, lean_mass_kg, notes_next_phase").eq("client_id", id).order("check_date", { ascending: true }),
     supabase.from("pt_sessions").select("id, session_date, notes").eq("client_id", id).order("session_date", { ascending: false }).limit(3),
     supabase.from("checkins").select("id, week_start, training, sleep, stress, adherence, flagged, flag_reasons, request, reviewed_at").eq("client_id", id).order("week_start", { ascending: false }).limit(1),
     supabase.from("exercise_logs").select("exercise_name, performed_on, sets, result_text").eq("client_id", id).order("performed_on", { ascending: false }).limit(8),
@@ -101,12 +102,12 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
     );
   }
 
-  const checkList = checks.data ?? [];
+  const checkList = sortChecks(checks.data ?? []);
   const last = checkList[checkList.length - 1];
   const prev = checkList[checkList.length - 2];
   const n = (v: number | string | null | undefined) => (v === null || v === undefined ? null : Number(v));
-  const bf = checkList.filter((c) => c.body_fat_pct !== null).map((c) => ({ date: c.check_date, value: Number(c.body_fat_pct) }));
-  const weight = checkList.filter((c) => c.weight_kg !== null).map((c) => ({ date: c.check_date, value: Number(c.weight_kg) }));
+  const bf = checkList.filter((c) => c.body_fat_pct !== null && c.check_date).map((c) => ({ date: c.check_date!, value: Number(c.body_fat_pct) }));
+  const weight = checkList.filter((c) => c.weight_kg !== null && c.check_date).map((c) => ({ date: c.check_date!, value: Number(c.weight_kg) }));
 
   const b = (billing.data as BillingRow[] | null)?.[0];
   const bStatus = me.role === "owner" ? billingStatus(b ? { ...b, kind: b.kind as PlanKind } : null, today, settings.data?.reminder_days ?? 7) : null;
@@ -127,7 +128,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
               <div><div className="text-xs text-muted">Magra</div><BigNumber value={fmtNum(last.lean_mass_kg)} unit="kg" /><Delta now={n(last.lean_mass_kg)} before={n(prev?.lean_mass_kg)} unit="kg" goodWhen="up" /></div>
             </div>
             {bf.length > 1 ? <LineChart label="Massa grassa" unit="%" height={110} points={bf} /> : weight.length > 1 ? <LineChart label="Peso" unit="kg" height={110} points={weight} /> : null}
-            {last.notes_next_phase ? <p className="text-sm text-ink-soft"><span className="font-semibold">Per la prossima fase:</span> {last.notes_next_phase}</p> : null}
+            {last.notes_next_phase ? <p className="line-clamp-6 text-sm whitespace-pre-line text-ink-soft"><span className="font-semibold">Per la prossima fase:</span>{"\n"}{last.notes_next_phase}</p> : null}
             <ArrowCTA href={`/staff/clienti/${id}/check`}>Tutti i check</ArrowCTA>
           </>
         ) : (

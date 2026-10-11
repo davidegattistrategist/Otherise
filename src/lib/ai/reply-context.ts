@@ -23,7 +23,7 @@ export async function buildReplyContext(supabase: ServerSupabase, clientId: stri
     supabase.from("clients").select("sex, birth_date, goals").eq("id", clientId).single(),
     supabase.from("workout_logs").select("id, program_id, day_id, week, performed_on, completed, notes, discomfort").eq("client_id", clientId).gte("performed_on", addDays(today, -14)).order("performed_on", { ascending: false }).order("updated_at", { ascending: false }).limit(2),
     supabase.from("programs").select("id, title, weeks, content").eq("client_id", clientId).eq("status", "published").order("start_date", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("checks").select("check_date, weight_kg, body_fat_pct").eq("client_id", clientId).order("check_date", { ascending: false }).limit(1),
+    supabase.from("checks").select("check_date, sequence, created_at, weight_kg, body_fat_pct").eq("client_id", clientId).not("check_date", "is", null).order("check_date", { ascending: false }).limit(1),
     supabase.from("checkins").select("week_start, training, sleep, stress, adherence, issues").eq("client_id", clientId).order("week_start", { ascending: false }).limit(1),
     supabase.from("client_projects").select("data").eq("client_id", clientId).maybeSingle(),
     getAiProfile(supabase, clientId),

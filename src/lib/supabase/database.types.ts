@@ -137,14 +137,14 @@ isOneToOne: false
                   ]
                 },"checks": {
                   Row: {
-                    "age_years": number | null,"body_fat_pct": number | null,"check_date": string,"circumferences": NonNullable<Json>,"client_id": string,"created_at": string,"created_by": string | null,"fat_mass_kg": number | null,"id": string,"lean_mass_kg": number | null,"notes_next_phase": string,"sex": string | null,"skinfold_sum_mm": number | null,"skinfolds": NonNullable<Json>,"strength_tests": NonNullable<Json>,"tests_text": string,"visible_to_client": boolean,"weight_kg": number | null
+                    "age_years": number | null,"body_fat_pct": number | null,"check_date": string | null,"circumferences": NonNullable<Json>,"client_id": string,"created_at": string,"created_by": string | null,"fat_mass_kg": number | null,"id": string,"lean_mass_kg": number | null,"notes_next_phase": string,"sequence": number | null,"sex": string | null,"skinfold_sum_mm": number | null,"skinfolds": NonNullable<Json>,"strength_tests": NonNullable<Json>,"tests_text": string,"visible_to_client": boolean,"weight_kg": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "age_years"?: number | null,"body_fat_pct"?: number | null,"check_date"?: string,"circumferences"?: NonNullable<Json>,"client_id": string,"created_at"?: string,"created_by"?: string | null,"fat_mass_kg"?: number | null,"id"?: string,"lean_mass_kg"?: number | null,"notes_next_phase"?: string,"sex"?: string | null,"skinfold_sum_mm"?: number | null,"skinfolds"?: NonNullable<Json>,"strength_tests"?: NonNullable<Json>,"tests_text"?: string,"visible_to_client"?: boolean,"weight_kg"?: number | null
+                    "age_years"?: number | null,"body_fat_pct"?: number | null,"check_date"?: string | null,"circumferences"?: NonNullable<Json>,"client_id": string,"created_at"?: string,"created_by"?: string | null,"fat_mass_kg"?: number | null,"id"?: string,"lean_mass_kg"?: number | null,"notes_next_phase"?: string,"sequence"?: number | null,"sex"?: string | null,"skinfold_sum_mm"?: number | null,"skinfolds"?: NonNullable<Json>,"strength_tests"?: NonNullable<Json>,"tests_text"?: string,"visible_to_client"?: boolean,"weight_kg"?: number | null
                   }
                   Update: {
-                    "age_years"?: number | null,"body_fat_pct"?: number | null,"check_date"?: string,"circumferences"?: NonNullable<Json>,"client_id"?: string,"created_at"?: string,"created_by"?: string | null,"fat_mass_kg"?: number | null,"id"?: string,"lean_mass_kg"?: number | null,"notes_next_phase"?: string,"sex"?: string | null,"skinfold_sum_mm"?: number | null,"skinfolds"?: NonNullable<Json>,"strength_tests"?: NonNullable<Json>,"tests_text"?: string,"visible_to_client"?: boolean,"weight_kg"?: number | null
+                    "age_years"?: number | null,"body_fat_pct"?: number | null,"check_date"?: string | null,"circumferences"?: NonNullable<Json>,"client_id"?: string,"created_at"?: string,"created_by"?: string | null,"fat_mass_kg"?: number | null,"id"?: string,"lean_mass_kg"?: number | null,"notes_next_phase"?: string,"sequence"?: number | null,"sex"?: string | null,"skinfold_sum_mm"?: number | null,"skinfolds"?: NonNullable<Json>,"strength_tests"?: NonNullable<Json>,"tests_text"?: string,"visible_to_client"?: boolean,"weight_kg"?: number | null
                   }
                   Relationships: [
                     {

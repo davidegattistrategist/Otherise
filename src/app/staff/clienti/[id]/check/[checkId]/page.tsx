@@ -26,7 +26,7 @@ export default async function EditCheckPage({ params }: { params: Promise<{ id: 
         sex={(c.sex ?? client.sex) as Sex}
         birthDate={client.birth_date}
         values={{
-          check_date: c.check_date,
+          check_date: c.check_date ?? "",
           weight_kg: c.weight_kg === null ? null : Number(c.weight_kg),
           skinfolds: (c.skinfolds ?? {}) as CheckValues["skinfolds"],
           circumferences: (c.circumferences ?? {}) as Record<string, number>,

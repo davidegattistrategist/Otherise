@@ -23,7 +23,6 @@ import {
 } from "@/lib/program/types";
 import { copyWeekToOthers, duplicateDay } from "@/lib/program/next-phase";
 import { PROGRESSION_RULES, fillWeeks, type ProgressionRule } from "@/lib/program/progression";
-import { formatLong, type ISODate } from "@/lib/dates";
 import { Button, Card, Eyebrow, Input, Notice, Pill, Select, Textarea, buttonClass, cx } from "@/components/ui";
 import { IconArrowLeft, IconCopy, IconDown, IconPlus, IconSparkle, IconTrash, IconUp, IconX } from "@/components/icons";
 import {
@@ -62,7 +61,7 @@ type Props = {
   initialContent: ProgramContent;
   exercises: LibraryExercise[];
   lastLogs: Record<string, string>;
-  nextPhaseNotes: { date: ISODate; text: string } | null;
+  nextPhaseNotes: { label: string; text: string } | null;
   clientName: string | null;
   aiEnabled: boolean;
   backHref: string;
@@ -337,7 +336,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         </div>
         {nextPhaseNotes ? (
           <div className="mt-5 rounded-2xl bg-sand px-4 py-3">
-            <Eyebrow>Note per la prossima fase · check del {formatLong(nextPhaseNotes.date)}</Eyebrow>
+            <Eyebrow>Note per la prossima fase · {/^\d/.test(nextPhaseNotes.label) ? `check del ${nextPhaseNotes.label}` : nextPhaseNotes.label}</Eyebrow>
             <p className="mt-1.5 text-[15px] leading-relaxed whitespace-pre-line">{nextPhaseNotes.text}</p>
           </div>
         ) : null}

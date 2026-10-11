@@ -268,6 +268,55 @@ describe("import dai fogli Google", () => {
     expect(r.warnings.length).toBeGreaterThan(0);
   });
 
+  it("colonne lette dall'intestazione, circuiti con i giri, settimane vuote ripetute, testo", () => {
+    const sheet = [
+      "Programmazione",
+      ',Giorno 1,,,Week 1,Week 2,Week 3,,Week 4,Rest,Indicazioni,Video',
+      ',Posturale (leggi note),https://youtu.be/x,,,,,,,,"- Stretching femorale\n- Addome",',
+      ',Log,https://youtu.be/log,,,,,,,,,',
+      ',Squat,,,4x5 50kg,4x6 50kg,4x4 55kg,,4x5 55kg,EMOM 2,,',
+      'Circuito,Rematore,,,4x8 16kg,,,,,,,',
+      ',Alzate laterali,,,4x12/14,,,,,EMOM 2,5,,',
+      'Cirucito 4 giri,Vogatore,,,300m,,,,,,,',
+      ',Affondi,,,30 passi,,,,,,,',
+      ',Burpees,,,10,,,,,"60""",,',
+      'Circuito,Ponte femorali,,,4x6/8,,,,,,,',
+      ',Deadbug,,,"3x20"" per lato",,,,,,,',
+      ',Corsa libera,,,min 20\',,,,,,,',
+    ].join("\n");
+    const r = parseProgramSheet(sheet);
+    expect(r.weeks).toBe(4);
+    const b = r.content.days[0].blocks;
+    expect(b.map((x) => x.kind)).toEqual(["text", "single", "superset", "circuit", "superset", "single"]);
+    expect(b[0].title).toBe("Posturale (leggi note)");
+    expect(b[0].notes).toContain("Stretching femorale");
+    expect(b[1].items[0].prescriptions).toEqual(["4x5 50kg", "4x6 50kg", "4x4 55kg", "4x5 55kg"]);
+    expect(b[2].items.map((i) => i.name)).toEqual(["Rematore", "Alzate laterali"]);
+    expect(b[2].items[1].prescriptions).toEqual(["4x12/14", "4x12/14", "4x12/14", "4x12/14"]);
+    expect(b[3].rounds).toBe(4);
+    expect(b[3].items.map((i) => i.name)).toEqual(["Vogatore", "Affondi", "Burpees"]);
+    expect(b[4].items.map((i) => i.name)).toEqual(["Ponte femorali", "Deadbug"]);
+    expect(r.logs).toEqual([]);
+  });
+
+  it("fogli vecchi: intestazione unica S1…, giorni \"Giorno N\", logbook a destra, settimane con il solo carico", () => {
+    const sheet = [
+      "Programmazione,,,,,,,,,,,,,Logbook",
+      ",,,,S1,S2,S3,S4,S5,S6,Rest,Indicazioni,Video,Week 1,Week 2,Week 3,Week 4,Week 5,Week 6",
+      ",Giorno 1,,,,,,,,,,,,,,,,,",
+      ",Hip thrust,,,4x6,40kg,40kg,45kg,,,,Salita in 3 secondi,video,4x6 40kg,4x6 42kg,,,,",
+      ",Pulley,,,3x12,20kg,,,,,,,,,,,,,",
+      ",Giorno 2,,,,,,,,,,,,,,,,,",
+      ",Corsa,,,30',,,,,,,,,,,,,,",
+    ].join("\n");
+    const r = parseProgramSheet(sheet);
+    expect(r.content.days.map((d) => d.title)).toEqual(["Giorno 1", "Giorno 2"]);
+    const hip = r.content.days[0].blocks[0].items[0];
+    expect(hip.prescriptions).toEqual(["4x6", "4x6 40kg", "4x6 40kg", "4x6 45kg"]);
+    expect(r.content.days[0].blocks[1].items[0].prescriptions).toEqual(["3x12", "3x12 20kg", "3x12 20kg", "3x12 20kg"]);
+    expect(r.logs.filter((l) => l.itemId === hip.id).map((l) => [l.week, l.text])).toEqual([[1, "4x6 40kg"], [2, "4x6 42kg"]]);
+  });
+
   it("eserciziario: colonne Esercizio, Video, Note e doppioni", () => {
     const { rows, duplicates } = parseExerciseCsv(
       "Esercizio,Video,Note\nAbductor machine,https://www.youtube.com/watch?v=_U2eLh9h4VU,Schiena staccata\nRematore con elastico,,\nRematore con elastico,https://youtu.be/abcdefghijk,Nota\n",

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { ageOn, isISODate } from "@/lib/dates";
+import { ageOn, isISODate, todayISO } from "@/lib/dates";
 import { CIRCUMFERENCES, SKINFOLD_SITES, computeBodyComposition, type Sex, type SkinfoldReadings } from "@/lib/body/skinfolds";
 import { estimateOneRepMax } from "@/lib/strength/e1rm";
 import type { ActionState } from "@/components/form-bits";
@@ -25,7 +25,7 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Act
   if (!client) return { error: "Cliente non trovato." };
 
   const date = String(fd.get("check_date") ?? "");
-  if (!isISODate(date)) return { error: "Data del check non valida." };
+  if (date && !isISODate(date)) return { error: "Data del check non valida." };
   const weight = num(fd.get("weight_kg"));
   if (weight !== null && (weight < 25 || weight > 300)) return { error: "Il peso sembra sbagliato." };
 
@@ -50,11 +50,11 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Act
     tests.push({ exercise, load, reps, rpe, e1rm: load && reps && rpe ? estimateOneRepMax(load, reps, rpe) : null });
   }
 
-  const age = ageOn(client.birth_date, date);
+  const age = ageOn(client.birth_date, date || todayISO());
   const comp = computeBodyComposition({ sex: client.sex as Sex, age, weightKg: weight, skinfolds });
   const row = {
     client_id: clientId,
-    check_date: date,
+    check_date: date || null,
     weight_kg: weight,
     age_years: age,
     sex: client.sex,
