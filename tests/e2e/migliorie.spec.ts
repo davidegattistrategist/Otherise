@@ -173,3 +173,22 @@ test("il cliente vede record ed esercizi nei progressi", async ({ page }) => {
   await expect(page.getByText("I tuoi esercizi")).toBeVisible();
   await expect(page.getByText("I tuoi record")).toBeVisible();
 });
+
+test("link per entrare preparato dal trainer: il cliente sceglie la password senza aspettare l'email", async ({ page, browser }, info) => {
+  test.skip(info.project.name !== "pc", "basta una volta");
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/clienti");
+  await page.locator('a[href^="/staff/clienti/"]', { hasText: "Test Sara" }).filter({ visible: true }).first().click();
+  await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
+  await page.goto(`${page.url()}/profilo`);
+  await page.getByRole("button", { name: "Prepara il link per entrare" }).click();
+  const box = page.getByText(/Ecco il link per entrare nell'app/);
+  await expect(box).toBeVisible();
+  const link = /(https?:\/\/\S+)/.exec((await box.textContent()) ?? "")![1];
+  const client = await (await browser.newContext(info.project.use)).newPage();
+  await client.goto(link);
+  // l'anteprima della pagina non consuma il link: serve il pulsante
+  await expect(client.getByRole("heading", { name: "Benvenuto" })).toBeVisible();
+  await client.getByRole("link", { name: "Entra e scegli la password" }).click();
+  await client.waitForURL(/\/imposta-password/);
+});

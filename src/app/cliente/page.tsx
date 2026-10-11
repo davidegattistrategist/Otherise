@@ -8,7 +8,7 @@ import { getMyLogs, getMyPrograms } from "@/lib/data/me";
 import { diffDays, formatHeading, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { completedCount, nextWorkout, programEndDate, timeProgress } from "@/lib/program/schedule";
 import { blockHeading } from "@/lib/program/types";
-import { billingStatus, type BillingRow, type PlanKind } from "@/lib/billing";
+import { billingStatus, type BillingRow, type PlanKind, clientFacingStatus } from "@/lib/billing";
 import { checkinWeekFor } from "@/lib/checkin";
 import { LineChart } from "@/components/line-chart";
 import { ArrowCTA, BigNumber, Card, Dot, Eyebrow, LinkButton, Notice, ProgressBar, Ring, fmtNum } from "@/components/ui";
@@ -41,7 +41,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
 
   const row = (billing as BillingRow[] | null)?.[0];
   // in pausa: nessun promemoria di rinnovo (il cliente usa l'app come sempre)
-  const pay = row && me.clientStatus !== "paused" ? billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7) : null;
+  const pay = row && me.clientStatus !== "paused" ? clientFacingStatus(billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7)) : null;
   const bf = (checks ?? []).filter((c) => c.body_fat_pct !== null).map((c) => ({ date: c.check_date, value: Number(c.body_fat_pct) }));
   const weight = (checks ?? []).filter((c) => c.weight_kg !== null).map((c) => ({ date: c.check_date, value: Number(c.weight_kg) }));
   const lastCheck = checks?.length ? checks[checks.length - 1] : null;

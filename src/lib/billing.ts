@@ -134,6 +134,22 @@ export function billingStatus(row: BillingRow | null | undefined, today: ISODate
   return { state, label, clientLabel: `${noun} saldato fino al`, dueDate: row.paid_until, daysLeft, sessionsLeft: null };
 }
 
+/** Oltre quanti giorni di ritardo il cliente non vede più avvisi di rinnovo (se ne occupa il trainer di persona). */
+export const CLIENT_OVERDUE_LIMIT = 10;
+
+/**
+ * Lo stato dei pagamenti da far vedere al cliente: in regola, in scadenza o
+ * scaduto da poco. Un ritardo lungo (o un dato vecchio, per esempio dallo
+ * storico importato) non si mostra e non manda promemoria: lo vede il trainer.
+ */
+export function clientFacingStatus(st: BillingStatus): BillingStatus | null {
+  if (st.state !== "overdue") return st;
+  if (st.daysLeft !== null) return -st.daysLeft <= CLIENT_OVERDUE_LIMIT ? st : null;
+  // pacchetto finito: avviso solo se ha sforato di poco
+  if (st.sessionsLeft !== null && st.sessionsLeft < 0 && st.sessionsLeft >= -2) return st;
+  return st.sessionsLeft === 0 ? st : null;
+}
+
 export function formatEuro(n: number | string | null | undefined): string {
   const v = typeof n === "string" ? Number(n) : n ?? 0;
   // "always": in italiano senza questa opzione 5550 € resterebbe senza punto delle migliaia

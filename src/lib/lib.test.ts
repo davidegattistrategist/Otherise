@@ -7,7 +7,7 @@ import { checkDue } from "./check-due";
 import { QUOTES, quoteOfDay } from "./quotes";
 import { estimateOneRepMax } from "./strength/e1rm";
 import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
-import { billingStatus, periodEnd, suggestNextPeriod } from "./billing";
+import { billingStatus, clientFacingStatus, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
 import { addDays, addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
 import { displayWeek, nextDay, nextWorkout, programEndDate, weekPosition } from "./program/schedule";
 import { buildNextPhase, copyWeekToOthers } from "./program/next-phase";
@@ -259,6 +259,16 @@ describe("pagamenti", () => {
     expect(pkg.label).toBe("2 sessioni rimaste");
     expect(billingStatus({ ...base, kind: "package", sessions_bought: 10, sessions_used: 10 }, "2026-10-09").state).toBe("overdue");
     expect(billingStatus(null, "2026-10-09").state).toBe("none");
+  });  it("al cliente solo scadenze vicine", () => {
+    const base = { plan_id: "p", amount: 600, sessions_bought: 0, sessions_used: 0, paid_until: null as string | null };
+    const st = (r: Partial<typeof base> & { kind: PlanKind }) => clientFacingStatus(billingStatus({ ...base, ...r }, "2026-10-12"));
+    expect(st({ kind: "quarterly", paid_until: "2026-11-01" })?.state).toBe("ok");
+    expect(st({ kind: "quarterly", paid_until: "2026-10-15" })?.state).toBe("due_soon");
+    expect(st({ kind: "quarterly", paid_until: "2026-10-05" })?.state).toBe("overdue");
+    expect(st({ kind: "quarterly", paid_until: "2026-06-30" })).toBeNull();
+    expect(st({ kind: "monthly", paid_until: null })).toBeNull();
+    expect(st({ kind: "package", sessions_bought: 10, sessions_used: 10 })?.state).toBe("overdue");
+    expect(st({ kind: "package", sessions_bought: 10, sessions_used: 15 })).toBeNull();
   });
 });
 

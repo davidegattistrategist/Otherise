@@ -7,7 +7,7 @@ import { notify, type NewNotification } from "./notify";
 import { deliverPendingEmails, sendEmail } from "./email";
 import { addDays, ageOn, diffDays, formatHeading, formatLong, isBirthday, isoWeekday, mondayOf, todayISO } from "./dates";
 import { siteUrl } from "./site";
-import { billingStatus, type PlanKind } from "./billing";
+import { billingStatus, clientFacingStatus, type PlanKind } from "./billing";
 import { checkinWeekFor } from "./checkin";
 import { programEndDate } from "./program/schedule";
 
@@ -35,7 +35,8 @@ export async function runDailyChecks(today = todayISO()) {
     for (const o of ownerIds) {
       out.push({ recipient_id: o, client_id: c.id, kind: "payment_due", title: `Pagamento: ${name(c)}`, body: st.label, link: `/staff/clienti/${c.id}/pagamenti`, dedupe_key: `pay:${c.id}:${key}:${st.state}` });
     }
-    if (c.user_id) {
+    // al cliente scriviamo solo per scadenze vicine: un ritardo lungo lo gestisce il coach di persona
+    if (c.user_id && clientFacingStatus(st)) {
       const body = st.sessionsLeft !== null
         ? st.sessionsLeft <= 0 ? "Il tuo pacchetto di sessioni è terminato: quando vuoi rinnova con il tuo coach." : `Ti restano ${st.sessionsLeft} sessioni nel pacchetto.`
         : st.state === "overdue" ? "Il periodo saldato è terminato: quando vuoi rinnova con il tuo coach." : `Il periodo saldato termina il ${formatLong(st.dueDate!)}.`;

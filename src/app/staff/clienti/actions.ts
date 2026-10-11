@@ -149,3 +149,31 @@ export async function setClientStatus(clientId: string, status: "active" | "paus
   revalidatePath("/staff", "layout");
   redirect(`/staff/clienti/${clientId}/profilo?stato=${status}`);
 }
+
+export type InviteLinkState = { link?: string; error?: string } | null;
+
+/**
+ * Link per entrare senza aspettare l'email (da mandare su WhatsApp o per
+ * messaggio): crea l'account se serve e prepara il link per scegliere la
+ * password. Il link apre una pagina con un pulsante, così le anteprime dei
+ * messaggi non lo consumano.
+ */
+export async function inviteLinkAction(clientId: string, _: InviteLinkState): Promise<InviteLinkState> {
+  await requireStaff();
+  const supabase = await createClient();
+  const { data: client } = await supabase.from("clients").select("id, email, user_id").eq("id", clientId).maybeSingle();
+  if (!client) return { error: "Cliente non trovato." };
+  if (!client.email) return { error: "Aggiungi prima l'email del cliente." };
+  const admin = createAdminClient();
+  let type: "invite" | "recovery" = client.user_id ? "recovery" : "invite";
+  let res = await admin.auth.admin.generateLink({ type, email: client.email });
+  if (res.error && type === "invite" && /already/i.test(res.error.message)) {
+    // l'account c'è già (per esempio invitato prima): link per scegliere la password
+    type = "recovery";
+    res = await admin.auth.admin.generateLink({ type, email: client.email });
+  }
+  const hash = res.data?.properties?.hashed_token;
+  if (res.error || !hash) return { error: `Non sono riuscito a preparare il link. ${res.error ? friendlyError(res.error) : ""}`.trim() };
+  revalidatePath(`/staff/clienti/${clientId}`, "layout");
+  return { link: `${await siteUrl()}/auth/entra?token_hash=${encodeURIComponent(hash)}&type=${type}` };
+}

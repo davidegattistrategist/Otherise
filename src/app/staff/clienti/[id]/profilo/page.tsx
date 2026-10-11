@@ -6,8 +6,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Button, Card, Eyebrow, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { ClientForm } from "../../client-form";
-import { deleteClientAction, inviteClientAction, setClientStatus, updateClientAction } from "../../actions";
+import { deleteClientAction, inviteClientAction, inviteLinkAction, setClientStatus, updateClientAction } from "../../actions";
 import { InviteButton } from "./invite-button";
+import { InviteLink } from "./invite-link";
 import { PrivacyStaffCard } from "./privacy-staff-card";
 import { ClearParams } from "@/components/clear-param";
 
@@ -75,6 +76,7 @@ export default async function ClientProfilePage({ params, searchParams }: { para
             <div className="flex flex-col gap-3">
               <p className="text-[15px] leading-relaxed text-muted">Invito inviato a {client.email}, ma il cliente non è ancora entrato. Il link vale 24 ore: se è scaduto, rimandalo.</p>
               <InviteButton action={inviteClientAction.bind(null, id)} label="Rimanda l'invito" />
+              <InviteLink action={inviteLinkAction.bind(null, id)} name={client.first_name} />
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -82,6 +84,7 @@ export default async function ClientProfilePage({ params, searchParams }: { para
                 {client.email ? `Mandiamo a ${client.email} un'email con il link per scegliere la password.` : "Aggiungi l'email del cliente per poterlo invitare."}
               </p>
               {client.email ? <InviteButton action={inviteClientAction.bind(null, id)} label="Invia invito" /> : null}
+              {client.email ? <InviteLink action={inviteLinkAction.bind(null, id)} name={client.first_name} /> : null}
             </div>
           )}
         </Card>

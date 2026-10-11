@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getMyPrograms } from "@/lib/data/me";
 import { diffDays, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { programEndDate } from "@/lib/program/schedule";
-import { billingStatus, formatEuro, METHOD_LABELS, PLAN_LABELS, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
+import { billingStatus, formatEuro, METHOD_LABELS, PLAN_LABELS, type BillingRow, type PaymentMethod, type PlanKind, clientFacingStatus } from "@/lib/billing";
 import { Card, Dot, Eyebrow, ProgressBar } from "@/components/ui";
 import { PasswordForm } from "@/components/password-form";
 import { IconLogout } from "@/components/icons";
@@ -34,7 +34,7 @@ export default async function ClientProfilePage() {
   const row = (billing as BillingRow[] | null)?.[0];
   const ended = me.clientStatus === "archived";
   // in pausa: nessun promemoria di rinnovo
-  const pay = row && me.clientStatus !== "paused" ? billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7) : null;
+  const pay = row && me.clientStatus !== "paused" ? clientFacingStatus(billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7)) : null;
   const phases = [current, upcoming, ...past].filter(Boolean).length;
   const months = client ? Math.max(0, Math.round(diffDays(client.start_date, today) / 30.44)) : 0;
 
