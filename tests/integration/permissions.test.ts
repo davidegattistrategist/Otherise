@@ -315,4 +315,13 @@ describe.skipIf(!run)("permessi", () => {
     expect(data!.ai_lessons).toBe("- lezione del titolare");
     expect((await clientA.from("app_settings").select("ai_lessons")).data ?? []).toEqual([]);
   });
+  it("lezioni sulle risposte: generali solo del titolare, sul cliente solo dello staff che lo segue", async () => {
+    await coach.from("app_settings").update({ ai_reply_lessons: "- hack" }).eq("id", 1);
+    await owner.from("app_settings").update({ ai_reply_lessons: "- festeggia e basta" }).eq("id", 1).throwOnError();
+    expect((await admin.from("app_settings").select("ai_reply_lessons").eq("id", 1).single()).data!.ai_reply_lessons).toBe("- festeggia e basta");
+    expect((await clientA.from("app_settings").select("ai_reply_lessons")).data ?? []).toEqual([]);
+    await coach.from("client_ai_profiles").upsert({ client_id: clientAId, reply_lessons: "- la chiama per nome" }).throwOnError();
+    expect((await clientA.from("client_ai_profiles").select("reply_lessons")).data ?? []).toEqual([]);
+    expect((await stranger.from("client_ai_profiles").select("reply_lessons")).data ?? []).toEqual([]);
+  });
 });

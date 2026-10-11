@@ -8,8 +8,8 @@ import { formatEuro } from "@/lib/billing";
 import { DEFAULT_PAYMENT_MESSAGE } from "@/lib/whatsapp";
 import { formatLong, todayISO } from "@/lib/dates";
 import { Card, Dot, Eyebrow, PageTitle, ProgressBar } from "@/components/ui";
-import { LessonsForm, MethodForm, PrivacyForm, SettingsForm } from "./forms";
-import { saveLessons, saveMethod, savePrivacy, saveSettings } from "./actions";
+import { LessonsForm, MethodForm, PrivacyForm, ReplyLessonsForm, SettingsForm } from "./forms";
+import { saveLessons, saveMethod, savePrivacy, saveReplyLessons, saveSettings } from "./actions";
 import { correctionTrend } from "@/lib/ai/learn";
 
 export const metadata: Metadata = { title: "Impostazioni" };
@@ -48,7 +48,7 @@ export default async function SettingsPage() {
     supabase.from("app_settings").select("business_name, coaching_method, reminder_days, ai_monthly_budget_eur, payment_message, legal_name, legal_address, legal_tax_id, privacy_email").maybeSingle(),
     supabase.from("ai_requests").select("cost_eur, kind").gte("created_at", `${monthStart}T00:00:00Z`),
     supabase.from("programs").select("id", { count: "exact", head: true }).eq("is_ai_example", true),
-    supabase.from("app_settings").select("ai_lessons, ai_lessons_updated_at").maybeSingle(),
+    supabase.from("app_settings").select("ai_lessons, ai_lessons_updated_at, ai_reply_lessons, ai_reply_lessons_updated_at").maybeSingle(),
     correctionTrend(supabase),
   ]);
   const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20, payment_message: "", legal_name: "", legal_address: "", legal_tax_id: "", privacy_email: "" };
@@ -92,6 +92,18 @@ export default async function SettingsPage() {
             </div>
           ) : null}
           <LessonsForm action={saveLessons} value={learned?.ai_lessons ?? ""} />
+        </Card>
+
+        <Card className="flex flex-col gap-4" id="lezioni-risposte">
+          <div>
+            <Eyebrow>Cosa ha imparato dalle tue risposte</Eyebrow>
+            <p className="mt-2 text-[15px] leading-relaxed text-muted">
+              Quando correggi o riscrivi una bozza di risposta in chat o nel check-up, l&apos;AI capisce cosa hai cambiato e se ne ricorda per le bozze successive.
+              Qui trovi le abitudini che valgono con tutti i clienti; quelle sul singolo cliente sono nella sua scheda, in Programma → Indicazioni per l&apos;AI.
+              {learned?.ai_reply_lessons_updated_at ? ` Ultimo aggiornamento: ${formatLong(learned.ai_reply_lessons_updated_at.slice(0, 10))}.` : ""}
+            </p>
+          </div>
+          <ReplyLessonsForm action={saveReplyLessons} value={learned?.ai_reply_lessons ?? ""} />
         </Card>
         </div>
 

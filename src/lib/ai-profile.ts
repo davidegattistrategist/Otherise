@@ -18,6 +18,8 @@ export type AiProfile = {
   squat_share: number | null;
   intensity_techniques: boolean | null;
   notes: string;
+  /** come scrivere a questo cliente: lo impara l'AI dalle risposte del trainer (solo per le bozze di risposta) */
+  reply_lessons: string;
   auto_note: string;
   updated_at: string | null;
 };
@@ -30,6 +32,7 @@ export const EMPTY_PROFILE: AiProfile = {
   squat_share: null,
   intensity_techniques: null,
   notes: "",
+  reply_lessons: "",
   auto_note: "",
   updated_at: null,
 };
@@ -96,6 +99,13 @@ export function parseProfileForm(fd: FormData): Omit<AiProfile, "auto_note" | "u
     squat_share: auto || !Number.isFinite(share) ? null : Math.min(100, Math.max(0, Math.round(share / 10) * 10)),
     intensity_techniques: tech === "si" ? true : tech === "no" ? false : null,
     notes: String(fd.get("notes") ?? "").slice(0, 2000),
+    reply_lessons: String(fd.get("reply_lessons") ?? "")
+      .split("\n")
+      .map((l) => l.trim().replace(/^[-•]\s*/, ""))
+      .filter(Boolean)
+      .slice(0, 15)
+      .map((l) => `- ${l.slice(0, 200)}`)
+      .join("\n"),
   };
 }
 

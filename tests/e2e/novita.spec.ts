@@ -55,7 +55,10 @@ test("dolore nel logbook: arriva al trainer in Oggi", async ({ page, browser }, 
   await page.getByText(/Inizia l'allenamento|Riprendi l'allenamento/).first().click();
   await page.waitForURL(/\/cliente\/sessione\//);
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: /Hai sentito dolore o fastidio/ }).click();
+  // se un giro precedente ha già scritto un fastidio su questo allenamento, il riquadro è già aperto
+  const discomfortBtn = page.getByRole("button", { name: /Hai sentito dolore o fastidio/ });
+  await expect(discomfortBtn.or(page.getByLabel("Dolore o fastidio"))).toBeVisible();
+  if (await discomfortBtn.isVisible()) await discomfortBtn.click();
   await page.getByLabel("Dolore o fastidio").fill(`Fastidio alla spalla ${tag}`);
   await expect(page.getByText(/Salvato alle/)).toBeVisible({ timeout: 10_000 });
 

@@ -186,7 +186,7 @@ export type AiImage = { mediaType: "image/jpeg" | "image/png" | "image/webp" | "
 export type AiUsage = { model: string; input: number; output: number; costEur: number };
 
 /** Un pezzo del messaggio: con cache = true il prefisso fin lì viene riletto a prezzo ridotto. */
-type Part = { text: string; cache?: boolean } | { images: AiImage[] };
+export type Part = { text: string; cache?: boolean } | { images: AiImage[] };
 
 export async function runJson(system: string, user: string | Part[], schema: Record<string, unknown>, images: AiImage[] = [], maxTokens = 32000, cacheSystem = false) {
   const m = model();
@@ -505,13 +505,18 @@ Come scrivere:
 - Se il cliente ha fatto più domande: UN SOLO messaggio che risponde a tutte, per punti brevi (un punto per domanda, con un numero o un trattino come farebbe il trainer), con al massimo una riga di apertura.
 - Dai del tu. Per chiamarlo per nome scrivi {nome}.
 - Niente frasi da assistente: niente "Ottima domanda", "Certamente!", "Spero di esserti stato utile", "Non esitare a contattarmi", "Ecco", niente grassetti, titoli o elenchi formattati.
-- Rispondi solo con quello che risulta dai dati (programma, logbook, metodo, progetto). Se la risposta dipende da una decisione del trainer o da un dato che non hai (cambiare il programma, i carichi, saltare o spostare allenamenti, prezzi e pagamenti), non inventare: rispondi in modo naturale prendendo tempo ("ci guardo stasera e ti dico", "ne parliamo alla prossima sessione").
+- Lezioni dalle correzioni del trainer: valgono più di queste regole generali; quelle su questo cliente valgono più di quelle generali.
+- Allenamenti: guarda sempre la sezione "programma vs fatto". Confronta quello che ha fatto con quello che chiedeva il programma, serie per serie: non dire che ha chiuso tutte le serie o tenuto il carico se non è vero. Se ci sono DIFFERENZE (una serie con meno ripetizioni, un carico diverso, serie saltate) tienine conto con tatto, senza farne un dramma.
+- Quando nel programma carico e ripetizioni sono scritti, li decide il programma: non suggerire di cambiarli (né una ripetizione in più né più carico) e non dare indicazioni in contrasto. Al massimo incoraggia a seguire quello che c'è scritto la prossima volta. Solo dove il programma dà un range di ripetizioni (es. 3x10/12) o lascia libero il carico puoi suggerire come progredire dentro quel range.
+- Se il cliente è contento o entusiasta (un esercizio sentito bene, un record, un buon allenamento) festeggia con lui e basta: niente consigli tecnici e non ripetere le indicazioni dell'esercizio, a meno che non chieda qualcosa o segnali un problema.
+- Rispondi solo con quello che risulta dai dati (programma, logbook, progetto). Se la risposta dipende da una decisione del trainer o da un dato che non hai (cambiare il programma, i carichi, saltare o spostare allenamenti, prezzi e pagamenti), non inventare: rispondi in modo naturale prendendo tempo ("ci guardo stasera e ti dico", "ne parliamo alla prossima sessione").
 - Dolore o fastidio: niente diagnosi e niente esercizi nuovi. Mostra che ti importa, chiedi dove e con quale esercizio, e proponi di sentirvi o di guardarlo insieme.
 - needsReply è false solo quando i messaggi non chiedono niente e non serve una risposta (un grazie, un ok, un saluto).
 - In italiano.`;
 
-export async function writeReplyDraft(userText: string) {
-  const { json, usage } = await runJson(REPLY_SYSTEM, userText, REPLY_SCHEMA as unknown as Record<string, unknown>, [], 1500);
+/** Bozza di risposta. Le parti con `cache` restano in memoria per qualche minuto (messaggi a raffica). */
+export async function writeReplyDraft(user: string | Part[]) {
+  const { json, usage } = await runJson(REPLY_SYSTEM, user, REPLY_SCHEMA as unknown as Record<string, unknown>, [], 1500, true);
   const parsed = z.object({ needsReply: z.boolean(), draft: z.string() }).parse(json);
   return { needsReply: parsed.needsReply && Boolean(parsed.draft.trim()), draft: parsed.draft.trim().slice(0, 3900), usage };
 }

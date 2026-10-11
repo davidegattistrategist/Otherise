@@ -7,14 +7,14 @@ export type Database = {
           Tables: {
             "ai_reply_drafts": {
                   Row: {
-                    "body": string,"checkin_id": string | null,"client_id": string,"closed_at": string | null,"created_at": string,"id": string,"last_message_id": string | null,"sent_by": string | null,"sent_text": string | null,"source": string,"status": string
+                    "body": string,"checkin_id": string | null,"client_id": string,"closed_at": string | null,"created_at": string,"id": string,"last_message_id": string | null,"learned_at": string | null,"sent_by": string | null,"sent_text": string | null,"source": string,"status": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "body": string,"checkin_id"?: string | null,"client_id": string,"closed_at"?: string | null,"created_at"?: string,"id"?: string,"last_message_id"?: string | null,"sent_by"?: string | null,"sent_text"?: string | null,"source": string,"status"?: string
+                    "body": string,"checkin_id"?: string | null,"client_id": string,"closed_at"?: string | null,"created_at"?: string,"id"?: string,"last_message_id"?: string | null,"learned_at"?: string | null,"sent_by"?: string | null,"sent_text"?: string | null,"source": string,"status"?: string
                   }
                   Update: {
-                    "body"?: string,"checkin_id"?: string | null,"client_id"?: string,"closed_at"?: string | null,"created_at"?: string,"id"?: string,"last_message_id"?: string | null,"sent_by"?: string | null,"sent_text"?: string | null,"source"?: string,"status"?: string
+                    "body"?: string,"checkin_id"?: string | null,"client_id"?: string,"closed_at"?: string | null,"created_at"?: string,"id"?: string,"last_message_id"?: string | null,"learned_at"?: string | null,"sent_by"?: string | null,"sent_text"?: string | null,"source"?: string,"status"?: string
                   }
                   Relationships: [
                     {
@@ -71,14 +71,14 @@ isOneToOne: false
                   ]
                 },"app_settings": {
                   Row: {
-                    "ai_lessons": string,"ai_lessons_updated_at": string | null,"ai_monthly_budget_eur": number,"business_name": string,"coaching_method": string,"id": number,"legal_address": string,"legal_name": string,"legal_tax_id": string,"payment_message": string,"privacy_email": string,"reminder_days": number,"updated_at": string
+                    "ai_lessons": string,"ai_lessons_updated_at": string | null,"ai_monthly_budget_eur": number,"ai_reply_lessons": string,"ai_reply_lessons_updated_at": string | null,"business_name": string,"coaching_method": string,"id": number,"legal_address": string,"legal_name": string,"legal_tax_id": string,"payment_message": string,"privacy_email": string,"reminder_days": number,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
+                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"ai_reply_lessons"?: string,"ai_reply_lessons_updated_at"?: string | null,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
                   }
                   Update: {
-                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
+                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"ai_reply_lessons"?: string,"ai_reply_lessons_updated_at"?: string | null,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -183,14 +183,14 @@ isOneToOne: true
                   ]
                 },"client_ai_profiles": {
                   Row: {
-                    "auto_note": string,"client_id": string,"intensity_techniques": boolean | null,"notes": string,"running_level": string | null,"session_minutes": number | null,"squat_share": number | null,"strength_level": string | null,"updated_at": string,"vertical_push": string | null
+                    "auto_note": string,"client_id": string,"intensity_techniques": boolean | null,"notes": string,"reply_lessons": string,"running_level": string | null,"session_minutes": number | null,"squat_share": number | null,"strength_level": string | null,"updated_at": string,"vertical_push": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "auto_note"?: string,"client_id": string,"intensity_techniques"?: boolean | null,"notes"?: string,"running_level"?: string | null,"session_minutes"?: number | null,"squat_share"?: number | null,"strength_level"?: string | null,"updated_at"?: string,"vertical_push"?: string | null
+                    "auto_note"?: string,"client_id": string,"intensity_techniques"?: boolean | null,"notes"?: string,"reply_lessons"?: string,"running_level"?: string | null,"session_minutes"?: number | null,"squat_share"?: number | null,"strength_level"?: string | null,"updated_at"?: string,"vertical_push"?: string | null
                   }
                   Update: {
-                    "auto_note"?: string,"client_id"?: string,"intensity_techniques"?: boolean | null,"notes"?: string,"running_level"?: string | null,"session_minutes"?: number | null,"squat_share"?: number | null,"strength_level"?: string | null,"updated_at"?: string,"vertical_push"?: string | null
+                    "auto_note"?: string,"client_id"?: string,"intensity_techniques"?: boolean | null,"notes"?: string,"reply_lessons"?: string,"running_level"?: string | null,"session_minutes"?: number | null,"squat_share"?: number | null,"strength_level"?: string | null,"updated_at"?: string,"vertical_push"?: string | null
                   }
                   Relationships: [
                     {

@@ -6,7 +6,7 @@ import { EMPTY_PROFILE, type AiProfile } from "../ai-profile";
 export async function getAiProfile(supabase: ServerSupabase, clientId: string): Promise<AiProfile> {
   const { data } = await supabase
     .from("client_ai_profiles")
-    .select("session_minutes, strength_level, running_level, vertical_push, squat_share, intensity_techniques, notes, auto_note, updated_at")
+    .select("session_minutes, strength_level, running_level, vertical_push, squat_share, intensity_techniques, notes, reply_lessons, auto_note, updated_at")
     .eq("client_id", clientId)
     .maybeSingle();
   return data ? { ...EMPTY_PROFILE, ...data } : { ...EMPTY_PROFILE };

@@ -88,6 +88,17 @@ test("su richiesta: 'Scrivo da zero' toglie la bozza, 'Prepara una bozza' la rif
   await owner.locator("textarea").fill(`Brava, avanti così ${tag}`);
   await owner.getByRole("button", { name: "Invia" }).click();
   await expect(owner.getByText(`Brava, avanti così ${tag}`)).toBeVisible();
+
+  // la bozza riscritta da zero insegna: lezioni generali in Impostazioni e su Giulia nella sua scheda
+  await expect(async () => {
+    await owner.goto("/staff/impostazioni");
+    await expect(owner.locator("#ai_reply_lessons")).toHaveValue(/festeggia e basta/, { timeout: 1000 });
+  }).toPass({ timeout: 20_000 });
+  await owner.goto("/staff/clienti");
+  await owner.getByRole("link", { name: /Giulia Esempio/ }).filter({ visible: true }).first().click();
+  await owner.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}/);
+  await owner.goto(`${owner.url()}/programma`);
+  await expect(owner.locator("#ai-reply")).toHaveValue(/Saluta con Ciao/);
 });
 
 test("check-up con una richiesta: la bozza riempie la risposta", async ({ page }) => {

@@ -50,6 +50,22 @@ export async function savePrivacy(_: ActionState, fd: FormData): Promise<ActionS
   return { ok: true, message: "Dati per l'informativa salvati." };
 }
 
+export async function saveReplyLessons(_: ActionState, fd: FormData): Promise<ActionState> {
+  await requireOwner();
+  const supabase = await createClient();
+  const lessons = String(fd.get("ai_reply_lessons") ?? "")
+    .split("\n")
+    .map((l) => l.trim().replace(/^[-•]\s*/, ""))
+    .filter(Boolean)
+    .slice(0, 30)
+    .map((l) => `- ${l.slice(0, 240)}`)
+    .join("\n");
+  const { error } = await supabase.from("app_settings").update({ ai_reply_lessons: lessons, ai_reply_lessons_updated_at: new Date().toISOString() }).eq("id", 1);
+  if (error) return { error: "Salvataggio non riuscito." };
+  revalidatePath("/staff/impostazioni");
+  return { ok: true, message: "Salvato: vale dalla prossima bozza di risposta." };
+}
+
 export async function saveLessons(_: ActionState, fd: FormData): Promise<ActionState> {
   await requireOwner();
   const supabase = await createClient();

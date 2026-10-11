@@ -63,6 +63,11 @@ export function similarity(a: string, b: string): number {
   return common / Math.max(A.size, B.size);
 }
 
+/** Dalla bozza al testo inviato c'è qualcosa da imparare? (scartata, o corretta davvero) */
+export function worthLearning(draft: string, sent: string): boolean {
+  return Boolean(sent.trim()) && similarity(draft, sent) < 0.97;
+}
+
 /**
  * Esempi veri di come scrive il trainer, per insegnare lo stile all'AI.
  * `text` è già pseudonimizzato. Per le correzioni `draft` è la bozza e `status`
@@ -99,9 +104,22 @@ export function styleSections(
   clientId: string,
   opts: { perClient?: number; maxClients?: number; maxThis?: number } = {},
 ): string {
-  const perClient = opts.perClient ?? 4;
-  const maxClients = opts.maxClients ?? 6;
-  const maxThis = opts.maxThis ?? 20;
+  const p = styleParts(examples, clientId, opts);
+  return `${p.general}\n\n${p.client}`;
+}
+
+/**
+ * Gli stessi due livelli separati: `general` cambia poco da un cliente
+ * all'altro (si può tenere in cache), `client` è solo di questo cliente.
+ */
+export function styleParts(
+  examples: StyleExample[],
+  clientId: string,
+  opts: { perClient?: number; maxClients?: number; maxThis?: number } = {},
+): { general: string; client: string } {
+  const perClient = opts.perClient ?? 3;
+  const maxClients = opts.maxClients ?? 5;
+  const maxThis = opts.maxThis ?? 12;
   const recent = [...examples].filter((e) => e.text.trim().length > 3).sort((a, b) => (a.at < b.at ? 1 : -1));
   // un messaggio nato da una bozza compare già come correzione
   const fromDrafts = new Set(recent.filter((e) => e.kind === "correction").map((e) => e.text.trim()));
@@ -117,24 +135,18 @@ export function styleSections(
   }
   const others = [...byClient.values()].slice(0, maxClients);
 
-  const parts: string[] = ["## Il tuo modo di scrivere\nDue livelli: le abitudini che hai con tutti i clienti e il tono che usi solo con questo cliente."];
-  if (others.length) {
-    parts.push(
-      "### Con tutti i clienti (abitudini costanti)\n" +
+  const general = [
+    "## Il tuo modo di scrivere\nDue livelli: le abitudini che hai con tutti i clienti e il tono che usi solo con questo cliente.",
+    others.length
+      ? "### Con tutti i clienti (abitudini costanti)\n" +
         "Messaggi tuoi ad altri clienti, raggruppati per cliente. Prendi solo quello che torna con più clienti: lunghezza, saluti, punteggiatura, espressioni tipiche, emoji. Soprannomi, battute e confidenze che usi con un cliente valgono solo per lui: non portarli a questo cliente.\n" +
-        others.map((list, i) => `Cliente ${String.fromCharCode(65 + i)}:\n${list.map(exampleLine).join("\n")}`).join("\n"),
-    );
-  } else {
-    parts.push("### Con tutti i clienti (abitudini costanti)\nNon ci sono ancora esempi con altri clienti: scrivi semplice, caldo e diretto, frasi corte, come in una chat tra persone che si conoscono.");
-  }
-  if (mine.length) {
-    parts.push(
-      "### Solo con questo cliente\n" +
-        "Come scrivi proprio a lui: quanta confidenza, come lo saluti e come lo chiami (per nome o con un soprannome), tu o lei, emoji, battute. Dove questo tono e le abitudini generali non coincidono, vince questo.\n" +
-        mine.map(exampleLine).join("\n"),
-    );
-  } else {
-    parts.push("### Solo con questo cliente\nNon gli hai ancora scritto: usa le abitudini generali, con un tono cordiale ma senza confidenze o soprannomi.");
-  }
-  return parts.join("\n\n");
+        others.map((list, i) => `Cliente ${String.fromCharCode(65 + i)}:\n${list.map(exampleLine).join("\n")}`).join("\n")
+      : "### Con tutti i clienti (abitudini costanti)\nNon ci sono ancora esempi con altri clienti: scrivi semplice, caldo e diretto, frasi corte, come in una chat tra persone che si conoscono.",
+  ].join("\n\n");
+  const client = mine.length
+    ? "### Solo con questo cliente\n" +
+      "Come scrivi proprio a lui: quanta confidenza, come lo saluti e come lo chiami (per nome o con un soprannome), tu o lei, emoji, battute. Dove questo tono e le abitudini generali non coincidono, vince questo.\n" +
+      mine.map(exampleLine).join("\n")
+    : "### Solo con questo cliente\nNon gli hai ancora scritto: usa le abitudini generali, con un tono cordiale ma senza confidenze o soprannomi.";
+  return { general, client };
 }

@@ -13,12 +13,14 @@ import "server-only";
  */
 import { createAdminClient } from "../supabase/admin";
 import type { ServerSupabase } from "../supabase/server";
-import { aiEnabled, writeReplyDraft } from "./claude";
+import { aiEnabled, writeReplyDraft, type Part } from "./claude";
 import { budgetExceeded, logAiRequest } from "./budget";
-import { buildClientContext } from "./context";
+import { buildReplyContext } from "./reply-context";
+import { learnFromReply, replyLessons, worthLearning } from "./reply-learn";
+import { pushLater } from "../notify";
 import { CHECKIN_QUESTIONS } from "../checkin";
 import { todayISO } from "../dates";
-import { fillName, looksLikeQuestion, messageText, pendingClientMessages, pseudonymize, similarity, styleSections, type DraftMessage, type StyleExample } from "../reply-draft";
+import { fillName, looksLikeQuestion, messageText, pendingClientMessages, pseudonymize, similarity, styleParts, type DraftMessage, type StyleExample } from "../reply-draft";
 
 type Admin = ReturnType<typeof createAdminClient>;
 export type ReplyDraft = { id: string; body: string; createdAt: string };
@@ -48,8 +50,8 @@ async function canRun(admin: Admin, client: ClientRow | null): Promise<string | 
  * Esempi veri di come scrive chi risponde, su due livelli: con tutti i clienti
  * (abitudini costanti) e solo con questo cliente (confidenza, saluti, soprannomi).
  */
-async function styleSection(admin: Admin, responderId: string | null, clientId: string): Promise<string> {
-  if (!responderId) return styleSections([], clientId);
+async function styleSection(admin: Admin, responderId: string | null, clientId: string): Promise<{ general: string; client: string }> {
+  if (!responderId) return styleParts([], clientId);
   const { data: me } = await admin.from("profiles").select("role").eq("id", responderId).maybeSingle();
   let clientsQ = admin.from("clients").select("id, first_name, last_name");
   if (me?.role !== "owner") clientsQ = clientsQ.eq("coach_id", responderId);
@@ -77,18 +79,26 @@ async function styleSection(admin: Admin, responderId: string | null, clientId: 
     ...[...(msgs ?? []), ...(mineMsgs ?? [])].map((m) => ({ id: m.id, clientId: m.client_id, kind: "message" as const, text: clean(m.body, m.client_id), at: m.created_at })),
     ...(replies ?? []).map((r) => ({ id: r.id, clientId: r.client_id, kind: "checkin" as const, text: clean(r.coach_reply, r.client_id), at: r.reviewed_at ?? r.submitted_at })),
   ];
-  return styleSections(examples, clientId);
+  return styleParts(examples, clientId);
 }
 
-async function methodText(admin: Admin) {
-  const { data } = await admin.from("app_settings").select("coaching_method").maybeSingle();
-  const m = data?.coaching_method?.trim();
-  return m ? `## Il tuo metodo (per sapere cosa rispondere)\n${m.slice(0, 4000)}` : "";
-}
-
-async function clientContext(admin: Admin, client: ClientRow) {
-  const ctx = await buildClientContext(admin as unknown as ServerSupabase, client.id);
-  return pseudonymize(ctx, [client.first_name, client.last_name]);
+/**
+ * Il messaggio per l'AI in tre parti: come scrive il trainer a tutti (cambia
+ * poco, resta in cache), poi tutto ciò che riguarda questo cliente, poi la richiesta.
+ */
+async function promptFor(admin: Admin, responder: string | null, client: ClientRow, rest: string[]): Promise<Part[]> {
+  const sb = admin as unknown as ServerSupabase;
+  const [style, lessons, context] = await Promise.all([styleSection(admin, responder, client.id), replyLessons(sb, client.id), buildReplyContext(sb, client.id)]);
+  const general = [
+    lessons.general ? `## Lezioni dalle tue correzioni (valgono con tutti i clienti)\n${lessons.general}` : "",
+    style.general,
+  ].filter(Boolean).join("\n\n");
+  const mine = [
+    lessons.client ? `## Lezioni su questo cliente (vincono sulle generali)\n${pseudonymize(lessons.client, [client.first_name, client.last_name])}` : "",
+    style.client,
+    `## Dati del cliente (oggi è il ${todayISO()})\n${pseudonymize(context, [client.first_name, client.last_name])}`,
+  ].filter(Boolean).join("\n\n");
+  return [{ text: general, cache: true }, { text: [mine, ...rest].filter(Boolean).join("\n\n") }];
 }
 
 function saveText(draft: string, client: ClientRow) {
@@ -138,17 +148,11 @@ export async function generateChatDraft(clientId: string, opts: { force?: boolea
   const convo = sorted.map((m) => `${senderLabel.get(m.id)}: ${pseudonymize(messageText(m), names)}`).join("\n");
   const pendingTxt = pending.map((m) => `- ${pseudonymize(messageText(m), names)}`).join("\n");
 
-  const [style, method, context] = await Promise.all([styleSection(admin, responder, clientId), methodText(admin), clientContext(admin, client)]);
-  const userText = [
-    style,
-    method,
-    `## Dati del cliente (oggi è il ${todayISO()})\n${context}`,
+  const userText = await promptFor(admin, responder, client, [
     `## Conversazione in chat (dalla più vecchia)\n${convo}`,
     `## Messaggi a cui rispondere ora\n${pendingTxt}`,
     "Scrivi la bozza di risposta a questi messaggi, come la scriveresti tu.",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  ]);
 
   let out;
   try {
@@ -188,16 +192,10 @@ export async function generateCheckinDraft(checkinId: string, opts: { force?: bo
   const responder = await responderFor(admin, client);
   const names = [client.first_name, client.last_name, client.email, client.phone];
   const scores = CHECKIN_QUESTIONS.map((q) => `${q.short} ${c[q.key]}/5`).join(", ");
-  const [style, method, context] = await Promise.all([styleSection(admin, responder, client.id), methodText(admin), clientContext(admin, client)]);
-  const userText = [
-    style,
-    method,
-    `## Dati del cliente (oggi è il ${todayISO()})\n${context}`,
+  const userText = await promptFor(admin, responder, client, [
     `## Check-up settimanale appena compilato (settimana del ${c.week_start}, voti da 1 a 5)\n${scores}${c.issues.trim() ? `\nProblemi: ${pseudonymize(c.issues, names)}` : ""}${c.request.trim() ? `\nRichiesta al coach: ${pseudonymize(c.request, names)}` : ""}`,
     "Scrivi la risposta al check-up che il cliente leggerà nell'app: rispondi alla richiesta e, se ci sono, ai problemi. needsReply è true.",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  ]);
 
   let out;
   try {
@@ -230,10 +228,18 @@ export async function closeDrafts(supabase: ServerSupabase, filter: { clientId: 
   const since = new Date(Date.now() - 3 * 864e5).toISOString();
   let q = supabase.from("ai_reply_drafts").select("id, body").in("status", ["ready", "dismissed"]).is("sent_text", null).gte("created_at", since);
   q = "checkinId" in filter ? q.eq("checkin_id", filter.checkinId) : q.eq("client_id", filter.clientId).eq("source", "chat");
-  const { data } = await q;
+  const { data } = await q.order("created_at", { ascending: false });
   const now = new Date().toISOString();
+  let learnFrom: { id: string; used: boolean; body: string } | null = null;
   for (const d of data ?? []) {
     const used = d.id === usedDraftId || similarity(d.body, sentText) >= 0.5;
     await supabase.from("ai_reply_drafts").update({ status: used ? "used" : "replaced", sent_text: sentText.slice(0, 4000), sent_by: sentBy, closed_at: now }).eq("id", d.id);
+    // si impara da una sola bozza: quella usata, altrimenti la più recente
+    if (!learnFrom || (used && !learnFrom.used)) learnFrom = { id: d.id, used, body: d.body };
+  }
+  // il trainer l'ha corretta o riscritta: dopo la risposta, l'AI ne ricava le lezioni
+  if (learnFrom && worthLearning(learnFrom.body, sentText)) {
+    const id = learnFrom.id;
+    await pushLater(() => learnFromReply(id, sentBy));
   }
 }

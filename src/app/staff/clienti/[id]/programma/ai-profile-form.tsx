@@ -86,6 +86,10 @@ export function AiProfileForm({ action, values, actualSquat }: { action: Action;
         <Label htmlFor="ai-notes" hint="facoltativo">Altre indicazioni per l&apos;AI</Label>
         <Textarea id="ai-notes" name="notes" rows={3} defaultValue={values.notes} placeholder="es. In palestra ha solo manubri fino a 30 kg; preferisce non correre sul tapis roulant" />
       </div>
+      <div>
+        <Label htmlFor="ai-reply" hint="una per riga">Come scrivergli in chat</Label>
+        <Textarea id="ai-reply" name="reply_lessons" rows={3} defaultValue={values.reply_lessons} placeholder="Si riempie da solo quando correggi le bozze di risposta. Puoi anche scriverlo tu: es. La chiamo Giuly; con lei niente emoji" />
+      </div>
       <ActionMessage state={state} />
       <div><SubmitButton variant="secondary">Salva le indicazioni</SubmitButton></div>
     </form>

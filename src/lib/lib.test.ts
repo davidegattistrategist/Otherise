@@ -1,4 +1,5 @@
-import { fillName, looksLikeQuestion, pendingClientMessages, pseudonymize, similarity, styleSections, type StyleExample } from "./reply-draft";
+import { fillName, looksLikeQuestion, pendingClientMessages, pseudonymize, similarity, styleParts, styleSections, worthLearning, type StyleExample } from "./reply-draft";
+import { prescriptionRule, setDifferences, workoutVsPlan } from "./reply-context";
 import { describe, expect, it } from "vitest";
 import { computeBodyComposition, protocolSites, siteAverage } from "./body/skinfolds";
 import { estimateOneRepMax } from "./strength/e1rm";
@@ -656,5 +657,48 @@ describe("assistente AI: formati compatti e correzioni", async () => {
     expect(t).toContain('aggiunto "Dead bug"');
     expect(t).toContain('tolto "Plank"');
     expect(diffText(diffPrograms(ai, ai))).toContain("Nessuna correzione");
+  });
+});
+
+describe("bozze di risposta: programma vs fatto", () => {
+  it("chi decide carico e ripetizioni", () => {
+    expect(prescriptionRule("4x8 52,5kg")).toContain("non suggerire cambi");
+    expect(prescriptionRule("5x5 @75%")).toContain("non suggerire cambi");
+    expect(prescriptionRule("3x10/12")).toContain("puoi suggerire come progredire");
+    expect(prescriptionRule("3x10/12 20kg")).toContain("dentro il range");
+    expect(prescriptionRule("3x30\"")).toBe("tempo deciso dal programma");
+  });
+  it("trova la serie con una ripetizione in meno", () => {
+    const sets = [8, 8, 8, 7].map((reps) => ({ kg: 52.5, reps, done: true }));
+    expect(setDifferences("4x8 52,5kg", sets)).toEqual(["serie 4: 7 ripetizioni invece di 8"]);
+    expect(setDifferences("4x8 52,5kg", sets.slice(0, 3))).toContain("fatte 3 serie su 4");
+    expect(setDifferences("4x8 52,5kg", [{ kg: 50, reps: 8, done: true }, ...sets.slice(1, 3), { kg: 52.5, reps: 8, done: true }])).toEqual(["serie 1: 50 kg invece di 52,5"]);
+    expect(setDifferences("3x10/12", [{ kg: 20, reps: 12 }, { kg: 20, reps: 11 }, { kg: 20, reps: 9 }])).toEqual(["serie 3: 9 ripetizioni invece di almeno 10"]);
+    // serie con solo il carico proposto e non spuntata: non conta come fatta
+    expect(setDifferences("2x8 40kg", [{ kg: 40, reps: 8, done: true }, { kg: 40, reps: null }])).toEqual(["fatte 1 serie su 2"]);
+  });
+  it("un allenamento in testo: prescrizione, fatto, differenze", () => {
+    const day = parseContent({
+      days: [{ id: "d1", title: "Giorno 1", notes: "", blocks: [
+        { id: "b1", kind: "single", title: "", notes: "", rounds: null, items: [{ id: "i1", name: "Pin squat", prescriptions: ["4x8 52,5kg"], rest: "2'", notes: "", exerciseId: null }] },
+        { id: "b2", kind: "single", title: "", notes: "", rounds: null, items: [{ id: "i2", name: "Pulley", prescriptions: ["3x10/12"], rest: "", notes: "Il braccio non tira", exerciseId: null }] },
+      ] }],
+    }).days[0];
+    const txt = workoutVsPlan(day, 1, [
+      { item_id: "i1", sets: [8, 8, 8, 7].map((reps) => ({ kg: 52.5, reps, done: true })), result_text: "pesante" },
+      { item_id: "i2", sets: [12, 12, 12].map((reps) => ({ kg: 30, reps, done: true })), result_text: "" },
+    ]);
+    expect(txt).toContain("Pin squat — programma: 4x8 52,5kg (carico e ripetizioni decisi dal programma: non suggerire cambi)");
+    expect(txt).toContain("8×52,5, 8×52,5, 8×52,5, 7×52,5 kg");
+    expect(txt).toContain("DIFFERENZE: serie 4: 7 ripetizioni invece di 8");
+    expect(txt).toContain('nota "pesante"');
+    expect(txt).toMatch(/Pulley — .* — come da programma/);
+  });
+  it("impara solo dalle bozze cambiate davvero, e lo stile si divide in due parti", () => {
+    expect(worthLearning("Ciao {nome}, grande!", "Ciao {nome}, grande!")).toBe(false);
+    expect(worthLearning("Ottimo per il pulley, il braccio non deve tirare", "Grandissima! Che bello sentirlo")).toBe(true);
+    const parts = styleParts([{ id: "1", clientId: "a", kind: "message", text: "Ciao bella, a giovedì", at: "1" }], "a");
+    expect(parts.client).toContain("Ciao bella");
+    expect(parts.general).not.toContain("Ciao bella");
   });
 });
