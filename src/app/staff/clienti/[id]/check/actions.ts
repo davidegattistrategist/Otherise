@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { ageOn, isISODate, todayISO } from "@/lib/dates";
-import { CIRCUMFERENCES, SKINFOLD_SITES, computeBodyComposition, type Sex, type SkinfoldReadings } from "@/lib/body/skinfolds";
+import { CIRCUMFERENCES, SKINFOLD_SITES, formulaById, type SkinfoldReadings } from "@/lib/body/skinfolds";
+import { recomputeClientChecks } from "@/lib/data/checks";
 import { estimateOneRepMax } from "@/lib/strength/e1rm";
 import type { ActionState } from "@/components/form-bits";
 import type { Json } from "@/lib/supabase/database.types";
@@ -51,7 +52,6 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Act
   }
 
   const age = ageOn(client.birth_date, date || todayISO());
-  const comp = computeBodyComposition({ sex: client.sex as Sex, age, weightKg: weight, skinfolds });
   const row = {
     client_id: clientId,
     check_date: date || null,
@@ -59,10 +59,6 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Act
     age_years: age,
     sex: client.sex,
     skinfolds: skinfolds as unknown as NonNullable<Json>,
-    skinfold_sum_mm: comp.ok ? comp.sumMm : null,
-    body_fat_pct: comp.ok ? comp.bodyFatPct : null,
-    fat_mass_kg: comp.ok ? comp.fatMassKg : null,
-    lean_mass_kg: comp.ok ? comp.leanMassKg : null,
     circumferences: circumferences as unknown as NonNullable<Json>,
     strength_tests: tests as unknown as NonNullable<Json>,
     tests_text: String(fd.get("tests_text") ?? "").trim(),
@@ -74,6 +70,9 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Act
     ? await supabase.from("checks").update(row).eq("id", checkId).eq("client_id", clientId)
     : await supabase.from("checks").insert(row);
   if (error) return { error: "Salvataggio non riuscito." };
+  // % di grasso e masse con la formula di riferimento del cliente (può
+  // cambiare per tutti i check se questo aggiunge o toglie una plica)
+  await recomputeClientChecks(supabase, clientId);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
   redirect(`/staff/clienti/${clientId}/check?salvato=1`);
 }
@@ -82,6 +81,24 @@ export async function deleteCheck(clientId: string, checkId: string) {
   await requireStaff();
   const supabase = await createClient();
   await supabase.from("checks").delete().eq("id", checkId).eq("client_id", clientId);
+  await recomputeClientChecks(supabase, clientId);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
   redirect(`/staff/clienti/${clientId}/check`);
+}
+
+/**
+ * Formula delle pliche di riferimento del cliente ("" = automatica). Ricalcola
+ * la % di tutti i check. Usata anche dal pulsante "Passa alla formula …".
+ */
+export async function setSkinfoldFormula(clientId: string, fd: FormData) {
+  await requireStaff();
+  const supabase = await createClient();
+  const raw = String(fd.get("formula") ?? "");
+  const f = raw ? formulaById(raw) : null;
+  const { data: client } = await supabase.from("clients").select("sex").eq("id", clientId).maybeSingle();
+  if (!client || (raw && (!f || f.sex !== client.sex))) redirect(`/staff/clienti/${clientId}/check`);
+  await supabase.from("clients").update({ skinfold_formula: f?.id ?? null }).eq("id", clientId);
+  await recomputeClientChecks(supabase, clientId);
+  revalidatePath(`/staff/clienti/${clientId}`, "layout");
+  redirect(`/staff/clienti/${clientId}/check?formula-salvata=1`);
 }

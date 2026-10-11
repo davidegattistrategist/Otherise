@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../src/lib/supabase/database.types";
 import { addDays, mondayOf, todayISO } from "../src/lib/dates";
-import { computeBodyComposition, type SkinfoldReadings } from "../src/lib/body/skinfolds";
+import { averagesOf, computeBodyComposition, referenceFormula, type SkinfoldReadings } from "../src/lib/body/skinfolds";
 import { estimateOneRepMax } from "../src/lib/strength/e1rm";
 import { parseExerciseCsv } from "../src/lib/import/exercises";
 import { newId, type ProgramContent } from "../src/lib/program/types";
@@ -154,27 +154,32 @@ async function main() {
   await logWeek(current!.id, content, 2, 3, addDays(start, 7));
   await logWeek(current!.id, content, 3, 1, addDays(start, 14));
 
-  // Check di Giulia (pliche inventate)
+  // Check di Giulia (pliche inventate). Il primo senza coscia (non si riusciva a
+  // prendere): la formula di riferimento è a 3 pliche e l'app propone le 5.
   const checks: Array<{ date: string; weight: number; sf: Record<string, number> }> = [
+    { date: addDays(today, -260), weight: 67.4, sf: { tricipite: 20, sottoscapolare: 16, soprailiaca: 18, addominale: 23.5 } },
     { date: addDays(today, -180), weight: 66.8, sf: { tricipite: 19, sottoscapolare: 15, soprailiaca: 17, addominale: 22, coscia: 27 } },
     { date: addDays(today, -95), weight: 65.9, sf: { tricipite: 17.5, sottoscapolare: 14, soprailiaca: 15, addominale: 20, coscia: 25 } },
     { date: addDays(today, -12), weight: 65.2, sf: { tricipite: 16, sottoscapolare: 13, soprailiaca: 13.5, addominale: 18, coscia: 23.5 } },
   ];
-  for (const [i, c] of checks.entries()) {
-    const skinfolds: SkinfoldReadings = Object.fromEntries(Object.entries(c.sf).map(([k, v]) => [k, [v, v + 0.5, null]]));
+  const toReadings = (sf: Record<string, number>): SkinfoldReadings => Object.fromEntries(Object.entries(sf).map(([k, v]) => [k, [v, v + 0.5, null]]));
+  const giuliaRef = referenceFormula("F", checks.map((c) => ({ averages: averagesOf(toReadings(c.sf)) })))!;
+  for (const [n, c] of checks.entries()) {
+    const i = n - 1;
+    const skinfolds = toReadings(c.sf);
     const age = Number(c.date.slice(0, 4)) - 1993 - (c.date.slice(5) < "05-14" ? 1 : 0);
-    const comp = computeBodyComposition({ sex: "F", age, weightKg: c.weight, skinfolds });
+    const comp = computeBodyComposition({ sex: "F", age, weightKg: c.weight, skinfolds, formula: giuliaRef.id });
     const squat = 55 + i * 7.5;
     await db.from("checks").insert({
       client_id: giulia, check_date: c.date, weight_kg: c.weight, age_years: age, sex: "F", skinfolds: skinfolds as never,
-      skinfold_sum_mm: comp.ok ? comp.sumMm : null, body_fat_pct: comp.ok ? comp.bodyFatPct : null, fat_mass_kg: comp.ok ? comp.fatMassKg : null, lean_mass_kg: comp.ok ? comp.leanMassKg : null,
+      skinfold_sum_mm: comp.ok ? comp.sumMm : null, body_fat_pct: comp.ok ? comp.bodyFatPct : null, fat_mass_kg: comp.ok ? comp.fatMassKg : null, lean_mass_kg: comp.ok ? comp.leanMassKg : null, body_fat_formula: comp.ok ? comp.formula.id : null,
       circumferences: { vita: 72 - i * 1.5, fianchi: 98 - i, coscia_dx: 56 - i * 0.5, braccio_dx: 27 + i * 0.3 } as never,
       strength_tests: [
         { exercise: "Back squat", load: squat, reps: 5, rpe: 8, e1rm: estimateOneRepMax(squat, 5, 8) },
         { exercise: "Panca piana bilanciere", load: 40 + i * 2.5, reps: 6, rpe: 8, e1rm: estimateOneRepMax(40 + i * 2.5, 6, 8) },
       ] as never,
-      tests_text: i === 2 ? "Plank 1'40\". Sit and reach +4 cm." : "",
-      notes_next_phase: i === 2 ? "Spingere sul volume gambe, inserire lavoro unilaterale. Schiena ok." : "",
+      tests_text: n === 3 ? "Plank 1'40\". Sit and reach +4 cm." : "",
+      notes_next_phase: n === 3 ? "Spingere sul volume gambe, inserire lavoro unilaterale. Schiena ok." : "",
       visible_to_client: true, created_by: owner,
     }).throwOnError();
   }

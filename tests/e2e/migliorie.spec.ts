@@ -10,6 +10,19 @@ async function login(page: Page, email: string) {
   await Promise.all([page.waitForURL((u) => !u.pathname.startsWith("/login")), page.getByRole("button", { name: "Entra" }).click()]);
 }
 
+test("promemoria di pagamento già scritto nella chat dell'app (niente WhatsApp)", async ({ page }) => {
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff");
+  await page.waitForLoadState("networkidle");
+  const link = page.getByRole("link", { name: /^Promemoria in chat a / }).filter({ visible: true }).first();
+  await expect(link).toBeVisible();
+  await expect(page.locator('a[href*="wa.me"]')).toHaveCount(0);
+  await link.click();
+  await page.waitForURL(/\/staff\/messaggi\/[0-9a-f-]{36}$/);
+  const box = page.locator("textarea").filter({ visible: true }).first();
+  await expect(box).toHaveValue(/^Ciao .+! Ti ricordo che/);
+});
+
 test("pagamenti: segna pagato in un tocco ed export CSV", async ({ page }) => {
   await login(page, "titolare@prova.local");
   await page.goto("/staff/pagamenti");

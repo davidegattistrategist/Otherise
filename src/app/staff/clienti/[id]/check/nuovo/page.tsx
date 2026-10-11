@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { getStaffClient } from "@/lib/data/client";
+import { foldContext } from "@/lib/data/checks";
+import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/dates";
 import type { Sex } from "@/lib/body/skinfolds";
 import { CheckForm } from "../check-form";
@@ -12,11 +14,15 @@ export default async function NewCheckPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   await requireStaff();
   const client = await getStaffClient(id);
+  const folds = await foldContext(await createClient(), client);
   return (
     <CheckForm
       action={saveCheck.bind(null, id, null)}
       sex={client.sex as Sex}
       birthDate={client.birth_date}
+      formula={folds.ref?.id ?? null}
+      manual={Boolean(client.skinfold_formula)}
+      lastMissing={folds.lastMissing}
       values={{ check_date: todayISO(), weight_kg: null, skinfolds: {}, circumferences: {}, strength_tests: [], tests_text: "", notes_next_phase: "", visible_to_client: true }}
     />
   );

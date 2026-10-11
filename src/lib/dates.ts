@@ -78,6 +78,16 @@ export function ageOn(birthDate: ISODate | null | undefined, on: ISODate): numbe
   return age;
 }
 
+/** È il compleanno? Chi è nato il 29 febbraio lo festeggia il 28 negli anni non bisestili. */
+export function isBirthday(birthDate: ISODate | null | undefined, on: ISODate): boolean {
+  if (!birthDate) return false;
+  const [, bm, bd] = parts(birthDate);
+  const [y, m, d] = parts(on);
+  if (m === bm && d === bd) return true;
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  return bm === 2 && bd === 29 && !leap && m === 2 && d === 28;
+}
+
 const MONTHS = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
 const MONTHS_LONG = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
 const DAYS = ["lun", "mar", "mer", "gio", "ven", "sab", "dom"];

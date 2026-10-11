@@ -63,6 +63,21 @@ test.describe("titolare", () => {
     await expect(page).toHaveURL(/\/check$/);
     await expect(page.getByText(/Grasso \d/)).toBeVisible();
 
+    // check senza coscia e ascellare: si usa la formula a 3 pliche e lo dice
+    await page.goto(`${base}/check/nuovo`);
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByText("l'ultima volta non presa")).toHaveCount(0);
+    for (const site of ["tricipite", "pettorale", "sottoscapolare", "soprailiaca", "addominale"]) {
+      await page.fill(`input[name=sf_${site}_0]`, "13");
+    }
+    await expect(page.getByText(/Manca ascellare, coscia: al salvataggio tutti i check/)).toBeVisible();
+    await page.getByRole("button", { name: "Salva check" }).click();
+    await expect(page.getByText("Check salvato.")).toBeVisible();
+    await expect(page.getByText(/Ora: 3 pliche \(petto, tricipite, sottoscapolare\), scelta in automatico/)).toBeVisible();
+    await expect(page.getByText("Pliche non prese: ascellare, coscia")).toBeVisible();
+    await page.goto(`${base}/check/nuovo`);
+    await expect(page.getByText("l'ultima volta non presa").filter({ visible: true })).toHaveCount(2);
+
     // posturale
     await page.goto(`${base}/posturale`);
     await page.fill("textarea[name=tight_muscles]", "Psoas rigido");

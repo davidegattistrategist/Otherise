@@ -40,6 +40,7 @@ export function ChatThread({
   emptyText,
   className,
   drafts,
+  prefill,
 }: {
   clientId: string;
   initial: ChatMessage[];
@@ -49,9 +50,11 @@ export function ChatThread({
   className?: string;
   /** Solo staff: bozze di risposta dell'assistente AI (null = nessuna pronta) */
   drafts?: { initial: ReplyDraft | null; clientName?: string };
+  /** Testo già scritto nel campo (es. promemoria di pagamento): parte solo se premi invio */
+  prefill?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initial);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(prefill ?? "");
   const [pending, setPending] = useState<Pending[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -228,6 +231,15 @@ export function ChatThread({
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   };
+
+  // testo già pronto (promemoria): campo alto quanto il messaggio
+  useEffect(() => {
+    if (!prefill) return;
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [prefill]);
 
   const applyDraft = (d: ReplyDraft) => {
     setText(d.body);

@@ -6,7 +6,7 @@
  * I risultati si aggiornano mentre scrivi; il server li ricalcola al salvataggio.
  */
 import { useActionState, useMemo, useState } from "react";
-import { CIRCUMFERENCES, SKINFOLD_SITES, computeBodyComposition, protocolSites, siteAverage, type Sex, type SkinfoldSite } from "@/lib/body/skinfolds";
+import { CIRCUMFERENCES, SKINFOLD_SITES, averagesOf, computeBodyComposition, formulaById, protocolSites, siteAverage, siteLabel, sumOf, type FormulaId, type Sex, type SkinfoldSite } from "@/lib/body/skinfolds";
 import { estimateOneRepMax, RPE_VALUES } from "@/lib/strength/e1rm";
 import { ageOn } from "@/lib/dates";
 import { Card, Eyebrow, Input, Label, Textarea, fmtNum } from "@/components/ui";
@@ -33,11 +33,20 @@ export function CheckForm({
   sex,
   birthDate,
   values,
+  formula,
+  manual,
+  lastMissing,
 }: {
   action: (s: ActionState, fd: FormData) => Promise<ActionState>;
   sex: Sex;
   birthDate: string | null;
   values: CheckValues;
+  /** formula di riferimento del cliente (null = nessuna formula validata per il suo storico) */
+  formula: FormulaId | null;
+  /** true se la formula l'ha scelta il trainer (non automatica) */
+  manual: boolean;
+  /** pliche del protocollo non prese nell'ultimo check */
+  lastMissing: SkinfoldSite[];
 }) {
   const [state, formAction] = useActionState(action, null);
   const [date, setDate] = useState(values.check_date);
@@ -55,11 +64,17 @@ export function CheckForm({
 
   const sites = protocolSites(sex);
   const age = ageOn(birthDate, date);
-  const comp = useMemo(() => {
-    const readings: Partial<Record<SkinfoldSite, Array<number | null>>> = {};
-    for (const s of sites) readings[s] = sf[s].map(toNum);
-    return computeBodyComposition({ sex, age, weightKg: toNum(weight), skinfolds: readings });
-  }, [sf, sites, sex, age, weight]);
+  const readings = useMemo(() => {
+    const r: Partial<Record<SkinfoldSite, Array<number | null>>> = {};
+    for (const s of sites) r[s] = sf[s].map(toNum);
+    return r;
+  }, [sf, sites]);
+  const comp = useMemo(() => computeBodyComposition({ sex, age, weightKg: toNum(weight), skinfolds: readings, formula }), [readings, sex, age, weight, formula]);
+  const avgs = averagesOf(readings);
+  const measured = Object.keys(avgs) as SkinfoldSite[];
+  const ref = formulaById(formula);
+  const refMissing = ref ? ref.sites.filter((s) => avgs[s] === undefined) : [];
+  const lower = (l: SkinfoldSite[]) => l.map((m) => siteLabel(m).toLowerCase()).join(", ");
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
@@ -98,7 +113,10 @@ export function CheckForm({
                 const avg = siteAverage(sf[s.key].map(toNum));
                 return (
                   <tr key={s.key} className="border-t border-sand-deep">
-                    <th scope="row" className="w-[28%] py-2 pr-1 text-left text-sm font-semibold break-words sm:w-auto sm:text-[15px]">{s.label}</th>
+                    <th scope="row" className="w-[28%] py-2 pr-1 text-left text-sm font-semibold break-words sm:w-auto sm:text-[15px]">
+                      {s.label}
+                      {lastMissing.includes(s.key) ? <span className="block text-xs font-normal text-accent-deep">l&apos;ultima volta non presa</span> : null}
+                    </th>
                     {[0, 1, 2].map((i) => (
                       <td key={i} className="px-1 py-1.5">
                         <input
@@ -119,18 +137,37 @@ export function CheckForm({
           </table>
         </div>
         <div className="mt-5 rounded-2xl bg-ink p-5 text-card">
-          {comp.ok ? (
-            <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))]">
-              <Result label="Somma pliche" value={`${fmtNum(comp.sumMm, 2)} mm`} />
-              <Result label="Massa grassa" value={`${fmtNum(comp.bodyFatPct, 2)} %`} />
-              <Result label="Massa grassa" value={comp.fatMassKg !== null ? `${fmtNum(comp.fatMassKg, 2)} kg` : "serve il peso"} />
-              <Result label="Massa magra" value={comp.leanMassKg !== null ? `${fmtNum(comp.leanMassKg, 2)} kg` : "serve il peso"} />
-            </div>
+          {measured.length === 0 ? (
+            <p className="text-[15px] leading-relaxed text-muted-dark">Scrivi le pliche che riesci a prendere: se una non si prende lasciala vuota, non conta come zero.</p>
+          ) : formula === null ? (
+            <p className="text-[15px] leading-relaxed text-muted-dark">
+              Somma pliche <strong className="text-card">{fmtNum(sumOf(avgs, measured), 2)} mm</strong>. Con le pliche prese finora a questo cliente non c&apos;è una formula validata per la percentuale di grasso: si confrontano somma delle pliche, peso e circonferenze.
+            </p>
+          ) : comp.ok && !(comp.fallback && manual) ? (
+            <>
+              <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))]">
+                <Result label="Somma pliche" value={`${fmtNum(sumOf(avgs, measured), 2)} mm`} />
+                <Result label="Massa grassa" value={`${fmtNum(comp.bodyFatPct, 2)} %`} />
+                <Result label="Massa grassa" value={comp.fatMassKg !== null ? `${fmtNum(comp.fatMassKg, 2)} kg` : "serve il peso"} />
+                <Result label="Massa magra" value={comp.leanMassKg !== null ? `${fmtNum(comp.leanMassKg, 2)} kg` : "serve il peso"} />
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-muted-dark">
+                Formula: {comp.formula.label}.
+                {comp.fallback && ref
+                  ? ` Manca ${lower(refMissing)}: al salvataggio tutti i check di questo cliente passeranno a questa formula, così i grafici restano confrontabili. Puoi cambiarla dalla pagina dei check.`
+                  : ""}
+              </p>
+            </>
+          ) : comp.ok ? (
+            <p className="text-[15px] leading-relaxed text-muted-dark">
+              Somma pliche <strong className="text-card">{fmtNum(sumOf(avgs, measured), 2)} mm</strong>. Con la formula scelta ({ref?.label}) manca {lower(refMissing)}: questo check resterà senza percentuale. Solo come indicazione, con {comp.formula.label.toLowerCase()} sarebbe {fmtNum(comp.bodyFatPct, 1)} %.
+            </p>
           ) : (
             <p className="text-[15px] leading-relaxed text-muted-dark">
+              Somma pliche <strong className="text-card">{fmtNum(sumOf(avgs, measured), 2)} mm</strong>.{" "}
               {comp.missing.length
-                ? `Per calcolare la percentuale di grasso servono tutte le pliche. Mancano: ${comp.missing.map((m) => SKINFOLD_SITES.find((s) => s.key === m)!.label.toLowerCase()).join(", ")}.`
-                : comp.reason}{" "}
+                ? `Con queste pliche non c'è una formula validata per la percentuale di grasso (manca ${lower(comp.missing)}): confronta la somma delle pliche, il peso e le circonferenze.`
+                : comp.reason + "."}{" "}
               Puoi comunque salvare il check.
             </p>
           )}

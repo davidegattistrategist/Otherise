@@ -8,7 +8,7 @@ Una pagina per le cose di tutti i giorni. L'app funziona da computer e da telefo
 - **Cliente**: vede solo sé stesso, solo i programmi pubblicati, e i check/valutazioni posturali che rendi visibili. Le note delle sessioni PT e le "note per la prossima fase" non le vede mai.
 
 ## La pagina "Oggi"
-Le cose da fare: check-up con qualcosa che non va, programmi che finiscono o da pubblicare, pagamenti in scadenza (con i pulsanti **Pagato** e **WhatsApp**, solo titolare), clienti che non registrano allenamenti da una settimana o con costanza sotto il 50%, clienti senza check da più di 5 settimane.
+Le cose da fare: check-up con qualcosa che non va, programmi che finiscono o da pubblicare, pagamenti in scadenza (con i pulsanti **Pagato** e **Promemoria**, solo titolare), clienti che non registrano allenamenti da una settimana o con costanza sotto il 50%, clienti senza check da più di 5 settimane.
 
 Ogni mattina alle 8 arriva **una sola email di riepilogo** con pagamenti, programmi da preparare e clienti da sentire. Check-up con problemi e messaggi in chat arrivano invece subito.
 
@@ -94,7 +94,7 @@ Se nel check-up il cliente ha scritto una **richiesta**, trovi già pronta una b
 ## Pagamenti (titolare)
 I pagamenti avvengono fuori dall'app. Qui registri cosa è saldato, nel modo più veloce possibile:
 - **Pagato**: in "Oggi" e in "Pagamenti", un tocco registra il pagamento atteso (importo del piano e periodo successivo, o le sessioni del pacchetto). Prima ti chiede conferma mostrandoti cosa registra.
-- **WhatsApp**: apre la chat del cliente con il promemoria già scritto (lo controlli e premi invio). Il testo si cambia in Impostazioni.
+- **Promemoria**: apre la chat dell'app con il cliente, con il promemoria già scritto (lo controlli e premi invio). Il testo si cambia in Impostazioni.
 - Scheda cliente → **Pagamenti → Registra un pagamento** per i casi particolari (importo diverso, pagamento a metà…).
 - **Pagamenti** nel menu: chi è scaduto e chi scade a breve, incassi per mese (grafico dell'ultimo anno), quanto entra nei prossimi 30 giorni, ricorrente stimato.
 - **Previsione dei prossimi mesi** (in fondo a Pagamenti): quanto dovrebbe entrare nei prossimi 3, 6 o 12 mesi dai clienti attivi. Gli abbonamenti si rinnovano alla scadenza allo stesso prezzo; i pacchetti quando finiscono le sessioni, al ritmo con cui le fa ogni cliente. Clienti in pausa e archiviati sono esclusi. Lo **scenario prudente** tiene conto di quanti clienti hanno rinnovato davvero nell'ultimo anno. È una stima: i pagamenti veri li registri sempre tu.

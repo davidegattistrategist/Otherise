@@ -41,7 +41,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
 
   const [programs, checks, sessions, checkins, recentLogs, notes, billing, settings] = await Promise.all([
     supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", id).in("status", ["published", "draft"]).order("start_date", { ascending: false, nullsFirst: true }),
-    supabase.from("checks").select("check_date, sequence, created_at, weight_kg, body_fat_pct, lean_mass_kg, notes_next_phase").eq("client_id", id).order("check_date", { ascending: true }),
+    supabase.from("checks").select("check_date, sequence, created_at, order_hint, weight_kg, body_fat_pct, lean_mass_kg, notes_next_phase").eq("client_id", id).order("check_date", { ascending: true }),
     supabase.from("pt_sessions").select("id, session_date, notes").eq("client_id", id).order("session_date", { ascending: false }).limit(3),
     supabase.from("checkins").select("id, week_start, training, sleep, stress, adherence, flagged, flag_reasons, request, reviewed_at").eq("client_id", id).order("week_start", { ascending: false }).limit(1),
     supabase.from("exercise_logs").select("exercise_name, performed_on, sets, result_text").eq("client_id", id).order("performed_on", { ascending: false }).limit(8),

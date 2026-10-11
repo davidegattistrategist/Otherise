@@ -128,7 +128,7 @@ export function ReminderButton({ action }: { action: Action }) {
   const [state, formAction] = useActionState(action, null);
   return (
     <form action={formAction} className="flex flex-col gap-2">
-      <div><SubmitButton variant="secondary" size="sm" pendingText="Invio…">Promemoria nell&apos;app</SubmitButton></div>
+      <div><SubmitButton variant="secondary" size="sm" pendingText="Invio…">Manda come notifica</SubmitButton></div>
       <ActionMessage state={state} />
     </form>
   );

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { buildTodayList, getClientsOverview, type TodayItem } from "@/lib/data/staff";
-import { formatHeading, formatShort, todayISO } from "@/lib/dates";
+import { ageOn, formatHeading, formatShort, isBirthday, todayISO } from "@/lib/dates";
 import { Card, Dot, Eyebrow, LinkButton, Notice, PageTitle } from "@/components/ui";
 import { getBillingLines } from "@/lib/data/billing";
 import { QuickPay } from "@/components/quick-pay";
@@ -56,6 +56,8 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
   const { programs, checks, training } = buildTodayList(clients, today);
   const billing = me.role === "owner" ? (await getBillingLines(supabase)).lines.filter((l) => !l.paused && (l.status.state === "overdue" || l.status.state === "due_soon")) : [];
   const active = clients.filter((c) => c.status === "active").length;
+  const birthdays = clients.filter((c) => c.status === "active" && isBirthday(c.birth_date, today));
+  const noBirth = clients.filter((c) => c.status === "active" && !c.birth_date);
 
   return (
     <div className="flex flex-col gap-6">
@@ -88,6 +90,23 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
             <p className="text-[15px] text-muted">Nessun check-up con problemi. Gli altri restano nella scheda dei clienti.</p>
           )}
         </Card>
+
+        {birthdays.length > 0 ? (
+          <Card>
+            <div className="mb-3 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Compleanni di oggi</Eyebrow></div>
+            <ul className="flex flex-col">
+              {birthdays.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-sand-deep py-2.5 first:border-t-0">
+                  <Link href={`/staff/clienti/${c.id}`} className="min-w-0 hover:opacity-70">
+                    <span className="block font-semibold">{c.fullName}</span>
+                    <span className="block text-sm text-muted">Compie {ageOn(c.birth_date, today)} anni</span>
+                  </Link>
+                  <Link href={`/staff/messaggi/${c.id}?promemoria=compleanno`} className="min-h-9 rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ring-sand-deep hover:bg-sand">Fagli gli auguri in chat</Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
 
         {pains && pains.length > 0 ? (
           <Card>
@@ -132,7 +151,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
                         <span className="block text-sm text-muted">{l.status.label}</span>
                       </span>
                     </Link>
-                    <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} whatsapp={l.whatsapp} compact />
+                    <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={l.reminder} compact />
                   </li>
                 ))}
               </ul>
@@ -149,6 +168,14 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
           <div className="mb-3"><Eyebrow>Check da fare</Eyebrow></div>
           <List items={checks} empty="Tutti i clienti hanno un check nelle ultime 5 settimane." />
         </Card>
+
+        {noBirth.length > 0 ? (
+          <Card>
+            <div className="mb-1"><Eyebrow>Da fare: chiedi la data di nascita</Eyebrow></div>
+            <p className="mb-2 text-sm text-muted">Serve per la massa grassa e per ricordarti il compleanno. Aggiungila nella scheda.</p>
+            <List items={noBirth.map((c) => ({ clientId: c.id, clientName: c.fullName, text: "Scheda", href: `/staff/clienti/${c.id}/profilo`, tone: "ink" as const }))} empty="" />
+          </Card>
+        ) : null}
       </div>
     </div>
   );

@@ -53,7 +53,7 @@ export async function buildClientContext(
     supabase.from("clients").select("sex, birth_date, goals, start_date, phase_weeks").eq("id", clientId).single(),
     supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", clientId).neq("status", "draft").order("start_date", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(3),
     supabase.from("exercise_logs").select("exercise_name, performed_on, week, sets, result_text").eq("client_id", clientId).gte("performed_on", since).order("performed_on"),
-    supabase.from("checks").select("check_date, sequence, created_at, weight_kg, body_fat_pct, lean_mass_kg, fat_mass_kg, circumferences, strength_tests, tests_text, notes_next_phase").eq("client_id", clientId).limit(300),
+    supabase.from("checks").select("check_date, sequence, created_at, order_hint, weight_kg, body_fat_pct, lean_mass_kg, fat_mass_kg, circumferences, strength_tests, tests_text, notes_next_phase").eq("client_id", clientId).limit(300),
     supabase.from("posture_assessments").select("assessed_on, tight_muscles, what_works, posture_work, notes").eq("client_id", clientId).order("assessed_on", { ascending: false }).limit(2),
     supabase.from("checkins").select("week_start, training, sleep, stress, adherence, issues, request").eq("client_id", clientId).order("week_start", { ascending: false }).limit(4),
     supabase.from("pt_sessions").select("session_date, notes").eq("client_id", clientId).order("session_date", { ascending: false }).limit(6),

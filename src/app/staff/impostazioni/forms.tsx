@@ -22,7 +22,7 @@ export function SettingsForm({ action, values, defaultMessage }: { action: Actio
           <Input name="ai_monthly_budget_eur" inputMode="decimal" defaultValue={String(values.ai_monthly_budget_eur).replace(".", ",")} required />
         </Field>
       </div>
-      <Field label="Messaggio WhatsApp per i rinnovi" hint="{nome} {situazione} {importo} {scadenza}">
+      <Field label="Messaggio di promemoria per i rinnovi" hint="{nome} {situazione} {importo} {scadenza}">
         <Textarea name="payment_message" rows={3} defaultValue={values.payment_message} placeholder={defaultMessage} />
       </Field>
       <ActionMessage state={state} />

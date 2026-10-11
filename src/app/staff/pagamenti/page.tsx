@@ -63,7 +63,7 @@ export default async function PaymentsOverviewPage() {
                   <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="font-semibold hover:underline">{l.name}</Link>
                   <div className="text-sm text-muted">{l.status.label}{l.proposal ? ` · prossimo: ${l.proposal}` : ""}</div>
                 </div>
-                <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} whatsapp={l.whatsapp} />
+                <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={l.reminder} />
               </li>
             ))}
           </ul>
@@ -116,7 +116,7 @@ export default async function PaymentsOverviewPage() {
                     {l.paused ? " · in pausa" : ""}
                   </span>
                 </span>
-                {l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} whatsapp={null} compact label={l.status.state === "ok" ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="shrink-0 text-sm font-semibold underline">Imposta piano</Link>}
+                {l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="shrink-0 text-sm font-semibold underline">Imposta piano</Link>}
               </div>
             </li>
           ))}
@@ -146,7 +146,7 @@ export default async function PaymentsOverviewPage() {
                   </span>
                 </td>
                 <td className="px-3 py-3 text-right text-muted tabular">{l.status.dueDate ? formatShort(l.status.dueDate) : l.status.sessionsLeft !== null ? `${l.sessionsUsed}/${l.sessionsBought} sessioni` : "—"}</td>
-                <td className="px-5 py-3 text-right">{l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} whatsapp={null} compact label={l.status.state === "ok" ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="text-sm font-semibold underline">Imposta piano</Link>}</td>
+                <td className="px-5 py-3 text-right">{l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="text-sm font-semibold underline">Imposta piano</Link>}</td>
               </tr>
             ))}
           </tbody>

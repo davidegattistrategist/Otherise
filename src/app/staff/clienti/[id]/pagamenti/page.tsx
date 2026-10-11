@@ -2,11 +2,10 @@ import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatShort, todayISO } from "@/lib/dates";
-import { billingStatus, formatEuro, isPeriodic, METHOD_LABELS, PLAN_LABELS, situationText, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
-import { DEFAULT_PAYMENT_MESSAGE, fillTemplate, waLink } from "@/lib/whatsapp";
-import { formatLong } from "@/lib/dates";
-import { IconWhatsapp } from "@/components/icons";
-import { Card, Dot, EmptyState, Eyebrow, Notice, buttonClass } from "@/components/ui";
+import { billingStatus, formatEuro, isPeriodic, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
+import { reminderChatLink } from "@/lib/data/billing";
+import { IconChat } from "@/components/icons";
+import { Card, Dot, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { PaymentForm, PlanForm, ReminderButton } from "./forms";
 import { closePackage, deletePayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder } from "./actions";
@@ -26,16 +25,12 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
     supabase.rpc("client_billing", { cid: id }),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
   ]);
-  const { data: client } = await supabase.from("clients").select("first_name, phone").eq("id", id).single();
   const plan = (plans ?? []).find((p) => p.active) ?? null;
   const row = (billing as BillingRow[] | null)?.[0] ?? null;
   const status = billingStatus(row ? { ...row, kind: row.kind as PlanKind } : null, today, settings?.reminder_days ?? 7);
   const kind = plan?.kind as PlanKind | undefined;
   const suggestion = plan && kind ? suggestNextPeriod(kind, plan.start_date, row?.paid_until ?? null) : null;
   const totalYear = (payments ?? []).filter((p) => p.paid_on.slice(0, 4) === today.slice(0, 4)).reduce((s, p) => s + Number(p.amount), 0);
-  const whatsapp = row && kind && client
-    ? waLink(client.phone, fillTemplate(settings?.payment_message?.trim() || DEFAULT_PAYMENT_MESSAGE, { nome: client.first_name, situazione: situationText(status, kind, formatLong), importo: formatEuro(row.amount), scadenza: status.dueDate ? formatLong(status.dueDate) : "" }))
-    : null;
   const editingPlan = piano === "modifica" && plan;
   const newPlan = piano === "nuovo" || !plan;
 
@@ -118,14 +113,11 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
         {plan ? (
           <Card className="flex flex-col gap-3">
             <Eyebrow>Promemoria</Eyebrow>
-            <p className="text-sm text-muted">L&apos;app avvisa già in automatico te e il cliente {settings?.reminder_days ?? 7} giorni prima della scadenza. Da qui puoi mandare un promemoria subito: su WhatsApp (il messaggio è già scritto) o nell&apos;app.</p>
+            <p className="text-sm text-muted">L&apos;app avvisa già in automatico te e il cliente {settings?.reminder_days ?? 7} giorni prima della scadenza. Da qui puoi mandare un promemoria subito: in chat (il messaggio è già scritto, lo controlli e premi invio) o come notifica.</p>
             <div className="flex flex-wrap items-start gap-2">
-              {whatsapp ? (
-                <a href={whatsapp} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "sm")}><IconWhatsapp size={16} /> Scrivi su WhatsApp</a>
-              ) : null}
+              <LinkButton href={reminderChatLink(id)} variant="secondary" size="sm"><IconChat size={16} /> Scrivi in chat</LinkButton>
               <ReminderButton action={sendPaymentReminder.bind(null, id)} />
             </div>
-            {!client?.phone ? <p className="text-xs text-muted">Aggiungi il telefono nella scheda per aprire direttamente la sua chat WhatsApp.</p> : null}
           </Card>
         ) : null}
         <Card className="flex flex-col gap-2">

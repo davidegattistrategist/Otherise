@@ -1,11 +1,12 @@
 import { fillName, looksLikeQuestion, pendingClientMessages, pseudonymize, similarity, styleParts, styleSections, worthLearning, type StyleExample } from "./reply-draft";
 import { prescriptionRule, setDifferences, workoutVsPlan } from "./reply-context";
 import { describe, expect, it } from "vitest";
-import { computeBodyComposition, protocolSites, siteAverage } from "./body/skinfolds";
+import { commonSites, computeBodyComposition, formulaById, formulaUpgrade, protocolSites, referenceFormula, siteAverage } from "./body/skinfolds";
+import { sortChecks } from "./check-order";
 import { estimateOneRepMax } from "./strength/e1rm";
 import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
 import { billingStatus, periodEnd, suggestNextPeriod } from "./billing";
-import { addMonths, ageOn, diffDays, formatHeading, isISODate, mondayOf, todayISO } from "./dates";
+import { addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
 import { displayWeek, nextDay, nextWorkout, programEndDate, weekPosition } from "./program/schedule";
 import { buildNextPhase, copyWeekToOthers } from "./program/next-phase";
 import { blockLetter, blockSummary, emptyBlock, itemLabel, normalizeWeeks, parseContent, type ProgramContent } from "./program/types";
@@ -44,15 +45,65 @@ describe("plicometria", () => {
     if (r.ok) expect(r.bodyFatPct).toBe(14.63);
   });
 
-  it("non calcola la percentuale se manca una plica (errore trovato nei fogli)", () => {
+  it("con 3 pliche usa la formula a 3 pliche (petto, tricipite, sottoscapolare)", () => {
     const r = computeBodyComposition({
       sex: "M",
       age: 29,
       weightKg: 98,
       skinfolds: { tricipite: [21, 21, 21], pettorale: [16, 16, 16], sottoscapolare: [22, 22.5, 22] },
     });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.formula.id).toBe("m3_pts");
+    expect(r.bodyFatPct).toBe(22.77);
+    expect(r.fallback).toBe(false);
+  });
+
+  it("donna senza coscia: formula tricipite, soprailiaca, addome", () => {
+    const r = computeBodyComposition({ sex: "F", age: 40, weightKg: 60, skinfolds: { tricipite: [12], sottoscapolare: [9], soprailiaca: [8], addominale: [10] } });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.formula.id).toBe("f3_tsa");
+    expect(r.bodyFatPct).toBeCloseTo(16.96, 2);
+  });
+
+  it("non calcola la percentuale senza una formula validata (mai una plica a zero)", () => {
+    const r = computeBodyComposition({ sex: "F", age: 30, weightKg: 60, skinfolds: { tricipite: [12], sottoscapolare: [9], soprailiaca: [8] } });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.missing).toEqual(["ascellare", "soprailiaca", "addominale", "coscia"]);
+    if (!r.ok) expect(r.missing).toEqual(["addominale", "coscia"]);
+  });
+
+  it("con la formula di riferimento: se manca una sua plica ripiega e lo segnala", () => {
+    const sk = { tricipite: [12], sottoscapolare: [9], soprailiaca: [8], addominale: [10] };
+    const r = computeBodyComposition({ sex: "F", age: 30, weightKg: 60, skinfolds: sk, formula: "f5" });
+    expect(r.ok && r.fallback && r.formula.id).toBe("f3_tsa");
+  });
+
+  it("formula di riferimento: la più completa valida per tutti i check, o quella scelta", () => {
+    const full = { averages: { tricipite: 12, sottoscapolare: 9, soprailiaca: 8, addominale: 10, coscia: 20 } };
+    const noThigh = { averages: { tricipite: 12, sottoscapolare: 9, soprailiaca: 8, addominale: 10 } };
+    const none = { averages: {} };
+    expect(referenceFormula("F", [full, full])?.id).toBe("f5");
+    expect(referenceFormula("F", [noThigh, full, none])?.id).toBe("f3_tsa");
+    expect(referenceFormula("F", [noThigh, full], "f5")?.id).toBe("f5");
+    expect(referenceFormula("F", [])?.id).toBe("f5");
+    expect(referenceFormula("F", [{ averages: { tricipite: 12, sottoscapolare: 9, soprailiaca: 8 } }])).toBeNull();
+    expect(referenceFormula("M", [full], "f5")?.id).toBeUndefined();
+  });
+
+  it("propone una formula più completa dopo 3 check di fila con la plica in più", () => {
+    const full = { averages: { tricipite: 12, sottoscapolare: 9, soprailiaca: 8, addominale: 10, coscia: 20 } };
+    const noThigh = { averages: { tricipite: 12, sottoscapolare: 9, soprailiaca: 8, addominale: 10 } };
+    const f3 = referenceFormula("F", [noThigh, full, full]);
+    expect(formulaUpgrade("F", [noThigh, full, full], f3)).toBeNull();
+    expect(formulaUpgrade("F", [noThigh, full, { averages: {} }, full, full], f3)?.id).toBe("f5");
+    expect(formulaUpgrade("F", [noThigh, full, full, full], formulaById("f5"))).toBeNull();
+  });
+
+  it("somma confrontabile: solo le pliche prese in tutti i check", () => {
+    const a = { averages: { tricipite: 12, sottoscapolare: 9, coscia: 20 } };
+    const b = { averages: { tricipite: 11, sottoscapolare: 8 } };
+    expect(commonSites("F", [a, b, { averages: {} }])).toEqual(["tricipite", "sottoscapolare"]);
   });
 
   it("chiede l'età se manca", () => {
@@ -69,6 +120,19 @@ describe("plicometria", () => {
 
   it("protocollo donna senza pettorale e ascellare", () => {
     expect(protocolSites("F")).toEqual(["tricipite", "sottoscapolare", "soprailiaca", "addominale", "coscia"]);
+  });
+});
+
+describe("ordine dei check", () => {
+  it("prima lo storico senza data, poi per data; order_hint mette al suo posto un check senza data", () => {
+    const list = [
+      { id: "b", check_date: "2025-03-01", created_at: "1" },
+      { id: "n2", check_date: null, sequence: 2, created_at: "1" },
+      { id: "h", check_date: null, sequence: 3, order_hint: "2025-02-01", created_at: "1" },
+      { id: "a", check_date: "2025-01-01", created_at: "1" },
+      { id: "n1", check_date: null, sequence: 1, created_at: "1" },
+    ];
+    expect(sortChecks(list).map((c) => c.id)).toEqual(["n1", "n2", "a", "h", "b"]);
   });
 });
 
@@ -121,6 +185,15 @@ describe("prescrizioni dei vostri programmi", () => {
 });
 
 describe("date", () => {
+  it("compleanno (anche per chi è nato il 29 febbraio)", () => {
+    expect(isBirthday("1990-10-11", "2026-10-11")).toBe(true);
+    expect(isBirthday("1990-10-12", "2026-10-11")).toBe(false);
+    expect(isBirthday(null, "2026-10-11")).toBe(false);
+    expect(isBirthday("1996-02-29", "2027-02-28")).toBe(true);
+    expect(isBirthday("1996-02-29", "2028-02-28")).toBe(false);
+    expect(isBirthday("1996-02-29", "2028-02-29")).toBe(true);
+  });
+
   it("formato e calcoli", () => {
     expect(isISODate("2026-02-30")).toBe(false);
     expect(isISODate("2026-10-09")).toBe(true);

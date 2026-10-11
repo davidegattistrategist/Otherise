@@ -5,7 +5,7 @@ import "server-only";
 import { createAdminClient } from "./supabase/admin";
 import { notify, type NewNotification } from "./notify";
 import { deliverPendingEmails, sendEmail } from "./email";
-import { addDays, diffDays, formatHeading, formatLong, isoWeekday, mondayOf, todayISO } from "./dates";
+import { addDays, ageOn, diffDays, formatHeading, formatLong, isBirthday, isoWeekday, mondayOf, todayISO } from "./dates";
 import { siteUrl } from "./site";
 import { billingStatus, type PlanKind } from "./billing";
 import { checkinWeekFor } from "./checkin";
@@ -16,7 +16,7 @@ export async function runDailyChecks(today = todayISO()) {
   const out: NewNotification[] = [];
   const [{ data: owners }, { data: clients }, { data: settings }] = await Promise.all([
     admin.from("profiles").select("id").eq("role", "owner"),
-    admin.from("clients").select("id, first_name, last_name, coach_id, user_id, weekly_checkin, status").eq("status", "active"),
+    admin.from("clients").select("id, first_name, last_name, coach_id, user_id, weekly_checkin, status, birth_date").eq("status", "active"),
     admin.from("app_settings").select("reminder_days").maybeSingle(),
   ]);
   const ownerIds = (owners ?? []).map((o) => o.id);
@@ -118,7 +118,25 @@ export async function runDailyChecks(today = todayISO()) {
     }
   }
 
-  // 5) Privacy: dati di clienti archiviati da più di 24 mesi (come scritto nell'informativa)
+  // 5) Compleanni: avviso allo staff per fare gli auguri
+  for (const c of clients ?? []) {
+    if (!isBirthday(c.birth_date, today)) continue;
+    const recipients = new Set(ownerIds);
+    if (c.coach_id) recipients.add(c.coach_id);
+    for (const r of recipients) {
+      out.push({
+        recipient_id: r,
+        client_id: c.id,
+        kind: "birthday",
+        title: `Compleanno: ${name(c)}`,
+        body: `Oggi compie ${ageOn(c.birth_date, today)} anni: fagli gli auguri!`,
+        link: `/staff/messaggi/${c.id}?promemoria=compleanno`,
+        dedupe_key: `bday:${c.id}:${today.slice(0, 4)}`,
+      });
+    }
+  }
+
+  // 6) Privacy: dati di clienti archiviati da più di 24 mesi (come scritto nell'informativa)
   const { data: oldArchived } = await admin
     .from("clients")
     .select("id, first_name, last_name")
@@ -164,11 +182,11 @@ async function sendStaffDigests(today: string): Promise<number> {
       .select("id, kind, title, body")
       .eq("recipient_id", s.id)
       .is("emailed_at", null)
-      .in("kind", ["payment_due", "program_ending", "inactive"])
+      .in("kind", ["birthday", "payment_due", "program_ending", "inactive"])
       .gte("created_at", since)
       .order("kind");
     if (!items?.length) continue;
-    const groups: Array<[string, string]> = [["payment_due", "Pagamenti"], ["program_ending", "Programmi da preparare"], ["inactive", "Clienti da sentire"]];
+    const groups: Array<[string, string]> = [["birthday", "Compleanni"], ["payment_due", "Pagamenti"], ["program_ending", "Programmi da preparare"], ["inactive", "Clienti da sentire"]];
     const lines: string[] = [`Ciao ${s.full_name.split(" ")[0] || ""}, ecco il riepilogo di ${formatHeading(today).toLowerCase()}.`, ""];
     for (const [kind, label] of groups) {
       const g = items.filter((i) => i.kind === kind);

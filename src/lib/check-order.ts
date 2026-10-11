@@ -1,18 +1,31 @@
 /**
- * Ordine dei check: prima lo storico importato (Check 1, 2… anche senza
- * data, colonna `sequence`), poi quelli registrati nell'app, per data.
+ * Ordine dei check, dal più vecchio:
+ * 1. lo storico importato senza data (Check 1, 2… colonna `sequence`);
+ * 2. tutti gli altri per data. Un check storico senza data ma di cui si sa il
+ *    periodo ha `order_hint` (una data che serve solo a metterlo al suo posto,
+ *    non si mostra e non entra nei grafici).
  */
 import { formatShort } from "./dates";
 
-type Orderable = { check_date: string | null; sequence?: number | null; created_at?: string };
+type Orderable = { check_date: string | null; sequence?: number | null; created_at?: string; order_hint?: string | null };
+
+const when = (c: Orderable) => c.check_date ?? c.order_hint ?? null;
 
 export function compareChecks(a: Orderable, b: Orderable): number {
-  const ia = a.sequence != null ? 0 : 1;
-  const ib = b.sequence != null ? 0 : 1;
-  if (ia !== ib) return ia - ib;
-  if (ia === 0 && a.sequence !== b.sequence) return (a.sequence ?? 0) - (b.sequence ?? 0);
-  const d = (a.check_date ?? "").localeCompare(b.check_date ?? "");
-  return d || (a.created_at ?? "").localeCompare(b.created_at ?? "");
+  const wa = when(a);
+  const wb = when(b);
+  const ga = wa ? 1 : 0;
+  const gb = wb ? 1 : 0;
+  if (ga !== gb) return ga - gb;
+  if (ga === 0) {
+    const sa = a.sequence ?? Number.MAX_SAFE_INTEGER;
+    const sb = b.sequence ?? Number.MAX_SAFE_INTEGER;
+    if (sa !== sb) return sa - sb;
+  } else {
+    const d = (wa ?? "").localeCompare(wb ?? "");
+    if (d) return d;
+  }
+  return (a.created_at ?? "").localeCompare(b.created_at ?? "");
 }
 
 /** Dal più vecchio al più recente. */

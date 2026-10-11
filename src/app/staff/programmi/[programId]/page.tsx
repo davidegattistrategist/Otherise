@@ -27,8 +27,8 @@ export default async function ProgramEditorPage({ params }: { params: Promise<{ 
     supabase.from("exercises").select("id, name, video_url").eq("archived", false).order("name"),
     program.client_id ? supabase.rpc("last_exercise_logs", { cid: program.client_id }) : Promise.resolve({ data: [] as Array<{ exercise_id: string | null; exercise_name: string; performed_on: string; sets: unknown; result_text: string }> }),
     program.client_id
-      ? supabase.from("checks").select("check_date, sequence, created_at, notes_next_phase").eq("client_id", program.client_id).neq("notes_next_phase", "").limit(200)
-      : Promise.resolve({ data: [] as Array<{ check_date: string | null; sequence: number | null; created_at: string; notes_next_phase: string }> }),
+      ? supabase.from("checks").select("check_date, sequence, created_at, order_hint, notes_next_phase").eq("client_id", program.client_id).neq("notes_next_phase", "").limit(200)
+      : Promise.resolve({ data: [] as Array<{ check_date: string | null; sequence: number | null; created_at: string; order_hint: string | null; notes_next_phase: string }> }),
   ]);
   const lastNotes = sortChecks(checkRes.data ?? []).pop() ?? null;
 
