@@ -28,5 +28,5 @@ export function needsConsent(c: ConsentState | null | undefined): boolean {
 /** Testo del consenso esplicito per i dati relativi alla salute (art. 9 GDPR). */
 export function healthConsentText(owner: Pick<PrivacyOwner, "legalName" | "businessName">): string {
   const who = owner.legalName.trim() || owner.businessName || "il titolare";
-  return `Acconsento al trattamento dei miei dati relativi alla salute (misure corporee, pliche, valutazioni posturali, test, dolori o fastidi, sonno e stress, foto e video che invio) da parte di ${who} e dei collaboratori che mi seguono, per programmare e seguire il mio percorso di allenamento, anche con l'aiuto dell'assistente AI senza il mio nome e i miei contatti, come descritto nell'informativa. So che posso revocare il consenso in qualsiasi momento.`;
+  return `Acconsento al trattamento dei miei dati relativi alla salute (misure corporee, pliche, valutazioni posturali, test, dolori o fastidi, sonno e stress, foto e video che invio) da parte di ${who} e dei collaboratori che mi seguono, per programmare e seguire il mio percorso di allenamento, anche con l'aiuto di strumenti di intelligenza artificiale, a cui non vengono comunicati il mio nome, il mio cognome e i miei contatti, come descritto nell'informativa. So che posso revocare il consenso in qualsiasi momento.`;
 }

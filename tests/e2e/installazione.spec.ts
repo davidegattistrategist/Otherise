@@ -20,7 +20,7 @@ test.afterEach(async ({ browser }) => {
   for (const c of browser.contexts()) await c.close().catch(() => undefined);
 });
 
-test("primo accesso dal telefono: la guida chiede il telefono e accompagna passo passo", async ({ browser }, info) => {
+test("primo accesso dal telefono: la guida mostra tutti i passi e poi lascia un promemoria", async ({ browser }, info) => {
   test.skip(info.project.name !== "telefono", "la guida compare solo sul telefono");
   // telefono "nuovo": nessuna guida già vista
   const ctx = await browser.newContext({ ...info.project.use, storageState: undefined });
@@ -32,17 +32,27 @@ test("primo accesso dal telefono: la guida chiede il telefono e accompagna passo
   await expect(guide).toBeVisible();
   await expect(guide.getByText("Che telefono hai?")).toBeVisible();
   await guide.getByRole("button", { name: /iPhone/ }).click();
-  await expect(guide.getByText("Tocca il pulsante Condividi")).toBeVisible();
-  await expect(guide.getByText("Passo 1 di 4")).toBeVisible();
-  await guide.getByRole("button", { name: "Fatto, avanti" }).click();
-  await expect(guide.getByText("Tocca “Aggiungi alla schermata Home”")).toBeVisible();
-  await guide.getByRole("button", { name: "Indietro" }).click();
-  await expect(guide.getByText("Passo 1 di 4")).toBeVisible();
-  for (let i = 0; i < 3; i++) await guide.getByRole("button", { name: "Fatto, avanti" }).click();
-  await expect(guide.getByText("Apri l'app dalla Home")).toBeVisible();
-  await guide.getByRole("button", { name: "Ho finito" }).click();
+  // un solo elenco con tutti i passi
+  await expect(guide.getByText("Ecco come fare")).toBeVisible();
+  const steps = guide.getByRole("listitem");
+  await expect(steps).toHaveCount(4);
+  await expect(steps.nth(0)).toContainText("Tocca il pulsante Condividi");
+  await expect(steps.nth(3)).toContainText("Apri l'app dalla Home");
+  await guide.getByRole("button", { name: "Ho capito, inizio" }).click();
   await expect(guide).toBeHidden();
-  // non ricompare
+  // il promemoria resta in alto con i passi in breve
+  const reminder = page.getByRole("region", { name: "Promemoria: metti l'app sulla Home" });
+  await expect(reminder).toBeVisible();
+  await expect(reminder.getByRole("listitem")).toHaveCount(4);
+  const box = (await reminder.boundingBox())!;
+  expect(box.y).toBeLessThan(40);
+  // si possono rivedere le istruzioni complete
+  await reminder.getByRole("button", { name: "Rivedi le istruzioni" }).click();
+  await expect(guide.getByText("Ecco come fare")).toBeVisible();
+  await guide.getByRole("button", { name: "Ho capito, inizio" }).click();
+  await reminder.getByRole("button", { name: "Chiudi il promemoria" }).click();
+  await expect(reminder).toBeHidden();
+  // non ricompare subito
   await page.reload();
   await page.waitForTimeout(1200);
   await expect(guide).toBeHidden();
@@ -54,8 +64,11 @@ test("primo accesso dal telefono: la guida chiede il telefono e accompagna passo
   await page.evaluate(() => localStorage.removeItem("otherise:install-guide"));
   await page.goto("/cliente");
   await guide.getByRole("button", { name: /Android/ }).click();
-  await expect(guide.getByText("Tocca i tre puntini in alto a destra")).toBeVisible();
-  await guide.getByRole("button", { name: "Chiudi" }).click();
+  await expect(guide.getByRole("listitem").nth(0)).toContainText("Tocca i tre puntini in alto a destra");
+  await guide.getByRole("button", { name: "L'ho già fatto" }).click();
+  await expect(guide).toBeHidden();
+  await page.reload();
+  await page.waitForTimeout(1200);
   await expect(guide).toBeHidden();
   expect(errors).toEqual([]);
   await ctx.close();

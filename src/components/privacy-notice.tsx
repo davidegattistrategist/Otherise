@@ -47,7 +47,7 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
       <ul>
         <li><strong>Seguirti nel percorso di allenamento</strong>: preparare e aggiornare i programmi, leggere i tuoi allenamenti, fare check e sessioni, risponderti in chat e ai check-up. Base: il contratto con te (art. 6.1.b GDPR).</li>
         <li><strong>Usare i dati relativi alla salute</strong> per valutare il tuo stato e programmare in modo sicuro ed efficace. Base: il tuo <strong>consenso esplicito</strong> (art. 9.2.a GDPR), che ti chiediamo nell&apos;app o su carta.</li>
-        <li><strong>Farci aiutare dall&apos;assistente AI</strong> a preparare bozze di programmi, riassunti dei check-up e risposte (punto 4). Base: il contratto (art. 6.1.b) e, per i dati relativi alla salute, il tuo consenso esplicito (art. 9.2.a).</li>
+        <li><strong>Usare strumenti di intelligenza artificiale</strong> per offrirti un&apos;esperienza migliore e programmi di qualità più alta (punto 4). Base: il contratto (art. 6.1.b) e, per i dati relativi alla salute, il tuo consenso esplicito (art. 9.2.a).</li>
         <li><strong>Gestire l&apos;abbonamento</strong>: tenere il registro dei pagamenti e ricordarti le scadenze. Base: il contratto (art. 6.1.b). I documenti fiscali li gestiamo fuori dall&apos;app per obbligo di legge (art. 6.1.c).</li>
         <li><strong>Mandarti avvisi di servizio</strong> nell&apos;app e per email (nuovo programma, risposta al check-up, messaggi, scadenze). Base: il contratto (art. 6.1.b).</li>
         <li><strong>Tenere l&apos;app sicura</strong> e prevenire accessi non autorizzati. Base: il nostro legittimo interesse (art. 6.1.f).</li>
@@ -56,11 +56,11 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
         Non usiamo i tuoi dati per pubblicità, non li vendiamo e non li cediamo a nessuno per fini commerciali.
       </p>
 
-      <H>4. L&apos;assistente AI</H>
+      <H>4. Intelligenza artificiale</H>
       <p>
-        Per preparare più in fretta le bozze dei programmi, i riassunti dei check-up e le bozze delle risposte ai tuoi messaggi e alle tue richieste, il coach può usare un assistente basato su intelligenza artificiale (Claude, di Anthropic). All&apos;assistente <strong>non mandiamo mai nome, cognome, email o telefono</strong>: solo i dati di allenamento e di salute utili a programmare e il testo degli ultimi messaggi della chat, cioè dati pseudonimizzati (le foto e i video non vengono inviati). L&apos;assistente propone e basta: <strong>ogni decisione la prende il tuo coach</strong>, che rilegge e corregge tutto, e ogni risposta che ricevi la manda lui. Non c&apos;è alcuna decisione automatizzata ai sensi dell&apos;art. 22 GDPR. Anthropic agisce come nostro responsabile del trattamento e, per contratto, non usa questi dati per addestrare i suoi modelli.
+        Per offrirti un&apos;esperienza migliore e programmi di qualità più alta, il coach si fa aiutare da strumenti di intelligenza artificiale (Claude, di Anthropic). A questi strumenti <strong>non comunichiamo mai nome, cognome, email o telefono</strong>: solo dati pseudonimizzati, cioè non collegabili direttamente a te. L&apos;intelligenza artificiale propone e basta: <strong>ogni decisione la prende il tuo coach</strong>, e ogni messaggio che ricevi lo manda lui. Non c&apos;è alcuna decisione automatizzata ai sensi dell&apos;art. 22 GDPR. Anthropic agisce come nostro responsabile del trattamento e, per contratto, non usa questi dati per addestrare i suoi modelli.
       </p>
-      <p>L&apos;uso dell&apos;assistente fa parte del servizio e di come il coach lavora: è compreso in quello che confermi all&apos;inizio (contratto e consenso sui dati relativi alla salute). Se hai dubbi, parlane con il tuo coach prima di confermare.</p>
+      <p>L&apos;intelligenza artificiale fa parte del servizio: il suo uso è compreso in quello che confermi all&apos;inizio (contratto e consenso sui dati relativi alla salute). Se hai dubbi, parlane con il tuo coach prima di confermare.</p>
 
       <H>5. Cosa succede se non ci dai i dati o il consenso</H>
       <p>
@@ -70,7 +70,7 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
       <H>6. Chi può vedere i tuoi dati</H>
       <ul>
         <li>Il titolare e i <strong>collaboratori</strong> che ti seguono, autorizzati per iscritto e tenuti alla riservatezza (art. 29 GDPR). Un collaboratore vede solo i clienti che segue.</li>
-        <li>I <strong>fornitori</strong> che ci permettono di far funzionare l&apos;app, nominati responsabili del trattamento (art. 28 GDPR): Supabase (database e archivio dei file, con server nell&apos;Unione europea, a Francoforte), Vercel (pubblicazione dell&apos;app), Anthropic (assistente AI), Resend (invio delle email).</li>
+        <li>I <strong>fornitori</strong> che ci permettono di far funzionare l&apos;app, nominati responsabili del trattamento (art. 28 GDPR): Supabase (database e archivio dei file, con server nell&apos;Unione europea, a Francoforte), Vercel (pubblicazione dell&apos;app), Anthropic (intelligenza artificiale), Resend (invio delle email).</li>
         <li>Il nostro commercialista, solo per i dati amministrativi necessari.</li>
         <li>Le autorità, solo se la legge lo impone.</li>
       </ul>
@@ -86,7 +86,7 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
         <li>Si entra nell&apos;app solo su invito e con password personale.</li>
         <li>I permessi sono controllati direttamente dal database: ognuno vede solo quello che deve vedere.</li>
         <li>Le connessioni sono cifrate; foto e video della chat stanno in un archivio privato e si aprono solo con link temporanei.</li>
-        <li>Al fornitore dell&apos;assistente AI non arrivano nome e contatti.</li>
+        <li>Agli strumenti di intelligenza artificiale non arrivano nome, cognome e contatti.</li>
       </ul>
 
       <H>9. Per quanto tempo li conserviamo</H>

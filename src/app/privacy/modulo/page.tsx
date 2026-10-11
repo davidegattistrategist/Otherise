@@ -33,7 +33,6 @@ export default async function PrivacyFormPage() {
         <p className="mt-4">Dichiaro di aver ricevuto e letto l&apos;informativa qui sopra.</p>
         <p className="mt-3">{healthConsentText(owner)}</p>
         <p className="mt-2 flex gap-8"><span>☐ Do il consenso</span><span>☐ Non do il consenso</span></p>
-        <p className="mt-4">Facoltativo: ☐ preferisco che l&apos;assistente AI non venga usato con i miei dati.</p>
         <p className="mt-4 text-[13px] text-muted">Se il cliente ha meno di 18 anni firma un genitore o chi ne fa le veci, indicando qui sotto il proprio nome.</p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>Luogo e data<div className={line} /></div>
