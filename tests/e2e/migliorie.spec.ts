@@ -23,6 +23,37 @@ test("promemoria di pagamento già scritto nella chat dell'app (niente WhatsApp)
   await expect(box).toHaveValue(/^Ciao .+! Ti ricordo che/);
 });
 
+test("cliente gratis: sparisce da pagamenti e previsioni, si può togliere", async ({ page }) => {
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/clienti");
+  await page.locator('a[href^="/staff/clienti/"]', { hasText: "Marta Demo" }).filter({ visible: true }).first().click();
+  await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
+  const base = page.url();
+  await page.goto(`${base}/pagamenti`);
+  await page.getByRole("button", { name: "Metti gratis" }).click();
+  await expect(page.getByText("Non compare in pagamenti, scadenze, incassi, previsioni ed export")).toBeVisible();
+  await expect(page.getByText("Gratis", { exact: true }).first()).toBeVisible();
+  await page.goto("/staff/pagamenti");
+  await expect(page.getByText("Incassi per mese")).toBeVisible();
+  await expect(page.getByText("Marta Demo")).toHaveCount(0);
+  await page.goto(`${base}/pagamenti`);
+  await page.getByRole("button", { name: "Non è più gratis" }).click();
+  await expect(page.getByRole("button", { name: "Metti gratis" })).toBeVisible();
+  await page.goto("/staff/pagamenti");
+  await expect(page.getByText("Marta Demo").first()).toBeVisible();
+});
+
+test("i clienti sono in ordine alfabetico per cognome", async ({ page }) => {
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/clienti");
+  await page.waitForLoadState("networkidle");
+  // nome e cognome di ogni cliente nell'elenco (telefono: elenco, computer: tabella)
+  const names = await page.locator("main a.font-semibold, main a span.font-semibold").filter({ visible: true }).allInnerTexts();
+  const surnames = names.map((n) => n.trim().split(" ").slice(1).join(" "));
+  expect(surnames.length).toBeGreaterThan(2);
+  expect(surnames).toEqual([...surnames].sort((a, b) => a.localeCompare(b, "it", { sensitivity: "base" })));
+});
+
 test("pagamenti: segna pagato in un tocco ed export CSV", async ({ page }) => {
   await login(page, "titolare@prova.local");
   await page.goto("/staff/pagamenti");
@@ -72,10 +103,14 @@ test("lo staff registra l'allenamento per il cliente e vede il riassunto AI", as
   await page.getByRole("link", { name: "Registra l'allenamento" }).click();
   await page.waitForURL(/\/allenamento\//);
   await page.waitForLoadState("networkidle");
-  const check = page.locator('button[aria-label="Segna la serie come fatta"]');
-  if (await check.count()) await check.first().click();
-  else await page.locator("main input").first().fill("Fatto in sessione");
-  await expect(page.getByText(/Salvato alle/)).toBeVisible({ timeout: 10_000 });
+  // se il tocco arriva prima che la pagina sia pronta non succede nulla
+  // (come sul telefono vero: si ritocca), quindi riprova finché salva
+  const check = page.locator('button[aria-label="Segna la serie come fatta"]').filter({ visible: true });
+  await expect(async () => {
+    if (await check.count()) await check.first().click();
+    else await page.locator("main input").filter({ visible: true }).first().fill(`Fatto in sessione ${Date.now()}`);
+    await expect(page.getByText(/Salvato alle/)).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 20_000 });
   await page.goto(`${base}/checkup`);
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: "Prepara il riassunto" }).click();

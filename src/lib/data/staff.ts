@@ -1,4 +1,5 @@
 import "server-only";
+import { bySurname } from "../names";
 import type { ServerSupabase } from "../supabase/server";
 import type { Me } from "../auth";
 import { billingStatus, type BillingRow, type BillingStatus, type PlanKind } from "../billing";
@@ -17,6 +18,7 @@ export type ClientRow = {
   user_id: string | null;
   weekly_checkin: boolean;
   birth_date: string | null;
+  free: boolean;
 };
 
 export type ClientOverview = ClientRow & {
@@ -40,11 +42,13 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
   const today = todayISO();
   let q = supabase
     .from("clients")
-    .select("id, first_name, last_name, email, sex, status, coach_id, user_id, weekly_checkin, birth_date")
+    .select("id, first_name, last_name, email, sex, status, coach_id, user_id, weekly_checkin, birth_date, free")
+    .order("last_name")
     .order("first_name");
   if (!opts.includeArchived) q = q.neq("status", "archived");
-  const { data: clients } = await q;
-  if (!clients?.length) return [];
+  const { data: rows } = await q;
+  if (!rows?.length) return [];
+  const clients = [...rows].sort(bySurname);
   const ids = clients.map((c) => c.id);
 
   const [programs, checks, logs, coaches, billing, settings] = await Promise.all([

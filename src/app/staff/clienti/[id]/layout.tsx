@@ -44,6 +44,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
             <Pill>{client.sex === "F" ? "Donna" : "Uomo"}{age !== null ? ` · ${age} anni` : ""}</Pill>
             {client.status !== "active" ? <Pill>{client.status === "paused" ? "In pausa" : "Archiviato"}</Pill> : null}
             {!client.user_id ? <Pill>Da invitare</Pill> : null}
+            {client.free ? <Pill>Gratis</Pill> : null}
           </div>
         </div>
         <div className="flex flex-wrap gap-2.5">

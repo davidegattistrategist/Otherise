@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { bySurname } from "@/lib/names";
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -22,7 +23,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
   await requireStaff();
   const supabase = await createClient();
   const [{ data: clients }, { data: recent }, { data: unread }] = await Promise.all([
-    supabase.from("clients").select("id, first_name, last_name, user_id, status").neq("status", "archived").order("first_name"),
+    supabase.from("clients").select("id, first_name, last_name, user_id, status").neq("status", "archived").order("last_name").order("first_name"),
     supabase.from("messages").select("client_id, body, attachments, created_at, deleted_at, sender_id").order("created_at", { ascending: false }).limit(500),
     supabase.rpc("my_unread_chats"),
   ]);
@@ -36,7 +37,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
   const rows = (clients ?? [])
     .filter((c) => !needle || `${c.first_name} ${c.last_name}`.toLowerCase().includes(needle))
     .map((c) => ({ ...c, last: last.get(c.id), unread: unreadBy.get(c.id) ?? 0 }))
-    .sort((a, b) => (b.last?.at ?? "").localeCompare(a.last?.at ?? "") || a.first_name.localeCompare(b.first_name));
+    .sort((a, b) => (b.last?.at ?? "").localeCompare(a.last?.at ?? "") || bySurname(a, b));
 
   return (
     <div className="flex max-w-3xl flex-col gap-5">

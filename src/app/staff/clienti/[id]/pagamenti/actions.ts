@@ -210,3 +210,15 @@ export async function reopenPackage(clientId: string, planId: string) {
     .eq("id", planId);
   revalidate(clientId);
 }
+
+/**
+ * Cliente gratis (un cliente di prova, o il trainer stesso): esce da pagamenti,
+ * scadenze, incassi, previsioni ed export. Lo storico resta salvato.
+ */
+export async function setClientFree(clientId: string, free: boolean) {
+  await requireOwner();
+  const supabase = await createClient();
+  await supabase.from("clients").update({ free }).eq("id", clientId);
+  revalidatePath("/staff", "layout");
+  redirect(`/staff/clienti/${clientId}/pagamenti`);
+}

@@ -1,5 +1,6 @@
 import "server-only";
 import type { ServerSupabase } from "../supabase/server";
+import { bySurname } from "../names";
 import { billingStatus, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PLAN_LABELS, situationText, type BillingStatus, type PlanKind } from "../billing";
 import { addDays, addMonths, formatLong, formatShort, todayISO, type ISODate } from "../dates";
 import { DEFAULT_PAYMENT_MESSAGE, fillTemplate } from "../whatsapp";
@@ -25,7 +26,7 @@ export type BillingLine = {
 export async function getBillingLines(supabase: ServerSupabase): Promise<{ lines: BillingLine[]; reminderDays: number }> {
   const today = todayISO();
   const [{ data: clients }, { data: billing }, { data: plans }, { data: settings }] = await Promise.all([
-    supabase.from("clients").select("id, first_name, last_name, status").neq("status", "archived").order("first_name"),
+    supabase.from("clients").select("id, first_name, last_name, status").neq("status", "archived").eq("free", false).order("last_name").order("first_name"),
     supabase.rpc("billing_overview"),
     supabase.from("payment_plans").select("id, client_id, kind, amount, method, start_date, package_sessions").eq("active", true),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
@@ -33,7 +34,7 @@ export async function getBillingLines(supabase: ServerSupabase): Promise<{ lines
   const reminderDays = settings?.reminder_days ?? 7;
   const byClient = new Map((billing ?? []).map((b) => [b.client_id, b]));
   const planBy = new Map((plans ?? []).map((p) => [p.client_id, p]));
-  const lines = (clients ?? []).map((c): BillingLine => {
+  const lines = [...(clients ?? [])].sort(bySurname).map((c): BillingLine => {
     const b = byClient.get(c.id);
     const plan = planBy.get(c.id);
     const kind = (b?.kind ?? null) as PlanKind | null;
@@ -92,7 +93,7 @@ export async function paymentReminderText(supabase: ServerSupabase, clientId: st
 export async function getRevenue(supabase: ServerSupabase, lines: BillingLine[], months = 12) {
   const today = todayISO();
   const firstMonth = addMonths(`${today.slice(0, 7)}-01`, -(months - 1));
-  const { data: payments } = await supabase.from("payments").select("paid_on, amount").gte("paid_on", firstMonth);
+  const { data: payments } = await supabase.from("payments").select("paid_on, amount, clients!inner(free)").eq("clients.free", false).gte("paid_on", firstMonth);
   const buckets: Array<{ month: string; total: number }> = [];
   for (let i = 0; i < months; i++) buckets.push({ month: addMonths(firstMonth, i).slice(0, 7), total: 0 });
   for (const p of payments ?? []) {

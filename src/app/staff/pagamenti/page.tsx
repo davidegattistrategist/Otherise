@@ -22,9 +22,9 @@ export default async function PaymentsOverviewPage() {
   const { lines } = await getBillingLines(supabase);
   const [revenue, { data: recent }] = await Promise.all([
     getRevenue(supabase, lines),
-    supabase.from("payments").select("id, client_id, paid_on, amount, method, clients(first_name, last_name)").order("paid_on", { ascending: false }).order("created_at", { ascending: false }).limit(12),
+    supabase.from("payments").select("id, client_id, paid_on, amount, method, clients!inner(first_name, last_name, free)").eq("clients.free", false).order("paid_on", { ascending: false }).order("created_at", { ascending: false }).limit(12),
   ]);
-  const rows = [...lines].sort((a, z) => ORDER[a.status.state] - ORDER[z.status.state] || (a.status.daysLeft ?? 999) - (z.status.daysLeft ?? 999) || a.name.localeCompare(z.name));
+  const rows = [...lines].sort((a, z) => ORDER[a.status.state] - ORDER[z.status.state] || (a.status.daysLeft ?? 999) - (z.status.daysLeft ?? 999));
   const attention = rows.filter((r) => r.status.state === "overdue" || r.status.state === "due_soon");
   const thisMonth = revenue.buckets[revenue.buckets.length - 1]?.total ?? 0;
   const thisYear = revenue.buckets.filter((b) => b.month.startsWith(year)).reduce((t, b) => t + b.total, 0);

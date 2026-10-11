@@ -281,10 +281,13 @@ test.describe("cliente", () => {
       await start.click();
       await page.waitForURL(/\/cliente\/sessione\//);
       await page.waitForLoadState("networkidle");
-      const check = page.locator('button[aria-label="Segna la serie come fatta"]');
-      if (await check.count()) await check.first().click();
-      else await page.locator("main input").first().fill("Fatto tutto");
-      await expect(page.getByText(/Salvato alle/)).toBeVisible({ timeout: 10_000 });
+      // un tocco prima che la pagina sia pronta non fa nulla: riprova finché salva
+      const check = page.locator('button[aria-label="Segna la serie come fatta"]').filter({ visible: true });
+      await expect(async () => {
+        if (await check.count()) await check.first().click();
+        else await page.locator("main input").filter({ visible: true }).first().fill(`Fatto tutto ${Date.now()}`);
+        await expect(page.getByText(/Salvato alle/)).toBeVisible({ timeout: 3_000 });
+      }).toPass({ timeout: 20_000 });
       await page.getByRole("button", { name: "Ho finito" }).click();
       // le serie non spuntate: prima di chiudere chiede se sono state fatte
       const ask = page.getByRole("dialog", { name: "Serie non spuntate" });

@@ -350,4 +350,29 @@ describe.skipIf(!run)("permessi", () => {
     expect((await clientA.from("client_ai_profiles").select("reply_lessons")).data ?? []).toEqual([]);
     expect((await stranger.from("client_ai_profiles").select("reply_lessons")).data ?? []).toEqual([]);
   });
+  it("cliente gratis: lo decide solo il titolare ed esce da pagamenti e scadenze", async () => {
+    // il collaboratore non può metterlo gratis
+    const { error: coachErr } = await coach.from("clients").update({ free: true }).eq("id", clientAId);
+    expect(coachErr).not.toBeNull();
+    const before = await owner.rpc("billing_overview");
+    expect((before.data ?? []).some((b: { client_id: string }) => b.client_id === clientAId)).toBe(true);
+    await owner.from("clients").update({ free: true }).eq("id", clientAId).throwOnError();
+    const after = await owner.rpc("billing_overview");
+    expect((after.data ?? []).some((b: { client_id: string }) => b.client_id === clientAId)).toBe(false);
+    expect((await clientA.rpc("client_billing", { cid: clientAId })).data ?? []).toEqual([]);
+    // il cliente non può togliersi (o mettersi) da solo
+    await clientA.from("clients").update({ free: false }).eq("id", clientAId);
+    expect((await admin.from("clients").select("free").eq("id", clientAId).single()).data!.free).toBe(true);
+    await owner.from("clients").update({ free: false }).eq("id", clientAId).throwOnError();
+    expect((await clientA.rpc("client_billing", { cid: clientAId })).data).toHaveLength(1);
+  });
+
+  it("formula delle pliche: la sceglie lo staff che segue il cliente, valori ammessi soltanto", async () => {
+    await coach.from("clients").update({ skinfold_formula: "f3_tsa" }).eq("id", clientAId).throwOnError();
+    const { error } = await coach.from("clients").update({ skinfold_formula: "inventata" }).eq("id", clientAId);
+    expect(error).not.toBeNull();
+    await clientA.from("clients").update({ skinfold_formula: "f5" }).eq("id", clientAId);
+    expect((await admin.from("clients").select("skinfold_formula").eq("id", clientAId).single()).data!.skinfold_formula).toBe("f3_tsa");
+    await coach.from("clients").update({ skinfold_formula: null }).eq("id", clientAId).throwOnError();
+  });
 });

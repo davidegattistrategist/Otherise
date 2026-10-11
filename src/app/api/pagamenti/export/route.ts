@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("payments")
-    .select("paid_on, amount, method, period_start, period_end, sessions, notes, clients(first_name, last_name, email), payment_plans(kind)")
+    .select("paid_on, amount, method, period_start, period_end, sessions, notes, clients!inner(first_name, last_name, email, free), payment_plans(kind)")
+    .eq("clients.free", false)
     .gte("paid_on", `${year}-01-01`)
     .lte("paid_on", `${year}-12-31`)
     .order("paid_on");

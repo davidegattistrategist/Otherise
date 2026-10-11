@@ -8,7 +8,7 @@ import { IconChat } from "@/components/icons";
 import { Card, Dot, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { PaymentForm, PlanForm, ReminderButton } from "./forms";
-import { closePackage, deletePayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder } from "./actions";
+import { closePackage, deletePayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree } from "./actions";
 import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Pagamenti" };
@@ -19,12 +19,24 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
   await requireOwner();
   const supabase = await createClient();
   const today = todayISO();
-  const [{ data: plans }, { data: payments }, { data: billing }, { data: settings }] = await Promise.all([
+  const [{ data: plans }, { data: payments }, { data: billing }, { data: settings }, { data: client }] = await Promise.all([
     supabase.from("payment_plans").select("id, kind, amount, method, start_date, package_sessions, active, notes, created_at, sessions_written_off, package_closed_on, package_closed_sessions").eq("client_id", id).order("created_at", { ascending: false }),
     supabase.from("payments").select("id, plan_id, paid_on, amount, method, period_start, period_end, sessions, notes").eq("client_id", id).order("paid_on", { ascending: false }),
     supabase.rpc("client_billing", { cid: id }),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
+    supabase.from("clients").select("free").eq("id", id).maybeSingle(),
   ]);
+  if (client?.free) {
+    return (
+      <Card className="flex max-w-2xl flex-col gap-3">
+        <Eyebrow>Cliente gratis</Eyebrow>
+        <p className="text-[15px] leading-relaxed">Non compare in pagamenti, scadenze, incassi, previsioni ed export, e non riceve promemoria di rinnovo. {(payments ?? []).length ? "I pagamenti registrati prima restano salvati ma non contano." : ""}</p>
+        <form action={setClientFree.bind(null, id, false)}>
+          <ConfirmButton variant="secondary" message="Togliere il cliente dai gratis? Tornerà nei pagamenti e nelle previsioni.">Non è più gratis</ConfirmButton>
+        </form>
+      </Card>
+    );
+  }
   const plan = (plans ?? []).find((p) => p.active) ?? null;
   const row = (billing as BillingRow[] | null)?.[0] ?? null;
   const status = billingStatus(row ? { ...row, kind: row.kind as PlanKind } : null, today, settings?.reminder_days ?? 7);
@@ -156,6 +168,13 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
             ))}
           </Card>
         ) : null}
+        <Card className="flex flex-col gap-2">
+          <Eyebrow>Cliente gratis</Eyebrow>
+          <p className="text-sm text-muted">Per un cliente di prova o per te stesso: non comparirà in pagamenti, scadenze, incassi e previsioni.</p>
+          <form action={setClientFree.bind(null, id, true)}>
+            <ConfirmButton variant="secondary" message="Mettere questo cliente gratis? Non comparirà più in pagamenti, scadenze, incassi e previsioni.">Metti gratis</ConfirmButton>
+          </form>
+        </Card>
       </div>
     </div>
   );

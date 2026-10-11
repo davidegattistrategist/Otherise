@@ -51,6 +51,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                   {c.compliance?.pct !== null && c.compliance?.pct !== undefined ? ` · costanza ${c.compliance.pct}%` : ""}
                   {c.status === "paused" ? " · in pausa" : ""}
                   {!c.user_id ? " · da invitare" : ""}
+                  {c.free && me.role === "owner" ? " · gratis" : ""}
                 </span>
               </Link>
             </li>
@@ -105,7 +106,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
                           {c.billing.label}
                         </span>
                       ) : (
-                        <span className="text-sm text-muted">Nessun piano</span>
+                        <span className="text-sm text-muted">{c.free ? "Gratis" : "Nessun piano"}</span>
                       )}
                     </td>
                   ) : null}

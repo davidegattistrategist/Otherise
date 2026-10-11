@@ -9,7 +9,7 @@ export const getStaffClient = cache(async (id: string) => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("clients")
-    .select("id, first_name, last_name, email, phone, sex, birth_date, goals, status, start_date, weekly_checkin, phase_weeks, coach_id, user_id, created_at, skinfold_formula")
+    .select("id, first_name, last_name, email, phone, sex, birth_date, goals, status, start_date, weekly_checkin, phase_weeks, coach_id, user_id, created_at, skinfold_formula, free")
     .eq("id", id)
     .maybeSingle();
   if (!data) notFound();
