@@ -4,7 +4,9 @@ import { z } from "zod";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { aiEnabled, askQuestions, progressRow, reviseProgram, suggestAlternatives, TIME_QUESTION, type AiUsage } from "@/lib/ai/claude";
+import { aiEnabled, draftProgram, progressRow, suggestAlternatives, TIME_OPTIONS, TIME_QUESTION, type AiUsage } from "@/lib/ai/claude";
+import { learnPending, learningContext, recordDraft } from "@/lib/ai/learn";
+import { after } from "next/server";
 import { minutesFromAnswer } from "@/lib/ai-profile";
 import { getAiProfile, saveAiProfile } from "@/lib/data/ai-profile";
 import { buildClientContext, buildMethodContext } from "@/lib/ai/context";
@@ -30,7 +32,9 @@ const bodySchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("revise"),
     ...reviseFields,
-    answers: z.array(z.object({ question: z.string().max(400), answer: z.string().trim().max(1000) })).max(5).default([]),
+    answers: z.array(z.object({ question: z.string().max(400), answer: z.string().trim().max(1000) })).max(6).default([]),
+    /** "Salta le domande": scrivi subito */
+    skip: z.boolean().default(false),
   }),
   z.object({
     mode: z.literal("progress"),
@@ -84,30 +88,38 @@ export async function POST(req: NextRequest) {
 
   try {
     if (body.mode === "questions" || body.mode === "revise") {
-      const [method, clientContext, profile] = await Promise.all([
+      const [method, learning, clientContext, profile] = await Promise.all([
         buildMethodContext(supabase),
+        learningContext(supabase),
         buildClientContext(supabase, program.client_id, program.id, body.current.content, { start: program.start_date, weeks: body.current.weeks }),
         getAiProfile(supabase, program.client_id),
       ]);
       // tempo per seduta: quello del programma, altrimenti quello di riferimento del cliente
       let sessionMinutes = program.session_minutes ?? profile.session_minutes;
-      if (body.mode === "questions") {
-        const result = await askQuestions({ instruction: body.instruction, ...method, clientContext, current: body.current, sessionMinutes, images: body.images });
-        await log("questions", result.usage);
-        return NextResponse.json({ questions: result.questions });
+      // se non c'è, lo chiede l'app prima di tutto (senza spendere una chiamata all'AI)
+      if (body.mode === "questions" && !sessionMinutes) {
+        return NextResponse.json({ questions: [{ question: TIME_QUESTION, options: TIME_OPTIONS }] });
       }
-      const answers = body.answers.filter((a) => a.answer);
+      const answers = body.mode === "revise" ? body.answers.filter((a) => a.answer) : [];
       const timeAnswer = answers.find((a) => a.question === TIME_QUESTION);
       const answeredMinutes = timeAnswer ? minutesFromAnswer(timeAnswer.answer) : null;
       if (answeredMinutes) sessionMinutes = answeredMinutes;
-      const result = await reviseProgram({ instruction: body.instruction, ...method, clientContext, current: body.current, sessionMinutes, answers, images: body.images });
-      await log("revise", result.usage);
+      // l'AI può fare domande una volta sola, e non dopo "Salta le domande"
+      const aiAlreadyAsked = body.mode === "revise" && body.answers.some((a) => a.question !== TIME_QUESTION);
+      const allowQuestions = !(body.mode === "revise" && body.skip) && !aiAlreadyAsked;
+      const result = await draftProgram({ instruction: body.instruction, ...method, ...learning, clientContext, current: body.current, sessionMinutes, answers, images: body.images }, allowQuestions);
+      await log(result.kind === "questions" ? "questions" : "revise", result.usage);
+      if (result.kind === "questions") return NextResponse.json({ questions: result.questions });
       // il tempo detto dal trainer (risposta o richiesta) diventa il nuovo riferimento del cliente
       const newMinutes = answeredMinutes ?? (result.timeFromTrainer ? result.sessionMinutes : null);
       if (newMinutes && newMinutes !== profile.session_minutes) {
         await saveAiProfile(supabase, program.client_id, { session_minutes: newMinutes });
       }
-      // nel programma lo mette l'editor (campo "Tempo per seduta"), che poi salva: niente conflitti di versione
+      // nel programma il tempo lo mette l'editor (campo "Tempo per seduta"), che poi salva: niente conflitti di versione
+      // la bozza si conserva: alla pubblicazione si vede cosa hai corretto e l'AI impara
+      await recordDraft(supabase, { programId: program.id, clientId: program.client_id, userId: me.id, content: result.content, instruction: body.instruction });
+      // correzioni di programmi già pubblicati, ritoccati da almeno mezz'ora: diventano lezioni
+      after(() => learnPending(me.id, { olderThanMinutes: 30 }));
       return NextResponse.json({
         summary: result.summary,
         title: result.title,

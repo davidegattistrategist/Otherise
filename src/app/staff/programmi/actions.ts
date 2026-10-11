@@ -17,6 +17,8 @@ import type { Json } from "@/lib/supabase/database.types";
 import { autoUpdate } from "@/lib/ai-profile";
 import { getAiProfile, saveAiProfile } from "@/lib/data/ai-profile";
 import { programBalance } from "@/lib/program/balance";
+import { after } from "next/server";
+import { compareWithDraft, learnPending } from "@/lib/ai/learn";
 
 const asJson = (c: ProgramContent) => c as unknown as NonNullable<Json>;
 
@@ -171,12 +173,14 @@ export async function saveProgram(id: string, input: unknown): Promise<SaveResul
   if (error || !data) return { ok: false, error: "Salvataggio non riuscito. Riprova." };
   const unknown = new Set<string>();
   content.days.forEach((d) => d.blocks.forEach((b) => b.items.forEach((it) => !it.exerciseId && it.name.trim() && unknown.add(it.name.trim()))));
+  // programma già pubblicato e ritoccato dopo una bozza dell'AI: aggiorna il confronto (le lezioni arrivano più tardi)
+  if (current.status === "published") await compareWithDraft(id, content, { maxAgeHours: 48 });
   if (data.client_id) revalidatePath(`/staff/clienti/${data.client_id}`, "layout");
   return { ok: true, updated_at: data.updated_at, unknownExercises: [...unknown] };
 }
 
 export async function publishProgram(id: string): Promise<ActionState> {
-  await requireStaff();
+  const me = await requireStaff();
   const supabase = await createClient();
   const { data: p } = await supabase.from("programs").select("id, client_id, title, start_date, is_template, content, session_minutes, clients(user_id)").eq("id", id).maybeSingle();
   if (!p || p.is_template || !p.client_id) return { error: "Solo i programmi dei clienti si pubblicano." };
@@ -187,6 +191,9 @@ export async function publishProgram(id: string): Promise<ActionState> {
   const profile = await getAiProfile(supabase, p.client_id);
   const patch = autoUpdate(profile, programBalance(parseContent(p.content)), p.session_minutes, p.title);
   if (patch) await saveAiProfile(supabase, p.client_id, patch);
+  // l'AI impara: confronta la sua ultima bozza con quello che pubblichi e ne ricava le lezioni
+  await compareWithDraft(id, parseContent(p.content));
+  after(() => learnPending(me.id, { programId: id }));
   const userId = (p.clients as unknown as { user_id: string | null } | null)?.user_id;
   if (userId) {
     await notify([{ recipient_id: userId, client_id: p.client_id, kind: "program_published", title: "Il tuo nuovo programma è pronto", body: p.title, link: "/cliente/programma", dedupe_key: `published:${id}` }]);

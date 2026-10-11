@@ -49,3 +49,20 @@ export async function savePrivacy(_: ActionState, fd: FormData): Promise<ActionS
   revalidatePath("/privacy");
   return { ok: true, message: "Dati per l'informativa salvati." };
 }
+
+export async function saveLessons(_: ActionState, fd: FormData): Promise<ActionState> {
+  await requireOwner();
+  const supabase = await createClient();
+  const lessons = String(fd.get("ai_lessons") ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => (l.startsWith("- ") ? l : `- ${l.replace(/^[-•]\s*/, "")}`))
+    .slice(0, 40)
+    .join("\n");
+  if (lessons.length > 12000) return { error: "Troppo lungo: tieni le lezioni brevi." };
+  const { error } = await supabase.from("app_settings").update({ ai_lessons: lessons, ai_lessons_updated_at: new Date().toISOString() }).eq("id", 1);
+  if (error) return { error: "Salvataggio non riuscito." };
+  revalidatePath("/staff/impostazioni");
+  return { ok: true, message: "Lezioni salvate: valgono dalla prossima bozza." };
+}

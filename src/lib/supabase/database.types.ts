@@ -71,14 +71,14 @@ isOneToOne: false
                   ]
                 },"app_settings": {
                   Row: {
-                    "ai_monthly_budget_eur": number,"business_name": string,"coaching_method": string,"id": number,"legal_address": string,"legal_name": string,"legal_tax_id": string,"payment_message": string,"privacy_email": string,"reminder_days": number,"updated_at": string
+                    "ai_lessons": string,"ai_lessons_updated_at": string | null,"ai_monthly_budget_eur": number,"business_name": string,"coaching_method": string,"id": number,"legal_address": string,"legal_name": string,"legal_tax_id": string,"payment_message": string,"privacy_email": string,"reminder_days": number,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
+                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
                   }
                   Update: {
-                    "ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
+                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -431,6 +431,18 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"program_ai_drafts": {
+                  Row: {
+                    "client_id": string | null,"compared_at": string | null,"content": Json,"corrections": string,"created_at": string,"created_by": string | null,"id": string,"instruction": string,"learned_at": string | null,"program_id": string,"rows_changed": number | null,"rows_total": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id"?: string | null,"compared_at"?: string | null,"content": Json,"corrections"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"instruction"?: string,"learned_at"?: string | null,"program_id": string,"rows_changed"?: number | null,"rows_total"?: number | null
+                  }
+                  Update: {
+                    "client_id"?: string | null,"compared_at"?: string | null,"content"?: Json,"corrections"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"instruction"?: string,"learned_at"?: string | null,"program_id"?: string,"rows_changed"?: number | null,"rows_total"?: number | null
+                  }
+                  Relationships: []
                 },"programs": {
                   Row: {
                     "ai_notes": Json | null,"client_id": string | null,"content": NonNullable<Json>,"created_at": string,"created_by": string | null,"description": string,"id": string,"is_ai_example": boolean,"is_template": boolean,"previous_program_id": string | null,"published_at": string | null,"session_minutes": number | null,"source": string,"start_date": string | null,"status": string,"title": string,"updated_at": string,"weeks": number

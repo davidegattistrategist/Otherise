@@ -83,6 +83,12 @@ test("l'AI fa qualche domanda prima della bozza", async ({ page }) => {
   await page.locator("#ai-instruction").fill("Aggiungiamo un giorno di corsa facile e teniamo la forza.");
   await page.getByRole("button", { name: "Prepara la bozza" }).click();
   await expect(page.getByText("Prima di preparare la bozza, qualche domanda")).toBeVisible({ timeout: 20_000 });
+  // se manca il tempo per seduta, prima lo chiede l'app; poi le domande dell'AI
+  if (await page.getByText("Quanto tempo ha a disposizione per ogni seduta?").isVisible()) {
+    await page.getByRole("button", { name: "75 minuti" }).click();
+    await page.getByRole("button", { name: "Prepara la bozza con queste risposte" }).click();
+    await expect(page.getByRole("button", { name: "6:30/km" })).toBeVisible({ timeout: 20_000 });
+  }
   await page.getByRole("button", { name: "6:30/km" }).click();
   await page.getByRole("button", { name: "Prepara la bozza con queste risposte" }).click();
   await expect(page.getByText("Cosa ha cambiato l'AI")).toBeVisible({ timeout: 30_000 });

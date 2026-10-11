@@ -6,10 +6,11 @@ import { supabaseServiceKey } from "@/lib/supabase/env";
 import { DEFAULT_MODEL } from "@/lib/ai/claude";
 import { formatEuro } from "@/lib/billing";
 import { DEFAULT_PAYMENT_MESSAGE } from "@/lib/whatsapp";
-import { todayISO } from "@/lib/dates";
+import { formatLong, todayISO } from "@/lib/dates";
 import { Card, Dot, Eyebrow, PageTitle, ProgressBar } from "@/components/ui";
-import { MethodForm, PrivacyForm, SettingsForm } from "./forms";
-import { saveMethod, savePrivacy, saveSettings } from "./actions";
+import { LessonsForm, MethodForm, PrivacyForm, SettingsForm } from "./forms";
+import { saveLessons, saveMethod, savePrivacy, saveSettings } from "./actions";
+import { correctionTrend } from "@/lib/ai/learn";
 
 export const metadata: Metadata = { title: "Impostazioni" };
 
@@ -43,10 +44,12 @@ export default async function SettingsPage() {
   await requireOwner();
   const supabase = await createClient();
   const monthStart = `${todayISO().slice(0, 7)}-01`;
-  const [{ data: settings }, { data: usage }, { count: examples }] = await Promise.all([
+  const [{ data: settings }, { data: usage }, { count: examples }, { data: learned }, trend] = await Promise.all([
     supabase.from("app_settings").select("business_name, coaching_method, reminder_days, ai_monthly_budget_eur, payment_message, legal_name, legal_address, legal_tax_id, privacy_email").maybeSingle(),
     supabase.from("ai_requests").select("cost_eur, kind").gte("created_at", `${monthStart}T00:00:00Z`),
     supabase.from("programs").select("id", { count: "exact", head: true }).eq("is_ai_example", true),
+    supabase.from("app_settings").select("ai_lessons, ai_lessons_updated_at").maybeSingle(),
+    correctionTrend(supabase),
   ]);
   const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20, payment_message: "", legal_name: "", legal_address: "", legal_tax_id: "", privacy_email: "" };
   const privacyMissing = !s.legal_name || !s.legal_address || !s.legal_tax_id || !s.privacy_email;
@@ -61,6 +64,7 @@ export default async function SettingsPage() {
     <div className="flex flex-col gap-6">
       <PageTitle eyebrow="Solo titolare" title="Impostazioni e metodo" />
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        <div className="flex flex-col gap-4">
         <Card className="flex flex-col gap-4">
           <div>
             <Eyebrow>Metodo di lavoro per l&apos;assistente AI</Eyebrow>
@@ -71,6 +75,25 @@ export default async function SettingsPage() {
           </div>
           <MethodForm action={saveMethod} value={s.coaching_method} />
         </Card>
+
+        <Card className="flex flex-col gap-4" id="lezioni">
+          <div>
+            <Eyebrow>Cosa ha imparato dalle tue correzioni</Eyebrow>
+            <p className="mt-2 text-[15px] leading-relaxed text-muted">
+              Quando pubblichi una bozza preparata dall&apos;AI, l&apos;app confronta la bozza con il programma che hai pubblicato e ne ricava delle lezioni generali,
+              che l&apos;assistente legge a ogni bozza insieme alle tue ultime correzioni. Le correzioni legate al singolo cliente non diventano lezioni.
+              {learned?.ai_lessons_updated_at ? ` Ultimo aggiornamento: ${formatLong(learned.ai_lessons_updated_at.slice(0, 10))}.` : ""}
+            </p>
+          </div>
+          {trend.length ? (
+            <div className="rounded-2xl bg-sand/70 px-4 py-3 text-sm" data-testid="ai-trend">
+              <div className="font-semibold">Righe che hai corretto nelle ultime bozze</div>
+              <div className="mt-1 text-muted">{trend.map((t) => `${t}%`).join(" → ")} <span className="text-xs">(dalla più vecchia alla più recente: l&apos;obiettivo è arrivare vicino a zero)</span></div>
+            </div>
+          ) : null}
+          <LessonsForm action={saveLessons} value={learned?.ai_lessons ?? ""} />
+        </Card>
+        </div>
 
         <div className="flex flex-col gap-4">
           <Card className="flex flex-col gap-4">

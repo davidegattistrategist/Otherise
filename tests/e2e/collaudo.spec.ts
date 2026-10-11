@@ -151,8 +151,13 @@ test.describe("titolare", () => {
     // il tempo scelto finisce nel programma e la stima per giornata compare
     await expect(page.getByLabel(/Tempo per seduta/)).toHaveValue("60");
     await expect(page.getByTestId("day-minutes").first()).toBeVisible();
+    // il trainer corregge una riga della bozza e pubblica: l'AI ne ricava una lezione
+    const cell = page.getByLabel(/, settimana 1$/).filter({ visible: true }).nth(1);
+    await cell.fill("3x10/14");
     await page.getByRole("button", { name: "Salva", exact: true }).click();
     await expect(page.getByText(/Salvato alle/)).toBeVisible();
+    await page.getByRole("button", { name: "Pubblica", exact: true }).click();
+    await expect(page.getByText(/Pubblicato/).first()).toBeVisible();
     // salva come modello
     await page.getByRole("button", { name: "Salva come modello" }).click();
     await page.fill("#tpl-title", `Modello ${info.project.name}`);
@@ -171,6 +176,16 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: "Salva le indicazioni" }).click();
     await expect(page.getByText("Indicazioni salvate")).toBeVisible();
     expect(await noHorizontalScroll(page)).toBe(true);
+
+    // impostazioni: le correzioni sono contate e diventate lezioni
+    await page.goto("/staff/impostazioni");
+    await expect(page.getByTestId("ai-trend")).toBeVisible();
+    await expect
+      .poll(async () => {
+        await page.reload();
+        return page.locator("#ai_lessons").inputValue();
+      }, { timeout: 20_000 })
+      .toMatch(/range larghi/);
 
     // eserciziario: nuovo, cerca, import csv
     await page.goto("/staff/eserciziario/nuovo");

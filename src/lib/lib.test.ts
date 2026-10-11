@@ -629,3 +629,32 @@ describe("progetto letto sui mesi del programma", () => {
     expect(ai).toContain("Stimoli che cambiano rispetto al mese prima");
   });
 });
+
+describe("assistente AI: formati compatti e correzioni", async () => {
+  const { compactProgram, exerciseCodes } = await import("./ai/prompt-format");
+  const { diffPrograms, diffText } = await import("./program/diff");
+  const item = (id: string, name: string, p: string[], exerciseId: string | null = null) => ({ id, exerciseId, name, rest: "", notes: "", prescriptions: p });
+  const block = (id: string, items: ReturnType<typeof item>[]) => ({ id, kind: "single" as const, title: "", notes: "", rounds: null, durationMin: null, everySec: null, workSec: null, restSec: null, items });
+  const uuid = "11111111-2222-4333-8444-555555555555";
+  it("codici corti al posto degli id e niente campi vuoti", () => {
+    const { codeById, idByCode } = exerciseCodes([{ id: uuid, name: "Squat" }]);
+    expect(codeById.get(uuid)).toBe("E1");
+    expect(idByCode.get("E1")).toBe(uuid);
+    const json = compactProgram({ title: "Fase", description: "", weeks: 2, content: { days: [{ id: "d1", title: "G1", notes: "", blocks: [block("b1", [item("i1", "Squat", ["4x5", "4x6"], uuid)])] }] } }, codeById);
+    expect(json).toContain('"exerciseId":"E1"');
+    expect(json).not.toContain(uuid);
+    expect(json).not.toContain("null");
+    expect(json).not.toContain('"notes"');
+  });
+  it("trova cosa ha corretto il trainer", () => {
+    const ai = { days: [{ id: "d1", title: "Giorno 1", notes: "", blocks: [block("b1", [item("a", "Squat", ["4x5 60kg", "4x6 60kg"]), item("b", "Curl", ["3x8/10", "3x8/10"]), item("c", "Plank", ["3x30\"", "3x30\""])])] }] };
+    const fin = { days: [{ id: "d1", title: "Giorno 1", notes: "", blocks: [block("b1", [item("a", "Squat", ["4x5 60kg", "4x6 60kg"]), item("b", "Curl", ["3x10/14", "3x10/14"]), item("n", "Dead bug", ["3x10", "3x10"])])] }] };
+    const d = diffPrograms(ai, fin);
+    expect(d.changed).toBe(3);
+    const t = diffText(d);
+    expect(t).toContain("Curl: prescrizioni 3x8/10 | 3x8/10 → 3x10/14 | 3x10/14");
+    expect(t).toContain('aggiunto "Dead bug"');
+    expect(t).toContain('tolto "Plank"');
+    expect(diffText(diffPrograms(ai, ai))).toContain("Nessuna correzione");
+  });
+});

@@ -70,3 +70,16 @@ export function PrivacyForm({ action, values }: { action: Action; values: { lega
     </form>
   );
 }
+
+/** Lezioni imparate dall'AI: il titolare le può correggere o cancellare. */
+export function LessonsForm({ action, value }: { action: Action; value: string }) {
+  const [state, formAction] = useActionState(action, null);
+  return (
+    <form action={formAction} className="flex flex-col gap-3">
+      <Label htmlFor="ai_lessons" hint="una per riga, puoi correggerle o cancellarle">Lezioni</Label>
+      <Textarea id="ai_lessons" name="ai_lessons" rows={8} defaultValue={value} placeholder="Ancora niente: le lezioni arrivano quando pubblichi una bozza dell'AI dopo averla corretta." className="font-[inherit] text-[15px]" />
+      <ActionMessage state={state} />
+      <div><SubmitButton variant="secondary">Salva le lezioni</SubmitButton></div>
+    </form>
+  );
+}

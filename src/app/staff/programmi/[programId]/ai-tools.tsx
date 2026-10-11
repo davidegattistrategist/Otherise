@@ -86,6 +86,8 @@ export function AiPanel({
   // domande dell'AI prima della bozza (null = non ancora chieste per questa richiesta)
   const [questions, setQuestions] = useState<Array<{ question: string; options: string[] }> | null>(null);
   const [answers, setAnswers] = useState<string[]>([]);
+  // risposte già date in questo giro (es. il tempo per seduta), da rimandare con le successive
+  const [asked, setAsked] = useState<Array<{ question: string; answer: string }>>([]);
   const canDictate = useSyncExternalStore(noopSubscribe, () => getSpeech() !== null, () => false);
   const recRef = useRef<SpeechRec | null>(null);
 
@@ -123,30 +125,40 @@ export function AiPanel({
     };
   };
 
-  const draft = async (qa: Array<{ question: string; answer: string }>) => {
-    const res = await post<{ summary: string; content: ProgramContent; notes: Record<string, string>; weeks: number; sessionMinutes?: number | null }>({ mode: "revise", ...request(), answers: qa });
-    onApply(res.content, res.notes, res.weeks, res.sessionMinutes);
-    setSummary(res.summary);
+  type Q = { question: string; options: string[] };
+  type QA = { question: string; answer: string };
+  type DraftRes = { questions?: Q[]; summary?: string; content?: ProgramContent; notes?: Record<string, string>; weeks?: number; sessionMinutes?: number | null };
+
+  /** Risposta dell'assistente: altre domande oppure la bozza pronta. */
+  const handle = (res: DraftRes, given: QA[]) => {
+    if (res.questions?.length) {
+      setAsked(given);
+      setQuestions(res.questions);
+      setAnswers(res.questions.map(() => ""));
+      return;
+    }
+    if (!res.content) throw new Error("L'assistente non ha preparato la bozza: riprova.");
+    onApply(res.content, res.notes ?? {}, res.weeks, res.sessionMinutes);
+    setSummary(res.summary ?? "");
     setQuestions(null);
     setAnswers([]);
+    setAsked([]);
   };
 
-  /** Prima l'AI può fare da 1 a 5 domande; se non ne ha, prepara subito la bozza. */
+  /**
+   * Un tocco: l'AI scrive subito la bozza oppure, se ha un dubbio forte, fa
+   * prima qualche domanda (spesso nessuna). Le risposte già date restano.
+   */
   const run = async () => {
     setBusy(true);
     setError(null);
     setSummary(null);
     try {
       if (questions === null) {
-        const res = await post<{ questions: Array<{ question: string; options: string[] }> }>({ mode: "questions", ...request() });
-        if (res.questions.length) {
-          setQuestions(res.questions);
-          setAnswers(res.questions.map(() => ""));
-          return;
-        }
-        await draft([]);
+        handle(await post<DraftRes>({ mode: "questions", ...request() }), []);
       } else {
-        await draft(questions.map((q, i) => ({ question: q.question, answer: answers[i]?.trim() ?? "" })));
+        const qa = [...asked, ...questions.map((q, i) => ({ question: q.question, answer: answers[i]?.trim() ?? "" }))];
+        handle(await post<DraftRes>({ mode: "revise", ...request(), answers: qa }), qa);
       }
     } catch (e) {
       setError(friendlyError(e));
@@ -159,7 +171,7 @@ export function AiPanel({
     setBusy(true);
     setError(null);
     try {
-      await draft([]);
+      handle(await post<DraftRes>({ mode: "revise", ...request(), answers: asked, skip: true }), asked);
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -210,6 +222,7 @@ export function AiPanel({
           onChange={(e) => {
             setInstruction(e.target.value);
             setQuestions(null);
+            setAsked([]);
           }}
           rows={4}
           placeholder="Es. Passiamo a volumizzazione per 6 settimane. Togli lo stacco da terra per il fastidio lombare, aggiungi un giorno di corsa facile, tieni gli allungamenti per i quadricipiti."

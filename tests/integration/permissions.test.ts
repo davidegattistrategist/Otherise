@@ -301,4 +301,18 @@ describe.skipIf(!run)("permessi", () => {
     // valori fuori dai limiti rifiutati dal database
     expect((await coach.from("client_ai_profiles").update({ squat_share: 150 }).eq("client_id", clientAId)).error).not.toBeNull();
   });
+  it("bozze dell'AI e lezioni: solo staff; le lezioni le cambia solo il titolare", async () => {
+    await coach.from("program_ai_drafts").insert({ program_id: publishedId, client_id: clientAId, content: { days: [] }, instruction: "prova" }).throwOnError();
+    expect((await coach.from("program_ai_drafts").select("id").eq("program_id", publishedId)).data).toHaveLength(1);
+    expect((await clientA.from("program_ai_drafts").select("*")).data ?? []).toEqual([]);
+    expect((await stranger.from("program_ai_drafts").select("*")).data ?? []).toEqual([]);
+    expect((await clientA.from("program_ai_drafts").insert({ program_id: publishedId, client_id: clientAId, content: {} })).error).not.toBeNull();
+    expect((await coach.from("program_ai_drafts").insert({ program_id: publishedId, client_id: clientBId, content: {} })).error).not.toBeNull();
+    // lezioni: il collaboratore le legge ma non le cambia
+    await coach.from("app_settings").update({ ai_lessons: "- hack" }).eq("id", 1);
+    await owner.from("app_settings").update({ ai_lessons: "- lezione del titolare" }).eq("id", 1).throwOnError();
+    const { data } = await admin.from("app_settings").select("ai_lessons").eq("id", 1).single();
+    expect(data!.ai_lessons).toBe("- lezione del titolare");
+    expect((await clientA.from("app_settings").select("ai_lessons")).data ?? []).toEqual([]);
+  });
 });

@@ -7,15 +7,20 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { BLOCK_KINDS, newId, programContentSchema, type ProgramContent } from "../program/types";
+import { compactProgram, exerciseCodes } from "./prompt-format";
 
 export const DEFAULT_MODEL = "claude-sonnet-5-5";
 
-/** Prezzi in dollari per milione di token (input, output). Aggiornare se cambiano. */
-const PRICES: Record<string, [number, number]> = {
-  "claude-sonnet-5-5": [2, 10],
-  "claude-opus-5-5": [4, 20],
-  "claude-haiku-5-5": [0.1, 0.5],
-  "claude-fable-5-1": [10, 50],
+/**
+ * Prezzi in dollari per milione di token: input, output e moltiplicatore per le
+ * parti rilette dalla cache (le scritture in cache costano 1,25 volte l'input).
+ * Aggiornare se cambiano: https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+ */
+const PRICES: Record<string, [number, number, number]> = {
+  "claude-sonnet-5-5": [2, 10, 0.05],
+  "claude-opus-5-5": [4, 20, 0.05],
+  "claude-haiku-5-5": [0.1, 0.5, 0.1],
+  "claude-fable-5-1": [10, 50, 0.025],
 };
 
 export function aiEnabled() {
@@ -27,9 +32,10 @@ export function model() {
 }
 
 /** Costo stimato in euro (al cambio 1 $ ≈ 0,92 €). */
-export function estimateCostEur(m: string, input: number, output: number) {
-  const [pi, po] = PRICES[m] ?? PRICES[DEFAULT_MODEL];
-  return ((input * pi + output * po) / 1_000_000) * 0.92;
+export function estimateCostEur(m: string, input: number, output: number, cache: { written?: number; read?: number } = {}) {
+  const [pi, po, readMult] = PRICES[m] ?? PRICES[DEFAULT_MODEL];
+  const inputCost = input * pi + (cache.written ?? 0) * pi * 1.25 + (cache.read ?? 0) * pi * readMult;
+  return ((inputCost + output * po) / 1_000_000) * 0.92;
 }
 
 const nullableInt = { anyOf: [{ type: "integer" }, { type: "null" }] };
@@ -158,7 +164,7 @@ Come ragioni:
 - Varietà: quando serve, cambia al massimo circa un esercizio per giornata, preferibilmente tra i complementari o sui muscoli piccoli; il resto progredisce su ripetizioni e carichi secondo la fase.
 - Tempo: ogni giornata deve stare nel tempo per seduta. Stima: fondamentale con bilanciere da 4-5 serie circa 25 minuti (avvicinamento e caricamento compresi), complementare da 4 serie circa 10-12 minuti, accessori 6-8 minuti, 2-3 minuti per ogni cambio di esercizio, blocco iniziale di addome/posturale 10-15 minuti, stretching finale 5 minuti. Se il tempo non è indicato, usa 75 minuti e scrivilo nel riassunto.
 - Carichi: usa quelli che il cliente ha fatto davvero (logbook) e i test. Per i fondamentali con un test o un massimale stimato, decidi l'obiettivo dell'ultima settimana (per esempio 4x5 o 5x5 all'80% del massimale stimato, sempre qualche ripetizione sotto il massimo possibile) e costruisci la progressione a ritroso. Se non c'è nessun dato, non inventare: lascia il carico libero ("4x8/10") e scrivilo nel campo change.
-- Usa gli esercizi dell'eserciziario quando esistono (con il loro exerciseId); per esercizi nuovi metti exerciseId null.
+- Usa gli esercizi dell'eserciziario quando esistono (exerciseId = il loro codice, es. "E12"); per esercizi nuovi metti exerciseId null.
 - Ogni esercizio ha esattamente una prescrizione per settimana (array lungo quanto "weeks"). Per gli stretching e i lavori posturali va bene la stessa prescrizione tutte le settimane.
 - Note posturali e infortuni noti: tienine conto nella scelta degli esercizi.
 - Dolori o fastidi recenti (logbook, check-up, note): NON cambiare il programma di tua iniziativa per questo motivo. Decide il trainer: segnalali nel riassunto. Se la richiesta del trainer dice cosa fare, segui quella.
@@ -179,16 +185,24 @@ export type AiImage = { mediaType: "image/jpeg" | "image/png" | "image/webp" | "
 
 export type AiUsage = { model: string; input: number; output: number; costEur: number };
 
-async function runJson(system: string, userText: string, schema: Record<string, unknown>, images: AiImage[] = [], maxTokens = 32000) {
+/** Un pezzo del messaggio: con cache = true il prefisso fin lì viene riletto a prezzo ridotto. */
+type Part = { text: string; cache?: boolean } | { images: AiImage[] };
+
+export async function runJson(system: string, user: string | Part[], schema: Record<string, unknown>, images: AiImage[] = [], maxTokens = 32000, cacheSystem = false) {
   const m = model();
-  const content: Anthropic.ContentBlockParam[] = [
-    ...images.map((img) => ({ type: "image" as const, source: { type: "base64" as const, media_type: img.mediaType, data: img.data } })),
-    { type: "text", text: userText },
-  ];
+  const parts: Part[] = typeof user === "string" ? [{ images }, { text: user }] : user;
+  const content: Anthropic.ContentBlockParam[] = [];
+  for (const p of parts) {
+    if ("images" in p) {
+      for (const img of p.images) content.push({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } });
+    } else if (p.text) {
+      content.push({ type: "text", text: p.text, ...(p.cache ? { cache_control: { type: "ephemeral" as const } } : {}) });
+    }
+  }
   const stream = client().messages.stream({
     model: m,
     max_tokens: maxTokens,
-    system,
+    system: cacheSystem ? [{ type: "text", text: system, cache_control: { type: "ephemeral" } }] : system,
     messages: [{ role: "user", content }],
     output_config: { format: { type: "json_schema", schema } },
   });
@@ -196,19 +210,20 @@ async function runJson(system: string, userText: string, schema: Record<string, 
   if (msg.stop_reason === "refusal") throw new Error("L'assistente non ha potuto completare questa richiesta.");
   if (msg.stop_reason === "max_tokens") throw new Error("Il programma è troppo lungo per una sola richiesta: prova a chiedere modifiche su un giorno alla volta.");
   const text = msg.content.filter((b) => b.type === "text").map((b) => (b as Anthropic.TextBlock).text).join("");
-  const usage: AiUsage = {
-    model: m,
-    input: msg.usage.input_tokens + (msg.usage.cache_read_input_tokens ?? 0) + (msg.usage.cache_creation_input_tokens ?? 0),
-    output: msg.usage.output_tokens,
-    costEur: 0,
-  };
-  usage.costEur = estimateCostEur(m, usage.input, usage.output);
+  const written = msg.usage.cache_creation_input_tokens ?? 0;
+  const read = msg.usage.cache_read_input_tokens ?? 0;
+  const usage: AiUsage = { model: m, input: msg.usage.input_tokens + written + read, output: msg.usage.output_tokens, costEur: 0 };
+  usage.costEur = estimateCostEur(m, msg.usage.input_tokens, usage.output, { written, read });
   return { json: JSON.parse(text) as unknown, usage };
 }
 
 export type ReviseInput = {
   instruction: string;
   method: string;
+  /** lezioni imparate dalle correzioni del trainer (una per riga) */
+  lessons?: string;
+  /** ultime correzioni del trainer alle bozze dell'AI (testo compatto) */
+  corrections?: string[];
   examples: string[];
   exercises: Array<{ id: string; name: string }>;
   clientContext: string;
@@ -218,27 +233,52 @@ export type ReviseInput = {
   images?: AiImage[];
 };
 
-function contextText(input: ReviseInput) {
-  const exerciseList = input.exercises.map((e) => `${e.id} | ${e.name}`).join("\n");
-  return [
+/**
+ * Il messaggio in tre parti, dalla più stabile alla più variabile, così le
+ * parti già lette vengono rilette dalla cache a una frazione del prezzo:
+ * 1) metodo, lezioni, esempi, eserciziario (uguali per tutti i clienti);
+ * 2) dati del cliente e programma di partenza (uguali tra domande e bozza);
+ * 3) richiesta e risposte.
+ */
+function promptParts(input: ReviseInput, task: string): { parts: Part[]; idByCode: Map<string, string> } {
+  const { codeById, idByCode } = exerciseCodes(input.exercises);
+  const stable = [
     `# Metodo del trainer\n${input.method || "(Il trainer non ha ancora scritto il suo metodo: ricavalo dagli esempi e dai programmi precedenti.)"}`,
+    input.lessons?.trim() ? `# Cosa hai imparato dalle correzioni del trainer (vale più del metodo)\n${input.lessons.trim()}` : "",
+    input.corrections?.length ? `# Ultime correzioni del trainer alle tue bozze (impara il suo modo di correggere)\n${input.corrections.join("\n\n")}` : "",
     input.examples.length ? `# Esempi di programmi scritti dal trainer\n${input.examples.join("\n\n")}` : "",
-    `# Eserciziario (id | nome)\n${exerciseList}`,
-    `# Dati del cliente\n${input.clientContext}`,
-    `# Programma attuale (JSON) da cui partire\n${JSON.stringify({ title: input.current.title, description: input.current.description, weeks: input.current.weeks, days: input.current.content.days })}`,
-    input.sessionMinutes ? `# Tempo a disposizione per seduta\n${input.sessionMinutes} minuti` : "# Tempo a disposizione per seduta\nNon indicato.",
-    input.images?.length ? "# Allegati\nIn allegato ci sono immagini con i risultati dei test o appunti del trainer." : "",
-    `# Richiesta del trainer\n${input.instruction}`,
-    input.answers?.length ? `# Risposte del trainer alle tue domande\n${input.answers.map((a) => `- ${a.question} → ${a.answer}`).join("\n")}` : "",
+    `# Eserciziario (codice | nome): usa il codice come exerciseId\n${input.exercises.map((e) => `${codeById.get(e.id)} | ${e.name}`).join("\n")}`,
   ]
     .filter(Boolean)
     .join("\n\n");
+  const clientPart = [
+    `# Dati del cliente\n${input.clientContext}`,
+    `# Programma attuale (JSON compatto: i campi vuoti sono omessi) da cui partire\n${compactProgram(input.current, codeById)}`,
+    input.sessionMinutes ? `# Tempo a disposizione per seduta\n${input.sessionMinutes} minuti` : "# Tempo a disposizione per seduta\nNon indicato.",
+  ].join("\n\n");
+  const request = [
+    input.images?.length ? "# Allegati\nIn allegato ci sono immagini con i risultati dei test o appunti del trainer." : "",
+    `# Richiesta del trainer\n${input.instruction}`,
+    input.answers?.length ? `# Risposte del trainer alle tue domande\n${input.answers.map((a) => `- ${a.question} → ${a.answer}`).join("\n")}` : "",
+    task,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  return {
+    parts: [{ text: stable, cache: true }, { text: clientPart, cache: true }, { images: input.images ?? [] }, { text: request }],
+    idByCode,
+  };
 }
 
-const QUESTIONS_SCHEMA = {
+/** Domanda fissa sul tempo, se il cliente non ha un tempo per seduta di riferimento (la fa l'app, senza AI). */
+export const TIME_QUESTION = "Quanto tempo ha a disposizione per ogni seduta?";
+export const TIME_OPTIONS = ["45 minuti", "60 minuti", "75 minuti", "90 minuti"];
+
+/** Domande oppure programma: un solo schema, così domande e bozza condividono la cache. */
+const DRAFT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["questions"],
+  required: ["questions", "program"],
   properties: {
     questions: {
       type: "array",
@@ -249,42 +289,59 @@ const QUESTIONS_SCHEMA = {
         properties: { question: { type: "string" }, options: { type: "array", items: { type: "string" } } },
       },
     },
+    program: { anyOf: [{ type: "null" }, PROGRAM_JSON_SCHEMA] },
   },
 } as const;
 
-const QUESTIONS_SYSTEM = `Sei l'assistente di programmazione di un personal trainer italiano. Prima di preparare la bozza di un programma controlli se ti manca qualcosa di davvero importante.
-Regole:
-- Meno domande fai, meglio è. Nella maggior parte dei casi zero: il metodo, i dati del cliente e la richiesta bastano.
-- Fai domande (al massimo 5, di solito 1-2) SOLO se hai un dubbio forte che cambia davvero il programma: per esempio il passo di corsa di partenza per chi corre ad andature precise, un carico di partenza su un fondamentale senza test né logbook, il focus della fase se il progetto e la richiesta si contraddicono, cosa fare con un fastidio segnalato.
-- Non chiedere il tempo per seduta: se manca lo chiede già l'app.
-- Non chiedere cose già scritte nei dati del cliente, nel metodo o nella richiesta, e non chiedere conferme su cose che il metodo decide già.
-- Domande brevi, mirate, facili da rispondere: quando puoi proponi 2-4 risposte pronte (options), altrimenti options vuoto.
-- In italiano, dando del tu al trainer.`;
+const ASK_OR_WRITE = `# Cosa fare adesso
+Decidi se ti serve chiedere qualcosa al trainer prima di scrivere.
+- Meno domande fai, meglio è: nella maggior parte dei casi nessuna. Fanne (al massimo 5, di solito 1-2) SOLO se hai un dubbio forte che cambia davvero il programma: per esempio il passo di corsa di partenza per chi corre ad andature precise, un carico di partenza su un fondamentale senza test né logbook, il focus della fase se progetto e richiesta si contraddicono, cosa fare con un fastidio segnalato.
+- Non chiedere il tempo per seduta, cose già scritte nei dati, nel metodo o nella richiesta, né conferme su cose che il metodo decide già.
+- Domande brevi, facili da rispondere, con 2-4 risposte pronte in options quando possibile; in italiano, dando del tu.
+- Se fai domande: restituisci le domande e program = null.
+- Se non ti servono: questions = [] e in program il programma completo aggiornato.`;
 
-/** Domanda fissa sul tempo, se il cliente non ha un tempo per seduta di riferimento. */
-export const TIME_QUESTION = "Quanto tempo ha a disposizione per ogni seduta?";
-const TIME_OPTIONS = ["45 minuti", "60 minuti", "75 minuti", "90 minuti"];
+const WRITE_NOW = `# Cosa fare adesso
+Restituisci questions = [] e in program il programma completo aggiornato.`;
 
+export type DraftProgram = {
+  summary: string;
+  title: string;
+  description: string;
+  weeks: number;
+  content: ProgramContent;
+  notes: Record<string, string>;
+  sessionMinutes: number | null;
+  timeFromTrainer: boolean;
+};
 
-/** Da 0 a 5 domande al trainer prima di preparare la bozza. */
-export async function askQuestions(input: ReviseInput) {
-  const userText = `${contextText(input)}\n\nDecidi se ti servono domande prima di preparare la bozza.`;
-  const { json, usage } = await runJson(QUESTIONS_SYSTEM, userText, QUESTIONS_SCHEMA as unknown as Record<string, unknown>, input.images, 2000);
+export type DraftResult =
+  | { kind: "questions"; questions: Array<{ question: string; options: string[] }>; usage: AiUsage }
+  | ({ kind: "program"; usage: AiUsage } & DraftProgram);
+
+/**
+ * Bozza del programma. Con allowQuestions l'AI può prima fare domande (e allora
+ * non scrive niente); senza, scrive subito. Le due chiamate condividono la cache.
+ */
+export async function draftProgram(input: ReviseInput, allowQuestions: boolean): Promise<DraftResult> {
+  const { parts, idByCode } = promptParts(input, allowQuestions ? ASK_OR_WRITE : WRITE_NOW);
+  const { json, usage } = await runJson(SYSTEM, parts, DRAFT_SCHEMA as unknown as Record<string, unknown>, [], 32000, true);
   const parsed = z
-    .object({ questions: z.array(z.object({ question: z.string(), options: z.array(z.string()) })) })
+    .object({ questions: z.array(z.object({ question: z.string(), options: z.array(z.string()) })).catch([]), program: z.unknown() })
     .parse(json);
-  const fromAi = parsed.questions
+  const questions = parsed.questions
     .filter((q) => q.question.trim() && !/tempo|minuti/i.test(q.question))
+    .slice(0, 5)
     .map((q) => ({ question: q.question.trim().slice(0, 300), options: q.options.map((o) => o.trim()).filter(Boolean).slice(0, 4) }));
-  const questions = (input.sessionMinutes ? fromAi : [{ question: TIME_QUESTION, options: TIME_OPTIONS }, ...fromAi]).slice(0, 5);
-  return { questions, usage };
+  if (!parsed.program) {
+    if (allowQuestions && questions.length) return { kind: "questions", questions, usage };
+    throw new Error("L'assistente non ha preparato il programma: riprova.");
+  }
+  return { kind: "program", ...normalizeProgram(parsed.program, input, idByCode), usage };
 }
 
-export async function reviseProgram(input: ReviseInput) {
-  const userText = `${contextText(input)}\n\nRestituisci il programma completo aggiornato.`;
-
-  const { json, usage } = await runJson(SYSTEM, userText, PROGRAM_JSON_SCHEMA as unknown as Record<string, unknown>, input.images);
-  const parsed = aiProgramSchema.parse(json);
+function normalizeProgram(raw: unknown, input: ReviseInput, idByCode: Map<string, string>) {
+  const parsed = aiProgramSchema.parse(raw);
   const validIds = new Set(input.exercises.map((e) => e.id));
   const idByName = new Map(input.exercises.map((e) => [e.name.toLowerCase(), e.id]));
   const weeks = Math.min(12, Math.max(1, parsed.weeks));
@@ -314,7 +371,8 @@ export async function reviseProgram(input: ReviseInput) {
         items: b.items.map((it) => {
           const id = uniq(it.id);
           if (it.change.trim()) notes[id] = it.change.trim();
-          const exId = it.exerciseId && validIds.has(it.exerciseId) ? it.exerciseId : idByName.get(it.name.trim().toLowerCase()) ?? null;
+          const code = it.exerciseId?.trim().toUpperCase() ?? "";
+          const exId = idByCode.get(code) ?? (it.exerciseId && validIds.has(it.exerciseId) ? it.exerciseId : idByName.get(it.name.trim().toLowerCase()) ?? null);
           return {
             id,
             exerciseId: exId,
@@ -328,7 +386,7 @@ export async function reviseProgram(input: ReviseInput) {
     })),
   });
   const minutes = parsed.sessionMinutes && parsed.sessionMinutes >= 15 && parsed.sessionMinutes <= 240 ? parsed.sessionMinutes : null;
-  return { summary: parsed.summary, title: parsed.title, description: parsed.description, weeks, content, notes, usage, sessionMinutes: minutes, timeFromTrainer: parsed.timeFromTrainer };
+  return { summary: parsed.summary, title: parsed.title, description: parsed.description, weeks, content, notes, sessionMinutes: minutes, timeFromTrainer: parsed.timeFromTrainer };
 }
 
 const PROGRESS_SCHEMA = {
