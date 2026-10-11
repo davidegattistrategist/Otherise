@@ -130,6 +130,9 @@ export function Logbook(props: LogbookProps) {
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveRef = useRef<(() => Promise<boolean>) | null>(null);
   const finishing = useRef(false);
+  // chili copiati in automatico dalla serie precedente ("itemId:serie"): seguono la prima serie finché non li cambi
+  const autoKg = useRef(new Set<string>());
+  const [unchecked, setUnchecked] = useState<{ name: string; missing: number; total: number }[] | null>(null);
   const latest = useRef({ items, notes, discomfort, performedOn, completed });
   useEffect(() => {
     latest.current = { items, notes, discomfort, performedOn, completed };
@@ -292,6 +295,58 @@ export function Logbook(props: LogbookProps) {
     if (s && s > 0) setTimer({ end: Date.now() + s * 1000, total: s });
   };
 
+  /** Serie non spuntate, per esercizio (solo dove si spuntano le serie). */
+  const uncheckedSets = () => {
+    const out: { name: string; missing: number; total: number }[] = [];
+    for (const b of day.blocks) {
+      for (const it of b.items) {
+        const plan = plans[it.id];
+        if (plan.mode === "text") continue;
+        const sets = latest.current.items[it.id]?.sets ?? [];
+        const missing = sets.filter((x) => !x.done).length;
+        if (missing) out.push({ name: it.name, missing, total: sets.length });
+      }
+    }
+    return out;
+  };
+
+  /** "Ho finito": se qualche serie non è spuntata, prima lo chiede. */
+  const askFinish = () => {
+    const list = initial.completed ? [] : uncheckedSets();
+    if (list.length) setUnchecked(list);
+    else void finish();
+  };
+
+  /** Dalla domanda finale: segna come fatte le serie non spuntate, o le lascia come saltate. */
+  const resolveUnchecked = (markDone: boolean) => {
+    setUnchecked(null);
+    const cur = latest.current.items;
+    const next: Record<string, ItemState> = {};
+    for (const b of day.blocks) {
+      for (const it of b.items) {
+        const st = cur[it.id];
+        if (!st || plans[it.id].mode === "text") {
+          if (st) next[it.id] = st;
+          continue;
+        }
+        const sets = st.sets.map((x, si, all) => {
+          if (x.done) return x;
+          if (!markDone) {
+            // serie saltata: senza ripetizioni il carico proposto non va registrato
+            return x.reps === null || x.reps === undefined ? { ...x, kg: null } : x;
+          }
+          if (plans[it.id].mode !== "sets") return { ...x, done: true };
+          const sug = suggestion(it, si);
+          return { kg: x.kg ?? sug.kg ?? (si > 0 ? all[si - 1].kg ?? null : null), reps: x.reps ?? sug.reps, done: true };
+        });
+        next[it.id] = { ...st, sets };
+      }
+    }
+    latest.current = { ...latest.current, items: next };
+    setItems(next);
+    void finish();
+  };
+
   const finish = async () => {
     setCompleted(true);
     latest.current = { ...latest.current, completed: true };
@@ -378,7 +433,23 @@ export function Logbook(props: LogbookProps) {
                             className="h-11 w-full rounded-xl border border-sand-deep bg-sand px-3 text-[16px] font-semibold tabular"
                             placeholder={fmt(suggestion(it, si).kg)}
                             value={fmt(s.kg)}
-                            onChange={(e) => update(it.id, (cur) => ({ ...cur, sets: cur.sets.map((x, i) => (i === si ? { ...x, kg: numOrNull(e.target.value) } : x)) }))}
+                            onChange={(e) => {
+                              const kg = numOrNull(e.target.value);
+                              autoKg.current.delete(`${it.id}:${si}`);
+                              // lo stesso carico va proposto nelle serie successive ancora da fare
+                              update(it.id, (cur) => ({
+                                ...cur,
+                                sets: cur.sets.map((x, i) => {
+                                  if (i === si) return { ...x, kg };
+                                  if (i < si || x.done) return x;
+                                  const key = `${it.id}:${i}`;
+                                  if (x.kg !== null && x.kg !== undefined && !autoKg.current.has(key)) return x;
+                                  if (kg === null) autoKg.current.delete(key);
+                                  else autoKg.current.add(key);
+                                  return { ...x, kg };
+                                }),
+                              }));
+                            }}
                           />
                           <input
                             aria-label={`${it.name}, serie ${si + 1}, ripetizioni`}
@@ -544,11 +615,33 @@ export function Logbook(props: LogbookProps) {
           {status.kind === "error" ? (
             <button type="button" onClick={() => void saveRef.current?.()} className="h-11 shrink-0 rounded-full px-4 text-sm font-semibold text-card ring-1 ring-line-dark">Riprova</button>
           ) : null}
-          <button type="button" onClick={() => void finish()} disabled={status.kind === "saving"} className="h-11 rounded-full bg-accent px-5 text-[15px] font-bold text-white disabled:opacity-60">
+          <button type="button" onClick={askFinish} disabled={status.kind === "saving"} className="h-11 rounded-full bg-accent px-5 text-[15px] font-bold text-white disabled:opacity-60">
             {initial.completed ? "Salva" : props.finishLabel ?? "Ho finito"}
           </button>
         </div>
       </div>
+
+      {unchecked ? (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-ink/40 sm:items-center" role="dialog" aria-modal="true" aria-label="Serie non spuntate">
+          <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-t-[28px] bg-sand px-5 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:rounded-[28px]">
+            <h2 className="text-[22px] leading-tight font-semibold">Alcune serie non sono spuntate</h2>
+            <ul className="mt-3 flex flex-col gap-1.5 text-[15px]">
+              {unchecked.map((u, i) => (
+                <li key={i} className="flex justify-between gap-3 rounded-xl bg-card px-3 py-2">
+                  <span className="min-w-0 font-semibold">{u.name}</span>
+                  <span className="shrink-0 text-muted tabular">{u.missing === u.total ? (u.total === 1 ? "non spuntata" : `tutte e ${u.total}`) : `${u.missing} su ${u.total}`}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-[16px] leading-relaxed">Le hai fatte e ti sei dimenticato di spuntarle, o le hai saltate?</p>
+            <div className="mt-4 flex flex-col gap-2">
+              <button type="button" onClick={() => resolveUnchecked(true)} className="min-h-12 w-full rounded-full bg-ink text-[16px] font-semibold text-card">Le ho fatte: segnale come fatte</button>
+              <button type="button" onClick={() => resolveUnchecked(false)} className="min-h-12 w-full rounded-full bg-card text-[16px] font-semibold ring-1 ring-sand-deep">Sì, le ho saltate</button>
+              <button type="button" onClick={() => setUnchecked(null)} className="min-h-11 text-sm font-semibold text-muted underline">Torno all&apos;allenamento</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

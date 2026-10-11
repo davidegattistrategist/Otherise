@@ -271,6 +271,13 @@ test.describe("cliente", () => {
       else await page.locator("main input").first().fill("Fatto tutto");
       await expect(page.getByText(/Salvato alle/)).toBeVisible({ timeout: 10_000 });
       await page.getByRole("button", { name: "Ho finito" }).click();
+      // le serie non spuntate: prima di chiudere chiede se sono state fatte
+      const ask = page.getByRole("dialog", { name: "Serie non spuntate" });
+      await expect(ask.or(page.getByText("Allenamento registrato"))).toBeVisible();
+      if (await ask.isVisible()) {
+        await expect(ask.getByRole("listitem").first()).toBeVisible();
+        await ask.getByRole("button", { name: "Le ho fatte: segnale come fatte" }).click();
+      }
       await expect(page.getByText("Allenamento registrato")).toBeVisible();
     }
     // progressi, percorso, notifiche
