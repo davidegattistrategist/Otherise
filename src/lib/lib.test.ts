@@ -616,3 +616,16 @@ describe("indicazioni per l'AI", async () => {
     expect(profileText(EMPTY_PROFILE)).toBe("");
   });
 });
+
+describe("progetto letto sui mesi del programma", () => {
+  it("segnala il cambio di fase e gli stimoli che cambiano", () => {
+    const p = emptyProject("2026-10");
+    p.phases = ["volume", "volume", "intensity", "intensity", "", "", "", "", "", "", "", ""];
+    p.rows[1].values = [1, 1, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0];
+    const ai = projectForAI(p, "2026-12-01", "2026-12-28");
+    expect(ai).toContain("novembre 2026 (mese prima): fase Volumizzazione");
+    expect(ai).toContain("dicembre 2026 (periodo del programma): fase Intensificazione");
+    expect(ai).toContain("CAMBIO DI FASE: da volumizzazione a intensificazione");
+    expect(ai).toContain("Stimoli che cambiano rispetto al mese prima");
+  });
+});

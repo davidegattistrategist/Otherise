@@ -91,16 +91,38 @@ export function monthIndex(project: Project, today: ISODate): number {
   return projectMonths(project.start).findIndex((m) => m.key === today.slice(0, 7));
 }
 
-/** Testo per l'assistente AI: obiettivo, mese corrente e i tre successivi. */
-export function projectForAI(project: Project, today: ISODate): string {
+/**
+ * Testo per l'assistente AI: obiettivo, mese prima, mesi coperti dal programma
+ * che si sta preparando (da `from` a `to`) e il mese dopo, con il cambio di fase
+ * messo in evidenza. Senza `to` usa il mese di `from` e i tre successivi.
+ */
+export function projectForAI(project: Project, from: ISODate, to?: ISODate): string {
   const months = projectMonths(project.start);
-  const from = Math.max(0, monthIndex(project, today));
+  const keys = months.map((m) => m.key);
+  const startIdx = keys.indexOf(from.slice(0, 7));
+  const endIdx = to ? keys.indexOf(to.slice(0, 7)) : -1;
+  const a = startIdx >= 0 ? startIdx : 0;
+  const b = endIdx >= a ? endIdx : Math.min(MONTHS - 1, a + (to ? 1 : 3));
   const lines: string[] = [];
   if (project.goal.trim()) lines.push(`Obiettivo: ${project.goal.trim()}`);
-  for (let i = from; i < Math.min(MONTHS, from + 4); i++) {
-    const phase = PHASE_BY_KEY.get(project.phases[i])?.label ?? "non indicata";
+  if (startIdx < 0) lines.push("(Il programma parte fuori dai 12 mesi del progetto: usa il mese più vicino.)");
+  const phaseOf = (i: number) => PHASE_BY_KEY.get(project.phases[i])?.label ?? "non indicata";
+  for (let i = Math.max(0, a - 1); i <= Math.min(MONTHS - 1, b + 1); i++) {
     const stim = project.rows.filter((r) => r.label.trim()).map((r) => `${r.label} ${levelLabel(r.kind, r.values[i]).toLowerCase()}`).join(", ");
-    lines.push(`- ${months[i].long}${i === from ? " (adesso)" : ""}: fase ${phase}. ${stim}.${project.notes[i]?.trim() ? ` Nota: ${project.notes[i].trim()}` : ""}`);
+    const tag = i < a ? " (mese prima)" : i > b ? " (mese dopo)" : to ? " (periodo del programma)" : i === a ? " (adesso)" : "";
+    lines.push(`- ${months[i].long}${tag}: fase ${phaseOf(i)}. ${stim}.${project.notes[i]?.trim() ? ` Nota: ${project.notes[i].trim()}` : ""}`);
+  }
+  if (a > 0 && project.phases[a - 1] && project.phases[a] && project.phases[a - 1] !== project.phases[a]) {
+    lines.push(`CAMBIO DI FASE: da ${phaseOf(a - 1).toLowerCase()} a ${phaseOf(a).toLowerCase()} proprio con questo programma.`);
+  }
+  for (let i = a + 1; i <= b; i++) {
+    if (project.phases[i] && project.phases[i] !== project.phases[i - 1]) {
+      lines.push(`Durante il programma la fase passa a ${phaseOf(i).toLowerCase()} (${months[i].long}).`);
+    }
+  }
+  const changed = project.rows.filter((r) => r.label.trim() && a > 0 && r.values[a] !== r.values[a - 1]);
+  if (changed.length) {
+    lines.push(`Stimoli che cambiano rispetto al mese prima: ${changed.map((r) => `${r.label} da ${levelLabel(r.kind, r.values[a - 1]).toLowerCase()} a ${levelLabel(r.kind, r.values[a]).toLowerCase()}`).join(", ")}.`);
   }
   return lines.join("\n");
 }

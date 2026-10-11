@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createClient();
   // passa dai permessi: se lo staff non gestisce il cliente il programma non c'è
-  const { data: program } = await supabase.from("programs").select("id, client_id, session_minutes").eq("id", body.programId).maybeSingle();
+  const { data: program } = await supabase.from("programs").select("id, client_id, session_minutes, start_date").eq("id", body.programId).maybeSingle();
   if (!program?.client_id) return NextResponse.json({ error: "Programma non trovato" }, { status: 404 });
 
   // tetto di spesa mensile
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     if (body.mode === "questions" || body.mode === "revise") {
       const [method, clientContext, profile] = await Promise.all([
         buildMethodContext(supabase),
-        buildClientContext(supabase, program.client_id, program.id, body.current.content),
+        buildClientContext(supabase, program.client_id, program.id, body.current.content, { start: program.start_date, weeks: body.current.weeks }),
         getAiProfile(supabase, program.client_id),
       ]);
       // tempo per seduta: quello del programma, altrimenti quello di riferimento del cliente

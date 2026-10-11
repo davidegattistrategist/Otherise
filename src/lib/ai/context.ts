@@ -38,7 +38,14 @@ export function programToText(title: string, weeks: number, content: ProgramCont
  * @param reference il programma da cui parte la bozza: se ha esercizi, l'AI riceve
  *   anche "com'è fatto" (serie per gruppo, accosciata/hinge, minuti stimati).
  */
-export async function buildClientContext(supabase: ServerSupabase, clientId: string, excludeProgramId?: string, reference?: ProgramContent) {
+export async function buildClientContext(
+  supabase: ServerSupabase,
+  clientId: string,
+  excludeProgramId?: string,
+  reference?: ProgramContent,
+  /** date del programma che si sta preparando: il progetto si legge su quei mesi */
+  period?: { start: string | null; weeks: number },
+) {
   const today = todayISO();
   const since = addDays(today, -16 * 7);
   const [client, programs, logs, checks, posture, checkins, pt, project, aiProfile] = await Promise.all([
@@ -62,9 +69,20 @@ export async function buildClientContext(supabase: ServerSupabase, clientId: str
   const indications = profileText(aiProfile);
   if (indications) parts.push(`## Indicazioni del trainer per questo cliente\n${indications}`);
 
+  // prima di tutto: cosa il trainer ha già deciso di fare in questa fase
+  const lastNotes = (checks.data ?? []).find((k) => k.notes_next_phase?.trim());
+  const lastPosture = (posture.data ?? [])[0];
+  const todo = [
+    lastNotes ? `- Note prese all'ultimo check (${lastNotes.check_date}) per la fase successiva, cioè QUESTA: ${lastNotes.notes_next_phase!.trim()}` : "",
+    lastPosture?.posture_work?.trim() ? `- Lavori posturali dall'ultima valutazione (${lastPosture.assessed_on}), inseriscili come indicato (se non è indicato dove, nel blocco iniziale): ${lastPosture.posture_work.trim()}` : "",
+  ].filter(Boolean);
+  if (todo.length) parts.push(`## Da applicare in questo programma (deciso dal trainer)\n${todo.join("\n")}`);
+
   const plan = parseProject(project.data?.data);
   if (plan) {
-    parts.push(`## Progetto annuale scritto dal trainer (segui la fase e gli stimoli del mese)\n${projectForAI(plan, today)}`);
+    const start = period?.start ?? today;
+    const end = period?.start ? addDays(start, period.weeks * 7 - 1) : undefined;
+    parts.push(`## Progetto annuale scritto dal trainer (segui la fase e gli stimoli dei mesi del programma)\n${projectForAI(plan, start, end)}`);
   }
 
   const past = (programs.data ?? []).filter((p) => p.id !== excludeProgramId);
