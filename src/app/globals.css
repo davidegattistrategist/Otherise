@@ -147,3 +147,15 @@ body {
     animation: none;
   }
 }
+
+/* Timer dell'allenamento: lampo al cambio di fase (components/logbook/workout-timer.tsx) */
+.timer-flash {
+  animation: timer-flash 700ms ease-out;
+}
+@keyframes timer-flash {
+  0% { transform: scale(1.04); filter: brightness(1.35); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .timer-flash { animation: none; }
+}

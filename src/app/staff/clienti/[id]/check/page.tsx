@@ -40,7 +40,7 @@ function ChartFilter({ name, value, options, keep, label, wide }: { name: keyof 
       <select key={value} id={`f-${name}`} name={name} defaultValue={value} className={`${wide ? "flex-1" : "max-w-[12rem]"} min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-1 text-sm`}>
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      <button type="submit" className="text-sm font-semibold underline">Mostra</button>
+      <button type="submit" className="min-h-10 px-2 text-sm font-semibold underline">Mostra</button>
     </form>
   );
 }

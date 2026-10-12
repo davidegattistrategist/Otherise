@@ -1,5 +1,6 @@
 "use client";
 
+import { DictateButton } from "@/components/dictate-button";
 import { useActionState, useState } from "react";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 import { Label, Select, Textarea, Input } from "@/components/ui";
@@ -83,7 +84,7 @@ export function AiProfileForm({ action, values, actualSquat }: { action: Action;
       </fieldset>
 
       <div>
-        <Label htmlFor="ai-notes" hint="facoltativo">Altre indicazioni per l&apos;AI</Label>
+        <div className="flex items-end justify-between gap-2"><Label htmlFor="ai-notes" hint="facoltativo">Altre indicazioni per l&apos;AI</Label><DictateButton targetId="ai-notes" /></div>
         <Textarea id="ai-notes" name="notes" rows={3} defaultValue={values.notes} placeholder="es. In palestra ha solo manubri fino a 30 kg; preferisce non correre sul tapis roulant" />
       </div>
       <div>

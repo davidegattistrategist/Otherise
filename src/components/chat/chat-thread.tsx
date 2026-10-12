@@ -8,11 +8,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { friendlyError } from "@/lib/friendly-error";
 import { deleteMessage, dismissReplyDraft, prepareUpload, requestReplyDraft, sendMessage } from "@/app/chat/actions";
 import type { ReplyDraft } from "@/lib/ai/reply";
-import { MAX_ATTACHMENTS, attachmentKind, sizeError, voiceLength, type ChatAttachment, type ChatMessage, type Transcript } from "@/lib/chat-shared";
+import { MAX_ATTACHMENTS, attachmentKind, sizeError, videoExpired, voiceLength, type ChatAttachment, type ChatMessage, type Transcript } from "@/lib/chat-shared";
 import { cx } from "@/components/ui";
 import { IconPaperclip, IconPlay, IconSend, IconSparkle, IconX } from "@/components/icons";
 import { prepareImage, uploadWithProgress, videoSize } from "./media";
 import { VoicePlayer, useVoiceRecorder, voiceSupported } from "./voice";
+import { canCompressVideo, compressVideo, shouldCompress } from "./compress-video";
 
 const MicIcon = () => (
   <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -20,7 +21,8 @@ const MicIcon = () => (
   </svg>
 );
 
-type Pending = { id: string; file: File; kind: "image" | "video"; preview: string; progress: number; error?: string };
+/** `preparing`: il video si sta riducendo (da 0 a 1); `width`/`height` dal video compresso */
+type Pending = { id: string; file: File; kind: "image" | "video"; preview: string; progress: number; error?: string; preparing?: number; width?: number; height?: number };
 
 const dayKey = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
 function dayLabel(iso: string) {
@@ -133,44 +135,85 @@ export function ChatThread({
     if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
   };
 
+  // video in compressione: si possono annullare togliendo l'allegato
+  const compressing = useRef(new Map<string, AbortController>());
+  useEffect(() => {
+    const running = compressing.current;
+    return () => running.forEach((c) => c.abort());
+  }, []);
+
+  /** Riduce il video come WhatsApp; se non si può, tiene l'originale (se non è troppo pesante). */
+  const prepareVideo = async (id: string, original: File) => {
+    const ctrl = new AbortController();
+    compressing.current.set(id, ctrl);
+    const res = await compressVideo(original, (v) => setPending((cur) => cur.map((x) => (x.id === id ? { ...x, preparing: v } : x))), ctrl.signal);
+    compressing.current.delete(id);
+    if (ctrl.signal.aborted) return;
+    const file = res?.file ?? original;
+    const tooBig = sizeError("video", file.size);
+    if (tooBig) {
+      setError(res ? tooBig : `${tooBig} Questo telefono non riesce a ridurlo da solo.`);
+      setPending((cur) => cur.filter((x) => x.id !== id));
+      return;
+    }
+    setPending((cur) => cur.map((x) => (x.id === id ? { ...x, file, preparing: undefined, width: res?.width, height: res?.height } : x)));
+  };
+
   const addFiles = (files: FileList | null) => {
     if (!files) return;
     setError(null);
     const next: Pending[] = [];
+    const toCompress: Pending[] = [];
     for (const f of Array.from(files)) {
       const kind = attachmentKind(f.type);
       if (!kind || kind === "audio") {
         setError(kind === "audio" ? "Per i vocali tocca il microfono accanto alla casella del messaggio." : "Si possono mandare solo foto e video.");
         continue;
       }
-      const tooBig = sizeError(kind, f.size);
-      if (tooBig) {
-        setError(tooBig);
-        continue;
+      const item: Pending = { id: `${f.name}-${f.size}-${Math.random()}`, file: f, kind, preview: URL.createObjectURL(f), progress: 0 };
+      if (kind === "video" && canCompressVideo() && shouldCompress(f)) {
+        // il controllo del peso si fa dopo la compressione
+        item.preparing = 0;
+        toCompress.push(item);
+      } else {
+        const tooBig = sizeError(kind, f.size);
+        if (tooBig) {
+          URL.revokeObjectURL(item.preview);
+          setError(tooBig);
+          continue;
+        }
       }
-      next.push({ id: `${f.name}-${f.size}-${Math.random()}`, file: f, kind, preview: URL.createObjectURL(f), progress: 0 });
+      next.push(item);
     }
-    setPending((cur) => [...cur, ...next].slice(0, MAX_ATTACHMENTS));
+    const room = MAX_ATTACHMENTS - pending.length;
+    const added = next.slice(0, Math.max(0, room));
+    setPending((cur) => [...cur, ...added].slice(0, MAX_ATTACHMENTS));
+    for (const p of toCompress) if (added.includes(p)) void prepareVideo(p.id, p.file);
   };
 
-  const removePending = (id: string) =>
+  const removePending = (id: string) => {
+    compressing.current.get(id)?.abort();
+    compressing.current.delete(id);
     setPending((cur) => {
       const p = cur.find((x) => x.id === id);
       if (p) URL.revokeObjectURL(p.preview);
       return cur.filter((x) => x.id !== id);
     });
+  };
+  const preparingVideo = pending.some((p) => p.preparing !== undefined);
 
   const send = async () => {
     if (sending) return;
     const body = text.trim();
     if (!body && pending.length === 0) return;
+    if (preparingVideo) return;
     setSending(true);
     setError(null);
     stick.current = true;
     try {
       const attachments: ChatAttachment[] = [];
       for (const p of pending) {
-        const ready = p.kind === "image" ? await prepareImage(p.file) : { blob: p.file as Blob, type: p.file.type, name: p.file.name, ...(await videoSize(p.file)) };
+        const ready = p.kind === "image" ? await prepareImage(p.file) : { blob: p.file as Blob, type: p.file.type, name: p.file.name, ...(p.width && p.height ? { width: p.width, height: p.height } : await videoSize(p.file)) };
         const ticket = await prepareUpload(clientId, { type: ready.type, size: ready.blob.size });
         if ("error" in ticket) throw new Error(ticket.error);
         await uploadWithProgress(ticket.signedUrl, ready.blob, ready.type, (v) => setPending((cur) => cur.map((x) => (x.id === p.id ? { ...x, progress: v } : x))));
@@ -305,8 +348,10 @@ export function ChatThread({
                 {m.attachments.some((a) => a.kind !== "audio") ? (
                   <div className={cx("grid gap-1", m.attachments.filter((a) => a.kind !== "audio").length > 1 ? "grid-cols-2" : "grid-cols-1")}>
                     {m.attachments.filter((a) => a.kind !== "audio").map((a) =>
-                      !a.url ? (
-                        <div key={a.path} className="flex h-32 w-40 items-center justify-center rounded-2xl bg-sand text-xs text-muted">Non disponibile</div>
+                      !a.url || (a.kind === "video" && videoExpired(m.createdAt)) ? (
+                        <div key={a.path} className="flex h-32 w-40 items-center justify-center rounded-2xl bg-sand px-3 text-center text-xs text-muted">
+                          {a.kind === "video" && videoExpired(m.createdAt) ? "Video scaduto: dopo 6 mesi si cancella da solo per fare spazio" : "Non disponibile"}
+                        </div>
                       ) : a.kind === "image" ? (
                         <button key={a.path} type="button" onClick={() => setViewer(a.url)} className="overflow-hidden rounded-2xl bg-sand">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -352,7 +397,7 @@ export function ChatThread({
           <div className="mb-3 rounded-2xl border border-sand-deep bg-sand/60 p-3" aria-label="Bozza di risposta">
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-muted uppercase"><IconSparkle size={14} /> Bozza di risposta</span>
-              <button type="button" onClick={() => void askDraft()} disabled={draftBusy} className="text-xs font-semibold text-muted underline disabled:opacity-50">{draftBusy ? "Sto riscrivendo…" : "Rifai"}</button>
+              <button type="button" onClick={() => void askDraft()} disabled={draftBusy} className="-my-2 min-h-10 px-2 text-sm font-semibold text-muted underline disabled:opacity-50">{draftBusy ? "Sto riscrivendo…" : "Rifai"}</button>
             </div>
             <p className="mt-1.5 max-h-40 overflow-y-auto text-[15px] leading-snug whitespace-pre-wrap">{draft.body}</p>
             <div className="mt-2.5 flex flex-wrap gap-2">
@@ -382,6 +427,13 @@ export function ChatThread({
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-ink text-card"><IconPlay size={22} /></div>
                 )}
+                {p.preparing !== undefined ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-ink/70 px-1.5 text-card" data-testid="video-compressing">
+                    <span className="text-[11px] font-semibold">Riduco…</span>
+                    <span className="text-xs font-bold tabular">{Math.round(p.preparing * 100)}%</span>
+                    <div className="h-1 w-full rounded-full bg-white/30"><div className="h-1 rounded-full bg-white" style={{ width: `${Math.round(p.preparing * 100)}%` }} /></div>
+                  </div>
+                ) : null}
                 {sending ? (
                   <div className="absolute inset-x-1 bottom-1 h-1.5 rounded-full bg-white/60"><div className="h-1.5 rounded-full bg-accent" style={{ width: `${Math.round(p.progress * 100)}%` }} /></div>
                 ) : (
@@ -391,6 +443,7 @@ export function ChatThread({
             ))}
           </div>
         ) : null}
+        {preparingVideo ? <p className="mb-2 text-xs text-muted" aria-live="polite">Riduco il video per mandarlo più leggero e veloce: tieni aperta l&apos;app qualche secondo.</p> : null}
         {voice.recording ? (
           <div className="flex items-center gap-2" aria-label="Registrazione del vocale">
             <button type="button" aria-label="Annulla il vocale" onClick={() => void voice.stop(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sand text-ink"><IconX size={20} /></button>
@@ -433,7 +486,7 @@ export function ChatThread({
               <MicIcon />
             </button>
           ) : (
-            <button type="button" aria-label="Invia" onClick={() => void send()} disabled={sending || (!text.trim() && pending.length === 0)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white disabled:opacity-40">
+            <button type="button" aria-label="Invia" onClick={() => void send()} disabled={sending || preparingVideo || (!text.trim() && pending.length === 0)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white disabled:opacity-40">
               {sending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <IconSend size={19} />}
             </button>
           )}

@@ -973,3 +973,24 @@ describe("timer dell'allenamento", async () => {
     expect(fmtClock(0.2)).toBe("0:01");
   });
 });
+
+describe("video della chat", async () => {
+  const { targetSize, shouldCompress } = await import("../components/chat/compress-video");
+  const { videoExpired, CHAT_VIDEO_KEEP_DAYS } = await import("./chat-shared");
+  it("riduce a 720p sul lato corto, senza mai ingrandire, con numeri pari", () => {
+    expect(targetSize(1080, 1920)).toEqual({ width: 720, height: 1280 });
+    expect(targetSize(3840, 2160)).toEqual({ width: 1280, height: 720 });
+    expect(targetSize(640, 360)).toEqual({ width: 640, height: 360 });
+    expect(targetSize(1081, 1921).width % 2).toBe(0);
+  });
+  it("comprime i video grandi o non mp4", () => {
+    expect(shouldCompress(new File([new Uint8Array(10)], "a.mov", { type: "video/quicktime" }))).toBe(true);
+    expect(shouldCompress(new File([new Uint8Array(10)], "a.mp4", { type: "video/mp4" }))).toBe(false);
+  });
+  it("i video si cancellano dopo 6 mesi", () => {
+    const now = Date.parse("2026-10-12T12:00:00Z");
+    expect(videoExpired("2026-03-01T10:00:00Z", now)).toBe(true);
+    expect(videoExpired("2026-06-01T10:00:00Z", now)).toBe(false);
+    expect(CHAT_VIDEO_KEEP_DAYS).toBeGreaterThanOrEqual(180);
+  });
+});

@@ -35,7 +35,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <div className="text-[13px] text-muted">
-            <Link href="/staff/clienti" className="hover:underline">Clienti</Link> / scheda
+            <Link href="/staff/clienti" className="-my-2 inline-block py-2 pr-1 hover:underline">Clienti</Link> / scheda
           </div>
           <h1 className="mt-1.5 mb-3 text-[36px] leading-tight font-normal tracking-tight sm:text-[44px]">
             {client.first_name} {client.last_name}

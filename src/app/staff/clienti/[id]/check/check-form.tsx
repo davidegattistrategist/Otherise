@@ -5,6 +5,7 @@
  * circonferenze, test di forza con massimale stimato, test liberi e note.
  * I risultati si aggiornano mentre scrivi; il server li ricalcola al salvataggio.
  */
+import { DictateButton } from "@/components/dictate-button";
 import { useActionState, useMemo, useState } from "react";
 import { CIRCUMFERENCES, SKINFOLD_SITES, averagesOf, computeBodyComposition, formulaById, protocolSites, siteAverage, siteLabel, sumOf, type FormulaId, type Sex, type SkinfoldSite } from "@/lib/body/skinfolds";
 import { estimateOneRepMax, RPE_VALUES } from "@/lib/strength/e1rm";
@@ -219,7 +220,7 @@ export function CheckForm({
       </Card>
 
       <Card>
-        <Label htmlFor="notes_next_phase" hint="abitudini, andamento, cosa cambiare. Riappare nell'editor del programma">Note per la prossima fase</Label>
+        <div className="flex items-end justify-between gap-2"><Label htmlFor="notes_next_phase" hint="abitudini, andamento, cosa cambiare. Riappare nell'editor del programma">Note per la prossima fase</Label><DictateButton targetId="notes_next_phase" /></div>
         <Textarea id="notes_next_phase" name="notes_next_phase" rows={4} defaultValue={values.notes_next_phase} />
         <label className="mt-4 flex items-center gap-3 text-[15px]">
           <input type="checkbox" name="visible_to_client" defaultChecked={values.visible_to_client} className="h-5 w-5 accent-[#1b1a17]" />

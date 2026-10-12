@@ -125,6 +125,23 @@ test("previsione incassi: solo il titolare, con orizzonte 3/6/12 mesi", async ({
   await expect(coach.getByRole("heading", { name: "Previsione incassi" })).toHaveCount(0);
 });
 
+/**
+ * Senza trascrizione sul server (manca GROQ_API_KEY) la dettatura usa il
+ * riconoscimento del browser: lo simuliamo dicendo alla pagina che il server
+ * non trascrive. La dettatura normale (registra e trascrive) è in dettatura.spec.ts.
+ */
+/** Apre l'assistente AI (riprova se il tocco arriva prima che la pagina sia pronta). */
+async function openAssistant(page: Page) {
+  await expect(async () => {
+    await page.getByRole("button", { name: /Chiedi all'AI/ }).click({ timeout: 2000 });
+    await expect(page.locator("#ai-instruction")).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 30_000 });
+}
+
+async function noServerTranscription(page: Page) {
+  await page.route("**/api/trascrivi", (r) => (r.request().method() === "GET" ? r.fulfill({ json: { enabled: false } }) : r.continue()));
+}
+
 /** Finto riconoscimento vocale del browser: `mode` = "ok" trascrive, "muto" non trascrive mai. */
 function fakeSpeech(mode: "ok" | "muto") {
   return (m: string) => {
@@ -157,16 +174,15 @@ function fakeSpeech(mode: "ok" | "muto") {
   };
 }
 
-test("dettatura nell'assistente AI: si vede il testo mentre parli e il pulsante funziona", async ({ page }) => {
+test("dettatura del browser (senza trascrizione sul server): si vede il testo mentre parli", async ({ page }) => {
+  await noServerTranscription(page);
   await page.addInitScript(fakeSpeech("ok"), "ok");
   await login(page, "titolare@prova.local");
   const id = await openClient(page, "Esempio Giulia");
   await page.goto(`/staff/clienti/${id}/programma`);
-  await page.waitForLoadState("networkidle");
   await page.locator("a[href^='/staff/programmi/']").filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/programmi\//);
-  await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: /Chiedi all'AI/ }).click();
+  await openAssistant(page);
   await page.getByRole("button", { name: "Detta" }).click();
   await expect(page.locator("#ai-instruction")).toHaveValue("Passiamo a forza per sei settimane.");
   await expect(page.getByText("togli lo stacco…")).toBeVisible();
@@ -176,16 +192,15 @@ test("dettatura nell'assistente AI: si vede il testo mentre parli e il pulsante 
   await expect(page.locator("#ai-instruction")).toHaveValue("Passiamo a forza per sei settimane. togli lo stacco");
 });
 
-test("dettatura che non trascrive: si ferma da sola e spiega cosa fare", async ({ page }) => {
+test("dettatura del browser che non trascrive: si ferma da sola e spiega cosa fare", async ({ page }) => {
+  await noServerTranscription(page);
   await page.addInitScript(fakeSpeech("muto"), "muto");
   await login(page, "titolare@prova.local");
   const id = await openClient(page, "Esempio Giulia");
   await page.goto(`/staff/clienti/${id}/programma`);
-  await page.waitForLoadState("networkidle");
   await page.locator("a[href^='/staff/programmi/']").filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/programmi\//);
-  await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: /Chiedi all'AI/ }).click();
+  await openAssistant(page);
   await page.getByRole("button", { name: "Detta" }).click();
   await expect(page.getByText(/non sta trascrivendo su questo dispositivo/)).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Detta" })).toBeVisible();
@@ -194,18 +209,17 @@ test("dettatura che non trascrive: si ferma da sola e spiega cosa fare", async (
   await expect(page.getByRole("button", { name: "Prepara la bozza" })).toBeEnabled();
 });
 
-test("su iPhone niente pulsante Detta: si usa il microfono della tastiera", async ({ browser }) => {
+test("su iPhone senza trascrizione sul server: niente Detta, si usa il microfono della tastiera", async ({ browser }) => {
   const ctx = await browser.newContext({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", viewport: { width: 390, height: 844 }, storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }] }] } });
   const page = await ctx.newPage();
+  await noServerTranscription(page);
   await page.addInitScript(fakeSpeech("ok"), "ok");
   await login(page, "titolare@prova.local");
   const id = await openClient(page, "Esempio Giulia");
   await page.goto(`/staff/clienti/${id}/programma`);
-  await page.waitForLoadState("networkidle");
   await page.locator("a[href^='/staff/programmi/']").filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/programmi\//);
-  await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: /Chiedi all'AI/ }).click();
+  await openAssistant(page);
   await expect(page.getByText("Per dettare tocca la casella e usa il microfono della tastiera.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Detta" })).toHaveCount(0);
   await ctx.close();

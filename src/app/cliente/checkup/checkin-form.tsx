@@ -1,5 +1,6 @@
 "use client";
 
+import { DictateButton } from "@/components/dictate-button";
 import { useActionState, useState } from "react";
 import { CHECKIN_QUESTIONS, SCORE_LABELS } from "@/lib/checkin";
 import { ActionMessage, SubmitButton } from "@/components/form-bits";
@@ -41,11 +42,11 @@ export function CheckinForm({ values, coach }: { values?: Values; coach: string 
         </fieldset>
       ))}
       <div>
-        <Label htmlFor="issues" hint="facoltativo">Dolori, fastidi o imprevisti</Label>
+        <div className="flex items-end justify-between gap-2"><Label htmlFor="issues" hint="facoltativo">Dolori, fastidi o imprevisti</Label><DictateButton targetId="issues" /></div>
         <Textarea id="issues" name="issues" rows={2} defaultValue={values?.issues ?? ""} placeholder="Es. fastidio alla spalla destra nelle distensioni" />
       </div>
       <div>
-        <Label htmlFor="request" hint="facoltativo">Vuoi chiedere qualcosa a {coach}?</Label>
+        <div className="flex items-end justify-between gap-2"><Label htmlFor="request" hint="facoltativo">Vuoi chiedere qualcosa a {coach}?</Label><DictateButton targetId="request" /></div>
         <Textarea id="request" name="request" rows={2} defaultValue={values?.request ?? ""} placeholder="Se scrivi qui, ricevi una risposta" />
       </div>
       {missing.length ? <p role="alert" className="rounded-xl bg-accent-soft px-3 py-2 text-sm">{missing.length === 1 ? "Manca la risposta a una domanda." : `Mancano le risposte a ${missing.length} domande.`}</p> : null}

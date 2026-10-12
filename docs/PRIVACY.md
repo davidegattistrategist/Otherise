@@ -28,6 +28,7 @@ Questo file mette insieme tutto quello che serve sulla privacy (GDPR) per usare 
   Le richieste ti arrivano come notifica (ed email). Di solito si ha **un mese** per rispondere.
 - **Copia dei dati**: scheda del cliente → Scheda → "Scarica tutti i suoi dati" (solo titolare). Scarica un file con tutto quello che l'app conserva su quel cliente.
 - **Cancellazione**: scheda del cliente → Scheda → "Elimina per sempre". Cancella dati, account, foto e video della chat.
+- **Video della chat**: si cancellano da soli dopo 6 mesi (lo dice anche l'informativa); il messaggio resta con "Video scaduto".
 - **Conservazione**: quando un ex cliente ha finito il percorso da 5 anni, l'app ti avvisa che è il momento di cancellarne i dati sulla salute, come scritto nell'informativa.
 - **Sicurezza**:
   - si entra solo su invito;
@@ -77,7 +78,7 @@ Il registro è obbligatorio quando si trattano dati relativi alla salute in modo
 | Basi giuridiche | Contratto (art. 6.1.b); consenso esplicito per i dati relativi alla salute (art. 9.2.a); consenso facoltativo per la pubblicazione sui social (art. 6.1.a); obbligo legale per i documenti fiscali (art. 6.1.c); legittimo interesse per sicurezza, tutela dei diritti e email su servizi simili (art. 6.1.f e art. 130 c.4 Codice privacy) |
 | Destinatari | Collaboratori autorizzati; responsabili: Supabase, Vercel, Anthropic, Resend; commercialista (solo dati amministrativi) |
 | Trasferimenti extra UE | USA (Vercel, Anthropic, Resend, Supabase Inc.), con clausole contrattuali standard o Data Privacy Framework |
-| Conservazione | Dati sulla salute, foto e video: durata del percorso + 5 anni; anagrafica e contratto: 10 anni; documenti fiscali 10 anni (fuori dall'app); contenuti social: fino a revoca |
+| Conservazione | Dati sulla salute, foto e video: durata del percorso + 5 anni (i video della chat si cancellano da soli dopo 6 mesi); anagrafica e contratto: 10 anni; documenti fiscali 10 anni (fuori dall'app); contenuti social: fino a revoca |
 | Misure di sicurezza | Accesso solo su invito con password personale; permessi a livello di database; cifratura delle connessioni; archivio privato per i file; pseudonimizzazione verso l'AI; backup giornalieri (Supabase Pro); revoca immediata degli accessi dei collaboratori |
 
 ## Se succede qualcosa (violazione dei dati)

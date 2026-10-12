@@ -67,7 +67,7 @@ export function CheckinReplyDraft({
         <div className="rounded-2xl border border-sand-deep bg-sand/60 p-3" aria-label="Bozza di risposta">
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-muted uppercase"><IconSparkle size={14} /> Bozza di risposta</span>
-            <button type="button" onClick={() => void ask()} disabled={busy} className="text-xs font-semibold text-muted underline disabled:opacity-50">{busy ? "Sto riscrivendo…" : "Rifai"}</button>
+            <button type="button" onClick={() => void ask()} disabled={busy} className="-my-2 min-h-10 px-2 text-sm font-semibold text-muted underline disabled:opacity-50">{busy ? "Sto riscrivendo…" : "Rifai"}</button>
           </div>
           <p className="mt-1.5 text-[15px] leading-snug whitespace-pre-wrap">{draft.body}</p>
           <div className="mt-2.5 flex flex-wrap gap-2">

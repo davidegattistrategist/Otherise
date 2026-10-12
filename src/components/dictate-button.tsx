@@ -1,11 +1,10 @@
 "use client";
 
 /**
- * Pulsante "Detta": scrive nella casella di testo quello che dici al
- * microfono (riconoscimento vocale del browser). Mentre parli mostra il testo
- * provvisorio; se il microfono non trascrive o dà errore si ferma e lo dice.
- * Su iPhone/iPad e nei browser che non lo supportano il pulsante non compare:
- * resta la dettatura della tastiera del telefono, che funziona sempre.
+ * Pulsante "Detta": registri la voce (un tocco per iniziare, uno per finire)
+ * e il testo trascritto finisce in fondo alla casella. Funziona su iPhone,
+ * Android e computer (vedi use-dictation.ts). Se la trascrizione non è
+ * attiva e il browser non sa riconoscere la voce, il pulsante non compare.
  */
 import { type RefObject } from "react";
 import { IconMic } from "./icons";
@@ -19,10 +18,24 @@ function appendText(el: HTMLTextAreaElement | HTMLInputElement | null | undefine
   el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-export function DictateButton({ target, onText, className }: { target?: RefObject<HTMLTextAreaElement | HTMLInputElement | null>; onText?: (t: string) => void; className?: string }) {
-  const { supported, listening, interim, error, toggle } = useDictation((text) => {
-    if (onText) onText(text);
-    appendText(target?.current, text);
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+export function DictateButton({
+  target,
+  targetId,
+  onText,
+  className,
+}: {
+  /** La casella dove scrivere (oppure il suo id, comodo nelle pagine del server) */
+  target?: RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
+  targetId?: string;
+  /** Per le caselle gestite da React (value + onChange): riceve il testo da aggiungere */
+  onText?: (t: string) => void;
+  className?: string;
+}) {
+  const { supported, listening, transcribing, seconds, mode, interim, error, toggle } = useDictation((text) => {
+    if (onText) return onText(text);
+    appendText(target?.current ?? (targetId ? (document.getElementById(targetId) as HTMLTextAreaElement | HTMLInputElement | null) : null), text);
   });
   if (!supported) return null;
 
@@ -31,14 +44,16 @@ export function DictateButton({ target, onText, className }: { target?: RefObjec
       <button
         type="button"
         onClick={toggle}
+        disabled={transcribing}
         aria-pressed={listening}
         className={cx(
-          "mb-1.5 inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold",
+          "mb-1.5 inline-flex min-h-10 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold disabled:opacity-70",
           listening ? "bg-accent text-white" : "bg-sand-deep/70 text-ink hover:bg-sand-deep",
           className,
         )}
       >
-        <IconMic size={16} /> {listening ? "Sto ascoltando… tocca per finire" : "Detta"}
+        <IconMic size={16} />{" "}
+        {transcribing ? "Trascrivo…" : listening ? (mode === "server" ? `${clock(seconds)} · tocca per finire` : "Sto ascoltando… tocca per finire") : "Detta"}
       </button>
       {listening && interim ? <span className="max-w-xs text-right text-xs text-muted italic" aria-live="polite">{interim}…</span> : null}
       {error ? <span role="status" className="max-w-xs text-right text-xs text-accent">{error}</span> : null}

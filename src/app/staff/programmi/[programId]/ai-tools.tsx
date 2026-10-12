@@ -92,7 +92,7 @@ export function AiPanel({
   // risposte già date in questo giro (es. il tempo per seduta), da rimandare con le successive
   const [asked, setAsked] = useState<Array<{ question: string; answer: string }>>([]);
   const dictation = useDictation((text) => setInstruction((v) => (v ? `${v.trimEnd()} ${text}` : text)));
-  const { listening, interim } = dictation;
+  const { listening, interim, transcribing } = dictation;
   // tempo trascorso mentre l'AI lavora, così si vede che non è bloccata
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
@@ -106,14 +106,20 @@ export function AiPanel({
   }, [busy]);
 
   /** Il testo da mandare: quello scritto più quello che si sta ancora dettando. */
-  const fullInstruction = () => (listening && interim ? `${instruction.trimEnd()} ${interim}`.trim() : instruction.trim());
+  const fullInstruction = (extra = "") => {
+    const tail = extra || (listening && interim ? interim : "");
+    return tail ? `${instruction.trimEnd()} ${tail}`.trim() : instruction.trim();
+  };
 
-  const request = () => {
+  /** Se stai ancora dettando, finisce la registrazione e aspetta il testo. */
+  const finishDictation = async () => (listening ? ((await dictation.stop()) ?? "") : "");
+
+  const request = (extra = "") => {
     const title = (document.getElementById("program-title") as HTMLInputElement | null)?.value ?? "";
     const description = (document.getElementById("desc") as HTMLTextAreaElement | null)?.value ?? "";
     return {
       programId,
-      instruction: fullInstruction(),
+      instruction: fullInstruction(extra),
       current: { title, description, weeks, content: currentContent },
       images: images.map(({ mediaType, data }) => ({ mediaType, data })),
     };
@@ -144,16 +150,20 @@ export function AiPanel({
    * prima qualche domanda (spesso nessuna). Le risposte già date restano.
    */
   const run = async () => {
-    if (listening) dictation.stop();
     setBusy(true);
     setError(null);
     setSummary(null);
     try {
+      const extra = await finishDictation();
+      if (fullInstruction(extra).length < 3) {
+        setError("Scrivi o detta cosa vuoi per questa fase, poi riprova.");
+        return;
+      }
       if (questions === null) {
-        handle(await post<DraftRes>({ mode: "questions", ...request() }), []);
+        handle(await post<DraftRes>({ mode: "questions", ...request(extra) }), []);
       } else {
         const qa = [...asked, ...questions.map((q, i) => ({ question: q.question, answer: answers[i]?.trim() ?? "" }))];
-        handle(await post<DraftRes>({ mode: "revise", ...request(), answers: qa }), qa);
+        handle(await post<DraftRes>({ mode: "revise", ...request(extra), answers: qa }), qa);
       }
     } catch (e) {
       setError(friendlyError(e));
@@ -163,11 +173,11 @@ export function AiPanel({
   };
 
   const skipQuestions = async () => {
-    if (listening) dictation.stop();
     setBusy(true);
     setError(null);
     try {
-      handle(await post<DraftRes>({ mode: "revise", ...request(), answers: asked, skip: true }), asked);
+      const extra = await finishDictation();
+      handle(await post<DraftRes>({ mode: "revise", ...request(extra), answers: asked, skip: true }), asked);
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -225,13 +235,18 @@ export function AiPanel({
           className="!border-line-dark !bg-[#26241f] !text-card placeholder:!text-muted-dark"
         />
         {listening ? (
-          <p className="-mt-1 text-sm text-muted-dark italic" aria-live="polite">{interim ? `${interim}…` : "Parla pure: il testo compare qui mentre lo trascrivo."}</p>
+          <p className="-mt-1 text-sm text-muted-dark italic" aria-live="polite">
+            {dictation.mode === "server" ? "Parla pure: quando tocchi di nuovo il pulsante, il testo compare qui. Puoi anche toccare subito \"Prepara la bozza\"." : interim ? `${interim}…` : "Parla pure: il testo compare qui mentre lo trascrivo."}
+          </p>
+        ) : transcribing ? (
+          <p className="-mt-1 text-sm text-muted-dark italic" aria-live="polite">Sto trascrivendo quello che hai detto…</p>
         ) : null}
         {dictation.error ? <Notice tone="error">{dictation.error}</Notice> : null}
         <div className="flex flex-wrap items-center gap-2.5">
           {dictation.supported ? (
-            <button type="button" onClick={dictation.toggle} className={cx("inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold", listening ? "bg-accent text-ink" : "bg-line-dark text-card")}>
-              <IconMic size={18} /> {listening ? "Sto ascoltando… tocca per fermare" : "Detta"}
+            <button type="button" onClick={dictation.toggle} disabled={transcribing || busy} className={cx("inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold disabled:opacity-70", listening ? "bg-accent text-ink" : "bg-line-dark text-card")}>
+              <IconMic size={18} />{" "}
+              {transcribing ? "Trascrivo…" : listening ? (dictation.mode === "server" ? `${Math.floor(dictation.seconds / 60)}:${String(Math.floor(dictation.seconds % 60)).padStart(2, "0")} · tocca per finire` : "Sto ascoltando… tocca per fermare") : "Detta"}
             </button>
           ) : (
             <span className="text-sm text-muted-dark">Per dettare tocca la casella e usa il microfono della tastiera.</span>
@@ -308,7 +323,7 @@ export function AiPanel({
           <button
             type="button"
             onClick={run}
-            disabled={busy || disabled || fullInstruction().length < 3}
+            disabled={busy || transcribing || disabled || (fullInstruction().length < 3 && !listening)}
             className="inline-flex min-h-12 items-center gap-3 rounded-full bg-card py-1.5 pr-5 pl-1.5 font-semibold text-ink disabled:opacity-50"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent"><IconSparkle size={18} /></span>

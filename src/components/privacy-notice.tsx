@@ -108,6 +108,7 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
       <H>10. Per quanto tempo li conserviamo</H>
       <ul>
         <li><strong>Dati relativi alla salute, foto e video del servizio</strong>: per tutta la durata del percorso e per <strong>5 anni</strong> dalla sua fine, per tutelarci in caso di contestazioni e per permetterti di riprendere da dove eri rimasto; poi li cancelliamo o li rendiamo anonimi. Se revochi il consenso smettiamo di raccoglierli e, se ce lo chiedi, cancelliamo quelli raccolti.</li>
+        <li><strong>Video mandati in chat</strong>: si cancellano da soli dopo 6 mesi (resta solo il messaggio).</li>
         <li><strong>Dati anagrafici e del contratto</strong>: per 10 anni dalla fine del rapporto (prescrizione ordinaria, art. 2946 del codice civile).</li>
         <li><strong>Dati contabili e fiscali</strong> (ricevute, fatture, registri): per 10 anni dall&apos;ultima registrazione, come previsto dalla legge (art. 2220 del codice civile).</li>
         <li><strong>Foto e video pubblicati sui social</strong> (punto 5): fino a quando revochi il permesso.</li>

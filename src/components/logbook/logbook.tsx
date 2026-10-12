@@ -6,6 +6,7 @@ import { blockHeading, itemLabel, type ProgramDay } from "@/lib/program/types";
 import { logPlan, restLabel, restSeconds, type LogPlan } from "@/lib/program/logbook";
 import { blockTimer, emomItemTimer, fmtClock, restTimerFor, timedSetTimer } from "@/lib/program/timer";
 import { TimerBar, useWorkoutTimer } from "./workout-timer";
+import { DictateButton } from "@/components/dictate-button";
 import type { SetLog } from "@/lib/program/prescription";
 import { saveWorkout } from "./actions";
 import { cx, fmtNum } from "@/components/ui";
@@ -570,7 +571,18 @@ export function Logbook(props: LogbookProps) {
       })}
 
       <section className="flex flex-col gap-3 rounded-[24px] bg-card p-4 sm:p-5">
-        <label htmlFor="session-notes" className="font-semibold">Com&apos;è andata in generale?</label>
+        <div className="flex items-end justify-between gap-2">
+          <label htmlFor="session-notes" className="mb-1.5 font-semibold">Com&apos;è andata in generale?</label>
+          <DictateButton
+            onText={(t) => {
+              const v = latest.current.notes;
+              const next = v ? `${v.trimEnd()} ${t}` : t;
+              setNotes(next);
+              latest.current = { ...latest.current, notes: next };
+              touch();
+            }}
+          />
+        </div>
         <textarea
           id="session-notes"
           rows={3}
@@ -585,7 +597,18 @@ export function Logbook(props: LogbookProps) {
         />
         {showDiscomfort ? (
           <div className="flex flex-col gap-2 rounded-2xl bg-accent-soft p-3">
-            <label htmlFor="session-discomfort" className="text-[15px] font-semibold">Dolore o fastidio</label>
+            <div className="flex items-end justify-between gap-2">
+              <label htmlFor="session-discomfort" className="mb-1.5 text-[15px] font-semibold">Dolore o fastidio</label>
+              <DictateButton
+                onText={(t) => {
+                  const v = latest.current.discomfort;
+                  const next = v ? `${v.trimEnd()} ${t}` : t;
+                  setDiscomfort(next);
+                  latest.current = { ...latest.current, discomfort: next };
+                  touch();
+                }}
+              />
+            </div>
             <textarea
               id="session-discomfort"
               rows={2}

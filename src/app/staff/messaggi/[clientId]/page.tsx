@@ -44,7 +44,7 @@ export default async function StaffChatPage({ params, searchParams }: { params: 
       {promemoria ? <ClearParams names={["promemoria"]} /> : null}
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <Link href="/staff/messaggi" className="flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink"><IconArrowLeft size={16} /> Messaggi</Link>
+          <Link href="/staff/messaggi" className="flex min-h-10 items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink"><IconArrowLeft size={16} /> Messaggi</Link>
           <h1 className="mt-1 truncate text-[28px] leading-tight font-normal tracking-tight">{client.first_name} {client.last_name}</h1>
         </div>
         <Link href={`/staff/clienti/${clientId}`} className="shrink-0 text-sm font-semibold underline">Scheda</Link>

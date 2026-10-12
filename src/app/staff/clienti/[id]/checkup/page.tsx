@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DictateButton } from "@/components/dictate-button";
 import { requireStaff } from "@/lib/auth";
 import { getStaffClient } from "@/lib/data/client";
 import { createClient } from "@/lib/supabase/server";
@@ -88,7 +89,7 @@ export default async function CheckupPage({ params }: { params: Promise<{ id: st
               {c.issues ? <p className="text-[15px] text-ink-soft"><span className="font-semibold">Problemi:</span> {c.issues}</p> : null}
               {c.request ? <p className="rounded-2xl bg-accent-soft px-4 py-3 text-[15px]"><span className="font-semibold">Richiesta:</span> {c.request}</p> : null}
               <form action={reviewCheckin.bind(null, id, c.id)} className="flex flex-col gap-2">
-                <label htmlFor={`r-${c.id}`} className="text-sm font-semibold">Risposta al cliente <span className="font-normal text-muted">(facoltativa, la vede nell&apos;app)</span></label>
+                <div className="flex items-end justify-between gap-2"><label htmlFor={`r-${c.id}`} className="text-sm font-semibold">Risposta al cliente <span className="font-normal text-muted">(facoltativa, la vede nell&apos;app)</span></label><DictateButton targetId={`r-${c.id}`} /></div>
                 {draftsOn && !c.coach_reply ? (
                   <CheckinReplyDraft clientId={id} checkinId={c.id} targetId={`r-${c.id}`} initial={draftOf.get(c.id) ?? null} canRequest={Boolean(c.request || c.issues)} />
                 ) : null}

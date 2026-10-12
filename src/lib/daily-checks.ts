@@ -10,6 +10,7 @@ import { siteUrl } from "./site";
 import { billingStatus, clientFacingStatus, type PlanKind } from "./billing";
 import { checkinWeekFor } from "./checkin";
 import { programEndDate } from "./program/schedule";
+import { CHAT_BUCKET, CHAT_VIDEO_KEEP_DAYS, type ChatAttachment } from "./chat-shared";
 
 export async function runDailyChecks(today = todayISO()) {
   const admin = createAdminClient();
@@ -185,11 +186,43 @@ export async function runDailyChecks(today = todayISO()) {
   }
 
   await notify(out);
+  const videosRemoved = await removeOldChatVideos(today);
   const digests = await sendStaffDigests(today);
   const emailed = (await deliverPendingEmails()) + digests;
   // pulizia: notifiche lette più vecchie di 6 mesi
   await admin.from("notifications").delete().lt("created_at", `${addDays(today, -180)}T00:00:00Z`).not("read_at", "is", null);
-  return { ok: true, today, notifications: out.length, emailed };
+  return { ok: true, today, notifications: out.length, emailed, videosRemoved };
+}
+
+/**
+ * I video della chat più vecchi di 6 mesi si cancellano dallo spazio file
+ * (deciso dal titolare per non riempire lo spazio). Il messaggio resta: al
+ * posto del video compare "Video scaduto". Foto e vocali restano.
+ */
+export async function removeOldChatVideos(today: string): Promise<number> {
+  const admin = createAdminClient();
+  const cutoff = `${addDays(today, -CHAT_VIDEO_KEEP_DAYS)}T00:00:00Z`;
+  const { data, error } = await admin
+    .from("messages")
+    .select("attachments")
+    .lt("created_at", cutoff)
+    .is("deleted_at", null)
+    // stringa JSON: con un array supabase-js scriverebbe la sintassi degli array di Postgres
+    .contains("attachments", JSON.stringify([{ kind: "video" }]))
+    .limit(2000);
+  if (error) {
+    console.error("pulizia video", error);
+    return 0;
+  }
+  const paths = (data ?? []).flatMap((m) => ((m.attachments as ChatAttachment[] | null) ?? []).filter((a) => a.kind === "video").map((a) => a.path));
+  if (!paths.length) return 0;
+  // remove restituisce solo i file che c'erano davvero: quelli già cancellati non contano
+  let removed = 0;
+  for (let i = 0; i < paths.length; i += 100) {
+    const { data: gone } = await admin.storage.from(CHAT_BUCKET).remove(paths.slice(i, i + 100));
+    removed += gone?.length ?? 0;
+  }
+  return removed;
 }
 
 /**

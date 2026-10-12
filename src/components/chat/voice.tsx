@@ -22,7 +22,7 @@ export function voiceSupported() {
   return typeof window !== "undefined" && typeof MediaRecorder !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);
 }
 
-export function useVoiceRecorder(onLimit: () => void) {
+export function useVoiceRecorder(onLimit: () => void, maxSeconds = MAX_VOICE_SECONDS) {
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const rec = useRef<MediaRecorder | null>(null);
@@ -47,10 +47,10 @@ export function useVoiceRecorder(onLimit: () => void) {
     const id = setInterval(() => {
       const s = (Date.now() - started.current) / 1000;
       setSeconds(s);
-      if (s >= MAX_VOICE_SECONDS) limitRef.current();
+      if (s >= maxSeconds) limitRef.current();
     }, 250);
     return () => clearInterval(id);
-  }, [recording]);
+  }, [recording, maxSeconds]);
 
   useEffect(() => () => stream.current?.getTracks().forEach((t) => t.stop()), []);
 
@@ -68,14 +68,14 @@ export function useVoiceRecorder(onLimit: () => void) {
       const cb = done.current;
       done.current = null;
       cleanup();
-      cb?.(blob.size ? { blob, type: t, seconds: Math.min(secs, MAX_VOICE_SECONDS) } : null);
+      cb?.(blob.size ? { blob, type: t, seconds: Math.min(secs, maxSeconds) } : null);
     };
     rec.current = r;
     started.current = Date.now();
     setSeconds(0);
     r.start(1000);
     setRecording(true);
-  }, [cleanup]);
+  }, [cleanup, maxSeconds]);
 
   /** Ferma e restituisce la registrazione (null se annullata o vuota). */
   const stop = useCallback((keep: boolean) => {

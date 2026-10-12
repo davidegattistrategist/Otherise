@@ -48,7 +48,7 @@ Da quel momento il codice è tuo. Le modifiche le fa Claude su tua richiesta (ve
    - Database password: generane una e salvala nelle note
    - Region: **Central EU (Frankfurt)** — i dati restano in Europa
    - **Create new project** e aspetta un paio di minuti.
-3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Nella cartella `supabase/migrations/` del tuo GitHub ci sono 12 file `.sql` (oggi; con gli aggiornamenti ne arriveranno altri): vanno eseguiti **tutti, uno alla volta, in ordine di nome** (il primo è `20261009120000_schema.sql`). Per ognuno: apri il file, premi il pulsante "Copy raw file", incolla tutto in una **New query** di Supabase e premi **Run** (se chiede conferma per una "destructive operation", conferma). Deve comparire "Success. No rows returned". Lo stesso script prepara anche lo spazio privato per le foto e i video della chat: in **Storage** deve comparire un contenitore chiamato `chat`.
+3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Nella cartella `supabase/migrations/` del tuo GitHub ci sono 14 file `.sql` (oggi; con gli aggiornamenti ne arriveranno altri): vanno eseguiti **tutti, uno alla volta, in ordine di nome** (il primo è `20261009120000_schema.sql`). Per ognuno: apri il file, premi il pulsante "Copy raw file", incolla tutto in una **New query** di Supabase e premi **Run** (se chiede conferma per una "destructive operation", conferma). Deve comparire "Success. No rows returned". Lo stesso script prepara anche lo spazio privato per le foto e i video della chat: in **Storage** deve comparire un contenitore chiamato `chat`.
 4. **Chiudi le iscrizioni libere** (nell'app si entra solo su invito): **Authentication → Sign In / Providers** → disattiva **Allow new users to sign up** → Save.
 5. **Indirizzi dell'app**: **Authentication → URL Configuration**
    - Site URL: `https://app.tuodominio.it` (l'indirizzo che userai; se non hai ancora il dominio metti per ora quello che ti darà Vercel al passo 5 e cambialo dopo)
@@ -106,7 +106,7 @@ Senza questo passo l'app funziona lo stesso, ma inviti e avvisi via email parton
 | `NEXT_PUBLIC_SITE_URL` | `https://app.tuodominio.it` (senza `/` finale) |
 | `ANTHROPIC_API_KEY` | chiave di Anthropic |
 | `RESEND_API_KEY` | chiave di Resend |
-| `GROQ_API_KEY` | chiave di Groq, per la trascrizione dei vocali (vedi sotto) |
+| `GROQ_API_KEY` | chiave di Groq, per la dettatura ("Detta") e la trascrizione dei vocali (vedi sotto) |
 | `EMAIL_FROM` | `Nome Attività <avvisi@tuodominio.it>` |
 | `CRON_SECRET` | una frase lunga a caso, es. 40 lettere e numeri inventati |
 
@@ -115,7 +115,7 @@ Senza questo passo l'app funziona lo stesso, ma inviti e avvisi via email parton
    - Tutte le altre (chiave secret di Supabase, Anthropic, Resend, Groq, `CRON_SECRET`) → **Secret**.
    - Copia le chiavi con il pulsante di copia accanto, non selezionando il testo: la chiave a schermo è accorciata con i puntini.
 
-   **Groq (trascrizione dei vocali)**: crea un account gratuito su console.groq.com, poi API Keys → Create API Key e copia la chiave. Costa circa 0,04 $ per ora di audio (mille vocali da un minuto ≈ 0,60 €) e non usa l'assistente AI. Senza questa chiave i vocali funzionano lo stesso, solo senza trascrizione.
+   **Groq (dettatura e trascrizione dei vocali, consigliato)**: crea un account gratuito su console.groq.com, poi API Keys → Create API Key e copia la chiave. Costa circa 0,04 $ per ora di audio (mille vocali da un minuto ≈ 0,60 €) e non usa l'assistente AI. Serve a due cose: il pulsante **"Detta"** (note delle sessioni, check, assistente AI, check-up e logbook del cliente: il telefono registra e Groq trascrive, così funziona uguale su iPhone e Android) e la trascrizione dei vocali in chat. Senza questa chiave i vocali funzionano senza trascrizione e "Detta" resta solo dove il browser sa riconoscere la voce (non su iPhone, dove si usa il microfono della tastiera).
 
    Facoltative: `ANTHROPIC_MODEL` se un giorno vuoi cambiare il modello dell'assistente (senza, usa quello predefinito); `NEXT_PUBLIC_CHAT_MAX_VIDEO_MB` se con Supabase Pro alzi il limite dei file (vedi sotto).
 
@@ -153,6 +153,8 @@ Per importare le vecchie schede: apri la scheda Google del cliente, scegli la sc
 ## 8. Chat: foto e video
 
 - I video della chat possono pesare al massimo 50 MB (circa 30–60 secondi girati col telefono): è il limite del piano gratuito di Supabase. Con il piano Pro puoi alzarlo in **Storage → Settings → Upload file size limit** e nel contenitore `chat` (**Storage → chat → Edit bucket**), poi su Vercel aggiungi `NEXT_PUBLIC_CHAT_MAX_VIDEO_MB` con il nuovo valore (es. `200`) e fai Redeploy.
+- **I video si riducono da soli prima dell'invio, come su WhatsApp**: il telefono li porta a 720p (circa 13–15 MB al minuto invece di 60–100), in un formato che si apre su iPhone, Android e computer. Con il limite di 50 MB si mandano quindi video di 3 minuti abbondanti. Se il telefono è troppo vecchio per ridurli, parte l'originale (se sta nel limite).
+- **I video più vecchi di 6 mesi si cancellano da soli** (controllo di ogni mattina), per non riempire lo spazio: il messaggio resta, al posto del video compare "Video scaduto". Foto e vocali restano. Per cambiare la durata: `CHAT_VIDEO_KEEP_DAYS` in `src/lib/chat-shared.ts`.
 - Le foto vengono ridotte automaticamente prima dell'invio, quindi occupano poco spazio. I messaggi vocali si registrano direttamente nella chat; con la chiave di Groq (passo 5) arrivano anche trascritti.
 
 ## 9. Sicurezza e manutenzione
