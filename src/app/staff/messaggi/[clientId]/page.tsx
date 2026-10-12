@@ -10,6 +10,7 @@ import { aiEnabled } from "@/lib/ai/claude";
 import { readyChatDraft } from "@/lib/ai/reply";
 import { getExtraSessions, paymentReminderText, sessionsDueText } from "@/lib/data/billing";
 import { ClearParams } from "@/components/clear-param";
+import { markChatUnread } from "../actions";
 
 export const metadata: Metadata = { title: "Chat" };
 
@@ -22,6 +23,7 @@ export default async function StaffChatPage({ params, searchParams }: { params: 
   if (!client) notFound();
   const messages = await loadMessages(clientId, me);
   await markChatRead(supabase, me.id, clientId);
+  const fromClient = Boolean(client.user_id) && messages.some((m) => !m.mine && !m.deleted);
   const draftsOn = aiEnabled() && Boolean(client.user_id);
   const draft = draftsOn ? await readyChatDraft(supabase, clientId) : null;
   // messaggio già scritto nel campo di testo (lo controlli e premi invio)
@@ -47,7 +49,14 @@ export default async function StaffChatPage({ params, searchParams }: { params: 
           <Link href="/staff/messaggi" className="flex min-h-10 items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink"><IconArrowLeft size={16} /> Messaggi</Link>
           <h1 className="mt-1 truncate text-[28px] leading-tight font-normal tracking-tight">{client.first_name} {client.last_name}</h1>
         </div>
-        <Link href={`/staff/clienti/${clientId}`} className="shrink-0 text-sm font-semibold underline">Scheda</Link>
+        <div className="flex shrink-0 items-center gap-4">
+          {fromClient ? (
+            <form action={markChatUnread.bind(null, clientId)}>
+              <button type="submit" className="min-h-10 text-sm font-semibold text-muted underline hover:text-ink">Segna da leggere</button>
+            </form>
+          ) : null}
+          <Link href={`/staff/clienti/${clientId}`} className="text-sm font-semibold underline">Scheda</Link>
+        </div>
       </div>
       {!client.user_id ? <p className="text-sm text-muted">Non ha ancora l&apos;app: leggerà i messaggi quando entrerà. Invitalo dalla scheda.{aiEnabled() ? " Le bozze di risposta dell'AI arrivano quando ti scrive dall'app." : ""}</p> : null}
       <ChatThread

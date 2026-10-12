@@ -135,6 +135,33 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"check_photos": {
+                  Row: {
+                    "check_id": string,"client_id": string,"created_at": string,"created_by": string | null,"height": number | null,"id": string,"path": string,"size_bytes": number | null,"sort_order": number,"thumb_path": string,"width": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "check_id": string,"client_id": string,"created_at"?: string,"created_by"?: string | null,"height"?: number | null,"id"?: string,"path": string,"size_bytes"?: number | null,"sort_order"?: number,"thumb_path": string,"width"?: number | null
+                  }
+                  Update: {
+                    "check_id"?: string,"client_id"?: string,"created_at"?: string,"created_by"?: string | null,"height"?: number | null,"id"?: string,"path"?: string,"size_bytes"?: number | null,"sort_order"?: number,"thumb_path"?: string,"width"?: number | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "check_photos_check_id_fkey"
+      columns: ["check_id"]
+isOneToOne: false
+      referencedRelation: "checks"
+      referencedColumns: ["id"]
+    },
+                    {
+      foreignKeyName: "check_photos_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"checks": {
                   Row: {
                     "age_years": number | null,"body_fat_pct": number | null,"imported": boolean, "body_fat_formula": string | null,"check_date": string | null,"circumferences": NonNullable<Json>,"client_id": string,"created_at": string,"created_by": string | null,"fat_mass_kg": number | null,"id": string,"lean_mass_kg": number | null,"notes_next_phase": string,"order_hint": string | null,"sequence": number | null,"sex": string | null,"skinfold_sum_mm": number | null,"skinfolds": NonNullable<Json>,"strength_tests": NonNullable<Json>,"tests_text": string,"visible_to_client": boolean,"weight_kg": number | null
@@ -631,6 +658,11 @@ isOneToOne: false
 "my_checks":
 { Args: Record<PropertyKey, never>; Returns: {
               "body_fat_pct": number,"check_date": string,"circumferences": Json,"fat_mass_kg": number,"id": string,"lean_mass_kg": number,"strength_tests": Json,"tests_text": string,"weight_kg": number
+            }[]
+                           },
+"my_check_photos":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "check_date": string,"check_id": string,"created_at": string,"height": number,"id": string,"path": string,"sort_order": number,"thumb_path": string,"width": number
             }[]
                            },
 "my_client_id":

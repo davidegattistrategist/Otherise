@@ -34,6 +34,8 @@ type Pending = {
   height?: number;
   /** Peso del video prima della riduzione (per mostrare quanto si è risparmiato) */
   originalSize?: number;
+  /** Secondi impiegati per ridurlo */
+  reduceSeconds?: number;
   /** Il video sta già salendo mentre scrivi il messaggio */
   uploading?: boolean;
 };
@@ -202,6 +204,7 @@ export function ChatThread({
   const prepareVideo = async (id: string, original: File) => {
     const ctrl = new AbortController();
     compressing.current.set(id, ctrl);
+    const started = performance.now();
     const res = await compressVideo(original, (v) => setPending((cur) => cur.map((x) => (x.id === id ? { ...x, preparing: v } : x))), ctrl.signal);
     compressing.current.delete(id);
     if (ctrl.signal.aborted) return;
@@ -212,7 +215,7 @@ export function ChatThread({
       setPending((cur) => cur.filter((x) => x.id !== id));
       return;
     }
-    setPending((cur) => cur.map((x) => (x.id === id ? { ...x, file, preparing: undefined, width: res?.width, height: res?.height, originalSize: res ? original.size : undefined } : x)));
+    setPending((cur) => cur.map((x) => (x.id === id ? { ...x, file, preparing: undefined, width: res?.width, height: res?.height, originalSize: res ? original.size : undefined, reduceSeconds: res ? Math.max(1, Math.round((performance.now() - started) / 1000)) : undefined } : x)));
     preUpload({ id, file, kind: "video", width: res?.width, height: res?.height });
   };
 
@@ -262,7 +265,7 @@ export function ChatThread({
   const preparingVideo = pending.some((p) => p.preparing !== undefined);
   const uploadingVideo = pending.some((p) => p.uploading) || (sending && pending.some((p) => p.kind === "video"));
   const reduced = pending.find((p) => p.originalSize && p.preparing === undefined);
-  const videoNote = reduced ? `Video ridotto da ${mb(reduced.originalSize!)} a ${mb(reduced.file.size)}.` : "";
+  const videoNote = reduced ? `Video ridotto da ${mb(reduced.originalSize!)} a ${mb(reduced.file.size)}${reduced.reduceSeconds ? ` in ${reduced.reduceSeconds} s` : ""}.` : "";
   const busyWithMedia = preparingVideo || uploadingVideo;
 
   // mentre un video si riduce o sale: schermo acceso e avviso se provi a chiudere la pagina

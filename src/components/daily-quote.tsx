@@ -10,6 +10,7 @@ import "@fontsource-variable/fraunces/wght-italic.css";
 import { useEffect, useState } from "react";
 import type { Quote } from "@/lib/quotes";
 import { IconX } from "./icons";
+import { BrandName } from "@/components/brand";
 
 const KEY = "otherise:quote-day";
 const SERIF = { fontFamily: '"Fraunces Variable", Georgia, "Times New Roman", serif' } as const;
@@ -86,7 +87,7 @@ export function DailyQuote({ quote, today, dateLabel, brand, dedication, label =
             <div className="quote-in flex items-center justify-between gap-3" style={{ animationDelay: "0ms" }}>
               <span className="flex items-center gap-2.5 text-[15px] font-bold tracking-tight">
                 <span className="h-2.5 w-2.5 rounded-full bg-accent" aria-hidden="true" />
-                {brand}
+                <BrandName name={brand} />
               </span>
               <button type="button" onClick={() => setOpen(false)} aria-label="Chiudi" className="flex h-11 w-11 items-center justify-center rounded-full text-muted-dark hover:text-card">
                 <IconX size={20} />

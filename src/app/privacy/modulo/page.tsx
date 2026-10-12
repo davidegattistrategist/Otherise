@@ -3,6 +3,7 @@ import { getPrivacyOwner } from "@/lib/data/privacy";
 import { healthConsentText, instagramConsentText } from "@/lib/privacy";
 import { PrivacyNotice } from "@/components/privacy-notice";
 import { PrintButton } from "./print-button";
+import { BrandName } from "@/components/brand";
 
 export const metadata: Metadata = { title: "Modulo privacy da firmare" };
 
@@ -18,7 +19,7 @@ export default async function PrivacyFormPage() {
       </div>
       <div className="flex items-center gap-2.5">
         <span className="h-3 w-3 rounded-full bg-accent" aria-hidden="true" />
-        <span className="text-lg font-bold tracking-tight">{owner.businessName}</span>
+        <BrandName name={owner.businessName} className="text-lg font-bold tracking-tight" />
       </div>
       <h1 className="mt-3 text-2xl font-semibold">Informativa privacy e consenso al trattamento dei dati</h1>
       <div className="mt-4 text-[13.5px] [&_h2]:mt-4 [&_h2]:text-base">

@@ -305,3 +305,53 @@ test("cliente spot: basta il nome, sesso e durata delle fasi si decidono dopo", 
   await expect(page.locator("input[name=sf_coscia_0]")).toBeVisible();
   await expect(page.locator("input[name=sf_pettorale_0]")).toHaveCount(0);
 });
+
+test("nuovo pagamento da Pagamenti: cliente nuovo con abbonamento, poi rinnovo e un pagamento libero; storico completo", async ({ page }, info) => {
+  await login(page, "titolare@prova.local");
+  const name = `Pagatore${info.project.name}${Date.now() % 10000}`;
+  await page.goto("/staff/pagamenti");
+  await page.getByRole("link", { name: "Nuovo pagamento" }).click();
+  await page.waitForURL(/\/staff\/pagamenti\/nuovo/);
+
+  // cliente nuovo al volo + abbonamento trimestrale
+  await page.locator("#pay-search").fill(name);
+  await page.getByRole("button", { name: /Cliente nuovo/ }).click();
+  await expect(page.locator('input[name="new_first_name"]')).toHaveValue(name);
+  await page.getByRole("button", { name: /^Abbonamento/ }).click();
+  await page.getByRole("button", { name: "Trimestrale", exact: true }).click();
+  await page.locator('input[name="amount"]').fill("300");
+  await page.locator('select[name="method"]').selectOption("cash");
+  await page.locator('input[name="period_start"]').fill("2026-09-01");
+  await expect(page.locator('input[name="period_end"]')).toHaveValue("2026-11-30");
+  await expect(page.getByTestId("payment-summary")).toContainText("vale dal 1 settembre 2026 al 30 novembre 2026");
+  await page.getByRole("button", { name: "Salva il pagamento" }).click();
+  await expect(page.getByText("Pagamento registrato")).toBeVisible();
+  await expect(page.getByText(/a posto fino al 30 novembre 2026/)).toBeVisible();
+
+  // secondo pagamento: rinnovo proposto in automatico dal giorno dopo
+  await page.getByRole("button", { name: "Registra un altro pagamento" }).click();
+  await page.locator("#pay-search").fill(name);
+  await page.getByRole("button", { name: new RegExp(name) }).click();
+  await expect(page.getByRole("button", { name: /Rinnovo/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('input[name="period_start"]')).toHaveValue("2026-12-01");
+  await expect(page.locator('input[name="amount"]')).toHaveValue("300");
+  await page.getByRole("button", { name: "Salva il pagamento" }).click();
+  await expect(page.getByText(/a posto fino al 28 febbraio 2027/)).toBeVisible();
+
+  // pagamento libero
+  await page.getByRole("button", { name: "Registra un altro pagamento" }).click();
+  await page.locator("#pay-search").fill(name);
+  await page.getByRole("button", { name: new RegExp(name) }).click();
+  await page.getByRole("button", { name: /^Altro valutazione/ }).click();
+  await page.getByRole("button", { name: "Valutazione posturale", exact: true }).click();
+  await page.locator('input[name="amount"]').fill("50");
+  await expect(page.getByTestId("payment-summary")).toContainText("per: Valutazione posturale");
+  await page.getByRole("button", { name: "Salva il pagamento" }).click();
+  await expect(page.getByText("Pagamento registrato")).toBeVisible();
+
+  // tutti i pagamenti, in ordine
+  await page.goto("/staff/pagamenti");
+  await page.locator("#tutti-i-pagamenti summary").click();
+  await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name }).filter({ hasText: "Valutazione posturale" })).toHaveCount(1);
+  await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name }).filter({ hasText: "Trimestrale" })).toHaveCount(2);
+});

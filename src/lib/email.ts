@@ -41,28 +41,34 @@ export async function emailPrefs(): Promise<{ staff: boolean; clients: boolean }
 
 /** Al massimo un'email ogni tanto per persona: le novità arrivate nel frattempo vanno nella stessa. */
 export const EMAIL_EVERY_HOURS = 20;
+/** Chi ha le notifiche sul telefono riceve un'email solo per queste, se dopo questi giorni non le ha ancora viste. */
+export const PUSH_REMINDER_KINDS = ["chat", "program_published"];
+export const PUSH_REMINDER_DAYS = 3;
 
 /**
  * Email il meno possibile. Le notifiche restano sempre nell'app (e sul
- * telefono con le notifiche push); per email partono solo:
- * - a chi le può ricevere (Impostazioni → Avvisi per email);
- * - a chi NON ha attivato le notifiche sul telefono (con le push non servono);
- * - per le novità non ancora lette nell'app;
- * - al massimo una ogni EMAIL_EVERY_HOURS ore, con tutte le novità insieme.
- * Ultime 48 ore. Le notifiche che non partono si segnano comunque come gestite.
+ * telefono con le notifiche push).
+ * - Chi NON ha le notifiche sul telefono: le novità non ancora lette, al
+ *   massimo un'email ogni EMAIL_EVERY_HOURS ore con tutto insieme, e ogni
+ *   email consiglia di attivare le notifiche.
+ * - Chi HA le notifiche sul telefono: solo un messaggio in chat o il
+ *   programma nuovo ancora non visti dopo PUSH_REMINDER_DAYS giorni.
+ * - Solo a chi le può ricevere (Impostazioni → Avvisi per email).
+ * Le notifiche che non serviranno mai per email si segnano come gestite;
+ * quelle che potrebbero servire più avanti restano in attesa.
  */
 export async function deliverPendingEmails(): Promise<number> {
   if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) return 0;
   const admin = createAdminClient();
   const prefs = await emailPrefs();
-  const since = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
+  const since = new Date(Date.now() - (PUSH_REMINDER_DAYS + 4) * 24 * 3600 * 1000).toISOString();
   const { data: pending } = await admin
     .from("notifications")
-    .select("id, recipient_id, title, body, link, read_at, created_at")
+    .select("id, recipient_id, kind, title, body, link, read_at, created_at")
     .is("emailed_at", null)
     .gte("created_at", since)
     .order("created_at")
-    .limit(300);
+    .limit(500);
   if (!pending?.length) return 0;
   const ids = [...new Set(pending.map((n) => n.recipient_id))];
   const [{ data: profiles }, { data: subs }] = await Promise.all([
@@ -71,27 +77,34 @@ export async function deliverPendingEmails(): Promise<number> {
   ]);
   const withPush = new Set((subs ?? []).map((s) => s.user_id));
   const now = Date.now();
+  const due = now - PUSH_REMINDER_DAYS * 24 * 3600 * 1000;
   const handled: string[] = [];
   const base = await siteUrl();
   let sent = 0;
   for (const p of profiles ?? []) {
     const mine = pending.filter((n) => n.recipient_id === p.id);
     const allowed = p.role === "owner" || p.role === "coach" ? prefs.staff : prefs.clients;
-    if (!allowed || withPush.has(p.id) || !p.email) {
+    if (!allowed || !p.email) {
       handled.push(...mine.map((n) => n.id));
       continue;
     }
-    // già lette nell'app: niente email
+    // già viste nell'app: niente email
     handled.push(...mine.filter((n) => n.read_at).map((n) => n.id));
-    const unread = mine.filter((n) => !n.read_at);
-    if (!unread.length) continue;
+    let send = mine.filter((n) => !n.read_at);
+    const push = withPush.has(p.id);
+    if (push) {
+      // con le notifiche sul telefono: solo chat e programma, e solo se dopo qualche giorno non li ha visti
+      handled.push(...send.filter((n) => !PUSH_REMINDER_KINDS.includes(n.kind)).map((n) => n.id));
+      send = send.filter((n) => PUSH_REMINDER_KINDS.includes(n.kind) && new Date(n.created_at).getTime() <= due);
+    }
+    if (!send.length) continue;
     // ha già ricevuto un'email da poco: queste aspettano la prossima (o vengono lette nell'app)
     if (p.last_email_at && now - new Date(p.last_email_at).getTime() < EMAIL_EVERY_HOURS * 3600 * 1000) continue;
-    const { subject, text } = bundleEmail(unread, base);
+    const { subject, text } = bundleEmail(send, base, push ? "reminder" : "no-push");
     const ok = await sendEmail(p.email, subject, text);
     if (ok) {
       sent++;
-      handled.push(...unread.map((n) => n.id));
+      handled.push(...send.map((n) => n.id));
       await admin.from("profiles").update({ last_email_at: new Date().toISOString() }).eq("id", p.id);
     }
   }

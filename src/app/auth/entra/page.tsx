@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getPrivacyOwner } from "@/lib/data/privacy";
+import { BrandName } from "@/components/brand";
 
 export const metadata: Metadata = { title: "Entra nell'app" };
 
@@ -18,7 +19,7 @@ export default async function EnterPage({ searchParams }: { searchParams: Promis
     <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-6 py-10">
       <div className="flex items-center gap-2.5">
         <span className="h-3 w-3 rounded-full bg-accent" aria-hidden="true" />
-        <span className="text-lg font-bold tracking-tight">{owner.businessName}</span>
+        <BrandName name={owner.businessName} className="text-lg font-bold tracking-tight" />
       </div>
       <div>
         <h1 className="text-[32px] leading-tight font-normal tracking-tight">{type === "recovery" ? "Nuova password" : "Benvenuto"}</h1>

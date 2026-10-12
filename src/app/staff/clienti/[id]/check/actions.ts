@@ -10,6 +10,13 @@ import { recomputeClientChecks } from "@/lib/data/checks";
 import { estimateOneRepMax } from "@/lib/strength/e1rm";
 import type { ActionState } from "@/components/form-bits";
 import type { Json } from "@/lib/supabase/database.types";
+import { customAlphabet } from "nanoid";
+import { z } from "zod";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { CHECK_PHOTOS_BUCKET } from "@/lib/check-photos";
+import { MAX_PHOTOS_PER_UPLOAD } from "@/lib/check-photos-shared";
+
+const photoId = customAlphabet("abcdefghijkmnpqrstuvwxyz23456789", 16);
 
 const num = (v: FormDataEntryValue | null): number | null => {
   if (v === null) return null;
@@ -75,20 +82,24 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Act
     visible_to_client: fd.get("visible_to_client") === "on",
     created_by: me.id,
   };
-  const { error } = checkId
-    ? await supabase.from("checks").update(row).eq("id", checkId).eq("client_id", clientId)
-    : await supabase.from("checks").insert(row);
-  if (error) return { error: "Salvataggio non riuscito." };
+  const { data: saved, error } = checkId
+    ? await supabase.from("checks").update(row).eq("id", checkId).eq("client_id", clientId).select("id").maybeSingle()
+    : await supabase.from("checks").insert(row).select("id").single();
+  if (error || !saved) return { error: "Salvataggio non riuscito." };
   // % di grasso e masse con la formula di riferimento del cliente (può
   // cambiare per tutti i check se questo aggiunge o toglie una plica)
   await recomputeClientChecks(supabase, clientId);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
-  redirect(`/staff/clienti/${clientId}/check?salvato=1`);
+  // dopo il salvataggio si propongono subito le foto di questo check
+  redirect(`/staff/clienti/${clientId}/check?salvato=${saved.id}`);
 }
 
 export async function deleteCheck(clientId: string, checkId: string) {
   await requireStaff();
   const supabase = await createClient();
+  // le foto spariscono con il check (anche i file)
+  const { data: photos } = await supabase.from("check_photos").select("path, thumb_path").eq("check_id", checkId).eq("client_id", clientId);
+  if (photos?.length) await createAdminClient().storage.from(CHECK_PHOTOS_BUCKET).remove(photos.flatMap((p) => [p.path, p.thumb_path]));
   await supabase.from("checks").delete().eq("id", checkId).eq("client_id", clientId);
   await recomputeClientChecks(supabase, clientId);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
@@ -110,4 +121,75 @@ export async function setSkinfoldFormula(clientId: string, fd: FormData) {
   await recomputeClientChecks(supabase, clientId);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
   redirect(`/staff/clienti/${clientId}/check?formula-salvata=1`);
+}
+
+// ---------------------------------------------------------------------
+// Foto del check: il browser riduce le foto (senza i dati che le appesantiscono),
+// chiede i link di caricamento, le carica direttamente nello storage e poi le
+// registra nel check.
+// ---------------------------------------------------------------------
+
+export type PhotoTicket = { path: string; thumbPath: string; url: string; thumbUrl: string };
+
+export async function preparePhotoUploads(clientId: string, checkId: string, count: number): Promise<{ tickets: PhotoTicket[] } | { error: string }> {
+  await requireStaff();
+  if (!Number.isInteger(count) || count < 1) return { error: "Scegli almeno una foto." };
+  if (count > MAX_PHOTOS_PER_UPLOAD) return { error: `Al massimo ${MAX_PHOTOS_PER_UPLOAD} foto per volta.` };
+  const supabase = await createClient();
+  // il check deve esistere ed essere di un cliente che puoi seguire (permessi del database)
+  const { data: check } = await supabase.from("checks").select("id").eq("id", checkId).eq("client_id", clientId).maybeSingle();
+  if (!check) return { error: "Check non trovato." };
+  const storage = createAdminClient().storage.from(CHECK_PHOTOS_BUCKET);
+  const tickets: PhotoTicket[] = [];
+  for (let i = 0; i < count; i++) {
+    const base = `${clientId}/${checkId}/${photoId()}`;
+    const [full, thumb] = await Promise.all([storage.createSignedUploadUrl(`${base}.jpg`), storage.createSignedUploadUrl(`${base}-t.jpg`)]);
+    if (full.error || !full.data || thumb.error || !thumb.data) return { error: "Caricamento non disponibile in questo momento. Riprova tra poco." };
+    tickets.push({ path: `${base}.jpg`, thumbPath: `${base}-t.jpg`, url: full.data.signedUrl, thumbUrl: thumb.data.signedUrl });
+  }
+  return { tickets };
+}
+
+const photosSchema = z
+  .array(
+    z.object({
+      path: z.string().max(200),
+      thumbPath: z.string().max(200),
+      width: z.number().int().positive().max(20000).nullable(),
+      height: z.number().int().positive().max(20000).nullable(),
+      size: z.number().int().nonnegative(),
+    }),
+  )
+  .min(1)
+  .max(MAX_PHOTOS_PER_UPLOAD);
+
+export async function saveCheckPhotos(clientId: string, checkId: string, input: unknown): Promise<{ ok: true } | { error: string }> {
+  await requireStaff();
+  const parsed = photosSchema.safeParse(input);
+  if (!parsed.success) return { error: "Foto non valide." };
+  const prefix = `${clientId}/${checkId}/`;
+  if (parsed.data.some((p) => !p.path.startsWith(prefix) || !p.thumbPath.startsWith(prefix) || p.path.includes(".."))) return { error: "Foto non valide." };
+  const supabase = await createClient();
+  const { data: last } = await supabase.from("check_photos").select("sort_order").eq("check_id", checkId).order("sort_order", { ascending: false }).limit(1).maybeSingle();
+  const start = (last?.sort_order ?? -1) + 1;
+  const { error } = await supabase.from("check_photos").insert(
+    parsed.data.map((p, i) => ({ check_id: checkId, client_id: clientId, path: p.path, thumb_path: p.thumbPath, width: p.width, height: p.height, size_bytes: p.size, sort_order: start + i })),
+  );
+  if (error) return { error: "Non sono riuscito a salvare le foto. Riprova." };
+  revalidatePath(`/staff/clienti/${clientId}`, "layout");
+  revalidatePath("/cliente/progressi");
+  return { ok: true };
+}
+
+export async function deleteCheckPhoto(clientId: string, photoId: string): Promise<{ ok: boolean }> {
+  await requireStaff();
+  const supabase = await createClient();
+  const { data: photo } = await supabase.from("check_photos").select("id, path, thumb_path").eq("id", photoId).eq("client_id", clientId).maybeSingle();
+  if (!photo) return { ok: false };
+  const { error } = await supabase.from("check_photos").delete().eq("id", photo.id);
+  if (error) return { ok: false };
+  await createAdminClient().storage.from(CHECK_PHOTOS_BUCKET).remove([photo.path, photo.thumb_path]);
+  revalidatePath(`/staff/clienti/${clientId}`, "layout");
+  revalidatePath("/cliente/progressi");
+  return { ok: true };
 }

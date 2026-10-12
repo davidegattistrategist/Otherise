@@ -4,12 +4,12 @@ import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { addMonths, formatShort, todayISO } from "@/lib/dates";
-import { formatEuro, METHOD_LABELS, type BillingStatus, type PaymentMethod } from "@/lib/billing";
+import { formatEuro, METHOD_LABELS, PLAN_LABELS, type BillingStatus, type PaymentMethod } from "@/lib/billing";
 import { getBillingLines, getRevenue, getSessionsToSettle, monthLabel } from "@/lib/data/billing";
 import { BarChart } from "@/components/bar-chart";
 import { QuickPay } from "@/components/quick-pay";
 import { BigNumber, Card, Dot, Eyebrow, PageTitle, buttonClass } from "@/components/ui";
-import { IconDownload } from "@/components/icons";
+import { IconDownload, IconPlus } from "@/components/icons";
 
 export const metadata: Metadata = { title: "Pagamenti" };
 
@@ -25,11 +25,27 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
   // mese aperto nel grafico degli incassi (di base quello in corso)
   const month = /^\d{4}-\d{2}$/.test(sp.incassi ?? "") ? sp.incassi! : today.slice(0, 7);
   const nextMonth = addMonths(`${month}-01`, 1);
-  const [revenue, { data: recent }, toSettle] = await Promise.all([
+  const [revenue, { data: recent }, toSettle, { data: history }] = await Promise.all([
     getRevenue(supabase, lines),
     supabase.from("payments").select("id, client_id, paid_on, amount, method, clients!inner(first_name, last_name, free)").eq("clients.free", false).gte("paid_on", `${month}-01`).lt("paid_on", nextMonth).order("paid_on", { ascending: false }).order("created_at", { ascending: false }),
     getSessionsToSettle(supabase),
+    supabase
+      .from("payments")
+      .select("id, client_id, paid_on, amount, method, period_start, period_end, sessions, notes, plan_id, clients!inner(first_name, last_name, free), payment_plans(kind)")
+      .eq("clients.free", false)
+      .order("paid_on", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1000),
   ]);
+  // tutti i pagamenti, dal più recente, divisi per mese
+  const historyMonths: Array<{ month: string; total: number; items: NonNullable<typeof history> }> = [];
+  for (const p of history ?? []) {
+    const m = p.paid_on.slice(0, 7);
+    let g = historyMonths[historyMonths.length - 1];
+    if (!g || g.month !== m) historyMonths.push((g = { month: m, total: 0, items: [] }));
+    g.total += Number(p.amount);
+    g.items.push(p);
+  }
   const monthTotal = (recent ?? []).reduce((t, p) => t + Number(p.amount), 0);
   const monthIndex = revenue.buckets.findIndex((b) => b.month === month);
   const rows = [...lines].sort((a, z) => ORDER[a.status.state] - ORDER[z.status.state] || (a.status.daysLeft ?? 999) - (z.status.daysLeft ?? 999));
@@ -44,7 +60,8 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
         title="Pagamenti"
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link href="/staff/pagamenti/previsione" className={buttonClass("primary", "sm")}>Previsione dei prossimi mesi</Link>
+            <Link href="/staff/pagamenti/nuovo" className={buttonClass("primary", "sm")}><IconPlus size={16} /> Nuovo pagamento</Link>
+            <Link href="/staff/pagamenti/previsione" className={buttonClass("secondary", "sm")}>Previsione dei prossimi mesi</Link>
             <a href={`/api/pagamenti/export?anno=${year}`} className={buttonClass("secondary", "sm")}>
               <IconDownload size={16} /> Esporta {year} per il commercialista
             </a>
@@ -123,6 +140,48 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
           )}
         </Card>
       </div>
+
+      <details className="group rounded-[var(--radius-card)] bg-card" id="tutti-i-pagamenti">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6">
+          <span>
+            <span className="block font-semibold">Tutti i pagamenti</span>
+            <span className="text-sm text-muted">{(history ?? []).length} registrati, dal più recente</span>
+          </span>
+          <span className="text-sm font-semibold underline group-open:hidden">Mostra</span>
+          <span className="hidden text-sm font-semibold underline group-open:inline">Nascondi</span>
+        </summary>
+        <div className="flex flex-col gap-5 px-5 pb-5 sm:px-6">
+          {historyMonths.map((g) => (
+            <section key={g.month} className="flex flex-col">
+              <div className="flex items-baseline justify-between gap-2 border-b border-sand-deep pb-1.5">
+                <h3 className="text-[13px] font-bold tracking-wider text-muted uppercase">{new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${g.month}-15T00:00:00Z`))}</h3>
+                <span className="text-sm font-semibold tabular">{formatEuro(g.total)}</span>
+              </div>
+              <ul className="flex flex-col">
+                {g.items.map((p) => {
+                  const c = p.clients as unknown as { first_name: string; last_name: string } | null;
+                  const kind = (p.payment_plans as unknown as { kind: string } | null)?.kind as keyof typeof PLAN_LABELS | undefined;
+                  const what = p.period_start && p.period_end
+                    ? `${kind ? PLAN_LABELS[kind] : "Periodo"} ${formatShort(p.period_start)} – ${formatShort(p.period_end)}`
+                    : p.sessions
+                      ? `${p.sessions} ${p.sessions === 1 ? "lezione" : "lezioni"}${p.plan_id ? "" : " a parte"}`
+                      : p.notes || "Pagamento";
+                  return (
+                    <li key={p.id} className="flex items-baseline justify-between gap-3 border-t border-sand-deep py-2.5 first:border-t-0">
+                      <span className="min-w-0">
+                        <Link href={`/staff/clienti/${p.client_id}/pagamenti`} className="font-semibold hover:underline">{c ? listName(c) : "Cliente eliminato"}</Link>
+                        <span className="block text-sm text-muted">{formatShort(p.paid_on)} · {what} · {METHOD_LABELS[p.method as PaymentMethod]}</span>
+                      </span>
+                      <span className="shrink-0 font-semibold tabular">{formatEuro(p.amount)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+          {!historyMonths.length ? <p className="text-[15px] text-muted">Ancora nessun pagamento registrato.</p> : null}
+        </div>
+      </details>
 
       {/* telefono: una scheda per cliente con tutto in vista */}
       <Card className="flex flex-col p-0 md:hidden">

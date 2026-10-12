@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { BrandName } from "@/components/brand";
 
 export function AuthShell({ title, subtitle, children }: { title: string; subtitle?: ReactNode; children: ReactNode }) {
   return (
@@ -6,7 +7,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center gap-2.5">
           <span className="h-3 w-3 rounded-full bg-accent" aria-hidden="true" />
-          <span className="text-lg font-bold tracking-tight">Otherise</span>
+          <BrandName name="Otherise" className="text-lg font-bold tracking-tight" />
         </div>
         <h1 className="text-[32px] leading-tight font-normal tracking-tight">{title}</h1>
         {subtitle ? <p className="mt-2 text-[15px] leading-relaxed text-muted">{subtitle}</p> : null}

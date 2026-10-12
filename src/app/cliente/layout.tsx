@@ -8,6 +8,7 @@ import { LiveBell, LiveProvider } from "@/components/live";
 import { InstallGuide } from "@/components/install-guide";
 import { PushPopup, PushSync } from "@/components/push";
 import { homeScreenName } from "@/lib/app-name";
+import { BrandName } from "@/components/brand";
 
 export default async function ClientAreaLayout({ children }: { children: React.ReactNode }) {
   const me = await requireClient();
@@ -27,7 +28,7 @@ export default async function ClientAreaLayout({ children }: { children: React.R
         <header className="flex items-center justify-between gap-3 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-2 md:pt-7">
           <Link href={ended ? "/cliente/messaggi" : "/cliente"} className="flex min-w-0 items-center gap-2.5">
             <span className="h-3 w-3 shrink-0 rounded-full bg-accent" aria-hidden="true" />
-            <span className="truncate text-[17px] font-bold tracking-tight">{name ?? "Otherise"}</span>
+            <BrandName name={name} className="text-[17px] font-bold tracking-tight" />
           </Link>
           <div className="hidden md:block"><ClientNav chatUnread={chatUnread} ended={ended} /></div>
           <LiveBell href="/cliente/notifiche" initial={unread ?? 0} />

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getMe, homeFor } from "@/lib/auth";
 import { getPrivacyOwner } from "@/lib/data/privacy";
 import { PrivacyNotice } from "@/components/privacy-notice";
+import { BrandName } from "@/components/brand";
 
 export const metadata: Metadata = { title: "Informativa privacy" };
 
@@ -14,7 +15,7 @@ export default async function PrivacyPage() {
       <Link href={back} className="text-sm font-semibold text-muted hover:text-ink">← {me ? "Torna all'app" : "Torna all'accesso"}</Link>
       <div className="mt-6 flex items-center gap-2.5">
         <span className="h-3 w-3 rounded-full bg-accent" aria-hidden="true" />
-        <span className="text-lg font-bold tracking-tight">{owner.businessName}</span>
+        <BrandName name={owner.businessName} className="text-lg font-bold tracking-tight" />
       </div>
       <h1 className="mt-4 text-[32px] leading-tight font-normal tracking-tight">Informativa sul trattamento dei dati personali</h1>
       <div className="mt-6">

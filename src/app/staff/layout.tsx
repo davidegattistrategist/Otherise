@@ -10,6 +10,7 @@ import { homeScreenName } from "@/lib/app-name";
 import { Toaster } from "@/components/toaster";
 import { IconLogout } from "@/components/icons";
 import { signOut } from "../login/actions";
+import { BrandName } from "@/components/brand";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const me = await requireStaff();
@@ -50,7 +51,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       <header className="flex w-full items-center justify-between gap-3 pt-[calc(1rem+env(safe-area-inset-top))] pr-[var(--edge-right)] pl-[var(--edge-left)] sm:px-8 lg:hidden">
         <Link href="/staff" className="flex min-w-0 items-center gap-2.5">
           <span className="h-3 w-3 shrink-0 rounded-full bg-accent" aria-hidden="true" />
-          <span className="truncate text-[17px] font-bold tracking-tight">{name ?? "Otherise"}</span>
+          <BrandName name={name} className="text-[17px] font-bold tracking-tight" />
         </Link>
         <LiveBell href="/staff/notifiche" initial={unread ?? 0} />
       </header>
@@ -60,7 +61,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
         <div className="flex items-center justify-between gap-2.5 px-2">
           <div className="flex items-center gap-2.5">
             <span className="h-3 w-3 rounded-full bg-accent" aria-hidden="true" />
-            <span className="text-[17px] font-bold tracking-tight">{name ?? "Otherise"}</span>
+            <BrandName name={name} className="text-[17px] font-bold tracking-tight" />
           </div>
         </div>
         <StaffNav items={items} />

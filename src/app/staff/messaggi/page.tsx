@@ -43,8 +43,9 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
     .map((c) => {
       const l = last.get(c.id);
       const unread = unreadBy.get(c.id) ?? 0;
-      // da rispondere: messaggi non letti, oppure l'ultimo messaggio è del cliente
-      return { ...c, last: l, unread, toAnswer: unread > 0 || Boolean(l && c.user_id && l.sender === c.user_id && l.preview !== "Messaggio eliminato") };
+      // da rispondere: messaggi che non hai ancora visto. Una chat aperta esce
+      // dall'elenco anche se non rispondi; con "Segna da leggere" ci torna.
+      return { ...c, last: l, unread, toAnswer: unread > 0 };
     })
     .sort((a, b) => (b.last?.at ?? "").localeCompare(a.last?.at ?? "") || bySurname(a, b));
 
@@ -71,7 +72,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
         </form>
       </div>
       {shown.length === 0 ? (
-        onlyToAnswer ? <EmptyState title="Nessuna chat da rispondere">Hai risposto a tutti. Le altre conversazioni sono in “Tutte”.</EmptyState> : <EmptyState title="Nessun cliente">Aggiungi un cliente per iniziare a scrivergli.</EmptyState>
+        onlyToAnswer ? <EmptyState title="Nessuna chat da rispondere">Hai visto tutti i messaggi. Se una chat ti serve ancora, aprila e premi “Segna da leggere”.</EmptyState> : <EmptyState title="Nessun cliente">Aggiungi un cliente per iniziare a scrivergli.</EmptyState>
       ) : (
         <ul className="flex flex-col overflow-hidden rounded-[24px] bg-card">
           {shown.map((c) => (

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -207,7 +208,10 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
         <Card className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between">
             <Eyebrow>Storico pagamenti</Eyebrow>
-            <span className="text-sm text-muted">{formatEuro(totalYear)} nel {today.slice(0, 4)}</span>
+            <span className="flex items-baseline gap-3">
+              <span className="text-sm text-muted">{formatEuro(totalYear)} nel {today.slice(0, 4)}</span>
+              <Link href={`/staff/pagamenti/nuovo?cliente=${id}`} className="text-sm font-semibold underline">Nuovo pagamento</Link>
+            </span>
           </div>
           {payments?.length ? (
             <ul className="flex flex-col">

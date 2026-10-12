@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireActiveClient } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { getMyLogs, getMyMaxes, getMyPrograms, getVideoMap, type MyProgram } from "@/lib/data/me";
 import { addDays, formatShort, todayISO } from "@/lib/dates";
 import { nextWorkout, programEndDate } from "@/lib/program/schedule";
@@ -20,6 +21,8 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
     return <EmptyState title="Il programma è in preparazione">Appena è pronto lo trovi qui, con tutte le settimane e i video degli esercizi.</EmptyState>;
   }
   const isCurrent = program.id === current?.id;
+  // ha aperto il programma: l'avviso "programma pronto" è visto (niente email di promemoria)
+  await (await createClient()).from("notifications").update({ read_at: new Date().toISOString() }).eq("recipient_id", me.id).eq("kind", "program_published").is("read_at", null);
   const weekParam = Number(sp.settimana);
   const [logs, videos, maxes] = await Promise.all([getMyLogs(program.id), getVideoMap(), getMyMaxes(me.clientId)]);
   // la settimana "di adesso" è quella del prossimo allenamento in sequenza

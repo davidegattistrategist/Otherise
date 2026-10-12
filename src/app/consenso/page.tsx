@@ -7,6 +7,7 @@ import { healthConsentText, instagramConsentText, needsConsent, PRIVACY_VERSION 
 import { PrivacyNotice } from "@/components/privacy-notice";
 import { Card } from "@/components/ui";
 import { ConsentForm } from "./consent-form";
+import { BrandName } from "@/components/brand";
 
 export const metadata: Metadata = { title: "Privacy" };
 
@@ -23,7 +24,7 @@ export default async function ConsentPage() {
     <main className="mx-auto flex max-w-[720px] flex-col gap-5 px-4 py-8 sm:px-6 sm:py-12">
       <div className="flex items-center gap-2.5">
         <span className="h-3 w-3 rounded-full bg-accent" aria-hidden="true" />
-        <span className="text-lg font-bold tracking-tight">{owner.businessName}</span>
+        <BrandName name={owner.businessName} className="text-lg font-bold tracking-tight" />
       </div>
       <div>
         <h1 className="text-[30px] leading-tight font-normal tracking-tight">{updated ? "Abbiamo aggiornato l'informativa" : `Ciao ${c?.first_name ?? ""}, prima di iniziare`}</h1>

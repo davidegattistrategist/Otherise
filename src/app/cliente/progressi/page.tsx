@@ -9,6 +9,8 @@ import { ExerciseProgress } from "@/components/exercise-progress";
 import { getExerciseProgress } from "@/lib/data/progress";
 import { IconTrophy } from "@/components/icons";
 import { BigNumber, Card, EmptyState, Eyebrow, cx, fmtNum } from "@/components/ui";
+import { myCheckPhotos } from "@/lib/check-photos";
+import { PhotoGrid } from "@/components/check-photos";
 
 export const metadata: Metadata = { title: "Progressi" };
 
@@ -25,7 +27,9 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
     supabase.rpc("my_pt_session_dates"),
   ]);
   const list = checks ?? [];
-  const exerciseSeries = await getExerciseProgress(supabase, me.clientId);
+  const [exerciseSeries, photos] = await Promise.all([getExerciseProgress(supabase, me.clientId), myCheckPhotos(supabase)]);
+  // foto dei check, dal più recente
+  const photoChecks = [...photos.values()].filter((g) => g.length).sort((a, b) => (b[0].checkDate ?? "").localeCompare(a[0].checkDate ?? ""));
   const records = exerciseSeries.filter((x) => x.record).slice(0, 6);
   const series = (pick: (c: (typeof list)[number]) => number | string | null) =>
     list.map((c) => ({ date: c.check_date, value: pick(c) })).filter((p) => p.value !== null && p.value !== undefined).map((p) => ({ date: p.date, value: Number(p.value) }));
@@ -90,6 +94,18 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
           </div>
         </>
       )}
+
+      {photoChecks.length ? (
+        <Card className="flex flex-col gap-4">
+          <Eyebrow>Le foto dei check</Eyebrow>
+          {photoChecks.map((g) => (
+            <section key={g[0].checkId} className="flex flex-col gap-2">
+              <h2 className="text-sm font-semibold">{g[0].checkDate ? formatLong(g[0].checkDate) : ""}</h2>
+              <PhotoGrid photos={g} title={g[0].checkDate ? formatShort(g[0].checkDate) : undefined} />
+            </section>
+          ))}
+        </Card>
+      ) : null}
 
       <ExerciseProgress title="I tuoi esercizi" series={exerciseSeries} selected={esercizio} hrefFor={(k) => `/cliente/progressi?esercizio=${encodeURIComponent(k)}`} />
 

@@ -27,6 +27,8 @@ import { Button, Card, EmptyState, Eyebrow, LinkButton, Notice, fmtNum } from "@
 import { ClearParams } from "@/components/clear-param";
 import { setSkinfoldFormula } from "./actions";
 import { SexPrompt } from "./sex-prompt";
+import { staffCheckPhotos } from "@/lib/check-photos";
+import { CheckPhotoUploader, PhotoGrid } from "@/components/check-photos";
 
 export const metadata: Metadata = { title: "Check" };
 
@@ -61,6 +63,7 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
     .select("id, check_date, sequence, created_at, order_hint, age_years, skinfolds, weight_kg, body_fat_pct, fat_mass_kg, lean_mass_kg, body_fat_formula, circumferences, strength_tests, tests_text, notes_next_phase, visible_to_client")
     .eq("client_id", id)
     .order("check_date", { ascending: true });
+  const photos = await staffCheckPhotos(supabase, id);
   const sex = client.sex as Sex;
   const list = sortChecks(checks ?? []).map((c) => ({ ...c, avg: averagesOf(c.skinfolds as SkinfoldReadings) }));
   const folds = list.map((c) => ({ averages: c.avg }));
@@ -92,7 +95,15 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
 
   return (
     <div className="flex flex-col gap-5">
-      {sp.salvato ? <><ClearParams names={["salvato"]} /><Notice tone="success">Check salvato.</Notice></> : null}
+      {sp.salvato ? (
+        <>
+          <ClearParams names={["salvato"]} />
+          <Notice tone="success">
+            <span className="block">Check salvato.{list.some((c) => c.id === sp.salvato) ? " Ora puoi aggiungere le foto: sceglile tutte insieme dalla galleria." : ""}</span>
+            {list.some((c) => c.id === sp.salvato) ? <CheckPhotoUploader clientId={id} checkId={sp.salvato} label="Aggiungi le foto del check" variant="primary" className="mt-2" /> : null}
+          </Notice>
+        </>
+      ) : null}
       {sp["formula-salvata"] ? <><ClearParams names={["formula-salvata"]} /><Notice tone="success">Formula aggiornata: ho ricalcolato la massa grassa di tutti i check.</Notice></> : null}
       {upgrade ? (
         <Card className="ring-1 ring-accent">
@@ -178,7 +189,8 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
               const measured = Object.keys(c.avg) as SkinfoldSite[];
               const missing = measured.length ? protocolSites(sex).filter((s) => c.avg[s] === undefined) : [];
               return (
-                <Link key={c.id} href={`/staff/clienti/${id}/check/${c.id}`} className="block rounded-[24px] bg-card p-5 hover:bg-white">
+                <div key={c.id} className="overflow-hidden rounded-[24px] bg-card">
+                <Link href={`/staff/clienti/${id}/check/${c.id}`} className="block p-5 hover:bg-white">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-lg font-semibold">{checkLabel(c, 0)}</span>
                     <span className="text-sm text-muted">{c.visible_to_client ? "Visibile al cliente" : "Solo staff"}</span>
@@ -194,6 +206,11 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
                   {c.tests_text ? <div className="mt-1 text-sm whitespace-pre-line text-muted">{c.tests_text}</div> : null}
                   {c.notes_next_phase ? <div className="mt-2 line-clamp-3 text-sm whitespace-pre-line text-ink-soft">Prossima fase: {c.notes_next_phase}</div> : null}
                 </Link>
+                <div className="flex flex-col gap-3 px-5 pb-5">
+                  <PhotoGrid photos={photos.get(c.id) ?? []} clientId={id} canDelete title={checkLabel(c, 0)} />
+                  <CheckPhotoUploader clientId={id} checkId={c.id} label={photos.get(c.id)?.length ? "Aggiungi altre foto" : "Aggiungi le foto"} />
+                </div>
+                </div>
               );
             })}
           </div>

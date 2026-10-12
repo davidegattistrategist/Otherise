@@ -977,9 +977,9 @@ describe("timer dell'allenamento", async () => {
 describe("video della chat", async () => {
   const { targetSize, shouldCompress } = await import("../components/chat/compress-video");
   const { videoExpired, CHAT_VIDEO_KEEP_DAYS } = await import("./chat-shared");
-  it("riduce a 540p sul lato corto, senza mai ingrandire, con numeri pari", () => {
-    expect(targetSize(1080, 1920)).toEqual({ width: 540, height: 960 });
-    expect(targetSize(3840, 2160)).toEqual({ width: 960, height: 540 });
+  it("riduce a 480p sul lato corto, senza mai ingrandire, con numeri pari", () => {
+    expect(targetSize(1080, 1920)).toEqual({ width: 480, height: 854 });
+    expect(targetSize(3840, 2160)).toEqual({ width: 854, height: 480 });
     expect(targetSize(640, 360)).toEqual({ width: 640, height: 360 });
     expect(targetSize(1081, 1921).width % 2).toBe(0);
   });
@@ -1004,6 +1004,9 @@ describe("email di avviso", async () => {
     const many = bundleEmail(Array.from({ length: 14 }, (_, i) => ({ title: `Avviso ${i + 1}`, body: "", link: null })), "https://app.esempio.it");
     expect(many.subject).toBe("Hai 14 novità nell'app");
     expect(many.text).toContain("…e altre 2.");
-    expect(many.text).toContain("Attiva le notifiche");
+    expect(many.text).toContain("attiva le notifiche");
+    const remind = bundleEmail([{ title: "Nuovo messaggio da Marco", body: "Ciao!", link: "/cliente/messaggi" }], "https://app.esempio.it", "reminder");
+    expect(remind.text).toContain("non l'hai ancora visto");
+    expect(remind.text).not.toContain("attiva le notifiche");
   });
 });

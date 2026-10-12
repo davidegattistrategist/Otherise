@@ -420,4 +420,26 @@ describe.skipIf(!run)("permessi", () => {
     const { data: k } = await coach.from("checks").insert({ client_id: clientAId, check_date: "2026-10-01", sex: "F" }).select("imported").single().throwOnError();
     expect(k!.imported).toBe(false);
   });
+  it("foto dei check: le carica lo staff che segue il cliente; il cliente vede solo quelle dei check visibili", async () => {
+    const { data: vis } = await coach.from("checks").insert({ client_id: clientAId, check_date: "2026-10-02", sex: "F", visible_to_client: true }).select("id").single().throwOnError();
+    const { data: hid } = await coach.from("checks").insert({ client_id: clientAId, check_date: "2026-10-03", sex: "F", visible_to_client: false }).select("id").single().throwOnError();
+    const row = (checkId: string, n: string, clientId = clientAId) => ({ check_id: checkId, client_id: clientId, path: `${clientId}/${checkId}/${n}.jpg`, thumb_path: `${clientId}/${checkId}/${n}-t.jpg` });
+    await coach.from("check_photos").insert([row(vis!.id, "a"), row(hid!.id, "b")]).throwOnError();
+    // percorso dei file diverso dal check: rifiutato
+    expect((await coach.from("check_photos").insert({ ...row(vis!.id, "c"), path: `${clientBId}/x/c.jpg` })).error).not.toBeNull();
+    // check di un altro cliente spacciato per questo: rifiutato
+    const { data: bCheck } = await owner.from("checks").insert({ client_id: clientBId, check_date: "2026-10-02", sex: "M" }).select("id").single().throwOnError();
+    expect((await coach.from("check_photos").insert(row(bCheck!.id, "d"))).error).not.toBeNull();
+    // il collaboratore non tocca i clienti non suoi
+    expect((await coach.from("check_photos").insert(row(bCheck!.id, "e", clientBId))).error).not.toBeNull();
+    // il cliente: niente tabella diretta, solo le foto dei check visibili
+    expect((await clientA.from("check_photos").select("id")).data ?? []).toEqual([]);
+    const mine = (await clientA.rpc("my_check_photos")).data ?? [];
+    expect(mine.map((p: { check_id: string }) => p.check_id)).toEqual([vis!.id]);
+    expect((await clientA.from("check_photos").insert(row(vis!.id, "f"))).error).not.toBeNull();
+    expect((await stranger.rpc("my_check_photos")).data ?? []).toEqual([]);
+    // eliminando il check spariscono anche le foto
+    await coach.from("checks").delete().eq("id", hid!.id).throwOnError();
+    expect((await admin.from("check_photos").select("id").eq("check_id", hid!.id)).data).toEqual([]);
+  });
 });

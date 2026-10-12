@@ -12,6 +12,7 @@ const TABLES = [
   "exercise_logs",
   "pt_sessions",
   "checks",
+  "check_photos",
   "posture_assessments",
   "checkins",
   "payment_plans",
@@ -28,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!client) return NextResponse.json({ error: "Cliente non trovato" }, { status: 404 });
   const out: Record<string, unknown> = {
     esportato_il: new Date().toISOString(),
-    nota: "Dati conservati nell'app per questo cliente. Foto e video della chat sono elencati negli allegati dei messaggi: se servono, scaricali dalla chat.",
+    nota: "Dati conservati nell'app per questo cliente. Foto e video della chat sono elencati negli allegati dei messaggi, le foto dei check in check_photos: se servono, scaricali dall'app (chat e check).",
     cliente: client,
   };
   const { data: notes } = await admin.from("client_private_notes").select("notes, updated_at").eq("client_id", id).maybeSingle();
