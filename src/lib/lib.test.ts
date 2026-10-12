@@ -132,14 +132,13 @@ describe("frase del giorno", () => {
     expect(dedicationOfDay(`2026-10-${12 + DEDICATIONS.length}`, "Giulia")).toBe("per Giulia");
     expect(dedicationOfDay("2026-10-12", null)).toBe("un giorno alla volta");
   });
-  it("100 frasi in sequenza, uguale per tutti nello stesso giorno, poi ricomincia", () => {
-    expect(QUOTES).toHaveLength(100);
-    expect(quoteOfDay("2026-10-12").n).toBe(1);
-    expect(quoteOfDay("2026-10-13").n).toBe(2);
-    expect(quoteOfDay(addDays("2026-10-12", 99)).n).toBe(100);
-    expect(quoteOfDay(addDays("2026-10-12", 100)).n).toBe(1);
-    expect(quoteOfDay("2026-10-11").n).toBe(100);
-    expect(quoteOfDay("2026-10-13").quote).toEqual({ text: "Chi ha cominciato è a metà dell'opera.", author: "Orazio" });
+  it("una frase per ogni data, uguale per tutti; il 29 febbraio solo negli anni bisestili", () => {
+    expect(Object.keys(QUOTES)).toHaveLength(366);
+    expect(quoteOfDay("2027-01-01")).toEqual({ text: "Il passato è un prologo.", author: "Shakespeare" });
+    expect(quoteOfDay("2026-12-25").text).toMatch(/Natale/);
+    expect(quoteOfDay("2028-02-29").text).toMatch(/quattro anni/);
+    expect(quoteOfDay("2027-03-01")).toBe(QUOTES["03-01"]);
+    expect(quoteOfDay(addDays("2027-02-28", 1))).toBe(QUOTES["03-01"]);
   });
 });
 

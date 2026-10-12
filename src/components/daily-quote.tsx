@@ -17,10 +17,21 @@ const SERIF = { fontFamily: '"Fraunces Variable", Georgia, "Times New Roman", se
 /** Grandezza del testo in base alla lunghezza, così ogni frase sta bene sullo schermo. */
 const sizeFor = (t: string) => (t.length > 95 ? "clamp(27px, 7vw, 42px)" : t.length > 60 ? "clamp(31px, 8.2vw, 50px)" : "clamp(36px, 9.6vw, 58px)");
 
-export function DailyQuote({ quote, today, dateLabel, brand, dedication }: { quote: Quote; today: string; dateLabel: string; brand: string; dedication: string }) {
+export function DailyQuote({ quote, today, dateLabel, brand, dedication, label = "La frase del giorno", autoOpen = true }: {
+  quote: Quote;
+  today: string;
+  dateLabel: string;
+  brand: string;
+  dedication: string;
+  /** Titolo piccolo della scheda (il trainer vede "La frase di oggi dei tuoi clienti"). */
+  label?: string;
+  /** Apertura a tutto schermo alla prima visita del giorno (solo per il cliente). */
+  autoOpen?: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (!autoOpen) return;
     let seen: string | null = null;
     try {
       seen = localStorage.getItem(KEY);
@@ -38,7 +49,7 @@ export function DailyQuote({ quote, today, dateLabel, brand, dedication }: { quo
       } catch {}
     }, 1000);
     return () => clearTimeout(t);
-  }, [today]);
+  }, [today, autoOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -60,7 +71,7 @@ export function DailyQuote({ quote, today, dateLabel, brand, dedication }: { quo
         className="quote-card group relative overflow-hidden rounded-[24px] bg-ink px-5 py-5 text-left text-card"
         aria-label="Apri la frase del giorno"
       >
-        <span className="relative block text-[11px] font-semibold tracking-[0.14em] text-muted-dark uppercase">La frase del giorno</span>
+        <span className="relative block text-[11px] font-semibold tracking-[0.14em] text-muted-dark uppercase">{label}</span>
         <span className="relative mt-2.5 block text-[21px] leading-[1.25] font-light text-balance" style={SERIF}>
           {quote.text}
         </span>

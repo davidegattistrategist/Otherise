@@ -176,7 +176,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
         ) : null}
       </div>
       {/* la frase del giorno: a tutto schermo alla prima apertura, poi qui in fondo */}
-      <DailyQuote quote={quote.quote} dedication={dedicationOfDay(today, client?.first_name)} today={today} dateLabel={formatHeading(today)} brand={brand ?? "Otherise"} />
+      <DailyQuote quote={quote} dedication={dedicationOfDay(today, client?.first_name)} today={today} dateLabel={formatHeading(today)} brand={brand ?? "Otherise"} />
     </div>
   );
 }

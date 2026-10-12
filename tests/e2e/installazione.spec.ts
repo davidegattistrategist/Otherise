@@ -146,3 +146,15 @@ test("frase del giorno: a tutto schermo la prima volta del giorno, poi resta nel
   await page.getByRole("button", { name: "Apri la frase del giorno" }).click();
   await expect(stage).toBeVisible();
 });
+
+test("il trainer vede in Oggi la frase che vedono i clienti, senza che si apra da sola", async ({ page }) => {
+  await login(page, "titolare@prova.local");
+  await page.evaluate(() => localStorage.removeItem("otherise:quote-day"));
+  await page.goto("/staff");
+  const card = page.getByRole("button", { name: "Apri la frase del giorno" });
+  await expect(card).toContainText("La frase di oggi dei tuoi clienti");
+  await page.waitForTimeout(1500);
+  await expect(page.getByRole("dialog", { name: "La frase del giorno" })).toHaveCount(0);
+  await card.click();
+  await expect(page.getByRole("dialog", { name: "La frase del giorno" }).getByText("[nome]")).toBeVisible();
+});

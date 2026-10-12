@@ -1,3 +1,5 @@
+import { DailyQuote } from "@/components/daily-quote";
+import { dedicationOfDay, quoteOfDay } from "@/lib/quotes";
 import Link from "next/link";
 import { listName } from "@/lib/names";
 import type { Metadata } from "next";
@@ -37,7 +39,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
   const me = await requireStaff();
   const supabase = await createClient();
   const today = todayISO();
-  const [clients, { data: checkins }, { data: pains }] = await Promise.all([
+  const [clients, { data: checkins }, { data: pains }, { data: brand }] = await Promise.all([
     getClientsOverview(supabase, me),
     supabase
       .from("checkins")
@@ -53,6 +55,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
       .is("discomfort_seen_at", null)
       .order("updated_at", { ascending: false })
       .limit(20),
+    supabase.rpc("business_name"),
   ]);
   const { programs, checks, training } = buildTodayList(clients, today);
   const billing = me.role === "owner" ? (await getBillingLines(supabase)).lines.filter((l) => !l.paused && (l.status.state === "overdue" || l.status.state === "due_soon")) : [];
@@ -178,6 +181,9 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
           </Card>
         ) : null}
       </div>
+
+      {/* la stessa frase che vedono oggi i clienti nella loro home (con la dedica al posto del nome) */}
+      <DailyQuote quote={quoteOfDay(today)} dedication={dedicationOfDay(today, "[nome]")} today={today} dateLabel={formatHeading(today)} brand={brand ?? "Otherise"} label="La frase di oggi dei tuoi clienti" autoOpen={false} />
     </div>
   );
 }
