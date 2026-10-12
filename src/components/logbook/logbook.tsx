@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { blockHeading, itemLabel, type ProgramDay } from "@/lib/program/types";
 import { logPlan, restLabel, restSeconds, type LogPlan } from "@/lib/program/logbook";
+import { blockTimer, emomItemTimer, fmtClock, restTimerFor, timedSetTimer } from "@/lib/program/timer";
+import { TimerBar, useWorkoutTimer } from "./workout-timer";
 import type { SetLog } from "@/lib/program/prescription";
 import { saveWorkout } from "./actions";
 import { cx, fmtNum } from "@/components/ui";
-import { IconCheck, IconPlay, IconPlus, IconTrophy, IconX } from "@/components/icons";
+import { IconCheck, IconPlay, IconPlus, IconTrophy } from "@/components/icons";
 import { epley, loadFromPercent } from "@/lib/strength/records";
 
 type ItemState = { sets: SetLog[]; resultText: string };
@@ -74,6 +76,8 @@ export function Logbook(props: LogbookProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day, week, maxes]);
 
+  const blockPlans = useMemo(() => Object.fromEntries(day.blocks.map((b) => [b.id, blockTimer(b)])), [day]);
+
   /** Valori proposti per una serie: dal programma, altrimenti dall'ultima volta */
   const suggestion = (it: { id: string; exerciseId?: string | null; name: string }, si: number) => {
     const plan = plans[it.id];
@@ -123,8 +127,7 @@ export function Logbook(props: LogbookProps) {
   const [performedOn, setPerformedOn] = useState(initial.performedOn);
   const [completed, setCompleted] = useState(initial.completed);
   const [status, setStatus] = useState<{ kind: "idle" | "saving" | "saved" | "error"; text?: string }>({ kind: "idle" });
-  const [timer, setTimer] = useState<{ end: number; total: number } | null>(null);
-  const [now, setNow] = useState(() => Date.now());
+  const clock = useWorkoutTimer();
   const dirty = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -263,21 +266,6 @@ export function Logbook(props: LogbookProps) {
     };
   }, []);
 
-  useEffect(() => {
-    if (!timer) return;
-    const id = setInterval(() => {
-      const t = Date.now();
-      setNow(t);
-      if (t >= timer.end) {
-        try {
-          navigator.vibrate?.([200, 100, 200]);
-        } catch {}
-        setTimer(null);
-      }
-    }, 250);
-    return () => clearInterval(id);
-  }, [timer]);
-
   const itemById = useMemo(() => new Map(day.blocks.flatMap((b) => b.items).map((it) => [it.id, it])), [day]);
   const update = (itemId: string, fn: (s: ItemState) => ItemState) => {
     const cur = latest.current.items;
@@ -289,10 +277,24 @@ export function Logbook(props: LogbookProps) {
     if (it) checkRecord(it, next[itemId].sets.filter((x) => x.done || (x.kg !== null && x.reps !== null)));
   };
 
+  /** Recupero dopo una serie spuntata: non interrompe un AMRAP, EMOM o intervalli in corso. */
   const startRest = (rest: string) => {
-    const s = restSeconds(rest);
-    // eslint-disable-next-line react-hooks/purity -- chiamata solo dai pulsanti, non durante il render
-    if (s && s > 0) setTimer({ end: Date.now() + s * 1000, total: s });
+    const p = restTimerFor(rest);
+    if (!p) return;
+    if (clock.active && clock.active.id !== "rest" && !clock.active.id.startsWith("set:")) return;
+    clock.start("rest", p);
+  };
+
+  /** Serie a tempo (es. plank 30"): parte il tempo, alla fine la serie si spunta e parte il recupero. */
+  const startTimedSet = (it: { id: string; name: string; rest: string }, seconds: number) => {
+    const sets = latest.current.items[it.id]?.sets ?? [];
+    const si = sets.findIndex((x) => !x.done);
+    if (si < 0) return;
+    clock.start(`set:${it.id}`, timedSetTimer(seconds, si + 1, sets.length, it.name), () => {
+      update(it.id, (cur) => ({ ...cur, sets: cur.sets.map((x, i) => (i === si ? { ...x, done: true } : x)) }));
+      const rest = restTimerFor(it.rest);
+      if (rest) clock.start("rest", rest);
+    });
   };
 
   /** Serie non spuntate, per esercizio (solo dove si spuntano le serie). */
@@ -383,6 +385,13 @@ export function Logbook(props: LogbookProps) {
                 <h2 className="text-[13px] font-bold tracking-wider uppercase">{blockHeading(b).title}</h2>
                 <span className="text-sm font-semibold text-accent-deep">{blockHeading(b).detail}</span>
                 {b.notes ? <p className="w-full text-sm text-muted">{b.notes}</p> : null}
+                {blockPlans[b.id] ? (
+                  <TimerButton
+                    running={clock.active?.id === `block:${b.id}`}
+                    label="Avvia il timer"
+                    onClick={() => clock.start(`block:${b.id}`, blockPlans[b.id]!)}
+                  />
+                ) : null}
               </div>
             ) : null}
             {b.items.map((it, ii) => {
@@ -419,6 +428,13 @@ export function Logbook(props: LogbookProps) {
                     </div>
                   </div>
 
+                  {plan.mode !== "text" && emomItemTimer(it.rest, st.sets.length) ? (
+                    <TimerButton
+                      running={clock.active?.id === `emom:${it.id}`}
+                      label={`Avvia l'EMOM: una serie ogni ${fmtClock(emomItemTimer(it.rest, st.sets.length)!.phases[1].seconds)}`}
+                      onClick={() => clock.start(`emom:${it.id}`, emomItemTimer(it.rest, st.sets.length)!)}
+                    />
+                  ) : null}
                   {plan.mode === "sets" ? (
                     <div className="flex flex-col gap-1.5">
                       <div className="grid grid-cols-[2.5rem_1fr_1fr_2.75rem] gap-2 px-0.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
@@ -522,6 +538,13 @@ export function Logbook(props: LogbookProps) {
                           </button>
                         ))}
                       </div>
+                      {timedSeconds(plan.label) && st.sets.some((x) => !x.done) ? (
+                        <TimerButton
+                          running={clock.active?.id === `set:${it.id}`}
+                          label={`Avvia ${plan.label}: la serie si spunta da sola`}
+                          onClick={() => startTimedSet(it, timedSeconds(plan.label)!)}
+                        />
+                      ) : null}
                       <input
                         aria-label={`Note su ${it.name}`}
                         className="h-11 rounded-xl border border-sand-deep bg-sand px-3 text-[15px]"
@@ -598,16 +621,7 @@ export function Logbook(props: LogbookProps) {
       </section>
 
       <div className={cx("sticky z-20 flex flex-col gap-2", props.barClass ?? "bottom-[calc(var(--nav-space)+0.5rem)] md:bottom-4")}>
-        {timer ? (
-          <div className="flex items-center gap-3 rounded-full bg-accent px-4 py-2.5 text-white shadow-lg" role="timer" aria-live="off">
-            <span className="text-sm font-semibold">Recupero</span>
-            <span className="text-xl font-bold tabular">{Math.max(0, Math.ceil((timer.end - now) / 1000))}&quot;</span>
-            <div className="h-1.5 flex-1 rounded-full bg-white/30"><div className="h-1.5 rounded-full bg-white" style={{ width: `${Math.max(0, Math.min(100, ((timer.end - now) / (timer.total * 1000)) * 100))}%` }} /></div>
-            <button type="button" aria-label="Recupero 15 secondi in meno" onClick={() => setTimer((t) => (t ? { ...t, end: Math.max(Date.now() + 1000, t.end - 15000) } : t))} className="h-8 rounded-full bg-white/20 px-2 text-xs font-bold">−15</button>
-            <button type="button" aria-label="Recupero 15 secondi in più" onClick={() => setTimer((t) => (t ? { end: t.end + 15000, total: t.total + 15 } : t))} className="h-8 rounded-full bg-white/20 px-2 text-xs font-bold">+15</button>
-            <button type="button" aria-label="Ferma il recupero" onClick={() => setTimer(null)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20"><IconX size={16} /></button>
-          </div>
-        ) : null}
+        <TimerBar timer={clock} />
         <div className="flex items-center gap-3 rounded-full bg-ink p-1.5 pl-5 text-card shadow-lg">
           <span className={cx("min-w-0 flex-1 truncate text-sm", status.kind === "error" ? "text-accent" : "text-muted-dark")} aria-live="polite">
             {status.kind === "saving" ? "Salvataggio…" : status.text ?? (completed ? "Sessione completata" : "Si salva da solo")}
@@ -643,5 +657,23 @@ export function Logbook(props: LogbookProps) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** Secondi di una serie a tempo dall'etichetta ("30\"", "1'30\""), null per le distanze. */
+function timedSeconds(label: string): number | null {
+  return /["”″'’]$/.test(label.trim()) ? restSeconds(label) : null;
+}
+
+function TimerButton({ running, label, onClick }: { running: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={running}
+      className={cx("mt-1 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 text-[15px] font-semibold", running ? "bg-sand-deep/60 text-muted" : "bg-ink text-card")}
+    >
+      <IconPlay size={16} /> {running ? "Timer in corso (in basso)" : label}
+    </button>
   );
 }

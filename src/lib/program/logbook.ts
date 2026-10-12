@@ -22,6 +22,11 @@ export function logPlan(item: ProgramItem, block: ProgramBlock, week: number): L
   if (plain && block.rounds && block.rounds <= 12) {
     return { mode: "sets", rows: block.rounds, repsHint: plain[1].replace(/\s+/g, ""), kgHint: plain[2] ? Number(plain[2].replace(",", ".")) : null, loadText: plain[2] ? `${plain[2]} kg` : "" };
   }
+  // ...oppure solo il tempo ("30\"", "1'"): una spunta (e un timer) per giro
+  if (block.rounds && block.rounds <= 12 && /^\d{1,3}\s*(?:"|”|″|''|sec|s)$|^\d{1,2}\s*['’]\s*(?:\d{1,2}\s*(?:"|”|″))?$/i.test(rx.trim())) {
+    const secs = restSeconds(rx);
+    if (secs) return { mode: "check", rows: block.rounds, label: secs % 60 === 0 && secs >= 60 ? `${secs / 60}'` : secs > 60 ? `${Math.floor(secs / 60)}'${secs % 60}"` : `${secs}"` };
+  }
   return { mode: "text" };
 }
 

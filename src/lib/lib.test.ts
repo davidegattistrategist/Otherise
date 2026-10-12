@@ -504,6 +504,10 @@ describe("logbook", () => {
     expect(logPlan({ ...emptyItem(1), prescriptions: ["12"] }, circuit, 1)).toMatchObject({ mode: "sets", rows: 3, repsHint: "12" });
     expect(logPlan({ ...emptyItem(1), prescriptions: ["10-12 20kg"] }, circuit, 1)).toMatchObject({ mode: "sets", rows: 3, kgHint: 20 });
     expect(logPlan({ ...emptyItem(1), prescriptions: ["12"] }, emptyBlock(1, "amrap"), 1)).toEqual({ mode: "text" });
+    // solo il tempo in un circuito: una spunta per giro (con il suo timer)
+    expect(logPlan({ ...emptyItem(1), prescriptions: ["30\""] }, circuit, 1)).toEqual({ mode: "check", rows: 3, label: "30\"" });
+    expect(logPlan({ ...emptyItem(1), prescriptions: ["1'"] }, circuit, 1)).toEqual({ mode: "check", rows: 3, label: "1'" });
+    expect(logPlan({ ...emptyItem(1), prescriptions: ["30\""] }, single, 1)).toEqual({ mode: "text" });
   });
   it("legge i recuperi", () => {
     expect(restSeconds('90"')).toBe(90);
@@ -904,5 +908,68 @@ describe("bozze di risposta: programma vs fatto", () => {
     const parts = styleParts([{ id: "1", clientId: "a", kind: "message", text: "Ciao bella, a giovedì", at: "1" }], "a");
     expect(parts.client).toContain("Ciao bella");
     expect(parts.general).not.toContain("Ciao bella");
+  });
+});
+
+describe("timer dell'allenamento", async () => {
+  const { adjustPlan, blockTimer, emomItemTimer, emomSeconds, fmtClock, restTimerFor, timedSetTimer, timerAt, totalSeconds, LEAD_SECONDS } = await import("./program/timer");
+  const block = (over: Partial<Parameters<typeof blockTimer>[0]>) => ({ ...emptyBlock(1, over.kind ?? "single"), ...over }) as Parameters<typeof blockTimer>[0];
+
+  it("AMRAP di 24 minuti: 3 secondi per partire e poi 24 minuti", () => {
+    const p = blockTimer(block({ kind: "amrap", durationMin: 24 }))!;
+    expect(totalSeconds(p)).toBe(LEAD_SECONDS + 24 * 60);
+    expect(timerAt(p, 1).phase.kind).toBe("lead");
+    const s = timerAt(p, LEAD_SECONDS + 60);
+    expect(s.phase.kind).toBe("work");
+    expect(fmtClock(s.remaining)).toBe("23:00");
+    expect(timerAt(p, LEAD_SECONDS + 24 * 60).done).toBe(true);
+  });
+
+  it("EMOM ogni 2 minuti per 12 minuti: 6 giri", () => {
+    const p = blockTimer(block({ kind: "emom", durationMin: 12, everySec: 120 }))!;
+    expect(p.title).toBe("E2MOM 12 min");
+    expect(p.phases.filter((x) => x.kind === "work")).toHaveLength(6);
+    const s = timerAt(p, LEAD_SECONDS + 2 * 120 + 30);
+    expect(s.phase.label).toBe("Giro 3/6");
+    expect(fmtClock(s.remaining)).toBe("1:30");
+  });
+
+  it("intervalli: lavoro e recupero alternati, niente recupero dopo l'ultimo giro", () => {
+    const p = blockTimer(block({ kind: "interval", rounds: 8, workSec: 30, restSec: 15 }))!;
+    expect(totalSeconds(p)).toBe(LEAD_SECONDS + 8 * 30 + 7 * 15);
+    expect(timerAt(p, LEAD_SECONDS + 35).phase.label).toBe("Recupero 1/8");
+    expect(timerAt(p, LEAD_SECONDS + 45).phase.label).toBe("Lavoro 2/8");
+    expect(p.phases.at(-1)!.kind).toBe("work");
+  });
+
+  it("senza tempi il blocco non ha timer", () => {
+    expect(blockTimer(block({ kind: "amrap", durationMin: null }))).toBeNull();
+    expect(blockTimer(block({ kind: "interval", workSec: null }))).toBeNull();
+    expect(blockTimer(block({ kind: "circuit", rounds: 3 }))).toBeNull();
+  });
+
+  it("recupero 'EMOM 2,5' dell'esercizio: una serie ogni 2 minuti e mezzo", () => {
+    expect(emomSeconds("EMOM 2,5")).toBe(150);
+    expect(emomSeconds("emom 2'")).toBe(120);
+    expect(emomSeconds("90\"")).toBeNull();
+    const p = emomItemTimer("EMOM 2,5", 4)!;
+    expect(p.phases.filter((x) => x.kind === "work")).toHaveLength(4);
+    expect(timerAt(p, LEAD_SECONDS + 151).phase.label).toBe("Serie 2/4");
+    // il recupero normale non parte per le serie EMOM
+    expect(restTimerFor("EMOM 2,5")).toBeNull();
+    expect(restTimerFor("1'30\"")!.phases[0].seconds).toBe(90);
+  });
+
+  it("serie a tempo e ±15 secondi sul recupero", () => {
+    const t = timedSetTimer(30, 2, 3, "Plank");
+    expect(t.title).toBe("Plank · serie 2/3");
+    expect(timedSetTimer(30, 1, 1).title).toBe("Serie");
+    expect(totalSeconds(t)).toBe(LEAD_SECONDS + 30);
+    const r = restTimerFor("60\"")!;
+    expect(adjustPlan(r, 10, 15).phases[0].seconds).toBe(75);
+    // togliere più di quanto resta lascia almeno un secondo
+    expect(adjustPlan(r, 55, -15).phases[0].seconds).toBe(56);
+    expect(fmtClock(65)).toBe("1:05");
+    expect(fmtClock(0.2)).toBe("0:01");
   });
 });

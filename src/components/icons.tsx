@@ -49,3 +49,9 @@ export const IconTrophy = (p: P) => <Base {...p}><path d="M8 4h8v5a4 4 0 0 1-8 0
 export const IconDownload = (p: P) => <Base {...p}><path d="M12 4v12" /><path d="m7 11 5 5 5-5" /><path d="M4 20h16" /></Base>;
 export const IconWhatsapp = (p: P) => <Base {...p}><path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z" /><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-1.8-1.8l.8-1-1-2z" /></Base>;
 export const IconPhoto = (p: P) => <Base {...p}><rect x="3" y="5" width="18" height="14" rx="3" /><circle cx="9" cy="10" r="1.8" /><path d="m21 16-5-5-8 8" /></Base>;
+export const IconPause = ({ size = 20, ...p }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...p}><rect x="6.5" y="5" width="4" height="14" rx="1" /><rect x="13.5" y="5" width="4" height="14" rx="1" /></svg>
+);
+export const IconRestart = (p: P) => <Base {...p}><path d="M4 12a8 8 0 1 0 2.4-5.7" /><path d="M4 4v5h5" /></Base>;
+export const IconSound = (p: P) => <Base {...p}><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z" /><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></Base>;
+export const IconSoundOff = (p: P) => <Base {...p}><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z" /><path d="m16 9.5 5 5M21 9.5l-5 5" /></Base>;
