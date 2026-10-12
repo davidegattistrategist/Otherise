@@ -11,12 +11,14 @@ export function SessionForm({
   today,
   compact,
   showPackage = true,
+  packageLabel = "Conta nel pacchetto",
 }: {
   action: (s: ActionState, fd: FormData) => Promise<ActionState>;
   values?: { session_date: string; notes: string; counts_toward_package: boolean };
   today: string;
   compact?: boolean;
   showPackage?: boolean;
+  packageLabel?: string;
 }) {
   const [state, formAction] = useActionState(action, null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -35,7 +37,7 @@ export function SessionForm({
         {showPackage ? (
           <label className="flex min-h-11 items-center gap-2 text-[15px]">
             <input type="checkbox" name="counts_toward_package" defaultChecked={values?.counts_toward_package ?? true} className="h-5 w-5 accent-[var(--color-accent)]" />
-            Conta nel pacchetto
+            {packageLabel}
           </label>
         ) : values && !values.counts_toward_package ? null : (
           <input type="hidden" name="counts_toward_package" value="on" />

@@ -3,12 +3,12 @@ import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatShort, todayISO } from "@/lib/dates";
 import { billingStatus, formatEuro, isPeriodic, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
-import { reminderChatLink } from "@/lib/data/billing";
+import { getExtraSessions, reminderChatLink } from "@/lib/data/billing";
 import { IconChat, IconDown } from "@/components/icons";
 import { Card, Dot, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
-import { ExtraPaymentForm, PaymentForm, PlanForm, ReminderButton } from "./forms";
-import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree } from "./actions";
+import { ExtraPaymentForm, ExtraSessionsFix, PaymentForm, PlanForm, ReminderButton } from "./forms";
+import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setExtraSessionsLeft } from "./actions";
 import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Pagamenti" };
@@ -38,6 +38,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
     );
   }
   const plan = (plans ?? []).find((p) => p.active) ?? null;
+  const extra = await getExtraSessions(supabase, id);
   const row = (billing as BillingRow[] | null)?.[0] ?? null;
   // in pausa o a fine percorso non è tra i pagamenti da incassare
   const paused = client?.status === "paused" || client?.status === "archived";
@@ -111,8 +112,8 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
           </Card>
         ) : null}
 
-        {!editingPlan ? (
-          <details className="group rounded-[24px] bg-card" open={!plan}>
+        {plan && !editingPlan ? (
+          <details className="group rounded-[24px] bg-card">
             <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
               <span>
                 <span className="block text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">Pagamento extra</span>
@@ -141,6 +142,20 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
       </div>
 
       <div className="flex flex-col gap-4">
+        {extra ? (
+          <Card className="flex flex-col gap-3">
+            <Eyebrow>Sessioni PT extra</Eyebrow>
+            <div className="flex items-baseline gap-2">
+              <span className={`text-[34px] leading-none font-semibold tabular ${extra.left <= 0 ? "text-accent" : ""}`}>{extra.left}</span>
+              <span className="text-[15px] text-muted">{extra.left === 1 ? "rimasta" : "rimaste"} su {extra.bought} pagate</span>
+            </div>
+            <p className="text-sm text-muted">
+              {extra.left < 0 ? `Ne avete fatte ${-extra.left} in più di quelle pagate. ` : extra.left === 0 ? "Sono finite: se continuate, registra un nuovo pagamento extra. " : ""}
+              Scalano da sole quando segni una sessione in <a href={`/staff/clienti/${id}/sessioni`} className="font-semibold text-ink underline">Sessioni PT</a> (contano quelle dal {formatShort(extra.since, 0)}).
+            </p>
+            <ExtraSessionsFix action={setExtraSessionsLeft.bind(null, id)} left={extra.left} />
+          </Card>
+        ) : null}
         {plan && !paused ? (
           <Card className="flex flex-col gap-3">
             <Eyebrow>Promemoria</Eyebrow>

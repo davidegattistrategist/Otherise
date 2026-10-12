@@ -367,6 +367,16 @@ describe.skipIf(!run)("permessi", () => {
     expect((await clientA.rpc("client_billing", { cid: clientAId })).data).toHaveLength(1);
   });
 
+  it("sessioni extra: la correzione del conteggio la fa solo il titolare", async () => {
+    const { error } = await coach.from("clients").update({ extra_sessions_adjust: 3 }).eq("id", clientAId);
+    expect(error).not.toBeNull();
+    await clientA.from("clients").update({ extra_sessions_adjust: 3 }).eq("id", clientAId);
+    expect((await admin.from("clients").select("extra_sessions_adjust").eq("id", clientAId).single()).data!.extra_sessions_adjust).toBe(0);
+    await owner.from("clients").update({ extra_sessions_adjust: 2 }).eq("id", clientAId).throwOnError();
+    expect((await admin.from("clients").select("extra_sessions_adjust").eq("id", clientAId).single()).data!.extra_sessions_adjust).toBe(2);
+    await owner.from("clients").update({ extra_sessions_adjust: 0 }).eq("id", clientAId).throwOnError();
+  });
+
   it("formula delle pliche: la sceglie lo staff che segue il cliente, valori ammessi soltanto", async () => {
     await coach.from("clients").update({ skinfold_formula: "f3_tsa" }).eq("id", clientAId).throwOnError();
     const { error } = await coach.from("clients").update({ skinfold_formula: "inventata" }).eq("id", clientAId);

@@ -9,6 +9,7 @@ import { billingStatus, formatEuro, isPeriodic, METHODS, nextPaymentProposal, PL
 import { notify } from "@/lib/notify";
 import { sendEmail } from "@/lib/email";
 import { siteUrl } from "@/lib/site";
+import { getExtraSessions } from "@/lib/data/billing";
 import type { ActionState } from "@/components/form-bits";
 
 const money = (v: FormDataEntryValue | null) => {
@@ -139,6 +140,24 @@ export async function recordExtraPayment(clientId: string, _: ActionState, fd: F
   if (error) return { error: "Salvataggio non riuscito." };
   revalidate(clientId);
   return { ok: true, message: `Pagamento extra di ${formatEuro(amount)} registrato. La scadenza del piano non cambia.` };
+}
+
+/** Correzione a mano: "ne restano N" (il conteggio poi continua da lì). */
+export async function setExtraSessionsLeft(clientId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  await requireOwner();
+  const supabase = await createClient();
+  const raw = String(fd.get("left") ?? "").trim();
+  const left = Number(raw);
+  if (!raw || !Number.isInteger(left) || left < 0) return { error: "Scrivi quante sessioni restano, per esempio 7." };
+  const current = await getExtraSessions(supabase, clientId);
+  if (!current) return { error: "Prima registra un pagamento extra con il numero di sessioni." };
+  // used = fatte + adjust; vogliamo bought - used = left
+  const done = current.used - current.adjust;
+  const adjust = current.bought - left - done;
+  const { error } = await supabase.from("clients").update({ extra_sessions_adjust: adjust }).eq("id", clientId);
+  if (error) return { error: "Salvataggio non riuscito." };
+  revalidate(clientId);
+  return { ok: true, message: `Fatto: ${left === 1 ? "resta 1 sessione" : `restano ${left} sessioni`}.` };
 }
 
 export async function deletePayment(clientId: string, paymentId: string) {

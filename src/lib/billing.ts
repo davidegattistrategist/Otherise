@@ -182,3 +182,29 @@ export function nextPaymentProposal(plan: { kind: PlanKind; amount: number | str
 
 /** Quanto vale un piano in un mese (per le stime delle entrate ricorrenti) */
 export const MONTHLY_FACTOR: Partial<Record<PlanKind, number>> = { monthly: 1, six_weeks: 30.44 / 42, quarterly: 1 / 3, semiannual: 1 / 6, annual: 1 / 12 };
+
+export type ExtraSessions = { bought: number; used: number; left: number; since: ISODate };
+
+/**
+ * Sessioni PT extra, comprate fuori dal piano (pagamenti extra con il numero di
+ * sessioni). Si scalano le sessioni PT segnate "scala dal pacchetto" dal giorno
+ * del primo pagamento extra; `adjust` è la correzione fatta a mano dal trainer
+ * (sessioni già fatte in più, positivo, o da restituire, negativo). Ai clienti
+ * con un pacchetto come piano principale le sessioni scalano dal pacchetto,
+ * quindi qui non si conta nulla.
+ */
+export function extraSessions(input: {
+  planKind: PlanKind | null;
+  payments: Array<{ plan_id: string | null; paid_on: ISODate; sessions: number | null }>;
+  sessions: Array<{ session_date: ISODate; counts_toward_package: boolean }>;
+  adjust: number;
+}): ExtraSessions | null {
+  if (input.planKind === "package") return null;
+  const extra = input.payments.filter((p) => !p.plan_id && p.sessions && p.sessions > 0);
+  if (!extra.length) return null;
+  const since = extra.map((p) => p.paid_on).sort()[0];
+  const bought = extra.reduce((s, p) => s + (p.sessions ?? 0), 0);
+  const done = input.sessions.filter((s) => s.counts_toward_package && s.session_date >= since).length;
+  const used = done + input.adjust;
+  return { bought, used, left: bought - used, since };
+}

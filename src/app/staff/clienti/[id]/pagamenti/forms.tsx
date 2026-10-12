@@ -170,7 +170,7 @@ export function ExtraPaymentForm({ action, today, method }: { action: Action; to
         </Field>
       </div>
       <div className="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
-        <Field label="Sessioni" hint="facoltativo">
+        <Field label="Sessioni" hint="se le scrivi, scalano da sole">
           <Input name="sessions" type="number" min={1} placeholder="Es. 10" />
         </Field>
         <Field label="Per cosa">
@@ -179,6 +179,22 @@ export function ExtraPaymentForm({ action, today, method }: { action: Action; to
       </div>
       <ActionMessage state={state} />
       <div><SubmitButton variant="secondary">Registra il pagamento extra</SubmitButton></div>
+    </form>
+  );
+}
+
+/** "Ne restano N": corregge a mano il conteggio delle sessioni extra. */
+export function ExtraSessionsFix({ action, left }: { action: Action; left: number }) {
+  const [state, formAction] = useActionState(action, null);
+  return (
+    <form action={formAction} className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="Correggi: ne restano">
+          <Input key={left} name="left" type="number" min={0} defaultValue={Math.max(0, left)} className="max-w-28" />
+        </Field>
+        <SubmitButton variant="secondary" size="sm">Salva</SubmitButton>
+      </div>
+      <ActionMessage state={state} />
     </form>
   );
 }

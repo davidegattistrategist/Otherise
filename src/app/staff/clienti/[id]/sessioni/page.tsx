@@ -5,6 +5,7 @@ import { formatWithWeekday, todayISO } from "@/lib/dates";
 import { Card, EmptyState, Eyebrow } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { SessionForm } from "./session-form";
+import { getExtraSessions } from "@/lib/data/billing";
 import { deletePtSession, savePtSession } from "./actions";
 
 export const metadata: Metadata = { title: "Sessioni PT" };
@@ -25,7 +26,10 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
   // "Conta nel pacchetto" serve solo ai clienti con un pacchetto di sessioni
   // (il collaboratore non vede i piani: per lui resta visibile)
   const { data: plan } = await supabase.from("payment_plans").select("kind").eq("client_id", id).eq("active", true).maybeSingle();
-  const showPackage = !plan || plan.kind === "package";
+  // sessioni PT extra pagate a parte (solo il titolare le vede)
+  const extra = await getExtraSessions(supabase, id);
+  const showPackage = !plan || plan.kind === "package" || Boolean(extra);
+  const packageLabel = extra ? "Scala dalle sessioni extra" : "Conta nel pacchetto";
   const thisMonth = list.filter((s) => s.session_date.slice(0, 7) === today.slice(0, 7)).length;
 
   return (
@@ -35,7 +39,13 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
           <Eyebrow>Nuova sessione</Eyebrow>
           <p className="mt-1.5 text-sm text-muted">Due righe a fine allenamento bastano: l&apos;assistente AI le userà per preparare il prossimo programma. Il cliente non le vede.</p>
         </div>
-        <SessionForm action={savePtSession.bind(null, id, null)} today={today} showPackage={showPackage} />
+        {extra ? (
+          <div className="rounded-2xl bg-sand px-4 py-3 text-[15px]">
+            <span className="font-semibold">Sessioni PT extra: {extra.left <= 0 ? "finite" : extra.left === 1 ? "ne resta 1" : `ne restano ${extra.left}`}</span>
+            <span className="text-muted"> su {extra.bought} pagate</span>
+          </div>
+        ) : null}
+        <SessionForm action={savePtSession.bind(null, id, null)} today={today} showPackage={showPackage} packageLabel={packageLabel} />
       </Card>
 
       <div className="flex flex-col gap-3">
@@ -50,14 +60,14 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
             modifica === s.id ? (
               <Card key={s.id} className="flex flex-col gap-3">
                 <Eyebrow>Modifica sessione</Eyebrow>
-                <SessionForm compact action={savePtSession.bind(null, id, s.id)} today={today} values={s} showPackage={showPackage} />
+                <SessionForm compact action={savePtSession.bind(null, id, s.id)} today={today} values={s} showPackage={showPackage} packageLabel={packageLabel} />
                 <a href={`/staff/clienti/${id}/sessioni`} className="text-sm font-semibold underline">Chiudi</a>
               </Card>
             ) : (
               <Card key={s.id} className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-semibold">{formatWithWeekday(s.session_date)}</span>
-                  {showPackage ? <span className="text-sm text-muted">{s.counts_toward_package ? "Conta nel pacchetto" : "Fuori pacchetto"}</span> : null}
+                  {showPackage ? <span className="text-sm text-muted">{s.counts_toward_package ? (extra ? "Scala dalle extra" : "Conta nel pacchetto") : extra ? "Non scala" : "Fuori pacchetto"}</span> : null}
                 </div>
                 {s.notes ? <p className="whitespace-pre-line text-[15px] leading-relaxed text-ink-soft">{s.notes}</p> : <p className="text-sm text-muted">Nessuna nota.</p>}
                 <div className="flex gap-4 pt-1">

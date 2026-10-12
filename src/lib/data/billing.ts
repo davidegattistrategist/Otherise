@@ -1,7 +1,7 @@
 import "server-only";
 import type { ServerSupabase } from "../supabase/server";
 import { bySurname, listName } from "../names";
-import { billingStatus, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PLAN_LABELS, situationText, type BillingStatus, type PlanKind } from "../billing";
+import { billingStatus, extraSessions, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PLAN_LABELS, situationText, type BillingStatus, type PlanKind } from "../billing";
 import { addDays, addMonths, formatLong, formatShort, todayISO, type ISODate } from "../dates";
 import { DEFAULT_PAYMENT_MESSAGE, fillTemplate } from "../whatsapp";
 
@@ -117,3 +117,19 @@ export const monthLabel = (ym: string) =>
   new Intl.DateTimeFormat("it-IT", { month: "short", timeZone: "UTC" }).format(new Date(`${ym}-15T00:00:00Z`)) as string;
 
 export type { ISODate };
+
+/**
+ * Sessioni PT extra del cliente (solo il titolare vede i pagamenti: per il
+ * collaboratore torna null). `adjust` è la correzione salvata sul cliente.
+ */
+export async function getExtraSessions(supabase: ServerSupabase, clientId: string) {
+  const [{ data: plan }, { data: payments }, { data: sessions }, { data: client }] = await Promise.all([
+    supabase.from("payment_plans").select("kind").eq("client_id", clientId).eq("active", true).maybeSingle(),
+    supabase.from("payments").select("plan_id, paid_on, sessions").eq("client_id", clientId).is("plan_id", null),
+    supabase.from("pt_sessions").select("session_date, counts_toward_package").eq("client_id", clientId),
+    supabase.from("clients").select("extra_sessions_adjust").eq("id", clientId).maybeSingle(),
+  ]);
+  const adjust = client?.extra_sessions_adjust ?? 0;
+  const result = extraSessions({ planKind: (plan?.kind as PlanKind | undefined) ?? null, payments: payments ?? [], sessions: sessions ?? [], adjust });
+  return result ? { ...result, adjust } : null;
+}

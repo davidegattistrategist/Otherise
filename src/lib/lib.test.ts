@@ -7,7 +7,7 @@ import { checkDue } from "./check-due";
 import { DEDICATIONS, QUOTES, dedicationOfDay, quoteOfDay } from "./quotes";
 import { estimateOneRepMax } from "./strength/e1rm";
 import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
-import { billingStatus, clientFacingStatus, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
+import { billingStatus, clientFacingStatus, extraSessions, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
 import { addDays, addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
 import { displayWeek, nextDay, nextWorkout, programEndDate, weekPosition } from "./program/schedule";
 import { buildNextPhase, copyWeekToOthers } from "./program/next-phase";
@@ -264,7 +264,24 @@ describe("pagamenti", () => {
     expect(pkg.label).toBe("2 sessioni rimaste");
     expect(billingStatus({ ...base, kind: "package", sessions_bought: 10, sessions_used: 10 }, "2026-10-09").state).toBe("overdue");
     expect(billingStatus(null, "2026-10-09").state).toBe("none");
-  });  it("al cliente solo scadenze vicine", () => {
+  });  it("sessioni PT extra: comprate con i pagamenti extra, scalano dalle sessioni segnate", () => {
+    const payments = [
+      { plan_id: "trimestre", paid_on: "2026-09-01", sessions: null },
+      { plan_id: null, paid_on: "2026-10-12", sessions: 10 },
+      { plan_id: null, paid_on: "2026-10-20", sessions: null },
+    ];
+    const sessions = [
+      { session_date: "2026-10-01", counts_toward_package: true }, // prima del pagamento: non conta
+      { session_date: "2026-10-12", counts_toward_package: true },
+      { session_date: "2026-10-14", counts_toward_package: false }, // compresa nel trimestre
+      { session_date: "2026-10-16", counts_toward_package: true },
+    ];
+    expect(extraSessions({ planKind: "quarterly", payments, sessions, adjust: 0 })).toEqual({ bought: 10, used: 2, left: 8, since: "2026-10-12" });
+    expect(extraSessions({ planKind: "quarterly", payments, sessions, adjust: 3 })?.left).toBe(5);
+    expect(extraSessions({ planKind: "package", payments, sessions, adjust: 0 })).toBeNull();
+    expect(extraSessions({ planKind: "quarterly", payments: payments.slice(0, 1), sessions, adjust: 0 })).toBeNull();
+  });
+  it("al cliente solo scadenze vicine", () => {
     const base = { plan_id: "p", amount: 600, sessions_bought: 0, sessions_used: 0, paid_until: null as string | null };
     const st = (r: Partial<typeof base> & { kind: PlanKind }) => clientFacingStatus(billingStatus({ ...base, ...r }, "2026-10-12"));
     expect(st({ kind: "quarterly", paid_until: "2026-11-01" })?.state).toBe("ok");
