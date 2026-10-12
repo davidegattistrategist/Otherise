@@ -1,6 +1,6 @@
 # Guida all'installazione di Otherise
 
-> Esiste anche una versione passo per passo per chi parte da zero, con le spiegazioni di ogni schermata e il messaggio da incollare in Claude: è il documento "Otherise: guida all'installazione per Diego" che ti ha condiviso Davide.
+> Se hai ricevuto Otherise come pacchetto (cartella con "LEGGIMI PER INIZIARE"), non serve leggere questa guida: il tuo assistente Claude ti accompagna passo per passo e la usa come riferimento.
 
 Questa guida porta l'app online **sui tuoi account**: il codice su GitHub, il database su Supabase, il sito su Vercel, l'assistente AI su Anthropic. Nessuno oltre a te (e a chi inviti) vede i dati dei tuoi clienti.
 
@@ -34,10 +34,9 @@ Tieni aperto un file di note (anche sul telefono) dove incollare man mano le **c
    - Nome: `otherise`
    - Seleziona **Private**
    - Non aggiungere README né altro, poi **Create repository**.
-3. Nel repository appena creato: **Settings → Collaborators → Add people** e aggiungi Davide (`davidegattistrategist`).
-4. Scrivi a Davide: copierà lui il codice nel tuo repository. Quando ha fatto, vedrai i file comparire.
+3. Collega GitHub a Claude (Impostazioni di Claude → connettori/integrazioni → GitHub) e dai accesso al repository `otherise`: Claude ci carica il codice (dal pacchetto ricevuto, file `otherise.bundle`). Quando ha fatto, vedrai i file comparire.
 
-Da quel momento il codice è tuo. Quando Davide migliora l'app, può mandarti gli aggiornamenti nello stesso modo (vedi "Aggiornamenti" in fondo).
+Da quel momento il codice è tuo. Le modifiche le fa Claude su tua richiesta (vedi `docs/COME-LAVORARE-CON-CLAUDE.md`); gli aggiornamenti di chi ti ha dato l'app si possono portare nel tuo repository (vedi "Aggiornamenti" in fondo).
 
 ---
 
@@ -148,8 +147,8 @@ Per importare le vecchie schede: apri la scheda Google del cliente, scegli la sc
 
 ## 7. Aggiornamenti futuri
 
-- **Codice**: Davide (o Claude, vedi `docs/COME-LAVORARE-CON-CLAUDE.md`) carica le modifiche sul tuo GitHub; Vercel rimette online la nuova versione da solo in un paio di minuti.
-- **Database**: se un aggiornamento aggiunge un file nella cartella `supabase/migrations/`, va eseguito una volta nel **SQL Editor** di Supabase, come al passo 2.3 (solo il file nuovo, non quelli già eseguiti). Chi ti manda l'aggiornamento te lo dice.
+- **Codice**: Claude (vedi `docs/COME-LAVORARE-CON-CLAUDE.md`) carica le modifiche sul tuo GitHub; Vercel rimette online la nuova versione da solo in un paio di minuti. Per prendere le novità dall'installazione di chi ti ha dato l'app: il file `VERSIONE.md` dice da quale versione sei partito; con accesso in lettura al suo repository, Claude confronta le versioni e applica solo le differenze.
+- **Database**: se un aggiornamento aggiunge un file nella cartella `supabase/migrations/`, va eseguito una volta su Supabase (solo il file nuovo, non quelli già eseguiti): lo fa Claude con il connettore di Supabase, oppure tu nel **SQL Editor** come al passo 2.3.
 
 ## 8. Chat: foto e video
 
