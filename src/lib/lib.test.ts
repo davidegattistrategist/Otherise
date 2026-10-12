@@ -689,7 +689,7 @@ describe("notifiche push", () => {
     const { homeScreenName } = await import("./app-name");
     expect(homeScreenName(null)).toBe("Otherise");
     expect(homeScreenName("Diego Coaching")).toBe("Diego Coaching");
-    expect(homeScreenName("Diego Teoldi Personal Training")).toBe("Diego");
+    expect(homeScreenName("Marco Bianchi Personal Training")).toBe("Marco");
   });
 });
 

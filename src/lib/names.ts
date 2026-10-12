@@ -3,7 +3,7 @@ export function bySurname(a: { first_name: string; last_name: string }, b: { fir
   return a.last_name.localeCompare(b.last_name, "it", { sensitivity: "base" }) || a.first_name.localeCompare(b.first_name, "it", { sensitivity: "base" });
 }
 
-/** Nome negli elenchi: prima il cognome, così si trova a colpo d'occhio ("Ippolito Sara"). */
+/** Nome negli elenchi: prima il cognome, così si trova a colpo d'occhio ("Rossi Anna"). */
 export function listName(c: { first_name: string; last_name: string }): string {
   return `${c.last_name} ${c.first_name}`.trim();
 }
