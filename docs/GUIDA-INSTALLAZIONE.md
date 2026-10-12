@@ -159,6 +159,7 @@ Per importare le vecchie schede: apri la scheda Google del cliente, scegli la sc
 ## 9. Sicurezza e manutenzione
 
 - Non condividere mai la chiave secret di Supabase né quella di Anthropic. Se pensi che una chiave sia uscita, rigenerala dal servizio e aggiornala su Vercel (poi Redeploy).
+- **Backup notturno gratuito**: attivalo seguendo `docs/BACKUP.md` (due segreti su GitHub, dieci minuti). Ogni notte copia i dati, verifica che la copia si possa ricaricare e ti avvisa via email se qualcosa non va.
 - Con il piano Free di Supabase **non ci sono backup automatici** e il progetto si mette in pausa se resta inattivo per una settimana (i controlli giornalieri lo tengono sveglio, ma non contarci). Con dati veri dei clienti passa al piano Pro.
 - Leggi anche `docs/PRIVACY.md`.
 
