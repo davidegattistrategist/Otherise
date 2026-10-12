@@ -17,7 +17,7 @@ const SERIF = { fontFamily: '"Fraunces Variable", Georgia, "Times New Roman", se
 /** Grandezza del testo in base alla lunghezza, così ogni frase sta bene sullo schermo. */
 const sizeFor = (t: string) => (t.length > 95 ? "clamp(27px, 7vw, 42px)" : t.length > 60 ? "clamp(31px, 8.2vw, 50px)" : "clamp(36px, 9.6vw, 58px)");
 
-export function DailyQuote({ quote, today, dateLabel, brand }: { quote: Quote; today: string; dateLabel: string; brand: string }) {
+export function DailyQuote({ quote, today, dateLabel, brand, dedication }: { quote: Quote; today: string; dateLabel: string; brand: string; dedication: string }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -101,9 +101,9 @@ export function DailyQuote({ quote, today, dateLabel, brand }: { quote: Quote; t
             </div>
 
             <div className="quote-in flex items-center justify-between gap-4" style={{ animationDelay: "700ms" }}>
-              <span className="flex items-center gap-2.5 text-[16px] whitespace-nowrap text-muted-dark italic sm:text-[17px]" style={SERIF}>
-                <span className="hidden h-px w-6 bg-accent sm:block" aria-hidden="true" />
-                un giorno alla volta
+              <span className="flex min-w-0 items-center gap-2.5 text-[16px] leading-snug text-muted-dark italic text-balance sm:text-[17px]" style={SERIF}>
+                <span className="hidden h-px w-6 shrink-0 bg-accent sm:block" aria-hidden="true" />
+                {dedication}
               </span>
               <button type="button" onClick={() => setOpen(false)} className="min-h-12 shrink-0 rounded-full bg-card px-5 text-[15px] font-semibold whitespace-nowrap text-ink hover:bg-white sm:px-6">
                 Inizia la giornata

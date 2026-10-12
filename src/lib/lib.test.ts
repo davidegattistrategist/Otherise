@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { commonSites, computeBodyComposition, formulaById, formulaUpgrade, protocolSites, referenceFormula, siteAverage } from "./body/skinfolds";
 import { sortChecks } from "./check-order";
 import { checkDue } from "./check-due";
-import { QUOTES, quoteOfDay } from "./quotes";
+import { DEDICATIONS, QUOTES, dedicationOfDay, quoteOfDay } from "./quotes";
 import { estimateOneRepMax } from "./strength/e1rm";
 import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
 import { billingStatus, clientFacingStatus, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
@@ -126,6 +126,12 @@ describe("plicometria", () => {
 });
 
 describe("frase del giorno", () => {
+  it("dedica col nome, diversa ogni giorno", () => {
+    expect(dedicationOfDay("2026-10-12", "Giulia")).toBe("per Giulia");
+    expect(dedicationOfDay("2026-10-13", " Giulia ")).toBe("forza Giulia");
+    expect(dedicationOfDay(`2026-10-${12 + DEDICATIONS.length}`, "Giulia")).toBe("per Giulia");
+    expect(dedicationOfDay("2026-10-12", null)).toBe("un giorno alla volta");
+  });
   it("100 frasi in sequenza, uguale per tutti nello stesso giorno, poi ricomincia", () => {
     expect(QUOTES).toHaveLength(100);
     expect(quoteOfDay("2026-10-12").n).toBe(1);

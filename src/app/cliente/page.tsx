@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { DailyQuote } from "@/components/daily-quote";
-import { quoteOfDay } from "@/lib/quotes";
+import { dedicationOfDay, quoteOfDay } from "@/lib/quotes";
 import type { Metadata } from "next";
 import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -176,7 +176,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
         ) : null}
       </div>
       {/* la frase del giorno: a tutto schermo alla prima apertura, poi qui in fondo */}
-      <DailyQuote quote={quote.quote} today={today} dateLabel={formatHeading(today)} brand={brand ?? "Otherise"} />
+      <DailyQuote quote={quote.quote} dedication={dedicationOfDay(today, client?.first_name)} today={today} dateLabel={formatHeading(today)} brand={brand ?? "Otherise"} />
     </div>
   );
 }

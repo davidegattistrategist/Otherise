@@ -185,3 +185,22 @@ export function quoteOfDay(today: ISODate): { n: number; quote: Quote } {
     QUOTES.length;
   return { n: i + 1, quote: QUOTES[i] };
 }
+
+/** Dedica in fondo alla frase del giorno: cambia ogni giorno, con il nome del cliente. */
+export const DEDICATIONS = [
+  "per {nome}",
+  "forza {nome}",
+  "buon allenamento, {nome}",
+  "questa è per te, {nome}",
+  "vai {nome}",
+  "un passo alla volta, {nome}",
+  "dai {nome}, oggi tocca a te",
+] as const;
+
+export function dedicationOfDay(today: ISODate, name: string | null | undefined): string {
+  const nome = name?.trim();
+  if (!nome) return "un giorno alla volta";
+  const n = DEDICATIONS.length;
+  const i = ((diffDays(QUOTES_START, today) % n) + n) % n;
+  return DEDICATIONS[i].replace("{nome}", nome);
+}
