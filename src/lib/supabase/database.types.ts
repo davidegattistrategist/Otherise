@@ -71,14 +71,14 @@ isOneToOne: false
                   ]
                 },"app_settings": {
                   Row: {
-                    "ai_lessons": string,"ai_lessons_updated_at": string | null,"ai_monthly_budget_eur": number,"ai_reply_lessons": string,"ai_reply_lessons_updated_at": string | null,"business_name": string,"coaching_method": string,"id": number,"legal_address": string,"legal_name": string,"legal_tax_id": string,"payment_message": string,"privacy_pec": string, "privacy_email": string,"reminder_days": number,"updated_at": string
+                    "ai_lessons": string,"ai_lessons_updated_at": string | null,"ai_monthly_budget_eur": number,"ai_reply_lessons": string,"ai_reply_lessons_updated_at": string | null,"business_name": string,"coaching_method": string,"id": number,"legal_address": string,"legal_name": string,"legal_tax_id": string,"payment_message": string,"privacy_pec": string, "privacy_email": string,"reminder_days": number,"staff_emails": boolean,"client_emails": boolean,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"ai_reply_lessons"?: string,"ai_reply_lessons_updated_at"?: string | null,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_pec"?: string, "privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
+                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"ai_reply_lessons"?: string,"ai_reply_lessons_updated_at"?: string | null,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_pec"?: string, "privacy_email"?: string,"reminder_days"?: number,"staff_emails"?: boolean,"client_emails"?: boolean,"updated_at"?: string
                   }
                   Update: {
-                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"ai_reply_lessons"?: string,"ai_reply_lessons_updated_at"?: string | null,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_pec"?: string, "privacy_email"?: string,"reminder_days"?: number,"updated_at"?: string
+                    "ai_lessons"?: string,"ai_lessons_updated_at"?: string | null,"ai_monthly_budget_eur"?: number,"ai_reply_lessons"?: string,"ai_reply_lessons_updated_at"?: string | null,"business_name"?: string,"coaching_method"?: string,"id"?: number,"legal_address"?: string,"legal_name"?: string,"legal_tax_id"?: string,"payment_message"?: string,"privacy_pec"?: string, "privacy_email"?: string,"reminder_days"?: number,"staff_emails"?: boolean,"client_emails"?: boolean,"updated_at"?: string
                   }
                   Relationships: [
                     

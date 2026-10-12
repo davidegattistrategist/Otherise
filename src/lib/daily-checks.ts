@@ -4,7 +4,7 @@ import "server-only";
  */
 import { createAdminClient } from "./supabase/admin";
 import { notify, type NewNotification } from "./notify";
-import { deliverPendingEmails, sendEmail } from "./email";
+import { deliverPendingEmails, emailPrefs, sendEmail } from "./email";
 import { addDays, ageOn, diffDays, formatHeading, formatLong, isBirthday, isoWeekday, mondayOf, todayISO } from "./dates";
 import { siteUrl } from "./site";
 import { billingStatus, clientFacingStatus, type PlanKind } from "./billing";
@@ -232,6 +232,7 @@ export async function removeOldChatVideos(today: string): Promise<number> {
  */
 async function sendStaffDigests(today: string): Promise<number> {
   if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) return 0;
+  if (!(await emailPrefs()).staff) return 0;
   const admin = createAdminClient();
   const since = new Date(Date.now() - 26 * 3600 * 1000).toISOString();
   const { data: staff } = await admin.from("profiles").select("id, email, full_name").in("role", ["owner", "coach"]);

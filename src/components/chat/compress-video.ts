@@ -1,7 +1,7 @@
 /**
  * Compressione dei video prima dell'invio in chat, come fa WhatsApp: il
- * telefono riduce il video a 720p e a circa 1,2 Mbit/s (H.264 + audio AAC,
- * file .mp4). Un minuto girato col telefono passa da 60–100 MB a circa 10 MB,
+ * telefono riduce il video a 540p e a circa 0,7 Mbit/s (H.264 + audio AAC,
+ * file .mp4). Un minuto girato col telefono passa da 60–100 MB a circa 6 MB,
  * e diventa un formato che si apre su iPhone, Android e computer.
  *
  * Usa le funzioni video del browser (WebCodecs) tramite la libreria
@@ -10,10 +10,10 @@
  * limite di dimensione.
  */
 
-/** Lato corto del video compresso, in pixel (720p). */
-export const COMPRESS_SHORT_SIDE = 720;
-/** Bitrate del video compresso (circa 9–10 MB al minuto con l'audio, come l'HD di WhatsApp). */
-export const COMPRESS_VIDEO_BITRATE = 1_200_000;
+/** Lato corto del video compresso, in pixel (540p: si vede bene la tecnica e pesa poco). */
+export const COMPRESS_SHORT_SIDE = 540;
+/** Bitrate del video compresso (circa 6 MB al minuto con l'audio). */
+export const COMPRESS_VIDEO_BITRATE = 700_000;
 /** Sotto questa dimensione il video si manda com'è (se è già un mp4). */
 export const COMPRESS_MIN_BYTES = 4 * 1024 * 1024;
 

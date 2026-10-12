@@ -82,3 +82,15 @@ export async function saveLessons(_: ActionState, fd: FormData): Promise<ActionS
   revalidatePath("/staff/impostazioni");
   return { ok: true, message: "Lezioni salvate: valgono dalla prossima bozza." };
 }
+
+export async function saveEmailPrefs(_: ActionState, fd: FormData): Promise<ActionState> {
+  await requireOwner();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("app_settings")
+    .update({ staff_emails: fd.get("staff_emails") === "on", client_emails: fd.get("client_emails") === "on", updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) return { error: "Salvataggio non riuscito. Se è appena arrivato un aggiornamento, esegui su Supabase il file SQL nuovo (20261012200000_email_avvisi.sql)." };
+  revalidatePath("/staff/impostazioni");
+  return { ok: true, message: "Preferenze salvate." };
+}

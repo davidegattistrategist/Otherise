@@ -98,3 +98,28 @@ export function LessonsForm({ action, value }: { action: Action; value: string }
     </form>
   );
 }
+
+export function EmailForm({ action, values }: { action: Action; values: { staff_emails: boolean; client_emails: boolean } }) {
+  const [state, formAction] = useActionState(action, null);
+  return (
+    <form action={formAction} className="flex flex-col gap-3">
+      <label className="flex min-h-11 items-start gap-3 text-[15px]">
+        <input type="checkbox" name="staff_emails" defaultChecked={values.staff_emails} className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-accent)]" />
+        <span>
+          <span className="font-semibold">Email a te e ai collaboratori</span>
+          <span className="block text-sm text-muted">Pagamenti, messaggi, check-up, dolori e riepilogo del mattino. Se le togli li vedi comunque nell&apos;app e con le notifiche sul telefono.</span>
+        </span>
+      </label>
+      <label className="flex min-h-11 items-start gap-3 text-[15px]">
+        <input type="checkbox" name="client_emails" defaultChecked={values.client_emails} className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--color-accent)]" />
+        <span>
+          <span className="font-semibold">Email ai clienti</span>
+          <span className="block text-sm text-muted">Nuovi messaggi, programma pronto, promemoria del check-up e dei rinnovi. Utile per chi non ha attivato le notifiche sul telefono.</span>
+        </span>
+      </label>
+      <p className="text-sm text-muted">Le email per entrare (invito e nuova password) partono sempre.</p>
+      <ActionMessage state={state} />
+      <div><SubmitButton>Salva le email</SubmitButton></div>
+    </form>
+  );
+}

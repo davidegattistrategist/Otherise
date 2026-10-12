@@ -28,10 +28,21 @@ function escapeHtml(s: string) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-/** Manda per email le notifiche in app non ancora inviate (ultime 48 ore). */
+/**
+ * Il titolare sceglie in Impostazioni chi riceve gli avvisi anche per email:
+ * lo staff (di serie no: vede tutto nell'app) e i clienti (di serie sì).
+ */
+export async function emailPrefs(): Promise<{ staff: boolean; clients: boolean }> {
+  const { data } = await createAdminClient().from("app_settings").select("staff_emails, client_emails").maybeSingle();
+  // se le colonne non ci sono ancora (file SQL non eseguito): niente email allo staff
+  return { staff: data?.staff_emails ?? false, clients: data?.client_emails ?? true };
+}
+
+/** Manda per email le notifiche in app non ancora inviate (ultime 48 ore), a chi le vuole. */
 export async function deliverPendingEmails(): Promise<number> {
   if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) return 0;
   const admin = createAdminClient();
+  const prefs = await emailPrefs();
   const since = new Date(Date.now() - 48 * 3600 * 1000).toISOString();
   const { data: pending } = await admin
     .from("notifications")
@@ -41,11 +52,16 @@ export async function deliverPendingEmails(): Promise<number> {
     .limit(100);
   if (!pending?.length) return 0;
   const ids = [...new Set(pending.map((n) => n.recipient_id))];
-  const { data: profiles } = await admin.from("profiles").select("id, email").in("id", ids);
+  const { data: profiles } = await admin.from("profiles").select("id, email, role").in("id", ids);
   const emailOf = new Map((profiles ?? []).map((p) => [p.id, p.email]));
+  const wants = new Map((profiles ?? []).map((p) => [p.id, p.role === "owner" || p.role === "coach" ? prefs.staff : prefs.clients]));
+  // chi non vuole email: le segniamo come gestite, così non partono più tardi tutte insieme
+  const skipped = pending.filter((n) => !wants.get(n.recipient_id)).map((n) => n.id);
+  if (skipped.length) await admin.from("notifications").update({ emailed_at: new Date().toISOString() }).in("id", skipped);
   const base = await siteUrl();
   let sent = 0;
   for (const n of pending) {
+    if (!wants.get(n.recipient_id)) continue;
     const to = emailOf.get(n.recipient_id);
     if (!to) continue;
     const ok = await sendEmail(to, n.title, [n.body, n.link ? `${base}${n.link}` : ""].filter(Boolean).join("\n"));

@@ -224,3 +224,22 @@ test("su iPhone senza trascrizione sul server: niente Detta, si usa il microfono
   await expect(page.getByRole("button", { name: "Detta" })).toHaveCount(0);
   await ctx.close();
 });
+
+test("avvisi per email: di serie niente email allo staff, il titolare può cambiarlo", async ({ page }) => {
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/impostazioni");
+  const card = page.locator("#email");
+  const staff = card.locator('input[name="staff_emails"]');
+  const clients = card.locator('input[name="client_emails"]');
+  await expect(staff).not.toBeChecked();
+  await expect(clients).toBeChecked();
+  await staff.check();
+  await card.getByRole("button", { name: "Salva le email" }).click();
+  await expect(card.getByText("Preferenze salvate.")).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#email input[name="staff_emails"]')).toBeChecked();
+  // rimetto com'era
+  await page.locator('#email input[name="staff_emails"]').uncheck();
+  await page.locator("#email").getByRole("button", { name: "Salva le email" }).click();
+  await expect(page.locator("#email").getByText("Preferenze salvate.")).toBeVisible();
+});

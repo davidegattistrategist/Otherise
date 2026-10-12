@@ -8,8 +8,8 @@ import { formatEuro } from "@/lib/billing";
 import { DEFAULT_PAYMENT_MESSAGE } from "@/lib/whatsapp";
 import { formatLong, todayISO } from "@/lib/dates";
 import { Card, Dot, Eyebrow, PageTitle, ProgressBar } from "@/components/ui";
-import { LessonsForm, MethodForm, PrivacyForm, ReplyLessonsForm, SettingsForm } from "./forms";
-import { saveLessons, saveMethod, savePrivacy, saveReplyLessons, saveSettings } from "./actions";
+import { EmailForm, LessonsForm, MethodForm, PrivacyForm, ReplyLessonsForm, SettingsForm } from "./forms";
+import { saveEmailPrefs, saveLessons, saveMethod, savePrivacy, saveReplyLessons, saveSettings } from "./actions";
 import { correctionTrend } from "@/lib/ai/learn";
 
 export const metadata: Metadata = { title: "Impostazioni" };
@@ -45,13 +45,13 @@ export default async function SettingsPage() {
   const supabase = await createClient();
   const monthStart = `${todayISO().slice(0, 7)}-01`;
   const [{ data: settings }, { data: usage }, { count: examples }, { data: learned }, trend] = await Promise.all([
-    supabase.from("app_settings").select("business_name, coaching_method, reminder_days, ai_monthly_budget_eur, payment_message, legal_name, legal_address, legal_tax_id, privacy_email, privacy_pec").maybeSingle(),
+    supabase.from("app_settings").select("business_name, coaching_method, reminder_days, ai_monthly_budget_eur, payment_message, legal_name, legal_address, legal_tax_id, privacy_email, privacy_pec, staff_emails, client_emails").maybeSingle(),
     supabase.from("ai_requests").select("cost_eur, kind").gte("created_at", `${monthStart}T00:00:00Z`),
     supabase.from("programs").select("id", { count: "exact", head: true }).eq("is_ai_example", true),
     supabase.from("app_settings").select("ai_lessons, ai_lessons_updated_at, ai_reply_lessons, ai_reply_lessons_updated_at").maybeSingle(),
     correctionTrend(supabase),
   ]);
-  const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20, payment_message: "", legal_name: "", legal_address: "", legal_tax_id: "", privacy_email: "", privacy_pec: "" };
+  const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20, payment_message: "", legal_name: "", legal_address: "", legal_tax_id: "", privacy_email: "", privacy_pec: "", staff_emails: false, client_emails: true };
   const privacyMissing = !s.legal_name || !s.legal_address || !s.legal_tax_id || !s.privacy_email;
   const spent = (usage ?? []).reduce((t, u) => t + Number(u.cost_eur), 0);
   const budget = Number(s.ai_monthly_budget_eur);
@@ -111,6 +111,11 @@ export default async function SettingsPage() {
           <Card className="flex flex-col gap-4">
             <Eyebrow>Attività</Eyebrow>
             <SettingsForm action={saveSettings} values={s} defaultMessage={DEFAULT_PAYMENT_MESSAGE} />
+          </Card>
+
+          <Card id="email" className="flex scroll-mt-6 flex-col gap-4">
+            <Eyebrow>Avvisi per email</Eyebrow>
+            <EmailForm action={saveEmailPrefs} values={{ staff_emails: s.staff_emails ?? false, client_emails: s.client_emails ?? true }} />
           </Card>
 
           <Card id="privacy" className="flex scroll-mt-6 flex-col gap-4">
