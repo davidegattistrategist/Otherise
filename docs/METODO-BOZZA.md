@@ -62,6 +62,7 @@ La primissima cosa è quanto tempo ha la persona per seduta: solo così distribu
 
 ## Superserie e circuiti
 - Lavoro muscolare: al massimo **superserie di 2 esercizi** (meglio unire distretti diversi: dorso + spinta, o due lavori di dorso diversi); 3 esercizi solo eccezionalmente. **Mai circuiti di 4 esercizi sullo stesso gruppo muscolare** (4 di addome o 4 di braccia è una follia: troppo tassante).
+- **Mai due macchine nella stessa superserie o nello stesso circuito di forza.** In palestra è difficile tenere occupate due postazioni insieme (per esempio leg press e lat machine): qualcun altro le usa e si crea confusione. Abbina sempre una macchina a un esercizio con i **manubri** (prima scelta), oppure a **corpo libero** o di **addome**. L'unica eccezione è quando nel programma precedente c'era già una superserie o un circuito con due macchine: in quel caso puoi mantenerla. La regola non vale per i circuiti ad alta intensità, cardio e HYROX.
 - Superserie sullo **stesso muscolo**: è una tecnica di intensità, solo come **finisher** (al massimo una per seduta, soprattutto braccia, a volte dorso o gambe) e solo se concordata.
 - **Circuiti ad alta intensità / aerobici / stile HYROX**: qui 4-5 esercizi hanno senso, alternando distretti e tipi di cardio diversi (es. vogatore + affondi in camminata + burpees). Formati possibili: AMRAP, EMOM, giri a tempo, esercizi di fila senza recupero fino a 30-50 minuti di lavoro. Vedi la parte HYROX.
 
