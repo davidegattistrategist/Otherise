@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getBillingOverview } from "@/lib/data/shared";
 import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -18,7 +19,7 @@ export default async function NewPaymentPage({ searchParams }: { searchParams: P
   const [{ data: clients }, { data: plans }, { data: billing }, { data: lastPays }] = await Promise.all([
     supabase.from("clients").select("id, first_name, last_name, status, start_date, pt_session_price").neq("status", "archived").eq("free", false),
     supabase.from("payment_plans").select("id, client_id, kind, amount, method, start_date, package_sessions").eq("active", true),
-    supabase.rpc("billing_overview"),
+    getBillingOverview().then((data) => ({ data })),
     supabase.from("payments").select("client_id, method, paid_on").order("paid_on", { ascending: false }).limit(500),
   ]);
   const planBy = new Map((plans ?? []).map((p) => [p.client_id, p]));

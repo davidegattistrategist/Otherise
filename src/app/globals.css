@@ -73,8 +73,8 @@ body {
   }
 }
 
-/* Sul telefono i campi restano a 16px: sotto, iPhone ingrandisce la pagina quando li tocchi */
-@media (max-width: 640px) {
+/* Sul telefono e sul tablet i campi restano a 16px: sotto, iPhone e iPad ingrandiscono la pagina quando li tocchi */
+@media (max-width: 640px), (hover: none) and (pointer: coarse) {
   input:not([data-large]),
   textarea,
   select {

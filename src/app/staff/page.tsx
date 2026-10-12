@@ -1,4 +1,5 @@
 import { DailyQuote } from "@/components/daily-quote";
+import { getBusinessName } from "@/lib/data/shared";
 import { dedicationOfDay, quoteOfDay } from "@/lib/quotes";
 import Link from "next/link";
 import { listName } from "@/lib/names";
@@ -55,7 +56,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
       .is("discomfort_seen_at", null)
       .order("updated_at", { ascending: false })
       .limit(20),
-    supabase.rpc("business_name"),
+    getBusinessName().then((data) => ({ data })),
   ]);
   const { programs, checks, training } = buildTodayList(clients, today);
   const billing = me.role === "owner" ? (await getBillingLines(supabase)).lines.filter((l) => !l.paused && (l.status.state === "overdue" || l.status.state === "due_soon")) : [];

@@ -1,4 +1,5 @@
 import "server-only";
+import { getBillingOverview } from "@/lib/data/shared";
 import type { ServerSupabase } from "../supabase/server";
 import { listName } from "../names";
 import { addDays, todayISO } from "../dates";
@@ -10,7 +11,7 @@ export async function getForecast(supabase: ServerSupabase, months: number) {
   const today = todayISO();
   const [{ data: clients }, { data: billing }, { data: plans }, { data: sessions }, { data: payments }] = await Promise.all([
     supabase.from("clients").select("id, first_name, last_name, status").eq("status", "active").eq("free", false),
-    supabase.rpc("billing_overview"),
+    getBillingOverview().then((data) => ({ data })),
     supabase.from("payment_plans").select("client_id, kind, amount, package_sessions").eq("active", true),
     supabase.from("pt_sessions").select("client_id, session_date").eq("counts_toward_package", true).gte("session_date", addDays(today, -84)),
     supabase.from("payments").select("client_id, paid_on, period_end, clients!inner(free)").eq("clients.free", false).gte("paid_on", addDays(today, -420)),

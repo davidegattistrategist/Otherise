@@ -18,24 +18,24 @@ export type Me = {
 /** L'utente collegato con il suo ruolo (una sola lettura per richiesta). */
 export const getMe = cache(async (): Promise<Me | null> => {
   const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return null;
-  const { data: profile } = await supabase.from("profiles").select("full_name, role, email").eq("id", data.user.id).maybeSingle();
+  // firma del token controllata sul server (senza chiamare Auth a ogni pagina)
+  const { data: auth } = await supabase.auth.getClaims();
+  const userId = typeof auth?.claims?.sub === "string" ? auth.claims.sub : null;
+  if (!userId) return null;
+  // profilo e scheda cliente insieme (una sola attesa)
+  const [{ data: profile }, { data: c }] = await Promise.all([
+    supabase.from("profiles").select("full_name, role, email").eq("id", userId).maybeSingle(),
+    supabase.from("clients").select("id, status").eq("user_id", userId).maybeSingle(),
+  ]);
   const role = (profile?.role ?? "none") as Role;
-  let clientId: string | null = null;
-  let clientStatus: string | null = null;
-  if (role === "client") {
-    const { data: c } = await supabase.from("clients").select("id, status").eq("user_id", data.user.id).maybeSingle();
-    clientId = c?.id ?? null;
-    clientStatus = c?.status ?? null;
-  }
+  const isClient = role === "client";
   return {
-    id: data.user.id,
-    email: profile?.email ?? data.user.email ?? "",
+    id: userId,
+    email: profile?.email ?? (typeof auth?.claims?.email === "string" ? auth.claims.email : ""),
     fullName: profile?.full_name ?? "",
     role,
-    clientId,
-    clientStatus,
+    clientId: isClient ? (c?.id ?? null) : null,
+    clientStatus: isClient ? (c?.status ?? null) : null,
   };
 });
 

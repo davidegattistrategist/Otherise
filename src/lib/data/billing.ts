@@ -1,4 +1,5 @@
 import "server-only";
+import { getBillingOverview } from "@/lib/data/shared";
 import type { ServerSupabase } from "../supabase/server";
 import { bySurname, listName } from "../names";
 import { billingStatus, ptCounterView, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PLAN_LABELS, situationText, type BillingStatus, type PlanKind } from "../billing";
@@ -27,7 +28,7 @@ export async function getBillingLines(supabase: ServerSupabase): Promise<{ lines
   const today = todayISO();
   const [{ data: clients }, { data: billing }, { data: plans }, { data: settings }] = await Promise.all([
     supabase.from("clients").select("id, first_name, last_name, status").neq("status", "archived").eq("free", false).order("last_name").order("first_name"),
-    supabase.rpc("billing_overview"),
+    getBillingOverview().then((data) => ({ data })),
     supabase.from("payment_plans").select("id, client_id, kind, amount, method, start_date, package_sessions").eq("active", true),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
   ]);

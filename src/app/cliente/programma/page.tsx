@@ -64,11 +64,11 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
         return (
           <Card key={day.id} className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-xl font-semibold">{day.title}{next && next.week === week && next.day.id === day.id ? <span className="ml-2 align-middle rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">Prossimo</span> : null}</h2>
+              <h2 className="min-w-0 text-xl font-semibold break-words">{day.title}{next && next.week === week && next.day.id === day.id ? <span className="ml-2 align-middle rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">Prossimo</span> : null}</h2>
               {st?.completed ? (
                 <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ink px-3 py-1 text-xs font-semibold whitespace-nowrap text-card"><IconCheck size={14} /> Fatto il {formatShort(st.performed_on)}</span>
               ) : st ? (
-                <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold">Iniziato</span>
+                <span className="shrink-0 rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold whitespace-nowrap">Iniziato</span>
               ) : null}
             </div>
             <ProgramDayView day={day} week={week} videos={videos} maxes={maxes} />

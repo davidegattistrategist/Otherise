@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getBusinessName } from "@/lib/data/shared";
 import { DailyQuote } from "@/components/daily-quote";
 import { dedicationOfDay, quoteOfDay } from "@/lib/quotes";
 import type { Metadata } from "next";
@@ -30,7 +31,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
     supabase.rpc("my_checks"),
     supabase.rpc("my_coach_name"),
     supabase.from("checkins").select("week_start, coach_reply, reviewed_at").eq("client_id", me.clientId).neq("coach_reply", "").order("week_start", { ascending: false }).limit(1).maybeSingle(),
-    supabase.rpc("business_name"),
+    getBusinessName().then((data) => ({ data })),
   ]);
   const quote = quoteOfDay(today);
   const logs = current ? await getMyLogs(current.id) : [];

@@ -20,11 +20,13 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // Non mettere codice tra createServerClient e getUser: serve a rinnovare la sessione.
-  const { data } = await supabase.auth.getUser();
+  // Non mettere codice tra createServerClient e getClaims: serve a rinnovare la sessione.
+  // getClaims controlla la firma del token sul server stesso (chiavi pubbliche di
+  // Supabase, tenute in memoria): niente chiamata ad Auth a ogni pagina.
+  const { data } = await supabase.auth.getClaims();
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/"));
-  if (!data.user && !isPublic) {
+  if (!data?.claims?.sub && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";

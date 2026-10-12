@@ -34,7 +34,7 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
   const thisMonth = list.filter((s) => s.session_date.slice(0, 7) === today.slice(0, 7)).length;
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       <Card id="nuova" className="flex flex-col gap-4 lg:sticky lg:top-6">
         <div>
           <Eyebrow>Nuova sessione</Eyebrow>

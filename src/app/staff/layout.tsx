@@ -1,4 +1,5 @@
 import { requireStaff } from "@/lib/auth";
+import { getBusinessName } from "@/lib/data/shared";
 import { createClient } from "@/lib/supabase/server";
 import { StaffNav, type NavItem } from "@/components/staff-nav";
 import { StaffMobileNav, type MobileItem } from "@/components/staff-mobile-nav";
@@ -17,7 +18,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   const supabase = await createClient();
   const [{ count: unread }, { data: name }, { data: chats }] = await Promise.all([
     supabase.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null),
-    supabase.rpc("business_name"),
+    getBusinessName().then((data) => ({ data })),
     supabase.rpc("my_unread_chats"),
   ]);
   const unreadChats = (chats ?? []).length;

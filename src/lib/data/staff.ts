@@ -1,4 +1,5 @@
 import "server-only";
+import { getBillingOverview } from "@/lib/data/shared";
 import { bySurname, listName } from "../names";
 import { checkDue } from "../check-due";
 import type { ServerSupabase } from "../supabase/server";
@@ -60,7 +61,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
     supabase.from("checks").select("client_id, check_date, imported").in("client_id", ids).not("check_date", "is", null).order("check_date", { ascending: false }),
     supabase.from("workout_logs").select("client_id, performed_on, completed").in("client_id", ids).order("performed_on", { ascending: false }).limit(2000),
     supabase.from("profiles").select("id, full_name").in("role", ["owner", "coach"]),
-    me.role === "owner" ? supabase.rpc("billing_overview") : Promise.resolve({ data: null }),
+    me.role === "owner" ? getBillingOverview().then((data) => ({ data })) : Promise.resolve({ data: null }),
     supabase.from("app_settings").select("reminder_days").maybeSingle(),
   ]);
   const reminderDays = settings.data?.reminder_days ?? 7;

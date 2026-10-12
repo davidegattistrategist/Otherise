@@ -15,14 +15,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ clie
   const me = await getMe();
   if (!me) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   const supabase = await createClient();
-  if (!(await canUseChat(supabase, clientId))) return NextResponse.json({ error: "Non trovato" }, { status: 404 });
   const after = req.nextUrl.searchParams.get("after");
-  const messages = await loadMessages(clientId, me, { after: after && !Number.isNaN(Date.parse(after)) ? after : null });
-  if (messages.some((m) => !m.mine)) await markChatRead(supabase, me.id, clientId);
-  // messaggi eliminati di recente (per toglierli anche dallo schermo di chi li vede)
-  const { data: deleted } = await supabase.from("messages").select("id").eq("client_id", clientId).not("deleted_at", "is", null).gte("deleted_at", new Date(Date.now() - 10 * 60 * 1000).toISOString());
-  // allo staff anche la bozza di risposta pronta (al cliente mai)
   const staff = me.role === "owner" || me.role === "coach";
-  const [draft, transcripts] = await Promise.all([staff ? readyChatDraft(supabase, clientId) : Promise.resolve(undefined), recentTranscripts(supabase, clientId)]);
+  // tutto insieme (i permessi li controlla comunque il database): una sola attesa
+  // invece di sei una dopo l'altra, conta perché la chat aperta lo chiede ogni 4 secondi
+  const [allowed, messages, { data: deleted }, draft, transcripts] = await Promise.all([
+    canUseChat(supabase, clientId),
+    loadMessages(clientId, me, { after: after && !Number.isNaN(Date.parse(after)) ? after : null }),
+    supabase.from("messages").select("id").eq("client_id", clientId).not("deleted_at", "is", null).gte("deleted_at", new Date(Date.now() - 10 * 60 * 1000).toISOString()),
+    staff ? readyChatDraft(supabase, clientId) : Promise.resolve(undefined),
+    recentTranscripts(supabase, clientId),
+  ]);
+  if (!allowed) return NextResponse.json({ error: "Non trovato" }, { status: 404 });
+  if (messages.some((m) => !m.mine)) await markChatRead(supabase, me.id, clientId);
   return NextResponse.json({ messages, deleted: (deleted ?? []).map((d) => d.id), transcripts, ...(staff ? { draft } : {}) }, { headers: { "cache-control": "no-store" } });
 }
