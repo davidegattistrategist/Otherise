@@ -183,10 +183,10 @@ export function nextPaymentProposal(plan: { kind: PlanKind; amount: number | str
 /** Quanto vale un piano in un mese (per le stime delle entrate ricorrenti) */
 export const MONTHLY_FACTOR: Partial<Record<PlanKind, number>> = { monthly: 1, six_weeks: 30.44 / 42, quarterly: 1 / 3, semiannual: 1 / 6, annual: 1 / 12 };
 
-export type ExtraSessions = {
-  /** sessioni pagate (pagamenti extra) */
+export type PtCounter = {
+  /** sessioni pagate (pacchetti, lezioni a parte, saldi; con la correzione: quelle che restavano + pagate dopo) */
   bought: number;
-  /** sessioni fatte che contano, più la correzione a mano */
+  /** sessioni fatte che contano */
   used: number;
   /** pagate ancora da fare (negativo = fatte e non ancora pagate) */
   left: number;
@@ -196,34 +196,20 @@ export type ExtraSessions = {
   price: number | null;
   /** quanto c'è da saldare (solo con il prezzo) */
   dueAmount: number | null;
+  /** da quando si conta */
   since: ISODate;
+  /** il conteggio riparte da una correzione a mano ("oggi gliene restano N") */
+  corrected: boolean;
 };
 
 /**
- * Sessioni PT a parte, fuori dal piano (pagate prima o da saldare dopo).
- * Si contano le sessioni PT segnate "conta" dal giorno `from` (scelto dal
- * trainer) o, se manca, dal primo pagamento extra; si scalano dalle sessioni
- * pagate con i pagamenti extra. `adjust` è la correzione a mano del trainer.
- * Ai clienti con un pacchetto come piano principale le sessioni scalano dal
- * pacchetto, quindi qui non si conta nulla.
+ * Contatore unico delle sessioni PT di un cliente (calcolato nel database da
+ * pt_counters()): rimaste = pagate − fatte. Le sessioni fatte senza copertura
+ * si scalano dal pacchetto successivo; quelle pagate in più restano da fare.
  */
-export function extraSessions(input: {
-  planKind: PlanKind | null;
-  payments: Array<{ plan_id: string | null; paid_on: ISODate; sessions: number | null }>;
-  sessions: Array<{ session_date: ISODate; counts_toward_package: boolean }>;
-  adjust: number;
-  from?: ISODate | null;
-  price?: number | null;
-}): ExtraSessions | null {
-  if (input.planKind === "package") return null;
-  const extra = input.payments.filter((p) => !p.plan_id && p.sessions && p.sessions > 0);
-  const since = input.from ?? extra.map((p) => p.paid_on).sort()[0];
-  if (!since) return null;
-  const bought = extra.reduce((s, p) => s + (p.sessions ?? 0), 0);
-  const done = input.sessions.filter((s) => s.counts_toward_package && s.session_date >= since).length;
-  const used = done + input.adjust;
-  const left = bought - used;
+export function ptCounterView(row: { since: ISODate; baseline_at: string | null; bought: number; used: number } | null, price: number | null = null): PtCounter | null {
+  if (!row) return null;
+  const left = row.bought - row.used;
   const due = Math.max(0, -left);
-  const price = input.price ?? null;
-  return { bought, used, left, due, price, dueAmount: price !== null ? Math.round(due * price * 100) / 100 : null, since };
+  return { bought: row.bought, used: row.used, left, due, price, dueAmount: price !== null ? Math.round(due * price * 100) / 100 : null, since: row.since, corrected: Boolean(row.baseline_at) };
 }

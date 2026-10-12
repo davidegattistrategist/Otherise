@@ -71,6 +71,18 @@ export async function setInstagramConsent(consent: boolean) {
       link: `/staff/clienti/${me.clientId}/profilo`,
       dedupe_key: `privacy:instagram:${me.clientId}:${todayISO()}`,
     })));
+  } else {
+    const name = await clientName(me.clientId);
+    const ids = await staffRecipients(me.clientId);
+    await notify(ids.map((id) => ({
+      recipient_id: id,
+      client_id: me.clientId,
+      kind: "instagram_consent",
+      title: `${name} ha dato il permesso per Instagram`,
+      body: "Da ora puoi pubblicare nelle storie alcuni video e foto delle sedute fatte insieme.",
+      link: `/staff/clienti/${me.clientId}/profilo`,
+      dedupe_key: `instagram:yes:${me.clientId}:${todayISO()}`,
+    })));
   }
   revalidatePath("/cliente/profilo");
 }

@@ -16,6 +16,7 @@
  * limite di dimensione.
  */
 
+import { canUsePlayer, compressWithPlayer, type PlayerStats } from "./compress-player";
 import { Canceled, MP4_H264, canCompressVideo, runCompression, type CompressFormat, type CompressOutput, type CompressResult, type Progress, type WorkerReply, type WorkerRequest } from "./compress-core";
 
 export { COMPRESS_FPS, COMPRESS_MIN_BYTES, COMPRESS_SHORT_SIDE, COMPRESS_VIDEO_BITRATE, MP4_H264, canCompressVideo, shouldCompress, targetSize } from "./compress-core";
@@ -26,10 +27,11 @@ export type { CompressFormat, CompressResult } from "./compress-core";
  * aggiornamento per punto percentuale, così la pagina non si ridisegna a ogni
  * fotogramma). Restituisce null se non è possibile o se il risultato non è più leggero.
  *
- * Il lavoro si fa in un "worker" (un processo a parte del browser), così la
- * pagina della chat non lo rallenta; se il worker non parte si fa nella pagina.
+ * Prima si prova col lettore video del telefono (compress-player.ts, il più
+ * veloce); se non va, il metodo classico in un "worker" (un processo a parte
+ * del browser, così la pagina della chat non lo rallenta) o nella pagina.
  */
-export async function compressVideo(file: File, onProgress?: Progress, signal?: AbortSignal, format: CompressFormat = MP4_H264, options: { fast?: boolean; worker?: boolean } = {}): Promise<CompressResult | null> {
+export async function compressVideo(file: File, onProgress?: Progress, signal?: AbortSignal, format: CompressFormat = MP4_H264, options: { fast?: boolean; worker?: boolean; player?: boolean; onStats?: (s: PlayerStats) => void } = {}): Promise<CompressResult | null> {
   if (!canCompressVideo()) return null;
   let last = -1;
   const progress: Progress = (p) => {
@@ -39,6 +41,15 @@ export async function compressVideo(file: File, onProgress?: Progress, signal?: 
     onProgress?.(pct / 100);
   };
   try {
+    // 1) col lettore video del telefono: il più veloce
+    if (options.player !== false && canUsePlayer()) {
+      const viaPlayer = await compressWithPlayer(file, format, progress, signal, options.onStats);
+      if (viaPlayer !== "error") return finish(viaPlayer, file, format);
+      if (signal?.aborted) return null;
+      last = -1;
+      progress(0);
+    }
+    // 2) metodo classico, in un worker (3) o nella pagina
     if (options.worker !== false && typeof Worker !== "undefined" && typeof OffscreenCanvas !== "undefined") {
       const viaWorker = await inWorker(file, format, progress, signal, options.fast !== false);
       if (viaWorker !== "error") return finish(viaWorker, file, format);

@@ -105,7 +105,7 @@ test.describe("titolare", () => {
     // il vecchio avviso del piano non resta sullo schermo
     await expect(page.getByText("Piano salvato.")).toHaveCount(0);
     await page.reload();
-    await expect(page.getByText(/1 fatte su 10 pagate/)).toBeVisible();
+    await expect(page.getByText(/9 sessioni rimaste/).first()).toBeVisible();
     expect(await noHorizontalScroll(page)).toBe(true);
 
     // programma vuoto → esercizi, blocchi, copia settimana, pubblica

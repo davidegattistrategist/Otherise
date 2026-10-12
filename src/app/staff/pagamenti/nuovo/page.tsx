@@ -11,9 +11,9 @@ import { NewPayment, type PayClient } from "./new-payment";
 
 export const metadata: Metadata = { title: "Nuovo pagamento" };
 
-export default async function NewPaymentPage({ searchParams }: { searchParams: Promise<{ cliente?: string }> }) {
+export default async function NewPaymentPage({ searchParams }: { searchParams: Promise<{ cliente?: string; tipo?: string }> }) {
   await requireOwner();
-  const { cliente } = await searchParams;
+  const { cliente, tipo } = await searchParams;
   const supabase = await createClient();
   const [{ data: clients }, { data: plans }, { data: billing }, { data: lastPays }] = await Promise.all([
     supabase.from("clients").select("id, first_name, last_name, status, start_date, pt_session_price").neq("status", "archived").eq("free", false),
@@ -52,7 +52,7 @@ export default async function NewPaymentPage({ searchParams }: { searchParams: P
       <PageTitle title="Nuovo pagamento">
         <p className="max-w-2xl text-[15px] text-muted">Scegli chi paga e cosa: l&apos;app propone importo e periodo, tu controlli e salvi.</p>
       </PageTitle>
-      <NewPayment clients={list} today={todayISO()} initialClient={list.some((c) => c.id === cliente) ? cliente! : null} />
+      <NewPayment clients={list} today={todayISO()} initialClient={list.some((c) => c.id === cliente) ? cliente! : null} initialType={tipo === "lezioni" ? "lessons" : null} />
     </div>
   );
 }

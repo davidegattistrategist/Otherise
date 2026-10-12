@@ -27,8 +27,8 @@ import { Button, Card, EmptyState, Eyebrow, LinkButton, Notice, fmtNum } from "@
 import { ClearParams } from "@/components/clear-param";
 import { setSkinfoldFormula } from "./actions";
 import { SexPrompt } from "./sex-prompt";
-import { staffCheckPhotos } from "@/lib/check-photos";
-import { CheckPhotoUploader, PhotoGrid } from "@/components/check-photos";
+import { CheckPhotoUploader } from "@/components/check-photos";
+import { IconPhoto } from "@/components/icons";
 
 export const metadata: Metadata = { title: "Check" };
 
@@ -63,7 +63,10 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
     .select("id, check_date, sequence, created_at, order_hint, age_years, skinfolds, weight_kg, body_fat_pct, fat_mass_kg, lean_mass_kg, body_fat_formula, circumferences, strength_tests, tests_text, notes_next_phase, visible_to_client")
     .eq("client_id", id)
     .order("check_date", { ascending: true });
-  const photos = await staffCheckPhotos(supabase, id);
+  // nell'elenco solo quante foto ha ogni check (si guardano aprendo il check)
+  const { data: photoRows } = await supabase.from("check_photos").select("check_id").eq("client_id", id);
+  const photos = new Map<string, { length: number }>();
+  for (const r of photoRows ?? []) photos.set(r.check_id, { length: (photos.get(r.check_id)?.length ?? 0) + 1 });
   const sex = client.sex as Sex;
   const list = sortChecks(checks ?? []).map((c) => ({ ...c, avg: averagesOf(c.skinfolds as SkinfoldReadings) }));
   const folds = list.map((c) => ({ averages: c.avg }));
@@ -205,11 +208,11 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
                   {tests.length ? <div className="mt-1.5 text-sm text-muted">{tests.map((t) => `${t.exercise}${t.e1rm ? ` ≈ ${fmtNum(t.e1rm)} kg` : t.load ? ` ${fmtNum(t.load)}×${t.reps ?? "?"}` : ""}`).join(" · ")}</div> : null}
                   {c.tests_text ? <div className="mt-1 text-sm whitespace-pre-line text-muted">{c.tests_text}</div> : null}
                   {c.notes_next_phase ? <div className="mt-2 line-clamp-3 text-sm whitespace-pre-line text-ink-soft">Prossima fase: {c.notes_next_phase}</div> : null}
+                  <div className="mt-2 flex items-center gap-1.5 text-sm text-muted">
+                    <IconPhoto size={15} />
+                    {photos.get(c.id)?.length ? `${photos.get(c.id)!.length} foto · le vedi aprendo il check` : "Nessuna foto: le aggiungi aprendo il check"}
+                  </div>
                 </Link>
-                <div className="flex flex-col gap-3 px-5 pb-5">
-                  <PhotoGrid photos={photos.get(c.id) ?? []} clientId={id} canDelete title={checkLabel(c, 0)} />
-                  <CheckPhotoUploader clientId={id} checkId={c.id} label={photos.get(c.id)?.length ? "Aggiungi altre foto" : "Aggiungi le foto"} />
-                </div>
                 </div>
               );
             })}

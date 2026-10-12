@@ -168,6 +168,31 @@ export function PhotoGrid({ photos, clientId, canDelete, title, className }: { p
   );
 }
 
+/**
+ * Elenco dei check con le foto: le foto non si vedono scorrendo la pagina, si
+ * aprono a tutto schermo solo toccando il check (si carica solo ciò che apri).
+ */
+export function PhotoAlbums({ albums }: { albums: Array<{ id: string; title: string; photos: CheckPhoto[] }> }) {
+  const [open, setOpen] = useState<{ album: number; index: number } | null>(null);
+  if (!albums.length) return null;
+  const album = open ? albums[open.album] : null;
+  return (
+    <>
+      <ul className="flex flex-col" aria-label="Check con le foto">
+        {albums.map((a, i) => (
+          <li key={a.id} className="border-t border-sand-deep first:border-t-0">
+            <button type="button" onClick={() => setOpen({ album: i, index: 0 })} className="flex min-h-12 w-full items-center justify-between gap-3 py-2 text-left">
+              <span className="flex items-center gap-2.5 font-semibold"><IconPhoto size={18} className="shrink-0 text-accent-deep" />{a.title}</span>
+              <span className="shrink-0 text-sm text-muted">{a.photos.length === 1 ? "1 foto" : `${a.photos.length} foto`} ›</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {open && album ? <Lightbox photos={album.photos} index={open.index} onIndex={(index) => setOpen({ ...open, index })} onClose={() => setOpen(null)} title={album.title} /> : null}
+    </>
+  );
+}
+
 function Lightbox({ photos, index, onIndex, onClose, clientId, canDelete, title }: { photos: CheckPhoto[]; index: number; onIndex: (i: number) => void; onClose: () => void; clientId?: string; canDelete?: boolean; title?: string }) {
   const router = useRouter();
   const [confirm, setConfirm] = useState(false);

@@ -57,6 +57,13 @@ test("il cliente revoca il consenso e lo ridà", async ({ page }) => {
   await expect(page.getByText("Richiesta inviata. Ti rispondiamo entro un mese.")).toBeVisible();
 });
 
+test("chi non dà il permesso per Instagram: avviso al titolare, che sa dove il cliente può darlo", async ({ page }) => {
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/notifiche");
+  await expect(page.getByText(/Esempio non ha dato il permesso per Instagram|Giulia Esempio non ha dato il permesso per Instagram/).first()).toBeVisible();
+  await expect(page.getByText(/Percorso → Privacy → Video sui social/).first()).toBeVisible();
+});
+
 test("il titolare scarica i dati di un cliente, il collaboratore no", async ({ page, browser }) => {
   await login(page, "titolare@prova.local");
   const id = await openClient(page, "Esempio Giulia");

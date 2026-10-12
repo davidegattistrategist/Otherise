@@ -35,9 +35,15 @@ test("foto del check: si caricano dalla galleria ridotte e senza dati nascosti, 
   const id = await giuliaId(staff);
   await staff.goto(`/staff/clienti/${id}/check`);
   await staff.waitForLoadState("networkidle");
-  // il check più recente tra quelli visibili al cliente
-  const card = staff.locator("div.rounded-\\[24px\\]").filter({ hasText: "Visibile al cliente" }).filter({ has: staff.locator('input[type=file][aria-label="Scegli le foto del check"]') }).first();
-  const grid = card.getByRole("list", { name: /./ });
+  // nell'elenco dei check le foto non si vedono (solo quante sono): si apre il check più recente visibile al cliente
+  await expect(staff.locator('ul[aria-label="Foto del check"]')).toHaveCount(0);
+  const link = staff.locator("a[href*='/check/']").filter({ hasText: "Visibile al cliente" }).first();
+  const checkDate = (await link.locator("span.text-lg").innerText()).trim();
+  await link.click();
+  await staff.waitForURL(/\/check\/[0-9a-f-]{36}$/);
+  await staff.waitForLoadState("networkidle");
+  const card = staff.locator("main");
+  const grid = card.getByRole("list", { name: "Foto del check" });
   const before = await grid.locator("li").count().catch(() => 0);
 
   // due foto scelte insieme, con un solo tocco
@@ -72,10 +78,18 @@ test("foto del check: si caricano dalla galleria ridotte e senza dati nascosti, 
   client.on("pageerror", (e) => errors.push(e.message));
   await login(client, "giulia@prova.local");
   await client.goto("/cliente/progressi");
-  const section = client.getByText("Le foto dei check");
-  await expect(section).toBeVisible();
-  const clientPhotos = client.locator('ul[aria-label] li img');
-  expect(await clientPhotos.count()).toBeGreaterThanOrEqual(before + 2);
+  await expect(client.getByText("Le foto dei check")).toBeVisible();
+  // le foto non si caricano scorrendo: si aprono toccando il check
+  await expect(client.locator('ul[aria-label="Check con le foto"] img')).toHaveCount(0);
+  const album = client.getByRole("button", { name: new RegExp(`(^|\\D)${before + 2} foto`) }).first();
+  await expect(album).toBeVisible();
+  await album.click();
+  const clientViewer = client.getByRole("dialog");
+  await expect(clientViewer.getByText(new RegExp(`1 di ${before + 2}`))).toBeVisible();
+  await expect.poll(() => clientViewer.locator("img").evaluate((img: HTMLImageElement) => (img.complete ? img.naturalWidth : 0))).toBeGreaterThan(0);
+  await expect(clientViewer.getByRole("button", { name: "Elimina" })).toHaveCount(0);
+  await clientViewer.getByRole("button", { name: "Chiudi" }).click();
+  expect(checkDate.length).toBeGreaterThan(0);
   // lo staff ne elimina una (conferma in due tocchi)
   await grid.locator("li button").last().click();
   await viewer.getByRole("button", { name: "Elimina" }).click();

@@ -8,7 +8,7 @@ import { ChatThread } from "@/components/chat/chat-thread";
 import { IconArrowLeft } from "@/components/icons";
 import { aiEnabled } from "@/lib/ai/claude";
 import { readyChatDraft } from "@/lib/ai/reply";
-import { getExtraSessions, paymentReminderText, sessionsDueText } from "@/lib/data/billing";
+import { getPtCounter, paymentReminderText, sessionsDueText } from "@/lib/data/billing";
 import { ClearParams } from "@/components/clear-param";
 import { markChatUnread } from "../actions";
 
@@ -38,7 +38,7 @@ export default async function StaffChatPage({ params, searchParams }: { params: 
             ? await sessionsPrefill()
             : null;
   async function sessionsPrefill() {
-    const extra = await getExtraSessions(supabase, clientId);
+    const extra = (await getPtCounter(supabase, clientId)).counter;
     return extra && extra.due > 0 ? sessionsDueText(client!.first_name, extra.due, extra.price) : null;
   }
   return (

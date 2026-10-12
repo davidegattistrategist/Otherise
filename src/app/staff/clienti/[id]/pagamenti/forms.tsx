@@ -183,45 +183,44 @@ export function ExtraPaymentForm({ action, today, method, defaults, submitLabel 
   );
 }
 
-/** Correzione a mano del conteggio: "restano N pagate" o "N da saldare". */
-export function ExtraSessionsFix({ action, left }: { action: Action; left: number }) {
+/**
+ * Correzione del contatore delle sessioni PT: "oggi gliene restano N" oppure
+ * "ne deve saldare N". Da quel momento si conta da solo.
+ */
+export function PtLeftForm({ action, left, price, first = false }: { action: Action; left: number | null; price: number | null; first?: boolean }) {
   const [state, formAction] = useActionState(action, null);
   return (
-    <form action={formAction} className="flex flex-col gap-2">
-      <span className="text-sm font-semibold">Correggi il conteggio</span>
+    <form action={formAction} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Input key={`n${left}`} name="count" type="number" min={0} defaultValue={Math.abs(left)} className="max-w-24" aria-label="Numero di sessioni" />
-        <Select key={`m${left}`} name="mode" defaultValue={left < 0 ? "due" : "left"} className="w-auto" aria-label="Tipo">
-          <option value="left">pagate ancora da fare</option>
-          <option value="due">da saldare</option>
+        <span className="text-[15px]">Oggi</span>
+        <Select key={`m${left}`} name="mode" defaultValue={left !== null && left < 0 ? "due" : "left"} className="w-auto" aria-label="Situazione">
+          <option value="left">gliene restano</option>
+          <option value="due">ne deve saldare</option>
         </Select>
-        <SubmitButton variant="secondary" size="sm">Salva</SubmitButton>
+        <Input key={`n${left}`} name="count" type="number" min={0} inputMode="numeric" defaultValue={left === null ? "" : Math.abs(left)} placeholder="0" className="max-w-20" aria-label="Numero di sessioni" />
+        <span className="text-[15px]">sessioni</span>
       </div>
+      {first ? (
+        <Field label="Prezzo a sessione" hint="facoltativo, per l'importo da saldare">
+          <Input name="price" inputMode="decimal" placeholder="Es. 45" defaultValue={price !== null ? String(price).replace(".", ",") : undefined} className="max-w-32" />
+        </Field>
+      ) : null}
       <ActionMessage state={state} />
+      <div><SubmitButton variant="secondary" size="sm">{first ? "Inizia a contare" : "Salva la correzione"}</SubmitButton></div>
     </form>
   );
 }
 
-/** Da quando contare le sessioni PT a parte e quanto costa una sessione. */
-export function PtCountingForm({ action, from, price, today, active, canStop = false }: { action: Action; from: string | null; price: number | null; today: string; active: boolean; canStop?: boolean }) {
+/** Prezzo di una sessione PT. */
+export function PtPriceForm({ action, price }: { action: Action; price: number | null }) {
   const [state, formAction] = useActionState(action, null);
   return (
-    <form action={formAction} className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Conta le sessioni dal">
-          <Input name="from" type="date" defaultValue={from ?? today} required />
-        </Field>
-        <Field label="Prezzo a sessione" hint="facoltativo">
-          <Input name="price" inputMode="decimal" placeholder="Es. 45" defaultValue={price !== null ? String(price).replace(".", ",") : undefined} />
-        </Field>
+    <form action={formAction} className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Input name="price" inputMode="decimal" placeholder="Es. 45" defaultValue={price !== null ? String(price).replace(".", ",") : undefined} className="max-w-32" aria-label="Prezzo a sessione" />
+        <SubmitButton variant="secondary" size="sm">Salva il prezzo</SubmitButton>
       </div>
       <ActionMessage state={state} />
-      <div className="flex flex-wrap items-center gap-3">
-        <SubmitButton variant="secondary" size="sm">{active ? "Salva" : "Inizia a contare"}</SubmitButton>
-        {canStop ? (
-          <button type="submit" name="stop" value="1" className="text-sm font-semibold text-muted underline">Smetti di contare</button>
-        ) : null}
-      </div>
     </form>
   );
 }

@@ -4,12 +4,12 @@ import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatShort, todayISO } from "@/lib/dates";
 import { billingStatus, formatEuro, isPeriodic, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
-import { getExtraSessions, reminderChatLink } from "@/lib/data/billing";
+import { getPtCounter, reminderChatLink } from "@/lib/data/billing";
 import { IconChat, IconDown } from "@/components/icons";
 import { Card, Dot, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
-import { EditPaymentForm, ExtraPaymentForm, ExtraSessionsFix, PaymentForm, PlanForm, PtCountingForm, ReminderButton } from "./forms";
-import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setExtraSessionsLeft, setPtCounting, updatePayment } from "./actions";
+import { EditPaymentForm, ExtraPaymentForm, PaymentForm, PlanForm, PtLeftForm, PtPriceForm, ReminderButton } from "./forms";
+import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setPtLeft, setPtPrice, clearPtCorrection, updatePayment } from "./actions";
 import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Pagamenti" };
@@ -39,7 +39,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
     );
   }
   const plan = (plans ?? []).find((p) => p.active) ?? null;
-  const extra = await getExtraSessions(supabase, id);
+  const { counter: pt, price: ptPrice } = await getPtCounter(supabase, id);
   const row = (billing as BillingRow[] | null)?.[0] ?? null;
   // in pausa o a fine percorso non è tra i pagamenti da incassare
   const paused = client?.status === "paused" || client?.status === "archived";
@@ -68,7 +68,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
             <p className="text-[15px] text-muted-dark">
               {PLAN_LABELS[kind]} · {formatEuro(plan.amount)} · {METHOD_LABELS[plan.method as PaymentMethod]}
               {status.dueDate ? ` · saldato fino al ${formatShort(status.dueDate, 0)}` : ""}
-              {kind === "package" && row ? ` · ${row.sessions_used - plan.sessions_written_off} fatte su ${row.sessions_bought} pagate` : ""}
+              {kind === "package" && pt ? ` · ${pt.left >= 0 ? `${pt.left} ${pt.left === 1 ? "sessione rimasta" : "sessioni rimaste"}` : `${-pt.left} da saldare`}` : ""}
               {kind === "package" && plan.sessions_written_off ? ` · ${plan.sessions_written_off} non usate (pacchetto chiuso)` : ""}
             </p>
             {paused ? <p className="text-sm text-muted-dark">Non è tra i pagamenti da incassare. Se rinnova, registra il pagamento e {client?.status === "paused" ? "riattivalo" : "riprendi il percorso"} dalla Scheda.</p> : null}
@@ -143,58 +143,69 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
       </div>
 
       <div className="flex flex-col gap-4">
-        {plan?.kind !== "package" ? (
-          <Card className="flex flex-col gap-3">
-            <Eyebrow>Sessioni PT a parte</Eyebrow>
-            {extra ? (
-              <>
-                {extra.due > 0 ? (
-                  <div className="flex flex-wrap items-baseline gap-x-2">
-                    <span className="text-[34px] leading-none font-semibold text-accent tabular">{extra.due}</span>
-                    <span className="text-[15px] text-muted">{extra.due === 1 ? "sessione da saldare" : "sessioni da saldare"}{extra.dueAmount !== null ? ` · ${formatEuro(extra.dueAmount)}` : ""}</span>
+        <Card className="flex flex-col gap-3" id="sessioni-pt">
+          <Eyebrow>Sessioni PT</Eyebrow>
+          {pt ? (
+            <>
+              {pt.due > 0 ? (
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-[34px] leading-none font-semibold text-accent tabular">{pt.due}</span>
+                  <span className="text-[15px] text-muted">{pt.due === 1 ? "sessione da saldare" : "sessioni da saldare"}{pt.dueAmount !== null ? ` · ${formatEuro(pt.dueAmount)}` : ""}</span>
+                </div>
+              ) : pt.left > 0 ? (
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-[34px] leading-none font-semibold tabular">{pt.left}</span>
+                  <span className="text-[15px] text-muted">{pt.left === 1 ? "sessione rimasta (pagata, da fare)" : "sessioni rimaste (pagate, da fare)"}</span>
+                </div>
+              ) : (
+                <div className="text-[22px] font-semibold">In pari: nessuna sessione rimasta</div>
+              )}
+              <p className="text-sm text-muted">
+                {pt.corrected ? `Dalla tua correzione del ${formatShort(pt.since, 0)}` : `Dal ${formatShort(pt.since, 0)}`}: {pt.bought} {pt.bought === 1 ? "pagata" : "pagate"} · {pt.used} {pt.used === 1 ? "fatta" : "fatte"}
+                {pt.price !== null ? ` · ${formatEuro(pt.price)} a sessione` : ""}. Si aggiorna da solo: le sessioni che segni in{" "}
+                <a href={`/staff/clienti/${id}/sessioni`} className="font-semibold text-ink underline">Sessioni PT</a> si tolgono, i pacchetti e le lezioni pagate si aggiungono (e coprono prima quelle fatte da saldare).
+              </p>
+              {pt.due > 0 ? (
+                <div className="flex flex-col gap-3 rounded-2xl bg-sand p-4">
+                  <div className="flex flex-wrap gap-2">
+                    <LinkButton href={`/staff/messaggi/${id}?promemoria=sessioni`} variant="secondary" size="sm"><IconChat size={16} /> Scrivi in chat quante sono</LinkButton>
                   </div>
-                ) : extra.left > 0 ? (
-                  <div className="flex flex-wrap items-baseline gap-x-2">
-                    <span className="text-[34px] leading-none font-semibold tabular">{extra.left}</span>
-                    <span className="text-[15px] text-muted">{extra.left === 1 ? "pagata, ancora da fare" : "pagate, ancora da fare"}</span>
-                  </div>
-                ) : (
-                  <div className="text-[22px] font-semibold">In pari</div>
-                )}
-                <p className="text-sm text-muted">
-                  {extra.used} {extra.used === 1 ? "fatta" : "fatte"} · {extra.bought} {extra.bought === 1 ? "pagata" : "pagate"} · contate dal {formatShort(extra.since, 0)}
-                  {extra.price !== null ? ` · ${formatEuro(extra.price)} a sessione` : ""}. Si aggiornano da sole quando segni una sessione in{" "}
-                  <a href={`/staff/clienti/${id}/sessioni`} className="font-semibold text-ink underline">Sessioni PT</a>.
-                </p>
-                {extra.due > 0 ? (
-                  <div className="flex flex-col gap-3 rounded-2xl bg-sand p-4">
-                    <div className="flex flex-wrap gap-2">
-                      <LinkButton href={`/staff/messaggi/${id}?promemoria=sessioni`} variant="secondary" size="sm"><IconChat size={16} /> Scrivi in chat quante sono</LinkButton>
+                  <details className="group">
+                    <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Registra il saldo</summary>
+                    <div className="pt-3">
+                      <ExtraPaymentForm action={recordExtraPayment.bind(null, id)} today={today} method="cash" defaults={{ amount: pt.dueAmount, sessions: pt.due, notes: "Saldo sessioni PT" }} submitLabel="Registra il saldo" />
                     </div>
-                    <details className="group">
-                      <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Registra il saldo</summary>
-                      <div className="pt-3">
-                        <ExtraPaymentForm action={recordExtraPayment.bind(null, id)} today={today} method="cash" defaults={{ amount: extra.dueAmount, sessions: extra.due, notes: "Saldo sessioni PT" }} submitLabel="Registra il saldo" />
-                      </div>
-                    </details>
-                  </div>
-                ) : null}
-                <ExtraSessionsFix action={setExtraSessionsLeft.bind(null, id)} left={extra.left} />
-                <details className="group">
-                  <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Da quando contare e prezzo</summary>
-                  <div className="pt-3">
-                    <PtCountingForm action={setPtCounting.bind(null, id)} from={extra.countFrom ?? extra.since} price={extra.price} today={today} active canStop={Boolean(extra.countFrom)} />
-                  </div>
-                </details>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-muted">Per le sessioni PT fuori dal piano: pagate in anticipo (con un pagamento extra) o da saldare dopo. Ogni sessione segnata in Sessioni PT si conta da sola e qui vedi quante ne restano o quante sono da saldare.</p>
-                <PtCountingForm action={setPtCounting.bind(null, id)} from={null} price={null} today={today} active={false} />
-              </>
-            )}
-          </Card>
-        ) : null}
+                  </details>
+                </div>
+              ) : null}
+              <div><LinkButton href={`/staff/pagamenti/nuovo?cliente=${id}&tipo=lezioni`} variant="secondary" size="sm">Registra un pacchetto o lezioni pagate</LinkButton></div>
+              <details className="group border-t border-sand-deep pt-3">
+                <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Correggi il conteggio</summary>
+                <div className="flex flex-col gap-3 pt-3">
+                  <p className="text-sm text-muted">Se il numero non è giusto (per esempio sessioni fatte prima di usare l&apos;app), scrivi come stanno le cose oggi: da qui in poi si conta da solo.</p>
+                  <PtLeftForm action={setPtLeft.bind(null, id)} left={pt.left} price={ptPrice} />
+                  {pt.corrected ? (
+                    <form action={clearPtCorrection.bind(null, id)}>
+                      <ConfirmButton variant="ghost" className="!min-h-0 !p-0 text-sm text-muted underline" message="Togliere la correzione? Il contatore torna a contare tutte le sessioni e tutti i pagamenti dall'inizio.">Togli la correzione</ConfirmButton>
+                    </form>
+                  ) : null}
+                </div>
+              </details>
+              <details className="group">
+                <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Prezzo a sessione</summary>
+                <div className="pt-3"><PtPriceForm action={setPtPrice.bind(null, id)} price={ptPrice} /></div>
+              </details>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted">
+                {plan && kind && isPeriodic(kind) ? "Le sessioni PT sono comprese nel suo piano, quindi non si contano." : "Ancora niente da contare."} Se fa sessioni da pagare a parte, registra il pacchetto o le lezioni pagate; se ne ha già fatte senza pagarle, scrivi qui quante ne deve saldare. Da lì il contatore va da solo: rimaste = pagate − fatte.
+              </p>
+              <PtLeftForm action={setPtLeft.bind(null, id)} left={null} price={ptPrice} first />
+              <div><LinkButton href={`/staff/pagamenti/nuovo?cliente=${id}&tipo=lezioni`} variant="secondary" size="sm">Registra un pacchetto o lezioni pagate</LinkButton></div>
+            </>
+          )}
+        </Card>
         {plan && !paused ? (
           <Card className="flex flex-col gap-3">
             <Eyebrow>Promemoria</Eyebrow>

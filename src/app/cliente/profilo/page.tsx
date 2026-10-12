@@ -84,7 +84,7 @@ export default async function ClientProfilePage() {
             {pay.state === "overdue" || pay.state === "due_soon" ? <Dot tone="accent" /> : null}
             {pay.dueDate ? `${pay.clientLabel} ${formatLong(pay.dueDate)}` : pay.clientLabel}
           </div>
-          <p className="text-sm text-muted">{PLAN_LABELS[row.kind as PlanKind]}{row.kind === "package" ? ` · ${row.sessions_used} sessioni fatte su ${row.sessions_bought}` : ""}. I pagamenti si fanno fuori dall&apos;app, come sempre.</p>
+          <p className="text-sm text-muted">{PLAN_LABELS[row.kind as PlanKind]}{row.kind === "package" ? (row.sessions_bought - row.sessions_used > 0 ? ` · ${row.sessions_bought - row.sessions_used === 1 ? "ti resta 1 sessione" : `ti restano ${row.sessions_bought - row.sessions_used} sessioni`}` : " · sessioni del pacchetto finite") : ""}. I pagamenti si fanno fuori dall&apos;app, come sempre.</p>
           {payments?.length ? (
             <ul className="flex flex-col border-t border-sand-deep pt-2">
               {payments.map((p) => (

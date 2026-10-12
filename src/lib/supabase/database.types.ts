@@ -256,14 +256,14 @@ isOneToOne: false
                   ]
                 },"clients": {
                   Row: {
-                    "archived_at": string | null,"birth_date": string | null,"coach_id": string | null,"consent_source": string | null,"created_at": string,"email": string | null,"first_name": string,"goals": string,"health_consent_at": string | null,"id": string,"last_name": string,"phase_weeks": number | null,"phone": string | null,"privacy_accepted_at": string | null,"privacy_version": string | null,"sex": string | null,"instagram_consent_at": string | null, "free": boolean, "skinfold_formula": string | null, "extra_sessions_adjust": number, "pt_count_from": string | null, "pt_session_price": number | null,"start_date": string,"status": string,"user_id": string | null,"weekly_checkin": boolean
+                    "archived_at": string | null,"birth_date": string | null,"coach_id": string | null,"consent_source": string | null,"created_at": string,"email": string | null,"first_name": string,"goals": string,"health_consent_at": string | null,"id": string,"last_name": string,"phase_weeks": number | null,"phone": string | null,"privacy_accepted_at": string | null,"privacy_version": string | null,"sex": string | null,"instagram_consent_at": string | null, "free": boolean, "skinfold_formula": string | null, "extra_sessions_adjust": number, "pt_count_from": string | null, "pt_session_price": number | null, "pt_baseline_at": string | null, "pt_baseline_left": number | null,"start_date": string,"status": string,"user_id": string | null,"weekly_checkin": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name": string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number | null,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex"?: string | null,"instagram_consent_at"?: string | null, "free"?: boolean, "skinfold_formula"?: string | null, "extra_sessions_adjust"?: number, "pt_count_from"?: string | null, "pt_session_price"?: number | null,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                    "archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name": string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number | null,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex"?: string | null,"instagram_consent_at"?: string | null, "free"?: boolean, "skinfold_formula"?: string | null, "extra_sessions_adjust"?: number, "pt_count_from"?: string | null, "pt_session_price"?: number | null, "pt_baseline_at"?: string | null, "pt_baseline_left"?: number | null,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
                   }
                   Update: {
-                    "archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name"?: string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number | null,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex"?: string | null,"instagram_consent_at"?: string | null, "free"?: boolean, "skinfold_formula"?: string | null, "extra_sessions_adjust"?: number, "pt_count_from"?: string | null, "pt_session_price"?: number | null,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
+                    "archived_at"?: string | null,"birth_date"?: string | null,"coach_id"?: string | null,"consent_source"?: string | null,"created_at"?: string,"email"?: string | null,"first_name"?: string,"goals"?: string,"health_consent_at"?: string | null,"id"?: string,"last_name"?: string,"phase_weeks"?: number | null,"phone"?: string | null,"privacy_accepted_at"?: string | null,"privacy_version"?: string | null,"sex"?: string | null,"instagram_consent_at"?: string | null, "free"?: boolean, "skinfold_formula"?: string | null, "extra_sessions_adjust"?: number, "pt_count_from"?: string | null, "pt_session_price"?: number | null, "pt_baseline_at"?: string | null, "pt_baseline_left"?: number | null,"start_date"?: string,"status"?: string,"user_id"?: string | null,"weekly_checkin"?: boolean
                   }
                   Relationships: [
                     {
@@ -619,6 +619,11 @@ isOneToOne: false
 "billing_overview":
 { Args: Record<PropertyKey, never>; Returns: {
               "amount": number,"client_id": string,"kind": string,"paid_until": string,"plan_id": string,"sessions_bought": number,"sessions_used": number,"start_date": string
+            }[]
+                           },
+"pt_counters":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "baseline_at": string | null,"bought": number,"client_id": string,"since": string,"used": number
             }[]
                            },
 "business_name":

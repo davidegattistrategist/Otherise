@@ -10,7 +10,7 @@ import { getExerciseProgress } from "@/lib/data/progress";
 import { IconTrophy } from "@/components/icons";
 import { BigNumber, Card, EmptyState, Eyebrow, cx, fmtNum } from "@/components/ui";
 import { myCheckPhotos } from "@/lib/check-photos";
-import { PhotoGrid } from "@/components/check-photos";
+import { PhotoAlbums } from "@/components/check-photos";
 
 export const metadata: Metadata = { title: "Progressi" };
 
@@ -96,14 +96,9 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
       )}
 
       {photoChecks.length ? (
-        <Card className="flex flex-col gap-4">
+        <Card className="flex flex-col gap-2">
           <Eyebrow>Le foto dei check</Eyebrow>
-          {photoChecks.map((g) => (
-            <section key={g[0].checkId} className="flex flex-col gap-2">
-              <h2 className="text-sm font-semibold">{g[0].checkDate ? formatLong(g[0].checkDate) : ""}</h2>
-              <PhotoGrid photos={g} title={g[0].checkDate ? formatShort(g[0].checkDate) : undefined} />
-            </section>
-          ))}
+          <PhotoAlbums albums={photoChecks.map((g) => ({ id: g[0].checkId, title: g[0].checkDate ? formatLong(g[0].checkDate) : "Check", photos: g }))} />
         </Card>
       ) : null}
 

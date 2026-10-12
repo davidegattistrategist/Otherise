@@ -1,7 +1,7 @@
 import "server-only";
 import type { ServerSupabase } from "../supabase/server";
 import { bySurname, listName } from "../names";
-import { billingStatus, extraSessions, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PLAN_LABELS, situationText, type BillingStatus, type PlanKind } from "../billing";
+import { billingStatus, ptCounterView, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PLAN_LABELS, situationText, type BillingStatus, type PlanKind } from "../billing";
 import { addDays, addMonths, formatLong, formatShort, todayISO, type ISODate } from "../dates";
 import { DEFAULT_PAYMENT_MESSAGE, fillTemplate } from "../whatsapp";
 
@@ -119,49 +119,32 @@ export const monthLabel = (ym: string) =>
 export type { ISODate };
 
 /**
- * Sessioni PT a parte del cliente (pagate prima o da saldare). Solo il
- * titolare vede i pagamenti: per il collaboratore torna null.
+ * Contatore delle sessioni PT del cliente (rimaste = pagate − fatte). Solo il
+ * titolare vede i pagamenti: per il collaboratore torna null. Null anche quando
+ * non c'è niente da contare (piano a periodo con le sessioni comprese).
  */
-export async function getExtraSessions(supabase: ServerSupabase, clientId: string) {
-  const [{ data: plan }, { data: payments }, { data: sessions }, { data: client }] = await Promise.all([
-    supabase.from("payment_plans").select("kind").eq("client_id", clientId).eq("active", true).maybeSingle(),
-    supabase.from("payments").select("plan_id, paid_on, sessions").eq("client_id", clientId).is("plan_id", null),
-    supabase.from("pt_sessions").select("session_date, counts_toward_package").eq("client_id", clientId),
-    supabase.from("clients").select("extra_sessions_adjust, pt_count_from, pt_session_price").eq("id", clientId).maybeSingle(),
+export async function getPtCounter(supabase: ServerSupabase, clientId: string) {
+  const [{ data: row }, { data: client }] = await Promise.all([
+    supabase.rpc("pt_counters").eq("client_id", clientId).maybeSingle(),
+    supabase.from("clients").select("pt_session_price").eq("id", clientId).maybeSingle(),
   ]);
-  const adjust = client?.extra_sessions_adjust ?? 0;
-  const planKind = (plan?.kind as PlanKind | undefined) ?? null;
-  const result = extraSessions({
-    planKind,
-    payments: payments ?? [],
-    sessions: sessions ?? [],
-    adjust,
-    from: client?.pt_count_from ?? null,
-    price: client?.pt_session_price !== null && client?.pt_session_price !== undefined ? Number(client.pt_session_price) : null,
-  });
-  return result ? { ...result, adjust, countFrom: client?.pt_count_from ?? null, planKind } : null;
+  const price = client?.pt_session_price !== null && client?.pt_session_price !== undefined ? Number(client.pt_session_price) : null;
+  return { counter: ptCounterView(row ?? null, price), price };
 }
 
 /** Clienti con sessioni PT fatte e non ancora saldate (pagina Pagamenti). */
 export async function getSessionsToSettle(supabase: ServerSupabase) {
-  const [{ data: clients }, { data: plans }, { data: payments }, { data: sessions }] = await Promise.all([
-    supabase.from("clients").select("id, first_name, last_name, status, free, extra_sessions_adjust, pt_count_from, pt_session_price").neq("status", "archived").eq("free", false),
-    supabase.from("payment_plans").select("client_id, kind").eq("active", true),
-    supabase.from("payments").select("client_id, plan_id, paid_on, sessions").is("plan_id", null).not("sessions", "is", null),
-    supabase.from("pt_sessions").select("client_id, session_date, counts_toward_package").eq("counts_toward_package", true),
+  const [{ data: rows }, { data: clients }] = await Promise.all([
+    supabase.rpc("pt_counters"),
+    supabase.from("clients").select("id, first_name, last_name, pt_session_price").neq("status", "archived").eq("free", false),
   ]);
-  const planBy = new Map((plans ?? []).map((p) => [p.client_id, p.kind as PlanKind]));
+  const byId = new Map((clients ?? []).map((c) => [c.id, c]));
   const out: Array<{ clientId: string; name: string; due: number; dueAmount: number | null }> = [];
-  for (const c of clients ?? []) {
-    const r = extraSessions({
-      planKind: planBy.get(c.id) ?? null,
-      payments: (payments ?? []).filter((p) => p.client_id === c.id),
-      sessions: (sessions ?? []).filter((s) => s.client_id === c.id),
-      adjust: c.extra_sessions_adjust ?? 0,
-      from: c.pt_count_from,
-      price: c.pt_session_price !== null ? Number(c.pt_session_price) : null,
-    });
-    if (r && r.due > 0) out.push({ clientId: c.id, name: listName(c), due: r.due, dueAmount: r.dueAmount });
+  for (const r of rows ?? []) {
+    const c = byId.get(r.client_id);
+    if (!c) continue;
+    const k = ptCounterView(r, c.pt_session_price !== null ? Number(c.pt_session_price) : null);
+    if (k && k.due > 0) out.push({ clientId: c.id, name: listName(c), due: k.due, dueAmount: k.dueAmount });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name, "it", { sensitivity: "base" }));
 }

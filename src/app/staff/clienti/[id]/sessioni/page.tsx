@@ -5,7 +5,7 @@ import { formatWithWeekday, todayISO } from "@/lib/dates";
 import { Card, EmptyState, Eyebrow } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { SessionForm } from "./session-form";
-import { getExtraSessions } from "@/lib/data/billing";
+import { getPtCounter } from "@/lib/data/billing";
 import { formatEuro } from "@/lib/billing";
 import { deletePtSession, savePtSession } from "./actions";
 
@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Sessioni PT" };
 export default async function PtSessionsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ modifica?: string }> }) {
   const { id } = await params;
   const { modifica } = await searchParams;
-  await requireStaff();
+  const me = await requireStaff();
   const supabase = await createClient();
   const today = todayISO();
   const { data: sessions } = await supabase
@@ -27,10 +27,10 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
   // "Conta nel pacchetto" serve solo ai clienti con un pacchetto di sessioni
   // (il collaboratore non vede i piani: per lui resta visibile)
   const { data: plan } = await supabase.from("payment_plans").select("kind").eq("client_id", id).eq("active", true).maybeSingle();
-  // sessioni PT extra pagate a parte (solo il titolare le vede)
-  const extra = await getExtraSessions(supabase, id);
+  // contatore delle sessioni PT (solo il titolare lo vede: per il collaboratore è vuoto)
+  const extra = me.role === "owner" ? (await getPtCounter(supabase, id)).counter : null;
   const showPackage = !plan || plan.kind === "package" || Boolean(extra);
-  const packageLabel = extra ? "Conta tra le sessioni PT a parte" : "Conta nel pacchetto";
+  const packageLabel = "Si scala dalle sessioni PT pagate";
   const thisMonth = list.filter((s) => s.session_date.slice(0, 7) === today.slice(0, 7)).length;
 
   return (
@@ -43,13 +43,14 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
         {extra ? (
           <div className="rounded-2xl bg-sand px-4 py-3 text-[15px]">
             <span className="font-semibold">
-              Sessioni PT a parte:{" "}
+              Sessioni PT:{" "}
               {extra.due > 0
                 ? `${extra.due} da saldare${extra.dueAmount !== null ? ` (${formatEuro(extra.dueAmount)})` : ""}`
                 : extra.left > 0
                   ? extra.left === 1 ? "ne resta 1 pagata" : `ne restano ${extra.left} pagate`
                   : "in pari"}
-            </span>
+            </span>{" "}
+            <a href={`/staff/clienti/${id}/pagamenti#sessioni-pt`} className="text-sm font-semibold underline">Dettagli</a>
           </div>
         ) : null}
         <SessionForm action={savePtSession.bind(null, id, null)} today={today} showPackage={showPackage} packageLabel={packageLabel} />
@@ -61,7 +62,7 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
           <span className="text-sm text-muted">{list.length} in totale · {thisMonth} questo mese</span>
         </div>
         {list.length === 0 ? (
-          <EmptyState title="Nessuna sessione registrata">{showPackage ? "Le sessioni che “contano nel pacchetto” scalano le sessioni rimaste ai clienti con pacchetto." : "Qui trovi lo storico delle sessioni in palestra con le tue note."}</EmptyState>
+          <EmptyState title="Nessuna sessione registrata">{showPackage ? "Le sessioni segnate “si scala” tolgono una sessione dal contatore delle sessioni pagate." : "Qui trovi lo storico delle sessioni in palestra con le tue note."}</EmptyState>
         ) : (
           list.map((s) =>
             modifica === s.id ? (
@@ -74,7 +75,7 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
               <Card key={s.id} className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-semibold">{formatWithWeekday(s.session_date)}</span>
-                  {showPackage ? <span className="text-sm text-muted">{s.counts_toward_package ? (extra ? "Conta" : "Conta nel pacchetto") : extra ? "Non conta" : "Fuori pacchetto"}</span> : null}
+                  {showPackage ? <span className="text-sm text-muted">{s.counts_toward_package ? "Si scala" : "Non si scala"}</span> : null}
                 </div>
                 {s.notes ? <p className="whitespace-pre-line text-[15px] leading-relaxed text-ink-soft">{s.notes}</p> : <p className="text-sm text-muted">Nessuna nota.</p>}
                 <div className="flex gap-4 pt-1">

@@ -442,4 +442,30 @@ describe.skipIf(!run)("permessi", () => {
     await coach.from("checks").delete().eq("id", hid!.id).throwOnError();
     expect((await admin.from("check_photos").select("id").eq("check_id", hid!.id)).data).toEqual([]);
   });
+  it("contatore unico delle sessioni PT: scoperte scalate dal pacchetto, correzione solo del titolare", async () => {
+    const { data: c } = await owner.from("clients").insert({ first_name: "Carla", last_name: "Contatore", sex: "F" }).select("id").single().throwOnError();
+    const cid = c!.id;
+    const counter = async () => ((await owner.rpc("pt_counters")).data ?? []).find((r: { client_id: string }) => r.client_id === cid) as { bought: number; used: number } | undefined;
+    // senza piano: due sessioni fatte e non pagate
+    await owner.from("pt_sessions").insert([{ client_id: cid, session_date: "2026-10-01" }, { client_id: cid, session_date: "2026-10-03" }]).throwOnError();
+    let k = await counter();
+    expect(k!.bought - k!.used).toBe(-2);
+    // compra 10 lezioni: le 2 scoperte si scalano, ne restano 8
+    await owner.from("payments").insert({ client_id: cid, paid_on: "2026-10-05", amount: 400, method: "cash", sessions: 10 }).throwOnError();
+    k = await counter();
+    expect(k!.bought - k!.used).toBe(8);
+    // correzione: oggi gliene restano 5 (poi si conta da qui)
+    await owner.from("clients").update({ pt_baseline_at: new Date().toISOString(), pt_baseline_left: 5 }).eq("id", cid).throwOnError();
+    await owner.from("pt_sessions").insert({ client_id: cid, session_date: "2026-10-12" }).throwOnError();
+    k = await counter();
+    expect(k!.bought - k!.used).toBe(4);
+    // il collaboratore e il cliente non vedono i contatori e non li correggono
+    expect((await coach.rpc("pt_counters")).error).not.toBeNull();
+    expect((await clientA.rpc("pt_counters")).error).not.toBeNull();
+    expect((await coach.from("clients").update({ pt_baseline_left: 50 }).eq("id", clientAId)).error).not.toBeNull();
+    // chi ha un pacchetto lo vede nello stato dei pagamenti con lo stesso conteggio
+    await owner.from("payment_plans").insert({ client_id: cid, kind: "package", amount: 400, method: "cash", start_date: "2026-10-05", package_sessions: 10 }).throwOnError();
+    const { data: b } = await owner.rpc("client_billing", { cid });
+    expect(b![0].sessions_bought - b![0].sessions_used).toBe(4);
+  });
 });

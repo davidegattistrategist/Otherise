@@ -8,7 +8,6 @@ import { formatLong, isISODate, todayISO } from "@/lib/dates";
 import { billingStatus, formatEuro, isPeriodic, METHODS, nextPaymentProposal, PLAN_KINDS, situationText, type BillingRow, type PlanKind } from "@/lib/billing";
 import { notify } from "@/lib/notify";
 import { deliverPendingEmails, sendEmail } from "@/lib/email";
-import { getExtraSessions } from "@/lib/data/billing";
 import type { ActionState } from "@/components/form-bits";
 
 const money = (v: FormDataEntryValue | null) => {
@@ -142,48 +141,50 @@ export async function recordExtraPayment(clientId: string, _: ActionState, fd: F
 }
 
 /**
- * Correzione a mano del conteggio: "restano N pagate da fare" oppure
- * "N da saldare" (il conteggio poi continua da lì).
+ * Correzione a mano del contatore delle sessioni PT: "oggi gliene restano N"
+ * oppure "ne deve saldare N". Il conteggio riparte da adesso: da qui in poi si
+ * aggiungono le sessioni pagate e si tolgono quelle fatte.
  */
-export async function setExtraSessionsLeft(clientId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+export async function setPtLeft(clientId: string, _: ActionState, fd: FormData): Promise<ActionState> {
   await requireOwner();
   const supabase = await createClient();
   const raw = String(fd.get("count") ?? "").trim();
   const n = Number(raw);
-  if (!raw || !Number.isInteger(n) || n < 0) return { error: "Scrivi un numero di sessioni, per esempio 3." };
+  if (!raw || !Number.isInteger(n) || n < 0 || n > 500) return { error: "Scrivi un numero di sessioni, per esempio 3." };
   const mode = String(fd.get("mode") ?? "left");
   const left = mode === "due" ? -n : n;
-  const current = await getExtraSessions(supabase, clientId);
-  if (!current) return { error: "Prima attiva il conteggio delle sessioni PT." };
-  // used = fatte + adjust; vogliamo bought - used = left
-  const done = current.used - current.adjust;
-  const adjust = current.bought - left - done;
-  const { error } = await supabase.from("clients").update({ extra_sessions_adjust: adjust }).eq("id", clientId);
-  if (error) return { error: "Salvataggio non riuscito." };
-  revalidate(clientId);
-  const what = n === 1 ? "1 sessione" : `${n} sessioni`;
-  return { ok: true, message: left < 0 ? `Fatto: ${what} da saldare.` : n === 0 ? "Fatto: siete in pari." : `Fatto: ${what} pagate ancora da fare.` };
-}
-
-/** Attiva o modifica il conteggio delle sessioni PT a parte: da quando e a che prezzo. */
-export async function setPtCounting(clientId: string, _: ActionState, fd: FormData): Promise<ActionState> {
-  await requireOwner();
-  const supabase = await createClient();
-  if (fd.get("stop") === "1") {
-    const { error } = await supabase.from("clients").update({ pt_count_from: null, pt_session_price: null, extra_sessions_adjust: 0 }).eq("id", clientId);
-    if (error) return { error: "Salvataggio non riuscito." };
-    revalidate(clientId);
-    return { ok: true, message: "Conteggio tolto." };
-  }
-  const from = String(fd.get("from") ?? "");
-  if (!isISODate(from)) return { error: "Scegli da che giorno contare le sessioni." };
   const rawPrice = String(fd.get("price") ?? "").trim();
   const price = rawPrice ? money(rawPrice) : null;
   if (price !== null && (!Number.isFinite(price) || price < 0)) return { error: "Prezzo non valido: scrivi per esempio 45, oppure lascialo vuoto." };
-  const { error } = await supabase.from("clients").update({ pt_count_from: from, pt_session_price: price }).eq("id", clientId);
+  const { error } = await supabase
+    .from("clients")
+    .update({ pt_baseline_at: new Date().toISOString(), pt_baseline_left: left, ...(fd.has("price") ? { pt_session_price: price } : {}) })
+    .eq("id", clientId);
   if (error) return { error: "Salvataggio non riuscito." };
   revalidate(clientId);
-  return { ok: true, message: "Conteggio salvato." };
+  const what = n === 1 ? "1 sessione" : `${n} sessioni`;
+  return { ok: true, message: left < 0 ? `Fatto: ${what} da saldare. Da ora le sessioni fatte e quelle pagate si contano da sole.` : n === 0 ? "Fatto: siete in pari. Da ora le sessioni si contano da sole." : `Fatto: ${what} pagate ancora da fare. Da ora si scalano da sole.` };
+}
+
+/** Prezzo di una sessione PT (serve per l'importo da saldare). */
+export async function setPtPrice(clientId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  await requireOwner();
+  const supabase = await createClient();
+  const rawPrice = String(fd.get("price") ?? "").trim();
+  const price = rawPrice ? money(rawPrice) : null;
+  if (price !== null && (!Number.isFinite(price) || price < 0)) return { error: "Prezzo non valido: scrivi per esempio 45, oppure lascialo vuoto." };
+  const { error } = await supabase.from("clients").update({ pt_session_price: price }).eq("id", clientId);
+  if (error) return { error: "Salvataggio non riuscito." };
+  revalidate(clientId);
+  return { ok: true, message: price === null ? "Prezzo tolto." : `Prezzo salvato: ${formatEuro(price)} a sessione.` };
+}
+
+/** Toglie la correzione a mano: il contatore torna a contare tutto dall'inizio. */
+export async function clearPtCorrection(clientId: string) {
+  await requireOwner();
+  const supabase = await createClient();
+  await supabase.from("clients").update({ pt_baseline_at: null, pt_baseline_left: null, extra_sessions_adjust: 0 }).eq("id", clientId);
+  revalidate(clientId);
 }
 
 /** Corregge un pagamento già registrato (es. il trimestre parte il 1° settembre e non il 1° agosto). */

@@ -39,7 +39,7 @@ export function targetSize(width: number, height: number, shortSide = COMPRESS_S
 }
 
 
-type Mb = typeof import("mediabunny");
+export type Mb = typeof import("mediabunny");
 export type Progress = (p: number) => void;
 
 export class Canceled extends Error {}
@@ -58,7 +58,7 @@ export async function runCompression(file: File, format: CompressFormat, onProgr
   return fullConversion(mb, file, format, onProgress, signal);
 }
 
-function newOutput(mb: Mb, format: CompressFormat) {
+export function newOutput(mb: Mb, format: CompressFormat) {
   return new mb.Output({ format: format.container === "mp4" ? new mb.Mp4OutputFormat({ fastStart: "in-memory" }) : new mb.WebMOutputFormat(), target: new mb.BufferTarget() });
 }
 
@@ -175,7 +175,7 @@ async function fastCompress(mb: Mb, file: File, format: CompressFormat, onProgre
 }
 
 /** Meglio il chip video del telefono (molto più veloce); se non c'è, va bene anche il resto. */
-async function pickAcceleration(mb: Mb, format: CompressFormat, size: { width: number; height: number }) {
+export async function pickAcceleration(mb: Mb, format: CompressFormat, size: { width: number; height: number }) {
   const base = { width: size.width, height: size.height, bitrate: COMPRESS_VIDEO_BITRATE, frameRate: COMPRESS_FPS };
   if (await mb.canEncodeVideo(format.video, { ...base, hardwareAcceleration: "prefer-hardware" })) return "prefer-hardware" as const;
   if (await mb.canEncodeVideo(format.video, base)) return "no-preference" as const;

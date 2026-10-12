@@ -30,7 +30,7 @@ export type PayClient = {
   method: string;
 };
 
-type Type = "renew" | "plan" | "lessons" | "other";
+export type Type = "renew" | "plan" | "lessons" | "other";
 const SUBSCRIPTIONS: PlanKind[] = ["monthly", "six_weeks", "quarterly", "semiannual", "annual"];
 const OTHER_PRESETS = ["Valutazione posturale", "Consulenza", "Programma online", "Check corporeo"];
 
@@ -40,9 +40,9 @@ const euro = (s: string) => {
 };
 const num = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n).replace(".", ","));
 
-export function NewPayment({ clients, today, initialClient }: { clients: PayClient[]; today: string; initialClient: string | null }) {
+export function NewPayment({ clients, today, initialClient, initialType = null }: { clients: PayClient[]; today: string; initialClient: string | null; initialType?: Type | null }) {
   const [round, setRound] = useState(0);
-  return <Wizard key={round} clients={clients} today={today} initialClient={round === 0 ? initialClient : null} onAgain={() => setRound((r) => r + 1)} />;
+  return <Wizard key={round} clients={clients} today={today} initialClient={round === 0 ? initialClient : null} initialType={round === 0 ? initialType : null} onAgain={() => setRound((r) => r + 1)} />;
 }
 
 /**
@@ -83,7 +83,7 @@ function addDay(d: string) {
   return t.toISOString().slice(0, 10);
 }
 
-function Wizard({ clients, today, initialClient, onAgain }: { clients: PayClient[]; today: string; initialClient: string | null; onAgain: () => void }) {
+function Wizard({ clients, today, initialClient, initialType, onAgain }: { clients: PayClient[]; today: string; initialClient: string | null; initialType: Type | null; onAgain: () => void }) {
   const [state, action] = useActionState<NewPaymentState, FormData>(registerPayment, null);
   const [clientId, setClientId] = useState<string | null>(initialClient);
   const [isNew, setIsNew] = useState(false);
@@ -91,7 +91,7 @@ function Wizard({ clients, today, initialClient, onAgain }: { clients: PayClient
   const [newLast, setNewLast] = useState("");
   const [query, setQuery] = useState("");
   const client = clients.find((c) => c.id === clientId) ?? null;
-  const [type, setType] = useState<Type | null>(client?.plan ? "renew" : null);
+  const [type, setType] = useState<Type | null>(client && initialType ? initialType : client?.plan ? "renew" : null);
   const d0 = defaultsFor(client, type, today);
   const [amount, setAmount] = useState(d0.amount);
   const [amountTouched, setAmountTouched] = useState(false);
