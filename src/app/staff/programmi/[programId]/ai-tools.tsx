@@ -7,7 +7,8 @@
  * Le proposte dell'AI arrivano nell'editor come modifiche NON salvate: il
  * trainer le rivede e decide se salvarle.
  */
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
+import { useDictation } from "@/components/use-dictation";
 import { friendlyError } from "@/lib/friendly-error";
 import type { ProgramContent, ProgramItem } from "@/lib/program/types";
 import { Button, Card, Eyebrow, Notice, Textarea, cx } from "@/components/ui";
@@ -15,8 +16,21 @@ import { IconMic, IconSparkle, IconX } from "@/components/icons";
 
 type Img = { mediaType: "image/jpeg"; data: string; preview: string };
 
+/** Oltre questo tempo smettiamo di aspettare (il server si ferma comunque a 5 minuti). */
+const AI_TIMEOUT_MS = 290_000;
+
 async function post<T>(body: unknown): Promise<T> {
-  const res = await fetch("/api/ai/program", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch("/api/ai/program", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal });
+  } catch (e) {
+    if (ctrl.signal.aborted) throw new Error("L'assistente non ha risposto in tempo: riprova tra poco. Il programma non è stato modificato.");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   const json = await res.json().catch(() => ({ error: "Risposta non valida" }));
   if (!res.ok) throw new Error(json.error ?? "Errore dell'assistente");
   return json as T;
@@ -40,16 +54,6 @@ function resizeImage(file: File): Promise<Img> {
     img.src = URL.createObjectURL(file);
   });
 }
-
-type SpeechRec = { lang: string; continuous: boolean; interimResults: boolean; start: () => void; stop: () => void; onresult: ((e: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null; onend: (() => void) | null };
-
-function getSpeech(): (new () => SpeechRec) | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
-
-const noopSubscribe = () => () => {};
 
 /** Richieste frequenti: un tocco le aggiunge al testo, poi si può completare a voce. */
 const AI_PRESETS = [
@@ -82,44 +86,34 @@ export function AiPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
-  const [listening, setListening] = useState(false);
   // domande dell'AI prima della bozza (null = non ancora chieste per questa richiesta)
   const [questions, setQuestions] = useState<Array<{ question: string; options: string[] }> | null>(null);
   const [answers, setAnswers] = useState<string[]>([]);
   // risposte già date in questo giro (es. il tempo per seduta), da rimandare con le successive
   const [asked, setAsked] = useState<Array<{ question: string; answer: string }>>([]);
-  const canDictate = useSyncExternalStore(noopSubscribe, () => getSpeech() !== null, () => false);
-  const recRef = useRef<SpeechRec | null>(null);
-
-
-  const toggleDictation = () => {
-    if (listening) {
-      recRef.current?.stop();
-      return;
-    }
-    const Ctor = getSpeech();
-    if (!Ctor) return;
-    const rec = new Ctor();
-    rec.lang = "it-IT";
-    rec.continuous = true;
-    rec.interimResults = false;
-    rec.onresult = (e) => {
-      let text = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) text += e.results[i][0].transcript;
-      if (text) setInstruction((v) => (v ? `${v} ${text.trim()}` : text.trim()));
+  const dictation = useDictation((text) => setInstruction((v) => (v ? `${v.trimEnd()} ${text}` : text)));
+  const { listening, interim } = dictation;
+  // tempo trascorso mentre l'AI lavora, così si vede che non è bloccata
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!busy) return;
+    const started = Date.now();
+    const t = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => {
+      clearInterval(t);
+      setElapsed(0);
     };
-    rec.onend = () => setListening(false);
-    recRef.current = rec;
-    rec.start();
-    setListening(true);
-  };
+  }, [busy]);
+
+  /** Il testo da mandare: quello scritto più quello che si sta ancora dettando. */
+  const fullInstruction = () => (listening && interim ? `${instruction.trimEnd()} ${interim}`.trim() : instruction.trim());
 
   const request = () => {
     const title = (document.getElementById("program-title") as HTMLInputElement | null)?.value ?? "";
     const description = (document.getElementById("desc") as HTMLTextAreaElement | null)?.value ?? "";
     return {
       programId,
-      instruction,
+      instruction: fullInstruction(),
       current: { title, description, weeks, content: currentContent },
       images: images.map(({ mediaType, data }) => ({ mediaType, data })),
     };
@@ -150,6 +144,7 @@ export function AiPanel({
    * prima qualche domanda (spesso nessuna). Le risposte già date restano.
    */
   const run = async () => {
+    if (listening) dictation.stop();
     setBusy(true);
     setError(null);
     setSummary(null);
@@ -168,6 +163,7 @@ export function AiPanel({
   };
 
   const skipQuestions = async () => {
+    if (listening) dictation.stop();
     setBusy(true);
     setError(null);
     try {
@@ -228,13 +224,17 @@ export function AiPanel({
           placeholder="Es. Passiamo a volumizzazione per 6 settimane. Togli lo stacco da terra per il fastidio lombare, aggiungi un giorno di corsa facile, tieni gli allungamenti per i quadricipiti."
           className="!border-line-dark !bg-[#26241f] !text-card placeholder:!text-muted-dark"
         />
+        {listening ? (
+          <p className="-mt-1 text-sm text-muted-dark italic" aria-live="polite">{interim ? `${interim}…` : "Parla pure: il testo compare qui mentre lo trascrivo."}</p>
+        ) : null}
+        {dictation.error ? <Notice tone="error">{dictation.error}</Notice> : null}
         <div className="flex flex-wrap items-center gap-2.5">
-          {canDictate ? (
-            <button type="button" onClick={toggleDictation} className={cx("inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold", listening ? "bg-accent text-ink" : "bg-line-dark text-card")}>
+          {dictation.supported ? (
+            <button type="button" onClick={dictation.toggle} className={cx("inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold", listening ? "bg-accent text-ink" : "bg-line-dark text-card")}>
               <IconMic size={18} /> {listening ? "Sto ascoltando… tocca per fermare" : "Detta"}
             </button>
           ) : (
-            <span className="text-sm text-muted-dark">Per dettare usa il microfono della tastiera del telefono.</span>
+            <span className="text-sm text-muted-dark">Per dettare tocca la casella e usa il microfono della tastiera.</span>
           )}
           <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full bg-line-dark px-4 text-sm font-semibold text-card">
             Allega foto dei test
@@ -308,11 +308,13 @@ export function AiPanel({
           <button
             type="button"
             onClick={run}
-            disabled={busy || disabled || instruction.trim().length < 3}
+            disabled={busy || disabled || fullInstruction().length < 3}
             className="inline-flex min-h-12 items-center gap-3 rounded-full bg-card py-1.5 pr-5 pl-1.5 font-semibold text-ink disabled:opacity-50"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent"><IconSparkle size={18} /></span>
-            {busy ? (questions === null ? "Sto leggendo i dati…" : "Sto preparando la bozza… (anche un minuto)") : questions?.length ? "Prepara la bozza con queste risposte" : "Prepara la bozza"}
+            {busy
+              ? `${questions === null ? "Sto leggendo i dati" : "Sto preparando la bozza"}… ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`
+              : questions?.length ? "Prepara la bozza con queste risposte" : "Prepara la bozza"}
           </button>
         </div>
       </div>

@@ -124,3 +124,89 @@ test("previsione incassi: solo il titolare, con orizzonte 3/6/12 mesi", async ({
   await coach.goto("/staff/pagamenti/previsione");
   await expect(coach.getByRole("heading", { name: "Previsione incassi" })).toHaveCount(0);
 });
+
+/** Finto riconoscimento vocale del browser: `mode` = "ok" trascrive, "muto" non trascrive mai. */
+function fakeSpeech(mode: "ok" | "muto") {
+  return (m: string) => {
+    class FakeRec {
+      lang = "";
+      continuous = false;
+      interimResults = false;
+      onresult: ((e: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      timers: ReturnType<typeof setTimeout>[] = [];
+      start() {
+        if (m !== "ok") return;
+        const res = (t: string, isFinal: boolean) => Object.assign([{ transcript: t }], { isFinal });
+        this.timers.push(setTimeout(() => this.onresult?.({ resultIndex: 0, results: [res("passiamo a forza", false)] }), 300));
+        this.timers.push(setTimeout(() => this.onresult?.({ resultIndex: 0, results: [res("Passiamo a forza per sei settimane.", true)] }), 700));
+        this.timers.push(setTimeout(() => this.onresult?.({ resultIndex: 1, results: [res("Passiamo a forza per sei settimane.", true), res("togli lo stacco", false)] }), 1000));
+      }
+      stop() {
+        this.timers.forEach(clearTimeout);
+        setTimeout(() => this.onend?.(), 50);
+      }
+      abort() {
+        this.stop();
+      }
+    }
+    const w = window as unknown as { webkitSpeechRecognition: unknown; SpeechRecognition: unknown };
+    w.webkitSpeechRecognition = FakeRec;
+    w.SpeechRecognition = FakeRec;
+  };
+}
+
+test("dettatura nell'assistente AI: si vede il testo mentre parli e il pulsante funziona", async ({ page }) => {
+  await page.addInitScript(fakeSpeech("ok"), "ok");
+  await login(page, "titolare@prova.local");
+  const id = await openClient(page, "Esempio Giulia");
+  await page.goto(`/staff/clienti/${id}/programma`);
+  await page.waitForLoadState("networkidle");
+  await page.locator("a[href^='/staff/programmi/']").filter({ visible: true }).first().click();
+  await page.waitForURL(/\/staff\/programmi\//);
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: /Chiedi all'AI/ }).click();
+  await page.getByRole("button", { name: "Detta" }).click();
+  await expect(page.locator("#ai-instruction")).toHaveValue("Passiamo a forza per sei settimane.");
+  await expect(page.getByText("togli lo stacco…")).toBeVisible();
+  // si può mandare anche mentre si detta: il testo provvisorio entra nella richiesta
+  await expect(page.getByRole("button", { name: "Prepara la bozza" })).toBeEnabled();
+  await page.getByRole("button", { name: /Sto ascoltando/ }).click();
+  await expect(page.locator("#ai-instruction")).toHaveValue("Passiamo a forza per sei settimane. togli lo stacco");
+});
+
+test("dettatura che non trascrive: si ferma da sola e spiega cosa fare", async ({ page }) => {
+  await page.addInitScript(fakeSpeech("muto"), "muto");
+  await login(page, "titolare@prova.local");
+  const id = await openClient(page, "Esempio Giulia");
+  await page.goto(`/staff/clienti/${id}/programma`);
+  await page.waitForLoadState("networkidle");
+  await page.locator("a[href^='/staff/programmi/']").filter({ visible: true }).first().click();
+  await page.waitForURL(/\/staff\/programmi\//);
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: /Chiedi all'AI/ }).click();
+  await page.getByRole("button", { name: "Detta" }).click();
+  await expect(page.getByText(/non sta trascrivendo su questo dispositivo/)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Detta" })).toBeVisible();
+  // e si può sempre scrivere e mandare
+  await page.locator("#ai-instruction").fill("Teniamo la forza.");
+  await expect(page.getByRole("button", { name: "Prepara la bozza" })).toBeEnabled();
+});
+
+test("su iPhone niente pulsante Detta: si usa il microfono della tastiera", async ({ browser }) => {
+  const ctx = await browser.newContext({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", viewport: { width: 390, height: 844 }, storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }] }] } });
+  const page = await ctx.newPage();
+  await page.addInitScript(fakeSpeech("ok"), "ok");
+  await login(page, "titolare@prova.local");
+  const id = await openClient(page, "Esempio Giulia");
+  await page.goto(`/staff/clienti/${id}/programma`);
+  await page.waitForLoadState("networkidle");
+  await page.locator("a[href^='/staff/programmi/']").filter({ visible: true }).first().click();
+  await page.waitForURL(/\/staff\/programmi\//);
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: /Chiedi all'AI/ }).click();
+  await expect(page.getByText("Per dettare tocca la casella e usa il microfono della tastiera.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Detta" })).toHaveCount(0);
+  await ctx.close();
+});
