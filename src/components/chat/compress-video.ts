@@ -14,6 +14,8 @@
 export const COMPRESS_SHORT_SIDE = 540;
 /** Bitrate del video compresso (circa 6 MB al minuto con l'audio). */
 export const COMPRESS_VIDEO_BITRATE = 700_000;
+/** Fotogrammi al secondo: 24 bastano per vedere un esercizio e il telefono ne codifica meno (più veloce). */
+export const COMPRESS_FPS = 24;
 /** Sotto questa dimensione il video si manda com'è (se è già un mp4). */
 export const COMPRESS_MIN_BYTES = 4 * 1024 * 1024;
 
@@ -63,7 +65,7 @@ export async function compressVideo(file: File, onProgress?: (p: number) => void
       output,
       tracks: "primary",
       // basta indicare il lato corto: l'altro segue le proporzioni (anche per i video in verticale)
-      video: { codec: format.video, ...(track.displayWidth <= track.displayHeight ? { width: size.width } : { height: size.height }), bitrate: COMPRESS_VIDEO_BITRATE, frameRate: 30 },
+      video: { codec: format.video, ...(track.displayWidth <= track.displayHeight ? { width: size.width } : { height: size.height }), bitrate: COMPRESS_VIDEO_BITRATE, frameRate: COMPRESS_FPS, hardwareAcceleration: "prefer-hardware" },
       // l'audio AAC del telefono si copia com'è; altrimenti si converte
       audio: { codec: format.audio },
     });

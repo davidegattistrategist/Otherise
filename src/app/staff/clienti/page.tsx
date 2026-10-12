@@ -18,6 +18,9 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   const clients = all
     .filter((c) => (archivio === "1" ? c.status === "archived" : c.status !== "archived"))
     .filter((c) => !needle || nameMatches(c, needle) || (c.email ?? "").includes(needle));
+  // i clienti in pausa stanno in una sezione a parte, sotto gli attivi
+  const active = archivio === "1" ? clients : clients.filter((c) => c.status !== "paused");
+  const paused = archivio === "1" ? [] : clients.filter((c) => c.status === "paused");
   const year = Number(todayISO().slice(0, 4));
 
   return (
@@ -38,6 +41,24 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
         </EmptyState>
       ) : (
         <>
+          {active.length ? <ClientList clients={active} me={me} year={year} /> : <p className="text-[15px] text-muted">Nessun cliente attivo{needle ? " con questo nome" : ""}.</p>}
+          {paused.length ? (
+            <section className="flex flex-col gap-3" aria-label="Clienti in pausa">
+              <h2 className="text-[13px] font-bold tracking-wider text-muted uppercase">In pausa · {paused.length}</h2>
+              <ClientList clients={paused} me={me} year={year} />
+            </section>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+type Row = Awaited<ReturnType<typeof getClientsOverview>>[number];
+
+function ClientList({ clients, me, year }: { clients: Row[]; me: { role: string }; year: number }) {
+  return (
+    <>
         {/* telefono: elenco compatto */}
         <ul className="flex flex-col overflow-hidden rounded-[24px] bg-card md:hidden">
           {clients.map((c) => (
@@ -116,8 +137,6 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
             </tbody>
           </table>
         </div>
-        </>
-      )}
-    </div>
+    </>
   );
 }

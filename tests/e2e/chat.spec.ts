@@ -43,6 +43,10 @@ test("chat con foto e video tra cliente e titolare", async ({ browser }, info) =
   await expect(client.getByText(`Ciao, ecco il mio squat ${tag}`)).toBeVisible({ timeout: 20_000 });
   await expect(client.locator('img[alt="Foto allegata"]').last()).toBeVisible();
   await expect(client.locator("video").last()).toBeVisible();
+  // si può scaricare il video inviato
+  const dl = client.waitForEvent("download");
+  await client.getByRole("button", { name: "Scarica il video" }).last().click();
+  expect((await dl).suggestedFilename()).toMatch(/\.(mp4|mov|webm)$/);
   const imgOk = await client.locator('img[alt="Foto allegata"]').last().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0);
   expect(imgOk).toBe(true);
 

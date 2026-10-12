@@ -22,6 +22,8 @@ Dal telefono il menu è in basso: Oggi, Clienti, Messaggi, Pagamenti e "Altro" p
 4. **Programma**: vedi sotto.
 5. **Pagamenti** (titolare): imposta il piano (mensile, 6 settimane, trimestrale, pacchetto di sessioni, sessione singola…).
 
+Nell'elenco **Clienti** quelli in pausa stanno in una sezione a parte, **In pausa**, sotto gli attivi; gli ex clienti sono in "Ex clienti".
+
 ## Il progetto annuale
 Scheda del cliente → **Progetto**: i prossimi 12 mesi, uno per colonna.
 - **Fase** del mese: Start, Volumizzazione, Intensificazione, Transizione, Reset, Scarico, Libero/estivo, Gara, Pausa.
@@ -73,12 +75,14 @@ Nell'editor:
 
 ## Chat
 - **Messaggi** nel menu: una conversazione per cliente, con testo, foto, video e **vocali**: con la casella vuota il tasto in basso a destra è il microfono (un tocco per registrare, la freccia per mandare, la X per annullare; massimo 5 minuti). Sotto ogni vocale c'è **Visualizza trascrizione** per leggerlo invece di ascoltarlo, e la bozza di risposta dell'AI parte dalla trascrizione. Il cliente la trova in "Chat" nell'app.
-- **I video si riducono da soli prima dell'invio**, come su WhatsApp (sulla miniatura compare "Riduco… 40%"): un minuto pesa circa 6 MB invece di 60–100 e si apre su ogni telefono. Il video comincia a salire subito, mentre scrivi il messaggio: tieni aperta l'app finché non è inviato (se la chiudi, il messaggio non parte e lo rimandi). **Dopo 6 mesi i video si cancellano da soli** per non riempire lo spazio: il messaggio resta con "Video scaduto". Se un video ti serve per sempre, salvalo sul telefono.
+- **I video si riducono da soli prima dell'invio**, come su WhatsApp (sulla miniatura compare "Riduco… 40%"): un minuto pesa circa 6 MB invece di 60–100 e si apre su ogni telefono. Sotto ogni foto e video c'è **Scarica** (sul telefono si apre "Condividi": scegli "Salva video" o "Salva immagine" e finisce nelle Foto). Il video comincia a salire subito, mentre scrivi il messaggio: tieni aperta l'app finché non è inviato (se la chiudi, il messaggio non parte e lo rimandi). **Dopo 6 mesi i video si cancellano da soli** per non riempire lo spazio: il messaggio resta con "Video scaduto". Se un video ti serve per sempre, salvalo sul telefono.
 - Il titolare vede tutte le conversazioni, il collaboratore quelle dei suoi clienti. I messaggi si aggiornano da soli mentre la chat è aperta; chi riceve un messaggio ha una notifica (al massimo una all'ora per conversazione) e un'email. Con le notifiche push attive, sul telefono arriva un avviso per ogni messaggio, anche ad app chiusa.
 
 ## Avvisi per email
 
-- **Impostazioni → Avvisi per email**: scegli se ricevere gli avvisi anche per email (tu e i collaboratori) e se mandarli ai clienti. Di serie lo staff **non** riceve email: vedi tutto nell'app e con le notifiche sul telefono. Ai clienti le email arrivano (nuovi messaggi, programma pronto, promemoria), utile per chi non ha attivato le notifiche. Le email per entrare (invito e nuova password) partono sempre.
+- **Le email sono il meno possibile.** Niente riepilogo del mattino: il riepilogo è **Oggi** nell'app. Un'email parte solo a chi **non** ha attivato le notifiche sul telefono, solo per novità non ancora lette nell'app, e al massimo **una al giorno** a persona con tutte le novità insieme.
+- **Impostazioni → Avvisi per email**: chi le può ricevere. Di serie tu e i collaboratori no, i clienti sì (con le regole sopra). Le email per entrare (invito e nuova password) partono sempre.
+- **Finestra "Attiva le notifiche"**: quando il cliente (o tu) apre l'app dalla schermata Home la prima volta, compare una finestra che spiega perché attivarle (messaggi, programmi, promemoria). "Più tardi" la ripropone dopo 3 giorni. Con le notifiche attive non arrivano più email.
 
 ## Notifiche e app sul telefono
 

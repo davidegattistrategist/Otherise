@@ -8,8 +8,7 @@ import { isISODate, todayISO } from "@/lib/dates";
 import { flattenItems, parseContent } from "@/lib/program/types";
 import type { Json } from "@/lib/supabase/database.types";
 import { notify, staffRecipients } from "@/lib/notify";
-import { emailPrefs, sendEmail } from "@/lib/email";
-import { siteUrl } from "@/lib/site";
+import { deliverPendingEmails } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 async function alertDiscomfort(clientId: string, logId: string, text: string, where: string) {
@@ -20,15 +19,8 @@ async function alertDiscomfort(clientId: string, logId: string, text: string, wh
   const body = `${where}: "${text.slice(0, 300)}"`;
   const link = `/staff/clienti/${clientId}`;
   await notify(ids.map((id) => ({ recipient_id: id, client_id: clientId, kind: "discomfort", title, body, link, dedupe_key: `discomfort:${logId}` })));
-  // email solo se il titolare le vuole (Impostazioni → Email): la notifica nell'app c'è sempre
-  if (!(await emailPrefs()).staff) return;
-  const { data: staff } = await admin.from("profiles").select("id, email").in("id", ids);
-  const base = await siteUrl();
-  for (const s of staff ?? []) {
-    if (!s.email) continue;
-    const ok = await sendEmail(s.email, title, `${body}\n\nDecidi tu come intervenire: ${base}${link}`);
-    if (ok) await admin.from("notifications").update({ emailed_at: new Date().toISOString() }).eq("recipient_id", s.id).eq("dedupe_key", `discomfort:${logId}`);
-  }
+  // l'email (se serve) parte con le regole di sempre: solo a chi non ha le notifiche sul telefono
+  await deliverPendingEmails();
 }
 
 const setSchema = z.object({

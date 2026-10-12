@@ -11,7 +11,7 @@ const baseURL = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 // (hanno i loro test in installazione.spec.ts, che li riaccende)
 const storageState = {
   cookies: [],
-  origins: [{ origin: new URL(baseURL).origin, localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }] }],
+  origins: [{ origin: new URL(baseURL).origin, localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }, { name: "otherise:push-popup", value: "9999999999999" }] }],
 };
 
 export default defineConfig({

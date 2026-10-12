@@ -226,3 +226,64 @@ export function PushPrompt({ text }: { text: string }) {
     </Card>
   );
 }
+
+const POPUP_KEY = "otherise:push-popup";
+
+/**
+ * Finestra "Attiva le notifiche" alla prima apertura dell'app dalla schermata
+ * Home (su Android anche dal browser). Con le notifiche attive non arrivano
+ * più email. "Più tardi" la rimanda di 3 giorni. Aspetta che altre finestre
+ * (guida, frase del giorno) siano chiuse.
+ */
+export function PushPopup({ text }: { text: string }) {
+  const [state, setState] = usePushState();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (state !== "off") return;
+    if (!(isInstalled() || platform() === "android")) return;
+    if (Date.now() < Number(readLocal(POPUP_KEY) ?? 0)) return;
+    const id = setInterval(() => {
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      clearInterval(id);
+      setOpen(true);
+    }, 1500);
+    return () => clearInterval(id);
+  }, [state]);
+  if (!open || state !== "off") return null;
+  const later = () => {
+    writeLocal(POPUP_KEY, String(Date.now() + 3 * 24 * 3600 * 1000));
+    setOpen(false);
+  };
+  const turnOn = async () => {
+    setBusy(true);
+    setError(false);
+    const r = await enablePush();
+    setBusy(false);
+    if (r === "error") return setError(true);
+    setState(r);
+    if (r === "on") {
+      setOpen(false);
+      void sendTestPush();
+    } else if (r === "denied") {
+      writeLocal(POPUP_KEY, String(Date.now() + 30 * 24 * 3600 * 1000));
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-ink/40 sm:items-center" role="dialog" aria-modal="true" aria-label="Attiva le notifiche">
+      <div className="w-full max-w-md rounded-t-[28px] bg-sand px-5 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:rounded-[28px]">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-white"><IconBell size={22} /></span>
+        <h2 className="mt-4 text-[24px] leading-tight font-semibold">Attiva le notifiche</h2>
+        <p className="mt-2 text-[16px] leading-relaxed">{text}</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted">È importante: è così che ti arrivano messaggi, programmi e promemoria. Con le notifiche attive non ricevi email.</p>
+        {state === "off" && platform() === "ios" ? <p className="mt-2 text-sm text-muted">Il telefono ti chiede il permesso: tocca &quot;Consenti&quot;.</p> : null}
+        {error ? <p role="status" className="mt-2 text-sm text-accent-deep">{ERROR_TEXT}</p> : null}
+        <div className="mt-5 flex flex-col gap-2">
+          <button type="button" onClick={turnOn} disabled={busy} className="min-h-12 w-full rounded-full bg-ink text-[16px] font-semibold text-card disabled:opacity-60">{busy ? "Attivo…" : "Attiva le notifiche"}</button>
+          <button type="button" onClick={later} className="min-h-11 text-sm font-semibold text-muted underline">Più tardi</button>
+        </div>
+      </div>
+    </div>
+  );
+}

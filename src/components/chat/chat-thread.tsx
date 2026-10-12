@@ -10,8 +10,8 @@ import { deleteMessage, dismissReplyDraft, prepareUpload, requestReplyDraft, sen
 import type { ReplyDraft } from "@/lib/ai/reply";
 import { MAX_ATTACHMENTS, attachmentKind, sizeError, videoExpired, voiceLength, type ChatAttachment, type ChatMessage, type Transcript } from "@/lib/chat-shared";
 import { cx } from "@/components/ui";
-import { IconPaperclip, IconPlay, IconSend, IconSparkle, IconX } from "@/components/icons";
-import { prepareImage, uploadWithProgress, videoSize } from "./media";
+import { IconDownload, IconPaperclip, IconPlay, IconSend, IconSparkle, IconX } from "@/components/icons";
+import { prepareImage, saveAttachment, uploadWithProgress, videoSize } from "./media";
 import { VoicePlayer, useVoiceRecorder, voiceSupported } from "./voice";
 import { canCompressVideo, compressVideo, shouldCompress } from "./compress-video";
 
@@ -78,6 +78,18 @@ export function ChatThread({
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [viewer, setViewer] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const download = async (url: string, name: string, path: string) => {
+    setDownloading(path);
+    setError(null);
+    try {
+      await saveAttachment(url, name);
+    } catch {
+      setError("Non sono riuscito a scaricarlo. Controlla la connessione e riprova.");
+    } finally {
+      setDownloading(null);
+    }
+  };
   const listRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const stick = useRef(true);
@@ -421,13 +433,25 @@ export function ChatThread({
                         <div key={a.path} className="flex h-32 w-40 items-center justify-center rounded-2xl bg-sand px-3 text-center text-xs text-muted">
                           {a.kind === "video" && videoExpired(m.createdAt) ? "Video scaduto: dopo 6 mesi si cancella da solo per fare spazio" : "Non disponibile"}
                         </div>
-                      ) : a.kind === "image" ? (
-                        <button key={a.path} type="button" onClick={() => setViewer(a.url)} className="overflow-hidden rounded-2xl bg-sand">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={a.url} alt="Foto allegata" loading="lazy" className="max-h-72 w-full max-w-[280px] object-cover" style={a.width && a.height ? { aspectRatio: `${a.width} / ${a.height}` } : undefined} />
-                        </button>
                       ) : (
-                        <video key={a.path} src={a.url} controls playsInline preload="metadata" className="max-h-80 w-full max-w-[300px] rounded-2xl bg-ink" />
+                        <div key={a.path} className={cx("flex flex-col gap-0.5", m.mine ? "items-end" : "items-start")}>
+                          {a.kind === "image" ? (
+                            <button type="button" onClick={() => setViewer(a.url)} className="overflow-hidden rounded-2xl bg-sand">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={a.url!} alt="Foto allegata" loading="lazy" className="max-h-72 w-full max-w-[280px] object-cover" style={a.width && a.height ? { aspectRatio: `${a.width} / ${a.height}` } : undefined} />
+                            </button>
+                          ) : (
+                            <video src={a.url!} controls playsInline preload="metadata" className="max-h-80 w-full max-w-[300px] rounded-2xl bg-ink" />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void download(a.url!, a.name, a.path)}
+                            disabled={downloading === a.path}
+                            className="inline-flex min-h-9 items-center gap-1 px-1 text-xs font-semibold text-muted hover:text-ink disabled:opacity-60"
+                          >
+                            <IconDownload size={14} /> {downloading === a.path ? "Scarico…" : a.kind === "video" ? "Scarica il video" : "Scarica la foto"}
+                          </button>
+                        </div>
                       ),
                     )}
                   </div>

@@ -5,7 +5,7 @@ import { StaffMobileNav, type MobileItem } from "@/components/staff-mobile-nav";
 import Link from "next/link";
 import { LiveBell, LiveProvider } from "@/components/live";
 import { InstallGuide } from "@/components/install-guide";
-import { PushSync } from "@/components/push";
+import { PushPopup, PushSync } from "@/components/push";
 import { homeScreenName } from "@/lib/app-name";
 import { Toaster } from "@/components/toaster";
 import { IconLogout } from "@/components/icons";
@@ -80,6 +80,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
     </div>
       <InstallGuide appName={homeScreenName(name)} />
       <PushSync />
+      <PushPopup text="Ti avviso quando un cliente ti scrive, segnala un dolore o compila il check-up." />
     </LiveProvider>
   );
 }

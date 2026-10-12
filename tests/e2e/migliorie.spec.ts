@@ -72,6 +72,11 @@ test("pausa: il cliente esce dai pagamenti da sistemare; fine percorso: al clien
   const fix = page.locator("section", { hasText: "Da sistemare" });
   if (await fix.count()) await expect(fix.getByText("Demo Marta")).toHaveCount(0);
   await expect(page.getByText("In pausa").filter({ visible: true }).first()).toBeVisible();
+  // nell'elenco clienti sta nella sezione "In pausa", non tra gli attivi
+  await page.goto("/staff/clienti");
+  const pausa = page.getByRole("region", { name: "Clienti in pausa" });
+  await expect(pausa.locator('a[href^="/staff/clienti/"]', { hasText: "Demo Marta" }).filter({ visible: true })).toHaveCount(1);
+  await expect(page.locator('a[href^="/staff/clienti/"]', { hasText: "Demo Marta" }).filter({ visible: true })).toHaveCount(1);
   await page.goto(`${marta}/profilo`);
   await page.getByRole("button", { name: "Riattiva" }).click();
   await expect(page.getByText("Cliente di nuovo attivo.")).toBeVisible();

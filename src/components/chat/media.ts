@@ -62,3 +62,35 @@ export function uploadWithProgress(signedUrl: string, blob: Blob, type: string, 
     xhr.send(blob);
   });
 }
+
+/**
+ * Scarica una foto o un video della chat. Sul telefono apre "Condividi", da
+ * cui si sceglie "Salva video" / "Salva immagine" (finisce nelle Foto); se non
+ * si può, scarica il file come un normale download.
+ */
+export async function saveAttachment(url: string, name: string): Promise<void> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("download");
+  const blob = await res.blob();
+  const file = new File([blob], name || "allegato", { type: blob.type });
+  const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
+  const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (mobile && nav.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file] });
+      return;
+    } catch (e) {
+      // annullato da chi lo usa: va bene così
+      if ((e as { name?: string })?.name === "AbortError") return;
+      // altrimenti (es. troppo tempo dal tocco) scarichiamo normalmente
+    }
+  }
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = file.name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 30_000);
+}

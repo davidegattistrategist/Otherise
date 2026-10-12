@@ -446,14 +446,14 @@ isOneToOne: false
                   ]
                 },"profiles": {
                   Row: {
-                    "created_at": string,"email": string,"full_name": string,"id": string,"role": string
+                    "created_at": string,"email": string,"full_name": string,"id": string,"last_email_at": string | null,"role": string
                   }
                   ComputedFields: never
                   Insert: {
                     "created_at"?: string,"email": string,"full_name"?: string,"id": string,"role"?: string
                   }
                   Update: {
-                    "created_at"?: string,"email"?: string,"full_name"?: string,"id"?: string,"role"?: string
+                    "created_at"?: string,"email"?: string,"full_name"?: string,"id"?: string,"last_email_at"?: string | null,"role"?: string
                   }
                   Relationships: [
                     

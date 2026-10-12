@@ -994,3 +994,16 @@ describe("video della chat", async () => {
     expect(CHAT_VIDEO_KEEP_DAYS).toBeGreaterThanOrEqual(180);
   });
 });
+
+describe("email di avviso", async () => {
+  const { bundleEmail } = await import("./email-bundle");
+  it("una novità: titolo e link; più novità: un'unica email con l'elenco", () => {
+    const one = bundleEmail([{ title: "Nuovo messaggio da Marco", body: "Ciao!", link: "/cliente/messaggi" }], "https://app.esempio.it");
+    expect(one.subject).toBe("Nuovo messaggio da Marco");
+    expect(one.text).toContain("https://app.esempio.it/cliente/messaggi");
+    const many = bundleEmail(Array.from({ length: 14 }, (_, i) => ({ title: `Avviso ${i + 1}`, body: "", link: null })), "https://app.esempio.it");
+    expect(many.subject).toBe("Hai 14 novità nell'app");
+    expect(many.text).toContain("…e altre 2.");
+    expect(many.text).toContain("Attiva le notifiche");
+  });
+});

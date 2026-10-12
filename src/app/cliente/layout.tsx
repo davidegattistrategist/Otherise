@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ClientNav } from "@/components/client-nav";
 import { LiveBell, LiveProvider } from "@/components/live";
 import { InstallGuide } from "@/components/install-guide";
-import { PushSync } from "@/components/push";
+import { PushPopup, PushSync } from "@/components/push";
 import { homeScreenName } from "@/lib/app-name";
 
 export default async function ClientAreaLayout({ children }: { children: React.ReactNode }) {
@@ -37,6 +37,7 @@ export default async function ClientAreaLayout({ children }: { children: React.R
       </div>
       <InstallGuide appName={homeScreenName(name)} />
       <PushSync />
+      <PushPopup text="Ti avviso quando ti scrive il tuo coach, quando è pronto il programma nuovo e quando c'è il check-up da fare." />
     </LiveProvider>
   );
 }

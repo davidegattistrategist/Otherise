@@ -243,3 +243,24 @@ test("avvisi per email: di serie niente email allo staff, il titolare può cambi
   await page.locator("#email").getByRole("button", { name: "Salva le email" }).click();
   await expect(page.locator("#email").getByText("Preferenze salvate.")).toBeVisible();
 });
+
+test("popup per attivare le notifiche (telefono Android): si può rimandare", async ({ browser }) => {
+  const ctx = await browser.newContext({
+    userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
+    viewport: { width: 412, height: 915 },
+    isMobile: true,
+    hasTouch: true,
+    storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }] }] },
+  });
+  const page = await ctx.newPage();
+  await login(page, "giulia@prova.local");
+  const popup = page.getByRole("dialog", { name: "Attiva le notifiche" });
+  await expect(popup).toBeVisible({ timeout: 15_000 });
+  await expect(popup).toContainText("Con le notifiche attive non ricevi email");
+  await popup.getByRole("button", { name: "Più tardi" }).click();
+  await expect(popup).toHaveCount(0);
+  await page.reload();
+  await page.waitForTimeout(3000);
+  await expect(page.getByRole("dialog", { name: "Attiva le notifiche" })).toHaveCount(0);
+  await ctx.close();
+});
