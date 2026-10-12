@@ -132,7 +132,8 @@ test("frase del giorno: a tutto schermo la prima volta del giorno, poi resta nel
   await page.goto("/cliente");
   const stage = page.getByRole("dialog", { name: "La frase del giorno" });
   await expect(stage).toBeVisible();
-  await expect(stage.getByText(/N° \d+/)).toBeVisible();
+  await expect(stage.getByText("un giorno alla volta")).toBeVisible();
+  await expect(stage.getByText(/N° \d+/)).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
   await stage.getByRole("button", { name: "Inizia la giornata" }).click();
   await expect(stage).toHaveCount(0);
