@@ -235,3 +235,51 @@ export function ReminderButton({ action }: { action: Action }) {
     </form>
   );
 }
+
+/** Correzione di un pagamento già registrato: data, importo, metodo, periodo coperto o sessioni, note. */
+export function EditPaymentForm({
+  action,
+  values,
+}: {
+  action: Action;
+  values: { paid_on: string; amount: number; method: string; period_start: string | null; period_end: string | null; sessions: number | null; notes: string; extra: boolean };
+}) {
+  const [state, formAction] = useActionState(action, null);
+  const periodic = Boolean(values.period_start && values.period_end);
+  return (
+    <form action={formAction} className="flex flex-col gap-3">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="Pagato il">
+          <Input name="paid_on" type="date" defaultValue={values.paid_on} required />
+        </Field>
+        <Field label="Importo">
+          <Input name="amount" inputMode="decimal" defaultValue={String(values.amount).replace(".", ",")} required />
+        </Field>
+        <Field label="Metodo">
+          <Select name="method" defaultValue={values.method}>
+            {METHODS.map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
+          </Select>
+        </Field>
+      </div>
+      {periodic ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Copre dal">
+            <Input name="period_start" type="date" defaultValue={values.period_start ?? ""} required />
+          </Field>
+          <Field label="Al">
+            <Input name="period_end" type="date" defaultValue={values.period_end ?? ""} required />
+          </Field>
+        </div>
+      ) : values.sessions !== null || values.extra ? (
+        <Field label="Sessioni pagate" hint={values.extra ? "facoltative" : undefined}>
+          <Input name="sessions" type="number" min={values.extra ? 0 : 1} defaultValue={values.sessions ?? ""} className="max-w-40" />
+        </Field>
+      ) : null}
+      <Field label="Note" hint="facoltative">
+        <Input name="notes" defaultValue={values.notes} />
+      </Field>
+      <ActionMessage state={state} />
+      <div><SubmitButton size="sm">Salva le modifiche</SubmitButton></div>
+    </form>
+  );
+}

@@ -7,8 +7,8 @@ import { getExtraSessions, reminderChatLink } from "@/lib/data/billing";
 import { IconChat, IconDown } from "@/components/icons";
 import { Card, Dot, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
-import { ExtraPaymentForm, ExtraSessionsFix, PaymentForm, PlanForm, PtCountingForm, ReminderButton } from "./forms";
-import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setExtraSessionsLeft, setPtCounting } from "./actions";
+import { EditPaymentForm, ExtraPaymentForm, ExtraSessionsFix, PaymentForm, PlanForm, PtCountingForm, ReminderButton } from "./forms";
+import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setExtraSessionsLeft, setPtCounting, updatePayment } from "./actions";
 import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Pagamenti" };
@@ -221,6 +221,12 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
                       {p.sessions ? ` · ${p.sessions} ${p.sessions === 1 ? "sessione" : "sessioni"}` : ""}
                     </div>
                     {p.notes ? <div className="text-sm text-ink-soft">{p.notes}</div> : null}
+                    <details className="mt-1">
+                      <summary className="inline-flex min-h-9 cursor-pointer items-center text-sm font-semibold text-ink-soft underline">Modifica</summary>
+                      <div className="mt-2 rounded-2xl bg-sand p-3">
+                        <EditPaymentForm action={updatePayment.bind(null, id, p.id)} values={{ paid_on: p.paid_on, amount: p.amount, method: p.method, period_start: p.period_start, period_end: p.period_end, sessions: p.sessions, notes: p.notes ?? "", extra: !p.plan_id }} />
+                      </div>
+                    </details>
                   </div>
                   <form action={deletePayment.bind(null, id, p.id)}>
                     <ConfirmButton variant="ghost" message="Eliminare questo pagamento?">Elimina</ConfirmButton>

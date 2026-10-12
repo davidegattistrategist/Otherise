@@ -26,6 +26,7 @@ import { LineChart } from "@/components/line-chart";
 import { Button, Card, EmptyState, Eyebrow, LinkButton, Notice, fmtNum } from "@/components/ui";
 import { ClearParams } from "@/components/clear-param";
 import { setSkinfoldFormula } from "./actions";
+import { SexPrompt } from "./sex-prompt";
 
 export const metadata: Metadata = { title: "Check" };
 
@@ -52,6 +53,8 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
   const sp = await searchParams;
   await requireStaff();
   const client = await getStaffClient(id);
+  // cliente creato senza indicare il sesso (spot, solo lezioni PT): prima si sceglie quello
+  if (!client.sex) return <SexPrompt clientId={id} />;
   const supabase = await createClient();
   const { data: checks } = await supabase
     .from("checks")

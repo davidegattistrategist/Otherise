@@ -7,8 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatLong, isISODate, todayISO } from "@/lib/dates";
 import { billingStatus, formatEuro, isPeriodic, METHODS, nextPaymentProposal, PLAN_KINDS, situationText, type BillingRow, type PlanKind } from "@/lib/billing";
 import { notify } from "@/lib/notify";
-import { sendEmail } from "@/lib/email";
-import { siteUrl } from "@/lib/site";
+import { deliverPendingEmails, sendEmail } from "@/lib/email";
 import { getExtraSessions } from "@/lib/data/billing";
 import type { ActionState } from "@/components/form-bits";
 
@@ -187,6 +186,44 @@ export async function setPtCounting(clientId: string, _: ActionState, fd: FormDa
   return { ok: true, message: "Conteggio salvato." };
 }
 
+/** Corregge un pagamento già registrato (es. il trimestre parte il 1° settembre e non il 1° agosto). */
+export async function updatePayment(clientId: string, paymentId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  await requireOwner();
+  const supabase = await createClient();
+  const { data: old } = await supabase.from("payments").select("plan_id, period_start, period_end, sessions").eq("id", paymentId).eq("client_id", clientId).maybeSingle();
+  if (!old) return { error: "Pagamento non trovato." };
+  const paidOn = String(fd.get("paid_on") ?? "");
+  if (!isISODate(paidOn)) return { error: "Data del pagamento non valida." };
+  const amount = money(fd.get("amount"));
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Importo non valido." };
+  const method = String(fd.get("method") ?? "transfer");
+  if (!(METHODS as readonly string[]).includes(method)) return { error: "Metodo non valido." };
+  const update: { paid_on: string; amount: number; method: (typeof METHODS)[number]; notes: string; period_start?: string; period_end?: string; sessions?: number | null } = {
+    paid_on: paidOn,
+    amount,
+    method: method as (typeof METHODS)[number],
+    notes: String(fd.get("notes") ?? "").trim().slice(0, 500),
+  };
+  if (old.period_start && old.period_end) {
+    const start = String(fd.get("period_start") ?? "");
+    const end = String(fd.get("period_end") ?? "");
+    if (!isISODate(start) || !isISODate(end)) return { error: "Indica il periodo coperto dal pagamento." };
+    if (end < start) return { error: "Il periodo finisce prima di iniziare." };
+    update.period_start = start;
+    update.period_end = end;
+  } else if (fd.has("sessions")) {
+    const raw = String(fd.get("sessions") ?? "").trim();
+    const n = raw && raw !== "0" ? int(raw) : null;
+    if (n !== null && Number.isNaN(n)) return { error: "Numero di sessioni non valido." };
+    if (old.plan_id && !n) return { error: "Indica quante sessioni copre il pagamento." };
+    update.sessions = n;
+  }
+  const { error } = await supabase.from("payments").update(update).eq("id", paymentId).eq("client_id", clientId);
+  if (error) return { error: "Salvataggio non riuscito." };
+  revalidate(clientId);
+  return { ok: true, message: "Pagamento corretto." };
+}
+
 export async function deletePayment(clientId: string, paymentId: string) {
   await requireOwner();
   const supabase = await createClient();
@@ -244,17 +281,15 @@ export async function sendPaymentReminder(clientId: string, _: ActionState, __: 
   if (client.user_id) {
     await notify([{ recipient_id: client.user_id, client_id: clientId, kind: "payment_reminder", title: "Promemoria rinnovo", body, link: "/cliente/profilo", dedupe_key: `payrem:${clientId}:${todayISO()}` }]);
   }
-  let emailed = false;
-  if (client.email) {
-    emailed = await sendEmail(client.email, `${business} · promemoria rinnovo`, `${body}\n\n${client.user_id ? `${await siteUrl()}/cliente/profilo` : ""}`.trim());
+  if (client.user_id) {
+    // email solo se serve (niente notifiche sul telefono, regole in deliverPendingEmails)
+    await deliverPendingEmails();
+    return { ok: true, message: "Promemoria inviato nell'app." };
   }
-  if (client.user_id && emailed) {
-    // l'email è già partita: evitiamo che il giro automatico la rimandi
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    await createAdminClient().from("notifications").update({ emailed_at: new Date().toISOString() }).eq("recipient_id", client.user_id).eq("dedupe_key", `payrem:${clientId}:${todayISO()}`);
-  }
-  if (!client.user_id && !emailed) return { error: "Il cliente non ha ancora l'app e l'invio delle email non è configurato: usa il pulsante WhatsApp." };
-  return { ok: true, message: emailed ? (client.user_id ? "Promemoria inviato nell'app e per email." : "Promemoria inviato per email.") : "Promemoria inviato nell'app (invio email non configurato)." };
+  // senza app l'email è l'unico modo
+  const emailed = client.email ? await sendEmail(client.email, `${business} · promemoria rinnovo`, body) : false;
+  if (!emailed) return { error: "Il cliente non ha ancora l'app e l'invio delle email non è configurato: scrivigli tu." };
+  return { ok: true, message: "Promemoria inviato per email." };
 }
 
 /**

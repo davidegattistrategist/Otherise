@@ -8,6 +8,7 @@ import type { Sex } from "@/lib/body/skinfolds";
 import { Card } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { CheckForm, type CheckValues } from "../check-form";
+import { SexPrompt } from "../sex-prompt";
 import { deleteCheck, saveCheck } from "../actions";
 
 export const metadata: Metadata = { title: "Check" };
@@ -20,9 +21,10 @@ export default async function EditCheckPage({ params }: { params: Promise<{ id: 
   const supabase = await createClient();
   const [{ data: c }, folds] = await Promise.all([
     supabase.from("checks").select("*").eq("id", checkId).eq("client_id", id).maybeSingle(),
-    foldContext(supabase, client, checkId),
+    client.sex ? foldContext(supabase, { ...client, sex: client.sex }, checkId) : Promise.resolve({ ref: null, lastMissing: [] }),
   ]);
   if (!c) notFound();
+  if (!c.sex && !client.sex) return <SexPrompt clientId={id} />;
   return (
     <div className="flex flex-col gap-5">
       <CheckForm

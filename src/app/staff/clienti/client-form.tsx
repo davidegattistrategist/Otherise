@@ -9,12 +9,12 @@ export type ClientFormValues = {
   last_name?: string;
   email?: string | null;
   phone?: string | null;
-  sex?: string;
+  sex?: string | null;
   birth_date?: string | null;
   goals?: string;
   start_date?: string;
   weekly_checkin?: boolean;
-  phase_weeks?: number;
+  phase_weeks?: number | null;
   coach_id?: string | null;
   status?: string;
   private_notes?: string;
@@ -41,9 +41,9 @@ export function ClientForm({
         <Field label="Cognome"><Input name="last_name" defaultValue={values.last_name} autoComplete="off" /></Field>
         <Field label="Email" hint="serve per l'invito"><Input name="email" type="email" defaultValue={values.email ?? ""} autoComplete="off" /></Field>
         <Field label="Telefono"><Input name="phone" type="tel" defaultValue={values.phone ?? ""} autoComplete="off" /></Field>
-        <Field label="Sesso" hint="decide le pliche: 7 uomo, 5 donna">
-          <Select name="sex" defaultValue={values.sex ?? ""} required>
-            <option value="" disabled>Scegli…</option>
+        <Field label="Sesso" hint="serve per le pliche">
+          <Select name="sex" defaultValue={values.sex ?? ""}>
+            <option value="">Da decidere</option>
             <option value="F">Donna</option>
             <option value="M">Uomo</option>
           </Select>
@@ -51,7 +51,8 @@ export function ClientForm({
         <Field label="Data di nascita" hint="serve per le formule"><Input name="birth_date" type="date" defaultValue={values.birth_date ?? ""} /></Field>
         <Field label="Inizio percorso"><Input name="start_date" type="date" defaultValue={values.start_date ?? ""} /></Field>
         <Field label="Durata delle fasi" hint="come il suo piano">
-          <Select name="phase_weeks" defaultValue={String(values.phase_weeks ?? 4)}>
+          <Select name="phase_weeks" defaultValue={values.phase_weeks ? String(values.phase_weeks) : ""}>
+            <option value="">Da decidere (solo lezioni PT, cliente spot…)</option>
             <option value="4">4 settimane (check ogni 4)</option>
             <option value="6">6 settimane (check ogni 6)</option>
             {values.phase_weeks && ![4, 6].includes(values.phase_weeks) ? <option value={values.phase_weeks}>{values.phase_weeks} settimane</option> : null}

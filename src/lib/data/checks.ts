@@ -46,7 +46,7 @@ export async function recomputeClientChecks(supabase: ServerSupabase, clientId: 
     supabase.from("clients").select("sex, birth_date, skinfold_formula").eq("id", clientId).maybeSingle(),
     supabase.from("checks").select(FIELDS).eq("client_id", clientId),
   ]);
-  if (!client) return null;
+  if (!client || !client.sex) return null;
   const sex = client.sex as Sex;
   const list = rows ?? [];
   const ref = referenceFormula(sex, list.map((c) => ({ averages: averagesOf(c.skinfolds as SkinfoldReadings) })), client.skinfold_formula);

@@ -18,12 +18,14 @@ const clientSchema = z.object({
   last_name: z.string().trim().default(""),
   email: z.string().trim().toLowerCase().email("Email non valida").or(z.literal("")).transform((v) => v || null),
   phone: z.string().trim().transform((v) => v || null),
-  sex: z.enum(["M", "F"], { message: "Indica il sesso (serve per le pliche)" }),
+  // da decidere per clienti spot o solo lezioni PT: si sceglie al primo check
+  sex: z.enum(["M", "F", ""]).transform((v) => (v ? v : null)),
   birth_date: z.string().refine((v) => v === "" || isISODate(v), "Data di nascita non valida").transform((v) => v || null),
   goals: z.string().trim().default(""),
   start_date: z.string().refine((v) => v === "" || isISODate(v), "Data di inizio non valida").transform((v) => v || todayISO()),
   weekly_checkin: z.preprocess((v) => v === "on" || v === "true", z.boolean()),
-  phase_weeks: z.coerce.number().int().min(2, "Durata delle fasi non valida").max(12, "Durata delle fasi non valida"),
+  // vuota = da decidere (si usano 4 settimane quando si prepara un programma)
+  phase_weeks: z.union([z.literal(""), z.coerce.number().int().min(2, "Durata delle fasi non valida").max(12, "Durata delle fasi non valida")]).transform((v) => (v === "" ? null : v)),
 });
 
 function readClientForm(fd: FormData) {
@@ -37,7 +39,7 @@ function readClientForm(fd: FormData) {
     goals: fd.get("goals") ?? "",
     start_date: fd.get("start_date") ?? "",
     weekly_checkin: fd.get("weekly_checkin") ?? "",
-    phase_weeks: fd.get("phase_weeks") || 4,
+    phase_weeks: fd.get("phase_weeks") ?? "",
   });
 }
 

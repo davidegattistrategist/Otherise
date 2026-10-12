@@ -33,7 +33,7 @@ export async function buildReplyContext(supabase: ServerSupabase, clientId: stri
   const c = client.data;
   if (c) {
     const age = ageOn(c.birth_date, today);
-    parts.push(`## Cliente\n${c.sex === "F" ? "Donna" : "Uomo"}${age ? `, ${age} anni` : ""}. Obiettivi: ${c.goals || "non indicati"}.`);
+    parts.push(`## Cliente\n${c.sex === "F" ? "Donna" : c.sex === "M" ? "Uomo" : "Cliente"}${age ? `, ${age} anni` : ""}. Obiettivi: ${c.goals || "non indicati"}.`);
   }
   const indications = profileText(profile);
   if (indications) parts.push(`## Indicazioni del trainer per questo cliente\n${indications}`);

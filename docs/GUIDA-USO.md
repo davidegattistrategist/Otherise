@@ -15,7 +15,7 @@ Ogni mattina alle 8 arriva **una sola email di riepilogo** con pagamenti, progra
 Dal telefono il menu è in basso: Oggi, Clienti, Messaggi, Pagamenti e "Altro" per il resto.
 
 ## Un nuovo cliente
-1. **Clienti → Nuovo cliente**: nome, sesso (serve per le pliche), data di nascita, email, obiettivi. Spunta "Check-up settimanale" se vuoi che lo compili, e "Invia subito l'invito".
+1. **Clienti → Nuovo cliente**: basta il nome. Sesso (serve per le pliche) e durata delle fasi si possono lasciare "Da decidere": comodo per chi fa solo lezioni PT o per un cliente spot di cui registri solo un pagamento. Il sesso te lo chiede l'app al primo check. Poi data di nascita, email, obiettivi. Spunta "Check-up settimanale" se vuoi che lo compili, e "Invia subito l'invito".
 2. **Check → Nuovo check**: peso, pliche (fino a 3 misure per sito, l'app fa la media), circonferenze, test. Massa grassa e magra si calcolano mentre scrivi. Se manca una plica del protocollo la percentuale non viene calcolata (meglio nessun numero che un numero sbagliato).
    - Uomo: 7 pliche (tricipitale, pettorale, ascellare, sottoscapolare, soprailiaca, addominale, coscia). Donna: 5 (senza pettorale e ascellare).
 3. **Posturale**: testo libero, con la spunta "Visibile al cliente" se vuoi che lo legga.
@@ -101,6 +101,7 @@ Il cliente lo compila da venerdì a domenica (allenamenti, sonno, stress, percor
 Se nel check-up il cliente ha scritto una **richiesta**, trovi già pronta una bozza di risposta sopra la casella (stesse regole della chat: Usa e modifica, oppure Scrivo da zero).
 
 ## Pagamenti (titolare)
+- **Correggere un pagamento**: nello storico dei pagamenti ogni riga ha **Modifica**: data d'incasso, importo, metodo, periodo coperto (es. il trimestre parte il 1° settembre e non il 1° agosto) o sessioni, note.
 I pagamenti avvengono fuori dall'app. Qui registri cosa è saldato, nel modo più veloce possibile:
 - **Pagato**: in "Oggi" e in "Pagamenti", un tocco registra il pagamento atteso (importo del piano e periodo successivo, o le sessioni del pacchetto). Prima ti chiede conferma mostrandoti cosa registra.
 - **Promemoria**: apre la chat dell'app con il cliente, con il promemoria già scritto (lo controlli e premi invio). Il testo si cambia in Impostazioni.

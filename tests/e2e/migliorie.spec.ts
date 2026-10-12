@@ -257,3 +257,51 @@ test("pagamento extra (sessioni PT in più): conta negli incassi ma non sposta l
   await expect(card.getByText("In pari")).toBeVisible();
   await expect(page.locator("li", { hasText: "Saldo sessioni PT" }).first()).toContainText("3 sessioni");
 });
+
+test("pagamento già registrato: si corregge data d'incasso e periodo coperto", async ({ page }) => {
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/clienti");
+  await page.locator('a[href^="/staff/clienti/"]', { hasText: "Esempio Giulia" }).filter({ visible: true }).first().click();
+  await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
+  await page.goto(`${page.url()}/pagamenti`);
+  // il primo pagamento con un periodo
+  const item = page.locator("li").filter({ hasText: "copre" }).filter({ visible: true }).first();
+  await item.getByText("Modifica", { exact: true }).click();
+  const paid = item.locator('input[name="paid_on"]');
+  const start = item.locator('input[name="period_start"]');
+  const end = item.locator('input[name="period_end"]');
+  const before = { paid: await paid.inputValue(), start: await start.inputValue(), end: await end.inputValue() };
+  await paid.fill("2026-09-24");
+  await start.fill("2026-09-01");
+  await end.fill("2026-11-30");
+  await item.getByRole("button", { name: "Salva le modifiche" }).click();
+  await expect(item.getByText("Pagamento corretto.")).toBeVisible();
+  await page.reload();
+  await expect(page.locator("li").filter({ hasText: /copre 1 set.*30 nov/ }).filter({ visible: true }).first()).toBeVisible();
+
+  // rimetto com'era
+  const again = page.locator("li").filter({ hasText: /copre 1 set.*30 nov/ }).filter({ visible: true }).first();
+  await again.getByText("Modifica", { exact: true }).click();
+  await again.locator('input[name="paid_on"]').fill(before.paid);
+  await again.locator('input[name="period_start"]').fill(before.start);
+  await again.locator('input[name="period_end"]').fill(before.end);
+  await again.getByRole("button", { name: "Salva le modifiche" }).click();
+  await expect(page.getByText("Pagamento corretto.").filter({ visible: true })).toBeVisible();
+});
+
+test("cliente spot: basta il nome, sesso e durata delle fasi si decidono dopo", async ({ page }, info) => {
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/clienti/nuovo");
+  const name = `Spot${info.project.name}${Date.now() % 10000}`;
+  await page.fill("input[name=first_name]", name);
+  await expect(page.locator("select[name=sex]")).toHaveValue("");
+  await expect(page.locator("select[name=phase_weeks]")).toHaveValue("");
+  await page.getByRole("button", { name: "Crea cliente" }).click();
+  await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
+  const base = page.url();
+  // per il check serve il sesso: lo chiede e poi mostra le pliche giuste
+  await page.goto(`${base}/check/nuovo`);
+  await page.getByRole("button", { name: "Donna" }).click();
+  await expect(page.locator("input[name=sf_coscia_0]")).toBeVisible();
+  await expect(page.locator("input[name=sf_pettorale_0]")).toHaveCount(0);
+});

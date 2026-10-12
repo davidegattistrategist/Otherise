@@ -65,7 +65,7 @@ export async function buildClientContext(
   const c = client.data;
   if (c) {
     const age = ageOn(c.birth_date, today);
-    parts.push(`## Cliente\nSesso: ${c.sex === "F" ? "donna" : "uomo"}${age ? `, ${age} anni` : ""}. In percorso dal ${c.start_date}.\nObiettivi: ${c.goals || "non indicati"}\nDurata delle fasi del suo piano: ${c.phase_weeks} settimane.`);
+    parts.push(`## Cliente\nSesso: ${c.sex === "F" ? "donna" : c.sex === "M" ? "uomo" : "non indicato"}${age ? `, ${age} anni` : ""}. In percorso dal ${c.start_date}.\nObiettivi: ${c.goals || "non indicati"}\nDurata delle fasi del suo piano: ${c.phase_weeks ? `${c.phase_weeks} settimane` : "non ancora decisa (di solito 4 settimane)"}.`);
   }
   const indications = profileText(aiProfile);
   if (indications) parts.push(`## Indicazioni del trainer per questo cliente\n${indications}`);

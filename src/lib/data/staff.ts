@@ -13,7 +13,7 @@ export type ClientRow = {
   first_name: string;
   last_name: string;
   email: string | null;
-  sex: "M" | "F";
+  sex: "M" | "F" | null;
   status: string;
   coach_id: string | null;
   user_id: string | null;

@@ -19,11 +19,20 @@ const num = (v: FormDataEntryValue | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+/** Sesso del cliente, se alla creazione era rimasto da decidere (serve per le pliche). */
+export async function setClientSex(clientId: string, sex: "M" | "F") {
+  await requireStaff();
+  const supabase = await createClient();
+  await supabase.from("clients").update({ sex }).eq("id", clientId);
+  revalidatePath(`/staff/clienti/${clientId}`, "layout");
+}
+
 export async function saveCheck(clientId: string, checkId: string | null, _: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireStaff();
   const supabase = await createClient();
   const { data: client } = await supabase.from("clients").select("sex, birth_date").eq("id", clientId).maybeSingle();
   if (!client) return { error: "Cliente non trovato." };
+  if (!client.sex) return { error: "Prima indica se è uomo o donna (serve per le pliche)." };
 
   const date = String(fd.get("check_date") ?? "");
   if (date && !isISODate(date)) return { error: "Data del check non valida." };

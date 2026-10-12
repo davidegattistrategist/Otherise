@@ -7,6 +7,7 @@ import { todayISO } from "@/lib/dates";
 import type { Sex } from "@/lib/body/skinfolds";
 import { CheckForm } from "../check-form";
 import { saveCheck } from "../actions";
+import { SexPrompt } from "../sex-prompt";
 
 export const metadata: Metadata = { title: "Nuovo check" };
 
@@ -14,7 +15,8 @@ export default async function NewCheckPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   await requireStaff();
   const client = await getStaffClient(id);
-  const folds = await foldContext(await createClient(), client);
+  if (!client.sex) return <SexPrompt clientId={id} />;
+  const folds = await foldContext(await createClient(), { ...client, sex: client.sex });
   return (
     <CheckForm
       action={saveCheck.bind(null, id, null)}
