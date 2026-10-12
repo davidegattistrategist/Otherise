@@ -7,8 +7,8 @@ import { getExtraSessions, reminderChatLink } from "@/lib/data/billing";
 import { IconChat, IconDown } from "@/components/icons";
 import { Card, Dot, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
-import { ExtraPaymentForm, ExtraSessionsFix, PaymentForm, PlanForm, ReminderButton } from "./forms";
-import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setExtraSessionsLeft } from "./actions";
+import { ExtraPaymentForm, ExtraSessionsFix, PaymentForm, PlanForm, PtCountingForm, ReminderButton } from "./forms";
+import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setExtraSessionsLeft, setPtCounting } from "./actions";
 import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Pagamenti" };
@@ -142,18 +142,56 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
       </div>
 
       <div className="flex flex-col gap-4">
-        {extra ? (
+        {plan?.kind !== "package" ? (
           <Card className="flex flex-col gap-3">
-            <Eyebrow>Sessioni PT extra</Eyebrow>
-            <div className="flex items-baseline gap-2">
-              <span className={`text-[34px] leading-none font-semibold tabular ${extra.left <= 0 ? "text-accent" : ""}`}>{extra.left}</span>
-              <span className="text-[15px] text-muted">{extra.left === 1 ? "rimasta" : "rimaste"} su {extra.bought} pagate</span>
-            </div>
-            <p className="text-sm text-muted">
-              {extra.left < 0 ? `Ne avete fatte ${-extra.left} in più di quelle pagate. ` : extra.left === 0 ? "Sono finite: se continuate, registra un nuovo pagamento extra. " : ""}
-              Scalano da sole quando segni una sessione in <a href={`/staff/clienti/${id}/sessioni`} className="font-semibold text-ink underline">Sessioni PT</a> (contano quelle dal {formatShort(extra.since, 0)}).
-            </p>
-            <ExtraSessionsFix action={setExtraSessionsLeft.bind(null, id)} left={extra.left} />
+            <Eyebrow>Sessioni PT a parte</Eyebrow>
+            {extra ? (
+              <>
+                {extra.due > 0 ? (
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-[34px] leading-none font-semibold text-accent tabular">{extra.due}</span>
+                    <span className="text-[15px] text-muted">{extra.due === 1 ? "sessione da saldare" : "sessioni da saldare"}{extra.dueAmount !== null ? ` · ${formatEuro(extra.dueAmount)}` : ""}</span>
+                  </div>
+                ) : extra.left > 0 ? (
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-[34px] leading-none font-semibold tabular">{extra.left}</span>
+                    <span className="text-[15px] text-muted">{extra.left === 1 ? "pagata, ancora da fare" : "pagate, ancora da fare"}</span>
+                  </div>
+                ) : (
+                  <div className="text-[22px] font-semibold">In pari</div>
+                )}
+                <p className="text-sm text-muted">
+                  {extra.used} {extra.used === 1 ? "fatta" : "fatte"} · {extra.bought} {extra.bought === 1 ? "pagata" : "pagate"} · contate dal {formatShort(extra.since, 0)}
+                  {extra.price !== null ? ` · ${formatEuro(extra.price)} a sessione` : ""}. Si aggiornano da sole quando segni una sessione in{" "}
+                  <a href={`/staff/clienti/${id}/sessioni`} className="font-semibold text-ink underline">Sessioni PT</a>.
+                </p>
+                {extra.due > 0 ? (
+                  <div className="flex flex-col gap-3 rounded-2xl bg-sand p-4">
+                    <div className="flex flex-wrap gap-2">
+                      <LinkButton href={`/staff/messaggi/${id}?promemoria=sessioni`} variant="secondary" size="sm"><IconChat size={16} /> Scrivi in chat quante sono</LinkButton>
+                    </div>
+                    <details className="group">
+                      <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Registra il saldo</summary>
+                      <div className="pt-3">
+                        <ExtraPaymentForm action={recordExtraPayment.bind(null, id)} today={today} method="cash" defaults={{ amount: extra.dueAmount, sessions: extra.due, notes: "Saldo sessioni PT" }} submitLabel="Registra il saldo" />
+                      </div>
+                    </details>
+                  </div>
+                ) : null}
+                <ExtraSessionsFix action={setExtraSessionsLeft.bind(null, id)} left={extra.left} />
+                <details className="group">
+                  <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Da quando contare e prezzo</summary>
+                  <div className="pt-3">
+                    <PtCountingForm action={setPtCounting.bind(null, id)} from={extra.countFrom ?? extra.since} price={extra.price} today={today} active canStop={Boolean(extra.countFrom)} />
+                  </div>
+                </details>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted">Per le sessioni PT fuori dal piano: pagate in anticipo (con un pagamento extra) o da saldare dopo. Ogni sessione segnata in Sessioni PT si conta da sola e qui vedi quante ne restano o quante sono da saldare.</p>
+                <PtCountingForm action={setPtCounting.bind(null, id)} from={null} price={null} today={today} active={false} />
+              </>
+            )}
           </Card>
         ) : null}
         {plan && !paused ? (

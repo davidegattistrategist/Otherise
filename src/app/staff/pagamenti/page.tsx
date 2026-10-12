@@ -5,7 +5,7 @@ import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { addMonths, formatShort, todayISO } from "@/lib/dates";
 import { formatEuro, METHOD_LABELS, type BillingStatus, type PaymentMethod } from "@/lib/billing";
-import { getBillingLines, getRevenue, monthLabel } from "@/lib/data/billing";
+import { getBillingLines, getRevenue, getSessionsToSettle, monthLabel } from "@/lib/data/billing";
 import { BarChart } from "@/components/bar-chart";
 import { QuickPay } from "@/components/quick-pay";
 import { BigNumber, Card, Dot, Eyebrow, PageTitle, buttonClass } from "@/components/ui";
@@ -25,9 +25,10 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
   // mese aperto nel grafico degli incassi (di base quello in corso)
   const month = /^\d{4}-\d{2}$/.test(sp.incassi ?? "") ? sp.incassi! : today.slice(0, 7);
   const nextMonth = addMonths(`${month}-01`, 1);
-  const [revenue, { data: recent }] = await Promise.all([
+  const [revenue, { data: recent }, toSettle] = await Promise.all([
     getRevenue(supabase, lines),
     supabase.from("payments").select("id, client_id, paid_on, amount, method, clients!inner(first_name, last_name, free)").eq("clients.free", false).gte("paid_on", `${month}-01`).lt("paid_on", nextMonth).order("paid_on", { ascending: false }).order("created_at", { ascending: false }),
+    getSessionsToSettle(supabase),
   ]);
   const monthTotal = (recent ?? []).reduce((t, p) => t + Number(p.amount), 0);
   const monthIndex = revenue.buckets.findIndex((b) => b.month === month);
@@ -71,6 +72,20 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
                   <div className="text-sm text-muted">{l.status.label}{l.proposal ? ` · prossimo: ${l.proposal}` : ""}</div>
                 </div>
                 <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={l.reminder} />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
+      {toSettle.length ? (
+        <Card className="flex flex-col gap-1">
+          <div className="mb-2 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Sessioni PT da saldare</Eyebrow></div>
+          <ul className="flex flex-col">
+            {toSettle.map((t) => (
+              <li key={t.clientId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-sand-deep py-3 first:border-t-0">
+                <Link href={`/staff/clienti/${t.clientId}/pagamenti`} className="font-semibold hover:underline">{t.name}</Link>
+                <span className="text-sm text-muted tabular">{t.due === 1 ? "1 sessione" : `${t.due} sessioni`}{t.dueAmount !== null ? ` · ${formatEuro(t.dueAmount)}` : ""}</span>
               </li>
             ))}
           </ul>

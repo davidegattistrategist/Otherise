@@ -8,7 +8,7 @@ import { ChatThread } from "@/components/chat/chat-thread";
 import { IconArrowLeft } from "@/components/icons";
 import { aiEnabled } from "@/lib/ai/claude";
 import { readyChatDraft } from "@/lib/ai/reply";
-import { paymentReminderText } from "@/lib/data/billing";
+import { getExtraSessions, paymentReminderText, sessionsDueText } from "@/lib/data/billing";
 import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Chat" };
@@ -32,7 +32,13 @@ export default async function StaffChatPage({ params, searchParams }: { params: 
         ? `Tanti auguri ${client.first_name}! 🎉`
         : promemoria === "saluto"
           ? `Ciao ${client.first_name}! Come sta andando?`
-          : null;
+          : promemoria === "sessioni" && me.role === "owner"
+            ? await sessionsPrefill()
+            : null;
+  async function sessionsPrefill() {
+    const extra = await getExtraSessions(supabase, clientId);
+    return extra && extra.due > 0 ? sessionsDueText(client!.first_name, extra.due, extra.price) : null;
+  }
   return (
     <div className="flex flex-col gap-3">
       {promemoria ? <ClearParams names={["promemoria"]} /> : null}

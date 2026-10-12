@@ -142,22 +142,49 @@ export async function recordExtraPayment(clientId: string, _: ActionState, fd: F
   return { ok: true, message: `Pagamento extra di ${formatEuro(amount)} registrato. La scadenza del piano non cambia.` };
 }
 
-/** Correzione a mano: "ne restano N" (il conteggio poi continua da lì). */
+/**
+ * Correzione a mano del conteggio: "restano N pagate da fare" oppure
+ * "N da saldare" (il conteggio poi continua da lì).
+ */
 export async function setExtraSessionsLeft(clientId: string, _: ActionState, fd: FormData): Promise<ActionState> {
   await requireOwner();
   const supabase = await createClient();
-  const raw = String(fd.get("left") ?? "").trim();
-  const left = Number(raw);
-  if (!raw || !Number.isInteger(left) || left < 0) return { error: "Scrivi quante sessioni restano, per esempio 7." };
+  const raw = String(fd.get("count") ?? "").trim();
+  const n = Number(raw);
+  if (!raw || !Number.isInteger(n) || n < 0) return { error: "Scrivi un numero di sessioni, per esempio 3." };
+  const mode = String(fd.get("mode") ?? "left");
+  const left = mode === "due" ? -n : n;
   const current = await getExtraSessions(supabase, clientId);
-  if (!current) return { error: "Prima registra un pagamento extra con il numero di sessioni." };
+  if (!current) return { error: "Prima attiva il conteggio delle sessioni PT." };
   // used = fatte + adjust; vogliamo bought - used = left
   const done = current.used - current.adjust;
   const adjust = current.bought - left - done;
   const { error } = await supabase.from("clients").update({ extra_sessions_adjust: adjust }).eq("id", clientId);
   if (error) return { error: "Salvataggio non riuscito." };
   revalidate(clientId);
-  return { ok: true, message: `Fatto: ${left === 1 ? "resta 1 sessione" : `restano ${left} sessioni`}.` };
+  const what = n === 1 ? "1 sessione" : `${n} sessioni`;
+  return { ok: true, message: left < 0 ? `Fatto: ${what} da saldare.` : n === 0 ? "Fatto: siete in pari." : `Fatto: ${what} pagate ancora da fare.` };
+}
+
+/** Attiva o modifica il conteggio delle sessioni PT a parte: da quando e a che prezzo. */
+export async function setPtCounting(clientId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  await requireOwner();
+  const supabase = await createClient();
+  if (fd.get("stop") === "1") {
+    const { error } = await supabase.from("clients").update({ pt_count_from: null, pt_session_price: null, extra_sessions_adjust: 0 }).eq("id", clientId);
+    if (error) return { error: "Salvataggio non riuscito." };
+    revalidate(clientId);
+    return { ok: true, message: "Conteggio tolto." };
+  }
+  const from = String(fd.get("from") ?? "");
+  if (!isISODate(from)) return { error: "Scegli da che giorno contare le sessioni." };
+  const rawPrice = String(fd.get("price") ?? "").trim();
+  const price = rawPrice ? money(rawPrice) : null;
+  if (price !== null && (!Number.isFinite(price) || price < 0)) return { error: "Prezzo non valido: scrivi per esempio 45, oppure lascialo vuoto." };
+  const { error } = await supabase.from("clients").update({ pt_count_from: from, pt_session_price: price }).eq("id", clientId);
+  if (error) return { error: "Salvataggio non riuscito." };
+  revalidate(clientId);
+  return { ok: true, message: "Conteggio salvato." };
 }
 
 export async function deletePayment(clientId: string, paymentId: string) {

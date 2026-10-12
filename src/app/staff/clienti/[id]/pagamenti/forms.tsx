@@ -145,7 +145,7 @@ export function PaymentForm({
  * Pagamento fuori dal piano (sessioni PT in più, una consulenza…): entra negli
  * incassi ma non sposta la scadenza del piano e non tocca le sessioni del pacchetto.
  */
-export function ExtraPaymentForm({ action, today, method }: { action: Action; today: string; method: string }) {
+export function ExtraPaymentForm({ action, today, method, defaults, submitLabel = "Registra il pagamento extra" }: { action: Action; today: string; method: string; defaults?: { amount?: number | null; sessions?: number | null; notes?: string }; submitLabel?: string }) {
   const [state, formAction] = useActionState(action, null);
   // dopo un salvataggio riuscito i campi tornano vuoti (il form si ricrea)
   const [prev, setPrev] = useState(state);
@@ -161,7 +161,7 @@ export function ExtraPaymentForm({ action, today, method }: { action: Action; to
           <Input name="paid_on" type="date" defaultValue={today} required />
         </Field>
         <Field label="Importo">
-          <Input name="amount" inputMode="decimal" placeholder="Es. 700" required />
+          <Input name="amount" inputMode="decimal" placeholder="Es. 700" defaultValue={defaults?.amount ? String(defaults.amount).replace(".", ",") : undefined} required />
         </Field>
         <Field label="Metodo">
           <Select name="method" defaultValue={method}>
@@ -171,30 +171,57 @@ export function ExtraPaymentForm({ action, today, method }: { action: Action; to
       </div>
       <div className="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
         <Field label="Sessioni" hint="se le scrivi, scalano da sole">
-          <Input name="sessions" type="number" min={1} placeholder="Es. 10" />
+          <Input name="sessions" type="number" min={1} placeholder="Es. 10" defaultValue={defaults?.sessions ?? undefined} />
         </Field>
         <Field label="Per cosa">
-          <Input name="notes" defaultValue="Sessioni PT extra" required />
+          <Input name="notes" defaultValue={defaults?.notes ?? "Sessioni PT extra"} required />
         </Field>
       </div>
       <ActionMessage state={state} />
-      <div><SubmitButton variant="secondary">Registra il pagamento extra</SubmitButton></div>
+      <div><SubmitButton variant="secondary">{submitLabel}</SubmitButton></div>
     </form>
   );
 }
 
-/** "Ne restano N": corregge a mano il conteggio delle sessioni extra. */
+/** Correzione a mano del conteggio: "restano N pagate" o "N da saldare". */
 export function ExtraSessionsFix({ action, left }: { action: Action; left: number }) {
   const [state, formAction] = useActionState(action, null);
   return (
     <form action={formAction} className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-end gap-2">
-        <Field label="Correggi: ne restano">
-          <Input key={left} name="left" type="number" min={0} defaultValue={Math.max(0, left)} className="max-w-28" />
-        </Field>
+      <span className="text-sm font-semibold">Correggi il conteggio</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input key={`n${left}`} name="count" type="number" min={0} defaultValue={Math.abs(left)} className="max-w-24" aria-label="Numero di sessioni" />
+        <Select key={`m${left}`} name="mode" defaultValue={left < 0 ? "due" : "left"} className="w-auto" aria-label="Tipo">
+          <option value="left">pagate ancora da fare</option>
+          <option value="due">da saldare</option>
+        </Select>
         <SubmitButton variant="secondary" size="sm">Salva</SubmitButton>
       </div>
       <ActionMessage state={state} />
+    </form>
+  );
+}
+
+/** Da quando contare le sessioni PT a parte e quanto costa una sessione. */
+export function PtCountingForm({ action, from, price, today, active, canStop = false }: { action: Action; from: string | null; price: number | null; today: string; active: boolean; canStop?: boolean }) {
+  const [state, formAction] = useActionState(action, null);
+  return (
+    <form action={formAction} className="flex flex-col gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Conta le sessioni dal">
+          <Input name="from" type="date" defaultValue={from ?? today} required />
+        </Field>
+        <Field label="Prezzo a sessione" hint="facoltativo">
+          <Input name="price" inputMode="decimal" placeholder="Es. 45" defaultValue={price !== null ? String(price).replace(".", ",") : undefined} />
+        </Field>
+      </div>
+      <ActionMessage state={state} />
+      <div className="flex flex-wrap items-center gap-3">
+        <SubmitButton variant="secondary" size="sm">{active ? "Salva" : "Inizia a contare"}</SubmitButton>
+        {canStop ? (
+          <button type="submit" name="stop" value="1" className="text-sm font-semibold text-muted underline">Smetti di contare</button>
+        ) : null}
+      </div>
     </form>
   );
 }

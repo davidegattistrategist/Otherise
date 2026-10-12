@@ -6,6 +6,7 @@ import { Card, EmptyState, Eyebrow } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
 import { SessionForm } from "./session-form";
 import { getExtraSessions } from "@/lib/data/billing";
+import { formatEuro } from "@/lib/billing";
 import { deletePtSession, savePtSession } from "./actions";
 
 export const metadata: Metadata = { title: "Sessioni PT" };
@@ -29,7 +30,7 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
   // sessioni PT extra pagate a parte (solo il titolare le vede)
   const extra = await getExtraSessions(supabase, id);
   const showPackage = !plan || plan.kind === "package" || Boolean(extra);
-  const packageLabel = extra ? "Scala dalle sessioni extra" : "Conta nel pacchetto";
+  const packageLabel = extra ? "Conta tra le sessioni PT a parte" : "Conta nel pacchetto";
   const thisMonth = list.filter((s) => s.session_date.slice(0, 7) === today.slice(0, 7)).length;
 
   return (
@@ -41,8 +42,14 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
         </div>
         {extra ? (
           <div className="rounded-2xl bg-sand px-4 py-3 text-[15px]">
-            <span className="font-semibold">Sessioni PT extra: {extra.left <= 0 ? "finite" : extra.left === 1 ? "ne resta 1" : `ne restano ${extra.left}`}</span>
-            <span className="text-muted"> su {extra.bought} pagate</span>
+            <span className="font-semibold">
+              Sessioni PT a parte:{" "}
+              {extra.due > 0
+                ? `${extra.due} da saldare${extra.dueAmount !== null ? ` (${formatEuro(extra.dueAmount)})` : ""}`
+                : extra.left > 0
+                  ? extra.left === 1 ? "ne resta 1 pagata" : `ne restano ${extra.left} pagate`
+                  : "in pari"}
+            </span>
           </div>
         ) : null}
         <SessionForm action={savePtSession.bind(null, id, null)} today={today} showPackage={showPackage} packageLabel={packageLabel} />
@@ -67,7 +74,7 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
               <Card key={s.id} className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-semibold">{formatWithWeekday(s.session_date)}</span>
-                  {showPackage ? <span className="text-sm text-muted">{s.counts_toward_package ? (extra ? "Scala dalle extra" : "Conta nel pacchetto") : extra ? "Non scala" : "Fuori pacchetto"}</span> : null}
+                  {showPackage ? <span className="text-sm text-muted">{s.counts_toward_package ? (extra ? "Conta" : "Conta nel pacchetto") : extra ? "Non conta" : "Fuori pacchetto"}</span> : null}
                 </div>
                 {s.notes ? <p className="whitespace-pre-line text-[15px] leading-relaxed text-ink-soft">{s.notes}</p> : <p className="text-sm text-muted">Nessuna nota.</p>}
                 <div className="flex gap-4 pt-1">

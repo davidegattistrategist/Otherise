@@ -276,10 +276,24 @@ describe("pagamenti", () => {
       { session_date: "2026-10-14", counts_toward_package: false }, // compresa nel trimestre
       { session_date: "2026-10-16", counts_toward_package: true },
     ];
-    expect(extraSessions({ planKind: "quarterly", payments, sessions, adjust: 0 })).toEqual({ bought: 10, used: 2, left: 8, since: "2026-10-12" });
+    expect(extraSessions({ planKind: "quarterly", payments, sessions, adjust: 0 })).toEqual({ bought: 10, used: 2, left: 8, due: 0, price: null, dueAmount: null, since: "2026-10-12" });
     expect(extraSessions({ planKind: "quarterly", payments, sessions, adjust: 3 })?.left).toBe(5);
     expect(extraSessions({ planKind: "package", payments, sessions, adjust: 0 })).toBeNull();
     expect(extraSessions({ planKind: "quarterly", payments: payments.slice(0, 1), sessions, adjust: 0 })).toBeNull();
+  });
+  it("sessioni PT da saldare: si contano da una data anche senza pagamenti, con il prezzo", () => {
+    const sessions = [
+      { session_date: "2026-10-01", counts_toward_package: true },
+      { session_date: "2026-10-05", counts_toward_package: true },
+      { session_date: "2026-10-08", counts_toward_package: true },
+    ];
+    const none = extraSessions({ planKind: null, payments: [], sessions, adjust: 0, from: "2026-10-03", price: 45 });
+    expect(none).toEqual({ bought: 0, used: 2, left: -2, due: 2, price: 45, dueAmount: 90, since: "2026-10-03" });
+    // saldate con un pagamento extra da 2 sessioni: in pari
+    const paid = extraSessions({ planKind: "single", payments: [{ plan_id: null, paid_on: "2026-10-10", sessions: 2 }], sessions, adjust: 0, from: "2026-10-03", price: 45 });
+    expect(paid?.left).toBe(0);
+    expect(paid?.due).toBe(0);
+    expect(extraSessions({ planKind: "monthly", payments: [], sessions, adjust: 0 })).toBeNull();
   });
   it("al cliente solo scadenze vicine", () => {
     const base = { plan_id: "p", amount: 600, sessions_bought: 0, sessions_used: 0, paid_until: null as string | null };

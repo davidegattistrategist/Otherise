@@ -212,21 +212,43 @@ test("pagamento extra (sessioni PT in più): conta negli incassi ma non sposta l
   const row = page.locator("li", { hasText: "Sessioni PT extra" }).first();
   await expect(row).toContainText("Extra");
   await expect(row).toContainText("10 sessioni");
-  // le sessioni extra si vedono e scalano quando segni una sessione PT
-  const card = page.locator("div", { has: page.getByText("Sessioni PT extra", { exact: true }) }).filter({ hasText: "pagate" }).last();
-  const leftNow = async () => Number((await card.locator(".tabular").first().textContent())!.trim());
-  const before2 = await leftNow();
+  // sessioni PT a parte: correzione, scalano quando segni una sessione, da saldare con il prezzo
+  const card = page.locator("div", { has: page.getByText("Sessioni PT a parte", { exact: true }) }).filter({ hasText: "Correggi il conteggio" }).last();
+  await card.locator("input[name=count]").fill("5");
+  await card.locator("select[name=mode]").selectOption("left");
+  await card.getByRole("button", { name: "Salva", exact: true }).click();
+  await expect(page.getByText("Fatto: 5 sessioni pagate ancora da fare.")).toBeVisible();
+  await expect(card.getByText("pagate, ancora da fare")).toBeVisible();
   const base = new URL(page.url()).pathname.replace(/\/pagamenti$/, "");
   await page.goto(`${base}/sessioni`);
-  await expect(page.getByText(/Sessioni PT extra: (ne restano|ne resta|finite)/)).toBeVisible();
-  await expect(page.getByText("Scala dalle sessioni extra").first()).toBeVisible();
+  await expect(page.getByText("Sessioni PT a parte: ne restano 5 pagate")).toBeVisible();
+  await expect(page.getByText("Conta tra le sessioni PT a parte").first()).toBeVisible();
   await page.getByRole("button", { name: "Salva la sessione" }).click();
   await expect(page.getByText("Sessione salvata.")).toBeVisible();
+  await page.goto(`${base}/sessioni`);
+  await expect(page.getByText("Sessioni PT a parte: ne restano 4 pagate")).toBeVisible();
+  // da saldare: 3 sessioni a 45 €
   await page.goto(`${base}/pagamenti`);
-  await expect.poll(leftNow).toBe(before2 - 1);
-  // correzione a mano
-  await card.locator("input[name=left]").fill("4");
-  await card.getByRole("button", { name: "Salva" }).click();
-  await expect(page.getByText("Fatto: restano 4 sessioni.")).toBeVisible();
-  await expect.poll(leftNow).toBe(4);
+  await card.locator("input[name=count]").fill("3");
+  await card.locator("select[name=mode]").selectOption("due");
+  await card.getByRole("button", { name: "Salva", exact: true }).click();
+  await expect(page.getByText("Fatto: 3 sessioni da saldare.")).toBeVisible();
+  await card.getByText("Da quando contare e prezzo").click();
+  await card.locator("input[name=price]").fill("45");
+  await card.getByRole("button", { name: "Salva", exact: true }).last().click();
+  await expect(page.getByText("Conteggio salvato.")).toBeVisible();
+  await expect(card.getByText(/sessioni da saldare · 135\s€/)).toBeVisible();
+  // nella pagina Pagamenti e già scritto in chat
+  await page.goto("/staff/pagamenti");
+  await expect(page.locator("li", { hasText: "Esempio Giulia" }).filter({ hasText: /3 sessioni · 135\s€/ })).toBeVisible();
+  await page.goto(`${base}/pagamenti`);
+  await card.getByRole("link", { name: /Scrivi in chat quante sono/ }).click();
+  await page.waitForURL(/\/staff\/messaggi\//);
+  await expect(page.locator("textarea").filter({ visible: true }).first()).toHaveValue(/siamo a 3 sessioni da saldare \(3 sessioni × 45\s€ = 135\s€\)/);
+  // saldo: torna in pari
+  await page.goto(`${base}/pagamenti`);
+  await card.locator("summary", { hasText: "Registra il saldo" }).click();
+  await card.getByRole("button", { name: "Registra il saldo" }).click();
+  await expect(card.getByText("In pari")).toBeVisible();
+  await expect(page.locator("li", { hasText: "Saldo sessioni PT" }).first()).toContainText("3 sessioni");
 });
