@@ -154,11 +154,14 @@ export async function compressWithPlayer(file: File, format: CompressFormat, onP
     let windowCaptured = 0;
     let windowStartSlot = 0;
 
+    let resumeTries = 0;
+    let stopTimer = () => {};
     const captureDone = new Promise<void>((resolve, reject) => {
       const rvfc = (video as unknown as { requestVideoFrameCallback: RVFC }).requestVideoFrameCallback.bind(video);
       const onFrame = (_now: number, meta: { mediaTime: number }) => {
         if (ended || failure) return;
         lastFrameAt = performance.now();
+        resumeTries = 0;
         const t = Math.max(0, meta.mediaTime - first);
         const slot = Math.floor(t / step + 1e-6);
         if (slot > lastSlot) {
@@ -207,6 +210,12 @@ export async function compressWithPlayer(file: File, format: CompressFormat, onP
         }
         // ripresa dopo che il telefono l'ha fermato (app in secondo piano, chiamata…)
         if (!holding && video.paused && !video.ended && document.visibilityState === "visible") {
+          // se non riparte mai (riproduzione bloccata dal telefono) si passa al metodo classico
+          if (++resumeTries > 10) {
+            clearInterval(timer);
+            reject(new Error("il lettore non riparte"));
+            return;
+          }
           lastFrameAt = performance.now();
           void video.play().catch(() => undefined);
         }
@@ -221,13 +230,18 @@ export async function compressWithPlayer(file: File, format: CompressFormat, onP
           windowCaptured = 0;
         }
       }, 1000);
+      stopTimer = () => clearInterval(timer);
     });
+    // evita l'avviso "promessa rifiutata non gestita" se si esce prima di aspettarla
+    captureDone.catch(() => undefined);
 
     video.playbackRate = rate;
-    await video.play();
     try {
+      // niente avvio entro 15 secondi (telefono che blocca la riproduzione): metodo classico
+      await Promise.race([video.play(), new Promise((_, rej) => setTimeout(() => rej(new Error("il lettore non parte")), 15_000))]);
       await captureDone;
     } finally {
+      stopTimer();
       ended = true;
       (wake as (() => void) | null)?.();
     }
