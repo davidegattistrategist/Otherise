@@ -34,7 +34,11 @@ test("chat con foto e video tra cliente e titolare", async ({ browser }, info) =
   await expect(client.getByText("Per i vocali tocca il microfono accanto alla casella del messaggio.")).toBeVisible();
   // testo + foto + video
   await client.fill("textarea", `Ciao, ecco il mio squat ${tag}`);
+  // il video comincia a salire subito, prima di toccare Invia (come WhatsApp)
+  const early = client.waitForRequest((r) => r.method() === "PUT" && r.url().includes("/object/upload/sign/"));
   await client.setInputFiles('input[type=file][aria-label="Allega foto o video"]', [path.join(FIX, "foto.jpg"), path.join(FIX, "video.mp4")]);
+  await early;
+  await expect(client.getByTestId("video-size")).toBeVisible();
   await client.getByRole("button", { name: "Invia" }).click();
   await expect(client.getByText(`Ciao, ecco il mio squat ${tag}`)).toBeVisible({ timeout: 20_000 });
   await expect(client.locator('img[alt="Foto allegata"]').last()).toBeVisible();

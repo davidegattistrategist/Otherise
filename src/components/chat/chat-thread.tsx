@@ -22,7 +22,23 @@ const MicIcon = () => (
 );
 
 /** `preparing`: il video si sta riducendo (da 0 a 1); `width`/`height` dal video compresso */
-type Pending = { id: string; file: File; kind: "image" | "video"; preview: string; progress: number; error?: string; preparing?: number; width?: number; height?: number };
+type Pending = {
+  id: string;
+  file: File;
+  kind: "image" | "video";
+  preview: string;
+  progress: number;
+  error?: string;
+  preparing?: number;
+  width?: number;
+  height?: number;
+  /** Peso del video prima della riduzione (per mostrare quanto si è risparmiato) */
+  originalSize?: number;
+  /** Il video sta già salendo mentre scrivi il messaggio */
+  uploading?: boolean;
+};
+type Uploaded = ChatAttachment;
+const mb = (bytes: number) => `${bytes < 10 * 1024 * 1024 ? (bytes / 1048576).toFixed(1).replace(".", ",") : Math.round(bytes / 1048576)} MB`;
 
 const dayKey = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
 function dayLabel(iso: string) {
@@ -142,6 +158,34 @@ export function ChatThread({
     return () => running.forEach((c) => c.abort());
   }, []);
 
+  // video che salgono già prima di "Invia" (come WhatsApp): id → caricamento in corso
+  const uploads = useRef(new Map<string, Promise<Uploaded>>());
+  const setProgress = (id: string, v: number) => setPending((cur) => cur.map((x) => (x.id === id ? { ...x, progress: v } : x)));
+
+  /** Carica un allegato nello storage e restituisce i dati per il messaggio. */
+  const uploadOne = async (p: Pick<Pending, "id" | "file" | "kind" | "width" | "height">): Promise<Uploaded> => {
+    const ready = p.kind === "image" ? await prepareImage(p.file) : { blob: p.file as Blob, type: p.file.type, name: p.file.name, ...(p.width && p.height ? { width: p.width, height: p.height } : await videoSize(p.file)) };
+    const ticket = await prepareUpload(clientId, { type: ready.type, size: ready.blob.size });
+    if ("error" in ticket) throw new Error(ticket.error);
+    await uploadWithProgress(ticket.signedUrl, ready.blob, ready.type, (v) => setProgress(p.id, v));
+    return { path: ticket.path, kind: p.kind, name: ready.name, size: ready.blob.size, width: ready.width, height: ready.height };
+  };
+
+  /** Il video parte subito: quando tocchi "Invia" è già (quasi) caricato. */
+  const preUpload = (p: Pick<Pending, "id" | "file" | "kind" | "width" | "height">) => {
+    setPending((cur) => cur.map((x) => (x.id === p.id ? { ...x, uploading: true, progress: 0 } : x)));
+    const job = uploadOne(p);
+    uploads.current.set(p.id, job);
+    job.then(
+      () => setPending((cur) => cur.map((x) => (x.id === p.id ? { ...x, uploading: false, progress: 1 } : x))),
+      () => {
+        // riproverà al momento dell'invio
+        uploads.current.delete(p.id);
+        setPending((cur) => cur.map((x) => (x.id === p.id ? { ...x, uploading: false, progress: 0 } : x)));
+      },
+    );
+  };
+
   /** Riduce il video come WhatsApp; se non si può, tiene l'originale (se non è troppo pesante). */
   const prepareVideo = async (id: string, original: File) => {
     const ctrl = new AbortController();
@@ -156,7 +200,8 @@ export function ChatThread({
       setPending((cur) => cur.filter((x) => x.id !== id));
       return;
     }
-    setPending((cur) => cur.map((x) => (x.id === id ? { ...x, file, preparing: undefined, width: res?.width, height: res?.height } : x)));
+    setPending((cur) => cur.map((x) => (x.id === id ? { ...x, file, preparing: undefined, width: res?.width, height: res?.height, originalSize: res ? original.size : undefined } : x)));
+    preUpload({ id, file, kind: "video", width: res?.width, height: res?.height });
   };
 
   const addFiles = (files: FileList | null) => {
@@ -189,11 +234,13 @@ export function ChatThread({
     const added = next.slice(0, Math.max(0, room));
     setPending((cur) => [...cur, ...added].slice(0, MAX_ATTACHMENTS));
     for (const p of toCompress) if (added.includes(p)) void prepareVideo(p.id, p.file);
+    for (const p of added) if (p.kind === "video" && p.preparing === undefined) preUpload(p);
   };
 
   const removePending = (id: string) => {
     compressing.current.get(id)?.abort();
     compressing.current.delete(id);
+    uploads.current.delete(id);
     setPending((cur) => {
       const p = cur.find((x) => x.id === id);
       if (p) URL.revokeObjectURL(p.preview);
@@ -201,6 +248,27 @@ export function ChatThread({
     });
   };
   const preparingVideo = pending.some((p) => p.preparing !== undefined);
+  const uploadingVideo = pending.some((p) => p.uploading) || (sending && pending.some((p) => p.kind === "video"));
+  const reduced = pending.find((p) => p.originalSize && p.preparing === undefined);
+  const videoNote = reduced ? `Video ridotto da ${mb(reduced.originalSize!)} a ${mb(reduced.file.size)}.` : "";
+  const busyWithMedia = preparingVideo || uploadingVideo;
+
+  // mentre un video si riduce o sale: schermo acceso e avviso se provi a chiudere la pagina
+  useEffect(() => {
+    if (!busyWithMedia) return;
+    let lock: { release: () => Promise<void> } | null = null;
+    const nav = navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } };
+    nav.wakeLock?.request("screen").then((l) => (lock = l)).catch(() => undefined);
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      void lock?.release().catch(() => undefined);
+    };
+  }, [busyWithMedia]);
 
   const send = async () => {
     if (sending) return;
@@ -213,12 +281,13 @@ export function ChatThread({
     try {
       const attachments: ChatAttachment[] = [];
       for (const p of pending) {
-        const ready = p.kind === "image" ? await prepareImage(p.file) : { blob: p.file as Blob, type: p.file.type, name: p.file.name, ...(p.width && p.height ? { width: p.width, height: p.height } : await videoSize(p.file)) };
-        const ticket = await prepareUpload(clientId, { type: ready.type, size: ready.blob.size });
-        if ("error" in ticket) throw new Error(ticket.error);
-        await uploadWithProgress(ticket.signedUrl, ready.blob, ready.type, (v) => setPending((cur) => cur.map((x) => (x.id === p.id ? { ...x, progress: v } : x))));
-        attachments.push({ path: ticket.path, kind: p.kind, name: ready.name, size: ready.blob.size, width: ready.width, height: ready.height });
+        // se il video stava già salendo aspettiamo quello; se era fallito, riproviamo adesso
+        const early = uploads.current.get(p.id);
+        let done: Uploaded | null = null;
+        if (early) done = await early.catch(() => null);
+        attachments.push(done ?? (await uploadOne(p)));
       }
+      uploads.current.clear();
       const res = await sendMessage(clientId, { body, attachments, draftId: usedDraft });
       if (!res.ok) throw new Error(res.error);
       merge([res.message]);
@@ -434,16 +503,28 @@ export function ChatThread({
                     <div className="h-1 w-full rounded-full bg-white/30"><div className="h-1 rounded-full bg-white" style={{ width: `${Math.round(p.preparing * 100)}%` }} /></div>
                   </div>
                 ) : null}
-                {sending ? (
+                {p.kind === "video" && p.preparing === undefined ? (
+                  <span className="absolute top-1 left-1 rounded-full bg-ink/80 px-1.5 py-0.5 text-[10px] font-semibold text-card tabular" data-testid="video-size">{mb(p.file.size)}</span>
+                ) : null}
+                {sending || p.uploading || (p.kind === "video" && p.progress > 0 && p.progress < 1) ? (
                   <div className="absolute inset-x-1 bottom-1 h-1.5 rounded-full bg-white/60"><div className="h-1.5 rounded-full bg-accent" style={{ width: `${Math.round(p.progress * 100)}%` }} /></div>
-                ) : (
+                ) : null}
+                {!sending ? (
                   <button type="button" aria-label="Togli allegato" onClick={() => removePending(p.id)} className="absolute top-1 right-1 flex h-6 w-6 items-center justify-center rounded-full bg-ink/80 text-card"><IconX size={14} /></button>
-                )}
+                ) : null}
               </div>
             ))}
           </div>
         ) : null}
-        {preparingVideo ? <p className="mb-2 text-xs text-muted" aria-live="polite">Riduco il video per mandarlo più leggero e veloce: tieni aperta l&apos;app qualche secondo.</p> : null}
+        {preparingVideo ? (
+          <p className="mb-2 text-xs text-muted" aria-live="polite">Riduco il video per mandarlo più leggero e veloce: tieni aperta l&apos;app qualche secondo.</p>
+        ) : uploadingVideo ? (
+          <p className="mb-2 text-xs text-muted" aria-live="polite">
+            {videoNote ? `${videoNote} ` : ""}Il video sta già partendo: intanto puoi scrivere e toccare Invia. Tieni aperta l&apos;app finché non è inviato.
+          </p>
+        ) : videoNote ? (
+          <p className="mb-2 text-xs text-muted">{videoNote}</p>
+        ) : null}
         {voice.recording ? (
           <div className="flex items-center gap-2" aria-label="Registrazione del vocale">
             <button type="button" aria-label="Annulla il vocale" onClick={() => void voice.stop(false)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sand text-ink"><IconX size={20} /></button>
