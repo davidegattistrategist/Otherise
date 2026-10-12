@@ -4,11 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { formatShort, todayISO } from "@/lib/dates";
 import { billingStatus, formatEuro, isPeriodic, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
 import { reminderChatLink } from "@/lib/data/billing";
-import { IconChat } from "@/components/icons";
+import { IconChat, IconDown } from "@/components/icons";
 import { Card, Dot, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
-import { PaymentForm, PlanForm, ReminderButton } from "./forms";
-import { closePackage, deletePayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree } from "./actions";
+import { ExtraPaymentForm, PaymentForm, PlanForm, ReminderButton } from "./forms";
+import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree } from "./actions";
 import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Pagamenti" };
@@ -111,6 +111,21 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
           </Card>
         ) : null}
 
+        {!editingPlan ? (
+          <details className="group rounded-[24px] bg-card" open={!plan}>
+            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+              <span>
+                <span className="block text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">Pagamento extra</span>
+                <span className="mt-1 block text-sm text-muted">Fuori dal piano, per esempio sessioni PT in più: conta negli incassi ma non cambia la scadenza.</span>
+              </span>
+              <IconDown size={18} className="shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="px-5 pb-5">
+              <ExtraPaymentForm action={recordExtraPayment.bind(null, id)} today={today} method="cash" />
+            </div>
+          </details>
+        ) : null}
+
         {editingPlan || newPlan ? (
           <Card className="flex flex-col gap-4">
             <div>
@@ -146,7 +161,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
               {payments.map((p) => (
                 <li key={p.id} className="flex items-start justify-between gap-3 border-t border-sand-deep py-3 first:border-t-0">
                   <div className="min-w-0">
-                    <div className="font-semibold tabular">{formatEuro(p.amount)} <span className="font-normal text-muted">· {METHOD_LABELS[p.method as PaymentMethod]}</span></div>
+                    <div className="font-semibold tabular">{formatEuro(p.amount)} <span className="font-normal text-muted">· {METHOD_LABELS[p.method as PaymentMethod]}</span>{!p.plan_id ? <span className="ml-2 rounded-full bg-sand px-2 py-0.5 text-xs font-semibold text-ink-soft">Extra</span> : null}</div>
                     <div className="text-sm text-muted">
                       {formatShort(p.paid_on, 0)}
                       {p.period_start && p.period_end ? ` · copre ${formatShort(p.period_start, 0)} – ${formatShort(p.period_end, 0)}` : ""}

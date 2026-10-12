@@ -192,3 +192,24 @@ test("link per entrare preparato dal trainer: il cliente sceglie la password sen
   await client.getByRole("link", { name: "Entra e scegli la password" }).click();
   await client.waitForURL(/\/imposta-password/);
 });
+
+test("pagamento extra (sessioni PT in più): conta negli incassi ma non sposta la scadenza del piano", async ({ page }) => {
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/clienti");
+  await page.locator('a[href^="/staff/clienti/"]', { hasText: "Esempio Giulia" }).filter({ visible: true }).first().click();
+  await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
+  await page.goto(`${new URL(page.url()).pathname}/pagamenti`);
+  const status = page.getByText(/saldato fino al/).first();
+  const before = await status.textContent();
+  await page.getByText("Pagamento extra", { exact: true }).click();
+  const form = page.locator("form", { has: page.getByRole("button", { name: "Registra il pagamento extra" }) });
+  await form.locator("input[name=amount]").fill("700");
+  await form.locator("input[name=sessions]").fill("10");
+  await expect(form.locator("select[name=method]")).toHaveValue("cash");
+  await form.getByRole("button", { name: "Registra il pagamento extra" }).click();
+  await expect(page.getByText("Pagamento extra di 700 € registrato. La scadenza del piano non cambia.")).toBeVisible();
+  await expect(status).toHaveText(before!);
+  const row = page.locator("li", { hasText: "Sessioni PT extra" }).first();
+  await expect(row).toContainText("Extra");
+  await expect(row).toContainText("10 sessioni");
+});

@@ -141,6 +141,48 @@ export function PaymentForm({
   );
 }
 
+/**
+ * Pagamento fuori dal piano (sessioni PT in più, una consulenza…): entra negli
+ * incassi ma non sposta la scadenza del piano e non tocca le sessioni del pacchetto.
+ */
+export function ExtraPaymentForm({ action, today, method }: { action: Action; today: string; method: string }) {
+  const [state, formAction] = useActionState(action, null);
+  // dopo un salvataggio riuscito i campi tornano vuoti (il form si ricrea)
+  const [prev, setPrev] = useState(state);
+  const [round, setRound] = useState(0);
+  if (state !== prev) {
+    setPrev(state);
+    if (state && "ok" in state && state.ok) setRound((r) => r + 1);
+  }
+  return (
+    <form key={round} action={formAction} className="flex flex-col gap-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Pagato il">
+          <Input name="paid_on" type="date" defaultValue={today} required />
+        </Field>
+        <Field label="Importo">
+          <Input name="amount" inputMode="decimal" placeholder="Es. 700" required />
+        </Field>
+        <Field label="Metodo">
+          <Select name="method" defaultValue={method}>
+            {METHODS.map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
+          </Select>
+        </Field>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
+        <Field label="Sessioni" hint="facoltativo">
+          <Input name="sessions" type="number" min={1} placeholder="Es. 10" />
+        </Field>
+        <Field label="Per cosa">
+          <Input name="notes" defaultValue="Sessioni PT extra" required />
+        </Field>
+      </div>
+      <ActionMessage state={state} />
+      <div><SubmitButton variant="secondary">Registra il pagamento extra</SubmitButton></div>
+    </form>
+  );
+}
+
 export function ReminderButton({ action }: { action: Action }) {
   const [state, formAction] = useActionState(action, null);
   return (

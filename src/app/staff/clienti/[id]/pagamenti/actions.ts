@@ -106,6 +106,41 @@ export async function recordPayment(clientId: string, planId: string, _: ActionS
   return { ok: true, message: `Pagamento di ${formatEuro(amount)} registrato.` };
 }
 
+/**
+ * Pagamento fuori dal piano (es. sessioni PT in più): senza piano e senza
+ * periodo, quindi conta negli incassi ma non cambia la scadenza né il pacchetto.
+ */
+export async function recordExtraPayment(clientId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  const me = await requireOwner();
+  const supabase = await createClient();
+  const paidOn = String(fd.get("paid_on") ?? "");
+  if (!isISODate(paidOn)) return { error: "Data del pagamento non valida." };
+  const amount = money(fd.get("amount"));
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Scrivi l'importo, per esempio 700." };
+  const method = String(fd.get("method") ?? "cash");
+  if (!(METHODS as readonly string[]).includes(method)) return { error: "Metodo non valido." };
+  const rawSessions = String(fd.get("sessions") ?? "").trim();
+  const sessions = rawSessions ? int(rawSessions) : null;
+  if (sessions !== null && (Number.isNaN(sessions) || sessions < 1)) return { error: "Il numero di sessioni non è valido: lascialo vuoto se non serve." };
+  const notes = String(fd.get("notes") ?? "").trim();
+  if (!notes) return { error: "Scrivi per cosa è il pagamento, per esempio \"Sessioni PT extra\"." };
+  const { error } = await supabase.from("payments").insert({
+    client_id: clientId,
+    plan_id: null,
+    paid_on: paidOn,
+    amount,
+    method: method as (typeof METHODS)[number],
+    period_start: null,
+    period_end: null,
+    sessions,
+    notes,
+    created_by: me.id,
+  });
+  if (error) return { error: "Salvataggio non riuscito." };
+  revalidate(clientId);
+  return { ok: true, message: `Pagamento extra di ${formatEuro(amount)} registrato. La scadenza del piano non cambia.` };
+}
+
 export async function deletePayment(clientId: string, paymentId: string) {
   await requireOwner();
   const supabase = await createClient();
