@@ -4,7 +4,7 @@ import { getPrivacyOwner } from "@/lib/data/privacy";
 export const metadata: Metadata = { title: "Entra nell'app" };
 
 /**
- * Pagina d'arrivo del link mandato a mano dal trainer: il link vero (che vale
+ * Pagina d'arrivo dei link per entrare (mandati a mano dal trainer o nelle email di invito e di nuova password): il link vero (che vale
  * una volta sola) parte solo toccando il pulsante, così le anteprime di
  * WhatsApp e degli altri messaggi non lo consumano.
  */
@@ -21,13 +21,13 @@ export default async function EnterPage({ searchParams }: { searchParams: Promis
         <span className="text-lg font-bold tracking-tight">{owner.businessName}</span>
       </div>
       <div>
-        <h1 className="text-[32px] leading-tight font-normal tracking-tight">Benvenuto</h1>
+        <h1 className="text-[32px] leading-tight font-normal tracking-tight">{type === "recovery" ? "Nuova password" : "Benvenuto"}</h1>
         <p className="mt-2 text-[15px] leading-relaxed text-muted">
-          {ok ? "Tocca il pulsante per entrare e scegliere la tua password. Il link vale per un solo accesso." : "Il link non è completo. Chiedi al tuo coach di mandartene uno nuovo."}
+          {ok ? (type === "recovery" ? "Tocca il pulsante per scegliere una nuova password. Il link vale per un solo accesso." : "Tocca il pulsante per entrare e scegliere la tua password. Il link vale per un solo accesso.") : "Il link non è completo. Chiedi al tuo coach di mandartene uno nuovo."}
         </p>
       </div>
       <a href={href} className="flex min-h-12 items-center justify-center rounded-full bg-ink px-6 text-[15px] font-semibold text-card">
-        {ok ? "Entra e scegli la password" : "Vai all'accesso"}
+        {ok ? (type === "recovery" ? "Scegli la nuova password" : "Entra e scegli la password") : "Vai all'accesso"}
       </a>
     </main>
   );
