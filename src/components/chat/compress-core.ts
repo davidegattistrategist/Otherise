@@ -36,8 +36,11 @@ export function shouldCompress(file: File): boolean {
 /** Dimensioni di uscita: lato corto a COMPRESS_SHORT_SIDE (mai ingrandire), numeri pari. */
 export function targetSize(width: number, height: number, shortSide = COMPRESS_SHORT_SIDE): { width: number; height: number } {
   const scale = Math.min(1, shortSide / Math.max(1, Math.min(width, height)));
-  const even = (n: number) => Math.max(2, Math.round((n * scale) / 2) * 2);
-  return { width: even(width), height: even(height) };
+  // quando si riduce, multipli di 16 (848×480): molti chip video Android non accettano
+  // altre misure; la differenza di proporzioni (meno dell'1%) non si vede
+  const step = scale < 1 ? 16 : 2;
+  const round = (n: number) => Math.max(step, Math.round((n * scale) / step) * step);
+  return { width: round(width), height: round(height) };
 }
 
 

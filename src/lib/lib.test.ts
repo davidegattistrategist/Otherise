@@ -954,9 +954,9 @@ describe("timer dell'allenamento", async () => {
 describe("video della chat", async () => {
   const { targetSize, shouldCompress } = await import("../components/chat/compress-video");
   const { videoExpired, CHAT_VIDEO_KEEP_DAYS } = await import("./chat-shared");
-  it("riduce a 480p sul lato corto, senza mai ingrandire, con numeri pari", () => {
-    expect(targetSize(1080, 1920)).toEqual({ width: 480, height: 854 });
-    expect(targetSize(3840, 2160)).toEqual({ width: 854, height: 480 });
+  it("riduce a 480p sul lato corto (multipli di 16), senza mai ingrandire, con numeri pari", () => {
+    expect(targetSize(1080, 1920)).toEqual({ width: 480, height: 848 });
+    expect(targetSize(3840, 2160)).toEqual({ width: 848, height: 480 });
     expect(targetSize(640, 360)).toEqual({ width: 640, height: 360 });
     expect(targetSize(1081, 1921).width % 2).toBe(0);
   });
