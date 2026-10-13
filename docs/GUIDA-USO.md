@@ -132,6 +132,9 @@ I pagamenti avvengono fuori dall'app. Qui registri cosa è saldato, nel modo pi�
 - **Sessioni PT, un solo contatore** (scheda Pagamenti del cliente → **Sessioni PT**): *rimaste = pagate − fatte*. Contano tutte le sessioni pagate (pacchetti, lezioni a parte, saldi) e tutte le sessioni PT segnate "si scala". Se fa sessioni senza averle pagate, il contatore va sotto zero ("N da saldare", con l'importo se hai messo il prezzo a sessione); quando compra un pacchetto quelle si scalano da sole e il resto diventa "rimaste". Per partire o sistemare il numero (per esempio sessioni fatte prima dell'app): **Correggi il conteggio** → "Oggi gliene restano N" oppure "ne deve saldare N", da lì va da solo. Chi ha un abbonamento con le sessioni comprese non ha contatore. Le sessioni pagate si registrano con **Registra un pacchetto o lezioni pagate**.
 - **Pacchetto terminato**: se un pacchetto finisce secondo i vostri accordi anche con sessioni non usate, nella scheda Pagamenti premi "Segna il pacchetto come terminato" (si può annullare). Il cliente risulta da rinnovare.
 
+## Backup
+Ogni notte una copia dei dati viene fatta e verificata su GitHub. Al mattino ti arriva la notifica "Backup di stanotte riuscito" con lo spazio usato (database, foto e video) rispetto ai limiti del piano gratuito di Supabase; se qualcosa non va, l'avviso arriva anche sul telefono. Riepilogo in Impostazioni → Backup e spazio.
+
 ## Privacy
 - Al primo accesso il cliente legge l'informativa e dà il consenso sui dati di salute: senza consenso non entra nella sua area. Chi inizia di persona prima di avere l'app firma il **modulo da stampare** (scheda del cliente → Dati → Privacy) e tu premi "Firmato su carta".
 - L'uso dell'assistente AI è scritto nell'informativa e compreso nel consenso iniziale: non c'è un interruttore per il cliente.

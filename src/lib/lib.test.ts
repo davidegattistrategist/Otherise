@@ -10,6 +10,7 @@ import { parsePrescription, prescriptionFromSets, summarizeSets } from "./progra
 import { billingStatus, clientFacingStatus, unpaidPeriods, withUnpaidRows, usesCredit, nextPaymentProposal, creditChange, dueAmount, isCoaching, ptCounterView, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
 import { clientNotices, ptLeft } from "./client-notice";
 import { triageFallback, triageWithoutAi } from "./note-triage";
+import { backupNotice, formatBytes, spaceSummary } from "./backup-notice";
 import { addDays, addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
 import { displayWeek, nextDay, nextWorkout, programEndDate, weekPosition } from "./program/schedule";
 import { buildNextPhase, copyWeekToOthers } from "./program/next-phase";
@@ -1122,5 +1123,37 @@ describe("note finali del cliente: cosa arriva al trainer", () => {
     expect(triageWithoutAi("Lo squat oggi era troppo pesante, posso scendere?")).toBeNull();
     expect(triageFallback("fastidio alla spalla sulle trazioni").read).toBe(true);
     expect(triageFallback("Bellissimo allenamento oggi, mi sono divertita tantissimo con tutti").read).toBe(false);
+  });
+});
+
+describe("conferma del backup notturno", () => {
+  const MB = 1024 * 1024;
+  const now = new Date("2026-10-14T06:00:00Z");
+  const run = (o: Partial<Parameters<typeof backupNotice>[0] & object> = {}) => ({ finished_at: "2026-10-14T02:20:00Z", ok: true, tables: 48, db_bytes: 45 * MB, files_bytes: 320 * MB, message: "", ...o });
+
+  it("riuscito: solo nell'app, con lo spazio usato rispetto al piano gratuito", () => {
+    const n = backupNotice(run(), now)!;
+    expect(n.title).toBe("Backup di stanotte riuscito");
+    expect(n.urgent).toBe(false);
+    expect(n.body).toContain("Tutto copiato e verificato (48 tabelle)");
+    expect(n.body).toContain("database 45 MB su 500 MB");
+    expect(n.body).toContain("foto e video 320 MB su 1 GB");
+    expect(n.key).toBe("backup:ok:2026-10-14");
+  });
+  it("spazio oltre l'80%: avviso anche sul telefono", () => {
+    const n = backupNotice(run({ files_bytes: 900 * MB }), now)!;
+    expect(n.urgent).toBe(true);
+    expect(n.body).toContain("lo spazio per foto e video è oltre l'80%");
+    expect(spaceSummary({ db_bytes: 450 * MB, files_bytes: 900 * MB }).warning).toContain("il database e lo spazio per foto e video sono");
+  });
+  it("non riuscito o mancante: anche sul telefono; mai configurato: niente", () => {
+    expect(backupNotice(run({ ok: false, message: "Si è fermato." }), now)).toMatchObject({ title: "Il backup di stanotte non è riuscito", urgent: true });
+    expect(backupNotice(run({ finished_at: "2026-10-12T02:20:00Z" }), now)).toMatchObject({ title: "Il backup di stanotte non risulta", urgent: true, key: "backup:missing:2026-10-14" });
+    expect(backupNotice(null, now)).toBeNull();
+  });
+  it("misure leggibili", () => {
+    expect(formatBytes(1024 * MB)).toBe("1 GB");
+    expect(formatBytes(1.5 * 1024 * MB)).toBe("1,5 GB");
+    expect(formatBytes(3.24 * MB)).toBe("3,2 MB");
   });
 });

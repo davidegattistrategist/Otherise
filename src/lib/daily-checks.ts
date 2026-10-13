@@ -10,6 +10,7 @@ import { billingStatus, clientFacingStatus, withUnpaidRows, type PlanKind, type 
 import { checkinWeekFor } from "./checkin";
 import { programEndDate } from "./program/schedule";
 import { CHAT_BUCKET, CHAT_VIDEO_KEEP_DAYS, type ChatAttachment } from "./chat-shared";
+import { backupNotice, type BackupRun } from "./backup-notice";
 
 export async function runDailyChecks(today = todayISO()) {
   const admin = createAdminClient();
@@ -194,12 +195,13 @@ export async function runDailyChecks(today = todayISO()) {
   }
 
   await notify(out);
+  const backup = await backupCheck(ownerIds);
   const videosRemoved = await removeOldChatVideos(today);
   // niente riepilogo per email: il riepilogo è "Oggi" nell'app
   const emailed = await deliverPendingEmails();
   // pulizia: notifiche lette più vecchie di 6 mesi
   await admin.from("notifications").delete().lt("created_at", `${addDays(today, -180)}T00:00:00Z`).not("read_at", "is", null);
-  return { ok: true, today, notifications: out.length, emailed, videosRemoved };
+  return { ok: true, today, notifications: out.length, emailed, videosRemoved, backup };
 }
 
 /**
@@ -233,3 +235,21 @@ export async function removeOldChatVideos(today: string): Promise<number> {
   return removed;
 }
 
+/**
+ * Conferma del backup notturno al titolare: riuscito (solo nell'app), non
+ * riuscito o mancante (anche sul telefono). Il registro lo scrive il backup su
+ * GitHub; senza righe il backup non è configurato e non si dice niente.
+ */
+export async function backupCheck(ownerIds: string[], now = new Date()): Promise<string> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("backup_runs").select("finished_at, ok, tables, db_bytes, files_bytes, message").order("finished_at", { ascending: false }).limit(1);
+  if (error) return "registro non disponibile";
+  const last = (data?.[0] ?? null) as BackupRun | null;
+  const notice = backupNotice(last ? { ...last, db_bytes: last.db_bytes === null ? null : Number(last.db_bytes), files_bytes: last.files_bytes === null ? null : Number(last.files_bytes) } : null, now);
+  if (!notice) return "non configurato";
+  await notify(
+    ownerIds.map((o) => ({ recipient_id: o, kind: "backup", title: notice.title, body: notice.body, link: "/staff/impostazioni#backup", dedupe_key: notice.key })),
+    { push: notice.urgent },
+  );
+  return notice.key.split(":")[1];
+}

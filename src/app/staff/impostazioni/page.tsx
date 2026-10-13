@@ -11,6 +11,7 @@ import { Card, Dot, Eyebrow, PageTitle, ProgressBar } from "@/components/ui";
 import { EmailForm, LessonsForm, MethodForm, PrivacyForm, ReplyLessonsForm, SettingsForm } from "./forms";
 import { saveEmailPrefs, saveLessons, saveMethod, savePrivacy, saveReplyLessons, saveSettings } from "./actions";
 import { correctionTrend } from "@/lib/ai/learn";
+import { FREE_DB_BYTES, FREE_FILES_BYTES, formatBytes } from "@/lib/backup-notice";
 
 export const metadata: Metadata = { title: "Impostazioni" };
 
@@ -51,6 +52,7 @@ export default async function SettingsPage() {
     supabase.from("app_settings").select("ai_lessons, ai_lessons_updated_at, ai_reply_lessons, ai_reply_lessons_updated_at").maybeSingle(),
     correctionTrend(supabase),
   ]);
+  const { data: backups } = await supabase.from("backup_runs").select("finished_at, ok, tables, db_bytes, files_bytes, message").order("finished_at", { ascending: false }).limit(7);
   const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20, payment_message: "", legal_name: "", legal_address: "", legal_tax_id: "", privacy_email: "", privacy_pec: "", staff_emails: false, client_emails: true };
   const privacyMissing = !s.legal_name || !s.legal_address || !s.legal_tax_id || !s.privacy_email;
   const spent = (usage ?? []).reduce((t, u) => t + Number(u.cost_eur), 0);
@@ -136,6 +138,8 @@ export default async function SettingsPage() {
             <p className="text-sm text-muted">{(usage ?? []).length} richieste. Modello: {process.env.ANTHROPIC_MODEL || DEFAULT_MODEL}. Superato il tetto, l&apos;assistente si ferma fino al mese dopo.</p>
           </Card>
 
+          <BackupCard runs={backups ?? []} />
+
           <Card className="flex flex-col gap-3">
             <Eyebrow>Collegamenti</Eyebrow>
             <ul className="flex flex-col gap-2">
@@ -149,5 +153,51 @@ export default async function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+const backupTime = (iso: string) =>
+  new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" }).format(new Date(iso));
+
+/** Backup notturno (registro scritto dal backup su GitHub) e spazio usato rispetto al piano gratuito di Supabase. */
+function BackupCard({ runs }: { runs: Array<{ finished_at: string; ok: boolean; tables: number | null; db_bytes: number | null; files_bytes: number | null; message: string }> }) {
+  const last = runs[0];
+  const lastOk = runs.find((r) => r.ok && r.db_bytes !== null);
+  return (
+    <Card id="backup" className="flex scroll-mt-6 flex-col gap-3">
+      <Eyebrow>Backup e spazio</Eyebrow>
+      {last ? (
+        <>
+          <p className="text-[15px]">
+            <span className="font-semibold">{last.ok ? "Ultimo backup riuscito" : "Ultimo backup non riuscito"}</span>
+            <span className="text-muted"> · {backupTime(last.finished_at)}</span>
+          </p>
+          {!last.ok && last.message ? <p className="text-sm text-accent-deep">{last.message}</p> : null}
+          <div className="flex items-center gap-1.5" aria-label="Ultimi backup, dal più recente">
+            {runs.map((r) => (
+              <span key={r.finished_at} title={`${backupTime(r.finished_at)}: ${r.ok ? "riuscito" : "non riuscito"}`} className={`h-2.5 w-6 rounded-full ${r.ok ? "bg-ink" : "bg-accent"}`} />
+            ))}
+            <span className="ml-1 text-xs text-muted">ultime notti</span>
+          </div>
+          {lastOk ? (
+            <div className="flex flex-col gap-2.5 pt-1">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-baseline justify-between text-sm"><span>Database</span><span className="text-muted">{formatBytes(Number(lastOk.db_bytes))} su {formatBytes(FREE_DB_BYTES)}</span></div>
+                <ProgressBar value={(Number(lastOk.db_bytes) / FREE_DB_BYTES) * 100} />
+              </div>
+              {lastOk.files_bytes !== null ? (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-baseline justify-between text-sm"><span>Foto e video</span><span className="text-muted">{formatBytes(Number(lastOk.files_bytes))} su {formatBytes(FREE_FILES_BYTES)}</span></div>
+                  <ProgressBar value={(Number(lastOk.files_bytes) / FREE_FILES_BYTES) * 100} />
+                </div>
+              ) : null}
+              <p className="text-sm text-muted">Limiti del piano gratuito di Supabase. Quando una barra passa l&apos;80% ti arriva un avviso: è il momento di passare a Pro. Foto e video non sono nel backup: restano su Supabase.</p>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-sm text-muted">Il backup notturno non ha ancora scritto qui. Se è attivo (guida BACKUP.md nel progetto), dalla prossima notte trovi qui l&apos;esito e ogni mattina una notifica di conferma.</p>
+      )}
+    </Card>
   );
 }

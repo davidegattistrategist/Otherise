@@ -95,6 +95,20 @@ isOneToOne: false
                     "created_at"?: string,"name"?: string,"value"?: string
                   }
                   Relationships: []
+                },"backup_runs": {
+                  Row: {
+                    "db_bytes": number | null,"files_bytes": number | null,"finished_at": string,"id": number,"message": string,"ok": boolean,"tables": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "db_bytes"?: number | null,"files_bytes"?: number | null,"finished_at"?: string,"id"?: never,"message"?: string,"ok": boolean,"tables"?: number | null
+                  }
+                  Update: {
+                    "db_bytes"?: number | null,"files_bytes"?: number | null,"finished_at"?: string,"id"?: never,"message"?: string,"ok"?: boolean,"tables"?: number | null
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"chat_reads": {
                   Row: {
                     "client_id": string,"last_read_at": string,"user_id": string

@@ -271,6 +271,15 @@ describe.skipIf(!run)("permessi", () => {
     expect((await coach.from("client_projects").insert({ client_id: clientBId, data })).error).not.toBeNull();
   });
 
+  it("registro del backup: lo legge solo il titolare, nessuno lo scrive dall'app", async () => {
+    await admin.from("backup_runs").insert({ ok: true, tables: 10, db_bytes: 1000, files_bytes: 2000 }).throwOnError();
+    expect((await owner.from("backup_runs").select("ok")).data).toHaveLength(1);
+    expect((await coach.from("backup_runs").select("*")).data).toEqual([]);
+    expect((await clientA.from("backup_runs").select("*")).data).toEqual([]);
+    expect((await owner.from("backup_runs").insert({ ok: false })).error).not.toBeNull();
+    expect((await coach.from("backup_runs").insert({ ok: false })).error).not.toBeNull();
+  });
+
   it("dolori nel logbook: il cliente li scrive, il diario con fastidi avvisa lo staff", async () => {
     await clientA.from("workout_logs").upsert({ client_id: clientAId, program_id: publishedId, day_id: "d1", week: 1, discomfort: "ginocchio" }, { onConflict: "program_id,week,day_id" }).throwOnError();
     const { data: wl } = await coach.from("workout_logs").select("discomfort").eq("program_id", publishedId).single();

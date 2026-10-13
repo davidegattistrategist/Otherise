@@ -71,3 +71,10 @@ jobs:
           path: backup-out/*.gpg
           retention-days: 30
           if-no-files-found: error
+
+      - name: Segna nell'app che il backup non è riuscito
+        if: failure() && steps.check.outputs.skip != '1' && env.SOURCE_URL != ''
+        run: |
+          if command -v psql > /dev/null; then
+            psql "$SOURCE_URL" -qc "insert into public.backup_runs (ok, message) values (false, 'Il backup di stanotte si è fermato: guarda su GitHub, Actions, Backup notturno.')" || true
+          fi

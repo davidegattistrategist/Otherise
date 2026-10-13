@@ -8,6 +8,8 @@ Come funziona (file `.github/workflows/backup.yml` e `scripts/backup/backup.sh`)
 3. **la ricarica su un database vuoto e ricontrolla che le righe siano le stesse**: se non tornano, il backup fallisce;
 4. la cifra con la tua frase segreta e la conserva su GitHub per 30 giorni (Actions → "Backup notturno" → un'esecuzione → in fondo, "Artifacts").
 
+**Ogni mattina l'app ti conferma com'è andata** con una notifica: "Backup di stanotte riuscito", insieme allo spazio usato da database e foto rispetto ai limiti del piano gratuito di Supabase (oltre l'80% ti avvisa che è ora di passare a Pro). Se il backup non è riuscito o non risulta, l'avviso arriva anche sul telefono. Lo stesso riepilogo, con le ultime notti, è in Impostazioni → Backup e spazio. Serve la tabella `backup_runs` (file `20261013140000_registro_backup.sql`): il backup ci scrive alla fine.
+
 Se una notte qualcosa va storto (database in pausa o irraggiungibile, copia incompleta, segreti sbagliati) GitHub ti manda un'email. Controlla che in GitHub → Settings → Notifications → **Actions** sia attivo l'avviso via email per i workflow falliti.
 
 ## Attivarlo (una volta)

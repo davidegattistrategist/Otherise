@@ -89,10 +89,22 @@ if [ "$bad" -gt 0 ]; then
   exit 1
 fi
 echo "OK: tutte le $(wc -l < "$OUT_DIR/tables.txt") tabelle hanno le stesse righe."
+NTABLES="$(wc -l < "$OUT_DIR/tables.txt" | tr -d ' ')"
 
 if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
   echo "== Cifratura"
   gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 --passphrase-fd 3 -o "$DUMP.gpg" "$DUMP" 3<<<"$BACKUP_PASSPHRASE"
   rm -f "$DUMP"
   ls -lh "$DUMP.gpg" | awk '{print "file cifrato: " $5}'
+fi
+
+# Registro nell'app: al mattino il titolare riceve la conferma con lo spazio usato
+# (database e file di foto e video). Se la tabella non c'è ancora, si va avanti.
+echo "== Registro"
+DB_BYTES="$(psql "$SOURCE_URL" -Atqc "select pg_database_size(current_database())" 2>/dev/null || echo "")"
+FILES_BYTES="$(psql "$SOURCE_URL" -Atqc "select coalesce(sum((metadata->>'size')::bigint), 0) from storage.objects" 2>/dev/null || echo "")"
+if psql "$SOURCE_URL" -qc "insert into public.backup_runs (ok, tables, db_bytes, files_bytes, message) values (true, ${NTABLES:-null}, ${DB_BYTES:-null}, ${FILES_BYTES:-null}, '')" 2>/dev/null; then
+  echo "registrato: database ${DB_BYTES:-?} byte, file ${FILES_BYTES:-?} byte"
+else
+  echo "registro non disponibile (manca la tabella backup_runs: esegui la migrazione 20261013140000_registro_backup.sql)"
 fi
