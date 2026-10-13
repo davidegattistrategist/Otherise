@@ -93,3 +93,44 @@ test("diario: i vecchi indirizzi del check-up portano al diario", async ({ page 
   await expect(page).toHaveURL(/\/cliente\/diario$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText(/[Dd]iario/);
 });
+
+test("Pagamenti: dopo 'Pagato' e da 'Tutti i pagamenti' si corregge il pagamento senza aprire la scheda", async ({ page }, info) => {
+  await login(page, "titolare@prova.local");
+  const name = `Correggo${info.project.name}${Date.now() % 10000}`;
+  await newClientPayment(page, name);
+  await page.getByRole("button", { name: /^Coaching/ }).click();
+  await page.getByRole("button", { name: "Mensile", exact: true }).click();
+  await page.locator('input[name="amount"]').fill("120");
+  await page.getByRole("button", { name: "Salva il pagamento" }).click();
+  await expect(page.getByText("Pagamento registrato")).toBeVisible();
+
+  // "Pagato" in Pagamenti, poi "Modifica" subito lì
+  await page.goto("/staff/pagamenti");
+  await page.waitForLoadState("networkidle");
+  const row = page.locator("li, tr", { hasText: name }).filter({ visible: true }).filter({ has: page.getByRole("button", { name: /^(Pagato|Registra)$/ }) }).first();
+  await row.getByRole("button", { name: /^(Pagato|Registra)$/ }).click();
+  const edit = page.getByRole("button", { name: `Modifica: pagamento di ${name}` }).filter({ visible: true }).first();
+  await expect(edit).toBeVisible();
+  await edit.click();
+  const dialog = page.getByRole("dialog", { name: `Correggi il pagamento di ${name}` });
+  await expect(dialog.locator('input[name="amount"]')).toHaveValue("120");
+  await dialog.locator('input[name="amount"]').fill("100");
+  await dialog.getByRole("button", { name: "Salva le modifiche" }).click();
+  await expect(dialog.getByText("Pagamento corretto.")).toBeVisible();
+  await dialog.getByRole("button", { name: "Chiudi" }).first().click();
+  await expect(dialog).toHaveCount(0);
+
+  // da "Tutti i pagamenti": si apre, si vede l'importo corretto, si elimina
+  await page.goto("/staff/pagamenti");
+  await page.locator("#tutti-i-pagamenti summary").click();
+  const item = page.locator("#tutti-i-pagamenti li").filter({ hasText: name }).filter({ hasText: "100" }).first();
+  await expect(item).toBeVisible();
+  await item.getByRole("button", { name: /^Modifica/ }).click();
+  const d2 = page.getByRole("dialog", { name: `Correggi il pagamento di ${name}` });
+  await d2.getByRole("button", { name: "Elimina il pagamento" }).click();
+  await d2.getByRole("button", { name: "Sì, elimina" }).click();
+  await expect(d2).toHaveCount(0);
+  await page.reload();
+  await page.locator("#tutti-i-pagamenti summary").click();
+  await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name })).toHaveCount(1);
+});

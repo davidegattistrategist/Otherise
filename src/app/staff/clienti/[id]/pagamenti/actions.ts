@@ -266,7 +266,7 @@ export async function deletePayment(clientId: string, paymentId: string) {
 }
 
 /** Registra in un tocco il pagamento atteso (importo e periodo del piano attivo). */
-export async function quickPayment(clientId: string): Promise<ActionState> {
+export async function quickPayment(clientId: string): Promise<ActionState & { payment?: { id: string; paid_on: string; amount: number; method: string; period_start: string | null; period_end: string | null; sessions: number | null } }> {
   const me = await requireOwner();
   const supabase = await createClient();
   const [{ data: plan }, { data: billing }] = await Promise.all([
@@ -278,7 +278,7 @@ export async function quickPayment(clientId: string): Promise<ActionState> {
   const periodic = isPeriodic(plan.kind as PlanKind);
   const credit = periodic ? await getClientCredit(supabase, clientId) : 0;
   const p = nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, row?.paid_until ?? null, credit);
-  const { error } = await supabase.from("payments").insert({
+  const { data: saved, error } = await supabase.from("payments").insert({
     client_id: clientId,
     plan_id: plan.id,
     paid_on: todayISO(),
@@ -290,11 +290,13 @@ export async function quickPayment(clientId: string): Promise<ActionState> {
     // paga il dovuto: il credito (o il debito) di prima è sistemato
     credit_change: periodic ? creditChange({ planAmount: Number(plan.amount), credit, paid: p.amount, keep: true }) : 0,
     created_by: me.id,
-  });
-  if (error) return { error: "Registrazione non riuscita." };
+  }).select("id, paid_on, amount, method, period_start, period_end, sessions").single();
+  if (error || !saved) return { error: "Registrazione non riuscita." };
   revalidate(clientId);
   return {
     ok: true,
+    // per correggerlo subito ("Modifica" accanto al pagamento appena registrato)
+    payment: { ...saved, amount: Number(saved.amount) },
     message: `Registrato ${formatEuro(p.amount)}${p.period_end ? ` · saldato fino al ${formatLong(p.period_end)}` : p.sessions ? ` · ${p.sessions} ${p.sessions === 1 ? "sessione" : "sessioni"}` : ""}.`,
   };
 }

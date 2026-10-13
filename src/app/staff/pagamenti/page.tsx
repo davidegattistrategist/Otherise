@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EditPaymentButton, type PaymentValues } from "@/components/edit-payment-dialog";
 import { listName } from "@/lib/names";
 import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
@@ -15,6 +16,11 @@ export const metadata: Metadata = { title: "Pagamenti" };
 
 const ORDER: Record<BillingStatus["state"], number> = { overdue: 0, due_soon: 1, none: 2, ok: 3 };
 
+/** Valori di un pagamento per la finestra "Modifica". */
+function paymentValues(p: { paid_on: string; amount: number | string; method: string; period_start: string | null; period_end: string | null; sessions: number | null; notes: string | null; plan_id: string | null }): PaymentValues {
+  return { paid_on: p.paid_on, amount: Number(p.amount), method: p.method, period_start: p.period_start, period_end: p.period_end, sessions: p.sessions, notes: p.notes ?? "", extra: !p.plan_id };
+}
+
 export default async function PaymentsOverviewPage({ searchParams }: { searchParams: Promise<{ incassi?: string }> }) {
   await requireOwner();
   const sp = await searchParams;
@@ -27,7 +33,7 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
   const nextMonth = addMonths(`${month}-01`, 1);
   const [revenue, { data: recent }, toSettle, { data: history }] = await Promise.all([
     getRevenue(supabase, lines),
-    supabase.from("payments").select("id, client_id, paid_on, amount, method, clients!inner(first_name, last_name, free)").eq("clients.free", false).gte("paid_on", `${month}-01`).lt("paid_on", nextMonth).order("paid_on", { ascending: false }).order("created_at", { ascending: false }),
+    supabase.from("payments").select("id, client_id, paid_on, amount, method, period_start, period_end, sessions, notes, plan_id, clients!inner(first_name, last_name, free)").eq("clients.free", false).gte("paid_on", `${month}-01`).lt("paid_on", nextMonth).order("paid_on", { ascending: false }).order("created_at", { ascending: false }),
     getSessionsToSettle(supabase),
     supabase
       .from("payments")
@@ -128,9 +134,12 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
               {recent.map((p) => {
                 const c = p.clients as unknown as { first_name: string; last_name: string } | null;
                 return (
-                  <li key={p.id} className="flex items-baseline justify-between gap-2 border-t border-sand-deep py-2.5 first:border-t-0">
+                  <li key={p.id} className="flex items-center justify-between gap-2 border-t border-sand-deep py-1.5 first:border-t-0">
                     <span className="min-w-0 truncate"><span className="font-semibold">{c ? listName(c) : "Cliente eliminato"}</span> <span className="text-sm text-muted">· {formatShort(p.paid_on)} · {METHOD_LABELS[p.method as PaymentMethod]}</span></span>
-                    <span className="shrink-0 font-semibold tabular">{formatEuro(p.amount)}</span>
+                    <span className="flex shrink-0 items-center gap-3">
+                      <span className="font-semibold tabular">{formatEuro(p.amount)}</span>
+                      <EditPaymentButton clientId={p.client_id} paymentId={p.id} name={c ? `${c.first_name} ${c.last_name}`.trim() : "Cliente"} values={paymentValues(p)} />
+                    </span>
                   </li>
                 );
               })}
@@ -172,7 +181,10 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
                         <Link href={`/staff/clienti/${p.client_id}/pagamenti`} className="font-semibold hover:underline">{c ? listName(c) : "Cliente eliminato"}</Link>
                         <span className="block text-sm text-muted">{formatShort(p.paid_on)} · {what} · {METHOD_LABELS[p.method as PaymentMethod]}</span>
                       </span>
-                      <span className="shrink-0 font-semibold tabular">{formatEuro(p.amount)}</span>
+                      <span className="flex shrink-0 flex-col items-end">
+                        <span className="font-semibold tabular">{formatEuro(p.amount)}</span>
+                        <EditPaymentButton clientId={p.client_id} paymentId={p.id} name={c ? `${c.first_name} ${c.last_name}`.trim() : "Cliente"} values={paymentValues(p)} />
+                      </span>
                     </li>
                   );
                 })}

@@ -298,7 +298,7 @@ export function EditPaymentForm({
           <Field label="Copre dal">
             <Input name="period_start" type="date" defaultValue={values.period_start ?? ""} required />
           </Field>
-          <Field label="Al">
+          <Field label="Al" hint="spostala per allungare o accorciare la scadenza">
             <Input name="period_end" type="date" defaultValue={values.period_end ?? ""} required />
           </Field>
         </div>
