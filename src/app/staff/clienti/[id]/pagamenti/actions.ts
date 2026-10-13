@@ -362,6 +362,31 @@ export async function quickPayment(clientId: string, index = 0): Promise<ActionS
   };
 }
 
+/** Saldo in un tocco delle sessioni PT fatte e non pagate (prezzo a lezione, tolto il credito sulle lezioni). */
+export async function settleSessions(clientId: string): Promise<ActionState & { payment?: SavedPayment }> {
+  const me = await requireOwner();
+  const supabase = await createClient();
+  const [{ data: counter }, { data: client }] = await Promise.all([
+    supabase.rpc("pt_counters"),
+    supabase.from("clients").select("pt_session_price").eq("id", clientId).maybeSingle(),
+  ]);
+  const k = (counter ?? []).find((r: { client_id: string }) => r.client_id === clientId) as { bought: number; used: number } | undefined;
+  const due = k ? Math.max(0, Number(k.used) - Number(k.bought)) : 0;
+  if (!due) return { error: "Non ci sono sessioni da saldare." };
+  const price = Number(client?.pt_session_price ?? 0);
+  if (!price) return { error: "Imposta prima il prezzo a lezione (Sistema i conti), oppure usa Nuovo pagamento." };
+  const full = Math.round(due * price * 100) / 100;
+  const credit = await getClientCredit(supabase, clientId, "lessons");
+  const amount = dueAmount(full, credit);
+  const { data: saved, error } = await supabase.from("payments").insert({
+    client_id: clientId, plan_id: null, paid_on: todayISO(), amount, method: "cash", period_start: null, period_end: null, sessions: due,
+    notes: "Saldo sessioni PT", credit_change: creditChange({ planAmount: full, credit, paid: amount, keep: true }), created_by: me.id,
+  }).select("id, paid_on, amount, method, period_start, period_end, sessions").single();
+  if (error || !saved) return { error: "Registrazione non riuscita." };
+  revalidate(clientId);
+  return { ok: true, payment: { ...saved, amount: Number(saved.amount) }, message: `Registrato ${formatEuro(amount)} · ${due} ${due === 1 ? "sessione" : "sessioni"}.` };
+}
+
 /** Segna pagato un periodo rimasto "da saldare" (importo del piano, tolto il credito). */
 export async function payUnpaid(clientId: string, paymentId: string): Promise<ActionState & { payment?: SavedPayment }> {
   await requireOwner();

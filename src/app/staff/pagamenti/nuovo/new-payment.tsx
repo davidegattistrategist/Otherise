@@ -45,9 +45,9 @@ const euro = (s: string) => {
 };
 const num = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n).replace(".", ","));
 
-export function NewPayment({ clients, today, initialClient, initialType = null }: { clients: PayClient[]; today: string; initialClient: string | null; initialType?: Type | null }) {
+export function NewPayment({ clients, today, initialClient, initialType = null, initialSessions = null }: { clients: PayClient[]; today: string; initialClient: string | null; initialType?: Type | null; initialSessions?: number | null }) {
   const [round, setRound] = useState(0);
-  return <Wizard key={round} clients={clients} today={today} initialClient={round === 0 ? initialClient : null} initialType={round === 0 ? initialType : null} onAgain={() => setRound((r) => r + 1)} />;
+  return <Wizard key={round} clients={clients} today={today} initialClient={round === 0 ? initialClient : null} initialType={round === 0 ? initialType : null} initialSessions={round === 0 ? initialSessions : null} onAgain={() => setRound((r) => r + 1)} />;
 }
 
 /**
@@ -68,7 +68,7 @@ export function planStart(kind: PlanKind, c: { paidUntil: string | null; startDa
   return today;
 }
 
-function defaultsFor(c: PayClient | null, type: Type | null, today: string) {
+function defaultsFor(c: PayClient | null, type: Type | null, today: string, sessions: number | null = null) {
   const method = c?.method ?? "cash";
   if (!c || !type) return { amount: "", method, start: today, end: "", sessions: "" };
   if (type === "renew" && c.plan && c.proposal) {
@@ -78,11 +78,14 @@ function defaultsFor(c: PayClient | null, type: Type | null, today: string) {
     const start = planStart("quarterly", c, today);
     return { amount: "", method, start, end: periodEnd("quarterly", start) ?? "", sessions: "" };
   }
-  if (type === "lessons") return { amount: c.ptPrice ? num(dueAmount(c.ptPrice, c.lessonsCredit)) : "", method, start: today, end: "", sessions: "1" };
+  if (type === "lessons") {
+    const n = sessions && sessions > 0 ? sessions : 1;
+    return { amount: c.ptPrice ? num(dueAmount(Math.round(n * c.ptPrice * 100) / 100, c.lessonsCredit)) : "", method, start: today, end: "", sessions: String(n) };
+  }
   return { amount: "", method, start: today, end: "", sessions: "" };
 }
 
-function Wizard({ clients, today, initialClient, initialType, onAgain }: { clients: PayClient[]; today: string; initialClient: string | null; initialType: Type | null; onAgain: () => void }) {
+function Wizard({ clients, today, initialClient, initialType, initialSessions, onAgain }: { clients: PayClient[]; today: string; initialClient: string | null; initialType: Type | null; initialSessions: number | null; onAgain: () => void }) {
   const [state, action] = useActionState<NewPaymentState, FormData>(registerPayment, null);
   const [clientId, setClientId] = useState<string | null>(initialClient);
   const [isNew, setIsNew] = useState(false);
@@ -91,7 +94,7 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
   const [query, setQuery] = useState("");
   const client = clients.find((c) => c.id === clientId) ?? null;
   const [type, setType] = useState<Type | null>(client && initialType ? initialType : client?.plan ? "renew" : null);
-  const d0 = defaultsFor(client, type, today);
+  const d0 = defaultsFor(client, type, today, initialSessions);
   const [amount, setAmount] = useState(d0.amount);
   const [amountTouched, setAmountTouched] = useState(false);
   const [method, setMethod] = useState(d0.method);

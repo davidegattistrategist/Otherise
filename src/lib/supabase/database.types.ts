@@ -543,14 +543,14 @@ isOneToOne: false
                   Relationships: []
                 },"pt_sessions": {
                   Row: {
-                    "client_id": string,"counts_toward_package": boolean,"created_at": string,"created_by": string | null,"id": string,"notes": string,"session_date": string
+                    "client_id": string,"counts_toward_package": boolean,"created_at": string,"created_by": string | null,"id": string,"notes": string,"session_date": string,"source": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "client_id": string,"counts_toward_package"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"notes"?: string,"session_date"?: string
+                    "client_id": string,"counts_toward_package"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"notes"?: string,"session_date"?: string,"source"?: string | null
                   }
                   Update: {
-                    "client_id"?: string,"counts_toward_package"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"notes"?: string,"session_date"?: string
+                    "client_id"?: string,"counts_toward_package"?: boolean,"created_at"?: string,"created_by"?: string | null,"id"?: string,"notes"?: string,"session_date"?: string,"source"?: string | null
                   }
                   Relationships: [
                     {
@@ -583,14 +583,14 @@ isOneToOne: false
                   ]
                 },"workout_logs": {
                   Row: {
-                    "client_id": string,"completed": boolean,"created_at": string,"day_id": string,"discomfort": string,"discomfort_seen_at": string | null,"id": string,"notes": string,"performed_on": string,"program_id": string,"updated_at": string,"week": number
+                    "client_id": string,"completed": boolean,"created_at": string,"day_id": string,"discomfort": string,"discomfort_seen_at": string | null,"note_flag": boolean | null,"note_reason": string,"note_seen_at": string | null,"id": string,"notes": string,"performed_on": string,"program_id": string,"updated_at": string,"week": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "client_id": string,"completed"?: boolean,"created_at"?: string,"day_id": string,"discomfort"?: string,"discomfort_seen_at"?: string | null,"id"?: string,"notes"?: string,"performed_on"?: string,"program_id": string,"updated_at"?: string,"week": number
+                    "client_id": string,"completed"?: boolean,"created_at"?: string,"day_id": string,"discomfort"?: string,"discomfort_seen_at"?: string | null,"note_flag"?: boolean | null,"note_reason"?: string,"note_seen_at"?: string | null,"id"?: string,"notes"?: string,"performed_on"?: string,"program_id": string,"updated_at"?: string,"week": number
                   }
                   Update: {
-                    "client_id"?: string,"completed"?: boolean,"created_at"?: string,"day_id"?: string,"discomfort"?: string,"discomfort_seen_at"?: string | null,"id"?: string,"notes"?: string,"performed_on"?: string,"program_id"?: string,"updated_at"?: string,"week"?: number
+                    "client_id"?: string,"completed"?: boolean,"created_at"?: string,"day_id"?: string,"discomfort"?: string,"discomfort_seen_at"?: string | null,"note_flag"?: boolean | null,"note_reason"?: string,"note_seen_at"?: string | null,"id"?: string,"notes"?: string,"performed_on"?: string,"program_id"?: string,"updated_at"?: string,"week"?: number
                   }
                   Relationships: [
                     {

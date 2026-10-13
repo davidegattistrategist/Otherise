@@ -204,9 +204,10 @@ export async function getPtCounter(supabase: ServerSupabase, clientId: string) {
 
 /** Clienti con sessioni PT fatte e non ancora saldate (pagina Pagamenti). */
 export async function getSessionsToSettle(supabase: ServerSupabase) {
-  const [{ data: rows }, { data: clients }] = await Promise.all([
+  const [{ data: rows }, { data: clients }, lessonCredits] = await Promise.all([
     supabase.rpc("pt_counters"),
     supabase.from("clients").select("id, first_name, last_name, pt_session_price").neq("status", "archived").eq("free", false),
+    getCredits(supabase, undefined, "lessons"),
   ]);
   const byId = new Map((clients ?? []).map((c) => [c.id, c]));
   const out: Array<{ clientId: string; name: string; due: number; dueAmount: number | null }> = [];
@@ -214,7 +215,8 @@ export async function getSessionsToSettle(supabase: ServerSupabase) {
     const c = byId.get(r.client_id);
     if (!c) continue;
     const k = ptCounterView(r, c.pt_session_price !== null ? Number(c.pt_session_price) : null);
-    if (k && k.due > 0) out.push({ clientId: c.id, name: listName(c), due: k.due, dueAmount: k.dueAmount });
+    // tolto il credito sulle lezioni
+    if (k && k.due > 0) out.push({ clientId: c.id, name: listName(c), due: k.due, dueAmount: k.dueAmount !== null ? dueAmount(k.dueAmount, lessonCredits.get(c.id) ?? 0) : null });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name, "it", { sensitivity: "base" }));
 }

@@ -86,6 +86,7 @@ test("il titolare chiude a mano un pacchetto e può annullare", async ({ page })
   const id = await openClient(page, "Prova Luca");
   await page.goto(`/staff/clienti/${id}/pagamenti`);
   await page.waitForLoadState("networkidle");
+  await page.locator("#sistema summary", { hasText: "Chiudi il pacchetto" }).click();
   await page.getByRole("button", { name: "Segna il pacchetto come terminato" }).click();
   await expect(page.getByText("Pacchetto segnato come terminato.")).toBeVisible();
   await expect(page.getByText("Pacchetto finito").first()).toBeVisible();

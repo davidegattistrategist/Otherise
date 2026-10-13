@@ -119,6 +119,16 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
         </Card>
       )}
 
+      {/* prima le cose da fare: la risposta del coach e gli avvisi */}
+      {lastReply?.coach_reply && diffDays((lastReply.reviewed_at ?? lastReply.week_start).slice(0, 10), today) <= 14 ? (
+        <Card className="flex flex-col gap-2">
+          <Eyebrow>{coach ?? "Il coach"} ti ha risposto</Eyebrow>
+          <p className="text-[15px] leading-relaxed whitespace-pre-line">{lastReply.coach_reply}</p>
+          <span className="text-xs text-muted">Diario della settimana del {formatShort(lastReply.week_start)}</span>
+        </Card>
+      ) : null}
+      {notices.length ? <PaymentNotices notices={notices} coach={coachFirst} /> : null}
+
       <div className="grid gap-4 sm:grid-cols-2">
         {current && current.position.state !== "not_started" ? (
           <Card className="flex flex-col gap-4">
@@ -159,21 +169,11 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
           </Card>
         ) : null}
 
-        {notices.length ? (
-          <PaymentNotices notices={notices} coach={coachFirst} />
-        ) : pay && pay.state === "ok" && pay.clientLabel ? (
+        {!notices.length && pay && pay.state === "ok" && pay.clientLabel ? (
           <Card className="flex flex-col gap-2">
             <Eyebrow>Percorso</Eyebrow>
             <div className="text-lg font-semibold">{pay.dueDate ? `${pay.clientLabel} ${formatShort(pay.dueDate)}` : pay.clientLabel}</div>
             <ArrowCTA href="/cliente/profilo">Dettagli</ArrowCTA>
-          </Card>
-        ) : null}
-
-        {lastReply?.coach_reply && diffDays((lastReply.reviewed_at ?? lastReply.week_start).slice(0, 10), today) <= 14 ? (
-          <Card className="flex flex-col gap-2">
-            <Eyebrow>{coach ?? "Il coach"} ti ha risposto</Eyebrow>
-            <p className="text-[15px] leading-relaxed whitespace-pre-line">{lastReply.coach_reply}</p>
-            <span className="text-xs text-muted">Diario della settimana del {formatShort(lastReply.week_start)}</span>
           </Card>
         ) : null}
       </div>

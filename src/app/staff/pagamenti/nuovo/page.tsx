@@ -13,9 +13,9 @@ import { NewPayment, type PayClient } from "./new-payment";
 
 export const metadata: Metadata = { title: "Nuovo pagamento" };
 
-export default async function NewPaymentPage({ searchParams }: { searchParams: Promise<{ cliente?: string; tipo?: string }> }) {
+export default async function NewPaymentPage({ searchParams }: { searchParams: Promise<{ cliente?: string; tipo?: string; sessioni?: string }> }) {
   await requireOwner();
-  const { cliente, tipo } = await searchParams;
+  const { cliente, tipo, sessioni } = await searchParams;
   const supabase = await createClient();
   const [{ data: clients }, { data: plans }, { data: billing }, { data: lastPays }] = await Promise.all([
     supabase.from("clients").select("id, first_name, last_name, status, start_date, pt_session_price").neq("status", "archived").eq("free", false),
@@ -52,15 +52,22 @@ export default async function NewPaymentPage({ searchParams }: { searchParams: P
     };
   });
 
+  const fromClient = list.find((c) => c.id === cliente) ?? null;
   return (
     <div className="flex flex-col gap-5">
-      <Link href="/staff/pagamenti" className="flex min-h-10 items-center gap-1.5 self-start text-sm font-semibold text-muted hover:text-ink">
-        <IconArrowLeft size={16} /> Pagamenti
-      </Link>
+      {fromClient ? (
+        <Link href={`/staff/clienti/${fromClient.id}/pagamenti`} className="flex min-h-10 items-center gap-1.5 self-start text-sm font-semibold text-muted hover:text-ink">
+          <IconArrowLeft size={16} /> Pagamenti di {fromClient.fullName}
+        </Link>
+      ) : (
+        <Link href="/staff/pagamenti" className="flex min-h-10 items-center gap-1.5 self-start text-sm font-semibold text-muted hover:text-ink">
+          <IconArrowLeft size={16} /> Pagamenti
+        </Link>
+      )}
       <PageTitle title="Nuovo pagamento">
         <p className="max-w-2xl text-[15px] text-muted">Scegli chi paga e cosa: l&apos;app propone importo e periodo, tu controlli e salvi.</p>
       </PageTitle>
-      <NewPayment clients={list} today={todayISO()} initialClient={list.some((c) => c.id === cliente) ? cliente! : null} initialType={tipo === "lezioni" ? "lessons" : null} />
+      <NewPayment clients={list} today={todayISO()} initialClient={list.some((c) => c.id === cliente) ? cliente! : null} initialType={tipo === "lezioni" ? "lessons" : tipo === "altro" ? "other" : tipo === "coaching" ? "plan" : null} initialSessions={/^\d{1,3}$/.test(sessioni ?? "") ? Number(sessioni) : null} />
     </div>
   );
 }

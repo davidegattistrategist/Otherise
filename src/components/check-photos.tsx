@@ -68,6 +68,56 @@ export async function preparePhoto(file: File): Promise<Ready> {
 }
 
 /** Pulsante "Aggiungi le foto": apre la galleria, si scelgono tutte insieme, si caricano da sole. */
+/** Solo le immagini tra i file scelti. */
+export const onlyImages = (files: File[]) => files.filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name));
+
+/**
+ * Riduce e carica le foto di un check (2560 px + miniatura, senza dati
+ * nascosti) e le registra. Usato dal pulsante delle foto e dal modulo del
+ * check (foto scelte prima di salvare).
+ */
+export async function uploadCheckPhotos(
+  clientId: string,
+  checkId: string,
+  files: File[],
+  onProgress: (p: { done: number; total: number; progress: number }) => void,
+): Promise<{ saved: number; error: string }> {
+  const list = onlyImages(files);
+  if (!list.length) return { saved: 0, error: "" };
+  if (list.length > MAX_PHOTOS_PER_UPLOAD) return { saved: 0, error: `Al massimo ${MAX_PHOTOS_PER_UPLOAD} foto per volta.` };
+  onProgress({ done: 0, total: list.length, progress: 0 });
+  try {
+    const res = await preparePhotoUploads(clientId, checkId, list.length);
+    if ("error" in res) throw new Error(res.error);
+    const uploaded: Array<{ path: string; thumbPath: string; width: number; height: number; size: number }> = [];
+    const skipped: string[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const t = res.tickets[i];
+      let ready: Ready;
+      try {
+        ready = await preparePhoto(list[i]);
+      } catch {
+        skipped.push(list[i].name);
+        continue;
+      }
+      await Promise.all([
+        uploadWithProgress(t.url, ready.full, "image/jpeg", (p) => onProgress({ done: i, total: list.length, progress: p })),
+        uploadWithProgress(t.thumbUrl, ready.thumb, "image/jpeg", () => undefined),
+      ]);
+      uploaded.push({ path: t.path, thumbPath: t.thumbPath, width: ready.width, height: ready.height, size: ready.full.size });
+      onProgress({ done: i + 1, total: list.length, progress: 0 });
+    }
+    if (uploaded.length) {
+      const ok = await saveCheckPhotos(clientId, checkId, uploaded);
+      if ("error" in ok) throw new Error(ok.error);
+    }
+    const error = skipped.length ? `${skipped.length === 1 ? "Una foto non si riesce a leggere" : `${skipped.length} foto non si riescono a leggere`}: prova a sceglierle di nuovo dalla galleria del telefono.` : "";
+    return { saved: uploaded.length, error };
+  } catch (e) {
+    return { saved: 0, error: e instanceof Error && e.message ? e.message : "Caricamento non riuscito. Riprova." };
+  }
+}
+
 export function CheckPhotoUploader({ clientId, checkId, label = "Aggiungi le foto", variant = "secondary", className }: { clientId: string; checkId: string; label?: string; variant?: "primary" | "secondary" | "light"; className?: string }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -78,43 +128,13 @@ export function CheckPhotoUploader({ clientId, checkId, label = "Aggiungi le fot
   const start = async (files: File[]) => {
     setError("");
     setSaved(0);
-    const list = files.filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name));
-    if (!list.length) return;
-    if (list.length > MAX_PHOTOS_PER_UPLOAD) {
-      setError(`Al massimo ${MAX_PHOTOS_PER_UPLOAD} foto per volta.`);
-      return;
-    }
-    setState({ done: 0, total: list.length, progress: 0 });
     try {
-      const res = await preparePhotoUploads(clientId, checkId, list.length);
-      if ("error" in res) throw new Error(res.error);
-      const uploaded: Array<{ path: string; thumbPath: string; width: number; height: number; size: number }> = [];
-      const skipped: string[] = [];
-      for (let i = 0; i < list.length; i++) {
-        const t = res.tickets[i];
-        let ready: Ready;
-        try {
-          ready = await preparePhoto(list[i]);
-        } catch {
-          skipped.push(list[i].name);
-          continue;
-        }
-        await Promise.all([
-          uploadWithProgress(t.url, ready.full, "image/jpeg", (p) => setState({ done: i, total: list.length, progress: p })),
-          uploadWithProgress(t.thumbUrl, ready.thumb, "image/jpeg", () => undefined),
-        ]);
-        uploaded.push({ path: t.path, thumbPath: t.thumbPath, width: ready.width, height: ready.height, size: ready.full.size });
-        setState({ done: i + 1, total: list.length, progress: 0 });
-      }
-      if (uploaded.length) {
-        const ok = await saveCheckPhotos(clientId, checkId, uploaded);
-        if ("error" in ok) throw new Error(ok.error);
-        setSaved(uploaded.length);
+      const r = await uploadCheckPhotos(clientId, checkId, files, setState);
+      if (r.saved) {
+        setSaved(r.saved);
         router.refresh();
       }
-      if (skipped.length) setError(`${skipped.length === 1 ? "Una foto non si riesce a leggere" : `${skipped.length} foto non si riescono a leggere`}: prova a sceglierle di nuovo dalla galleria del telefono.`);
-    } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : "Caricamento non riuscito. Riprova.");
+      if (r.error) setError(r.error);
     } finally {
       setState(null);
       if (input.current) input.current.value = "";

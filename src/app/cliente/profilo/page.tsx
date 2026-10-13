@@ -8,7 +8,9 @@ import { programEndDate } from "@/lib/program/schedule";
 import { formatEuro, METHOD_LABELS, PLAN_LABELS, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
 import { Card, Dot, Eyebrow, ProgressBar } from "@/components/ui";
 import { PasswordForm } from "@/components/password-form";
-import { IconLogout } from "@/components/icons";
+import { IconArrowRight, IconBook, IconLogout } from "@/components/icons";
+import Link from "next/link";
+import { checkinWeekFor } from "@/lib/checkin";
 import { signOut } from "@/app/login/actions";
 import { PrivacyCard } from "./privacy-card";
 import { ProjectTimeline } from "@/components/project-timeline";
@@ -21,7 +23,7 @@ export default async function ClientProfilePage() {
   const supabase = await createClient();
   const today = todayISO();
   const [{ data: client }, { data: coach }, { data: billing }, { data: payments }, { current, upcoming, past }, { data: sessions }] = await Promise.all([
-    supabase.from("clients").select("first_name, last_name, email, start_date, goals, health_consent_at, consent_source, instagram_consent_at").eq("id", me.clientId).single(),
+    supabase.from("clients").select("first_name, last_name, email, start_date, goals, health_consent_at, consent_source, instagram_consent_at, weekly_checkin").eq("id", me.clientId).single(),
     supabase.rpc("my_coach_name"),
     supabase.rpc("client_billing", { cid: me.clientId }),
     supabase.from("payments").select("id, paid_on, amount, method, period_start, period_end, sessions").eq("client_id", me.clientId).eq("unpaid", false).order("paid_on", { ascending: false }).limit(12),
@@ -76,6 +78,19 @@ export default async function ClientProfilePage() {
           <div className="text-sm text-muted">Dal {formatShort(current.start_date)} al {formatShort(programEndDate(current.start_date, current.weeks))} · settimana {current.week} di {current.weeks}</div>
           <ProgressBar value={(current.week / current.weeks) * 100} />
         </Card>
+      ) : null}
+
+      {client?.weekly_checkin && !ended ? (
+        <Link href="/cliente/diario" className="flex min-h-16 items-center justify-between gap-3 rounded-[24px] bg-card px-5 py-4">
+          <span className="flex items-center gap-3">
+            <IconBook size={20} />
+            <span>
+              <span className="block font-semibold">Il tuo diario</span>
+              <span className="block text-sm text-muted">{checkinWeekFor(today) ? "È aperto: compilalo entro domenica" : "Si apre il venerdì · qui trovi anche le settimane passate e le risposte"}</span>
+            </span>
+          </span>
+          <IconArrowRight size={18} className="shrink-0 text-muted" />
+        </Link>
       ) : null}
 
       {!ended ? <PaymentNotices notices={notices} coach={coachFirst} /> : null}

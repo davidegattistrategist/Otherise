@@ -11,7 +11,7 @@ import { ageOn, formatHeading, formatShort, isBirthday, todayISO } from "@/lib/d
 import { Card, Dot, Eyebrow, LinkButton, Notice, PageTitle } from "@/components/ui";
 import { getBillingLines } from "@/lib/data/billing";
 import { QuickPay } from "@/components/quick-pay";
-import { markDiscomfortSeen } from "./today-actions";
+import { markDiscomfortSeen, markNoteSeen } from "./today-actions";
 import { FirstSteps } from "./first-steps";
 import { ClearParams } from "@/components/clear-param";
 import { PushPrompt } from "@/components/push";
@@ -40,7 +40,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
   const me = await requireStaff();
   const supabase = await createClient();
   const today = todayISO();
-  const [clients, { data: checkins }, { data: pains }, { data: brand }] = await Promise.all([
+  const [clients, { data: checkins }, { data: pains }, { data: brand }, { data: clientNotes }] = await Promise.all([
     getClientsOverview(supabase, me),
     supabase
       .from("checkins")
@@ -57,6 +57,14 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
       .order("updated_at", { ascending: false })
       .limit(20),
     getBusinessName().then((data) => ({ data })),
+    // note finali dei clienti che l'AI ha giudicato da leggere
+    supabase
+      .from("workout_logs")
+      .select("id, client_id, week, performed_on, notes, note_reason, clients(first_name, last_name)")
+      .eq("note_flag", true)
+      .is("note_seen_at", null)
+      .order("updated_at", { ascending: false })
+      .limit(20),
   ]);
   const { programs, checks, training } = buildTodayList(clients, today);
   const billing = me.role === "owner" ? (await getBillingLines(supabase)).lines.filter((l) => !l.paused && (l.status.state === "overdue" || l.status.state === "due_soon")) : [];
@@ -135,6 +143,28 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
           </Card>
         ) : null}
 
+        {clientNotes && clientNotes.length > 0 ? (
+          <Card>
+            <div className="mb-3 flex items-center gap-2"><Dot tone="deep" /><Eyebrow>Note dei clienti da leggere</Eyebrow></div>
+            <ul className="flex flex-col">
+              {clientNotes.map((n) => {
+                const cl = n.clients as unknown as { first_name: string; last_name: string } | null;
+                return (
+                  <li key={n.id} className="flex items-start gap-3 border-t border-sand-deep py-2.5 first:border-t-0">
+                    <Link href={`/staff/clienti/${n.client_id}/note?vista=cliente`} className="min-w-0 flex-1 hover:opacity-70">
+                      <span className="block font-semibold">{cl ? listName(cl) : "Cliente"}{n.note_reason ? <span className="font-normal text-ink-soft"> · {n.note_reason}</span> : null}</span>
+                      <span className="block text-sm text-muted">{formatShort(n.performed_on)} · settimana {n.week} · “{n.notes.slice(0, 160)}{n.notes.length > 160 ? "…" : ""}”</span>
+                    </Link>
+                    <form action={markNoteSeen.bind(null, n.id)}>
+                      <button type="submit" className="min-h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-sand-deep hover:bg-sand">Letta</button>
+                    </form>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        ) : null}
+
         <Card>
           <div className="mb-3"><Eyebrow>Programmi</Eyebrow></div>
           <List items={programs} empty="Tutti i clienti hanno un programma in corso." />
@@ -178,7 +208,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
           <Card>
             <div className="mb-1"><Eyebrow>Da fare: chiedi la data di nascita</Eyebrow></div>
             <p className="mb-2 text-sm text-muted">Serve per la massa grassa e per ricordarti il compleanno. Aggiungila nella scheda.</p>
-            <List items={noBirth.map((c) => ({ clientId: c.id, clientName: c.fullName, text: "Scheda", href: `/staff/clienti/${c.id}/profilo`, tone: "ink" as const }))} empty="" />
+            <List items={noBirth.map((c) => ({ clientId: c.id, clientName: c.fullName, text: "Dati", href: `/staff/clienti/${c.id}/profilo`, tone: "ink" as const }))} empty="" />
           </Card>
         ) : null}
       </div>

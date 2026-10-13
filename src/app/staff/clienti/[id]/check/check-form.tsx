@@ -6,7 +6,11 @@
  * I risultati si aggiornano mentre scrivi; il server li ricalcola al salvataggio.
  */
 import { DictateButton } from "@/components/dictate-button";
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { onlyImages, uploadCheckPhotos } from "@/components/check-photos";
+import { useKeepAwake } from "@/components/use-keep-awake";
+import { IconDown, IconPhoto, IconX } from "@/components/icons";
 import { CIRCUMFERENCES, SKINFOLD_SITES, averagesOf, computeBodyComposition, formulaById, protocolSites, siteAverage, siteLabel, sumOf, type FormulaId, type Sex, type SkinfoldSite } from "@/lib/body/skinfolds";
 import { estimateOneRepMax, RPE_VALUES } from "@/lib/strength/e1rm";
 import { ageOn } from "@/lib/dates";
@@ -24,12 +28,17 @@ export type CheckValues = {
   visible_to_client: boolean;
 };
 
+/** Esito del salvataggio: con le foto scelte nel modulo torna l'id del check (le carica il browser). */
+export type CheckState = (NonNullable<ActionState> & { checkId?: string }) | null;
+
 const toNum = (s: string) => {
   const n = Number(s.replace(",", "."));
   return s.trim() && Number.isFinite(n) ? n : null;
 };
 
 export function CheckForm({
+  clientId,
+  newCheck = false,
   action,
   sex,
   birthDate,
@@ -38,7 +47,10 @@ export function CheckForm({
   manual,
   lastMissing,
 }: {
-  action: (s: ActionState, fd: FormData) => Promise<ActionState>;
+  clientId: string;
+  /** check nuovo: si possono scegliere le foto prima di salvare */
+  newCheck?: boolean;
+  action: (s: CheckState, fd: FormData) => Promise<CheckState>;
   sex: Sex;
   birthDate: string | null;
   values: CheckValues;
@@ -50,6 +62,30 @@ export function CheckForm({
   lastMissing: SkinfoldSite[];
 }) {
   const [state, formAction] = useActionState(action, null);
+  const router = useRouter();
+  // foto scelte prima di salvare (solo per un check nuovo): si caricano appena il check è salvato
+  const [photos, setPhotos] = useState<File[]>([]);
+  const previews = useMemo(() => photos.map((f) => URL.createObjectURL(f)), [photos]);
+  const [upload, setUpload] = useState<{ done: number; total: number; progress: number } | null>(null);
+  const [uploadError, setUploadError] = useState("");
+  const photoInput = useRef<HTMLInputElement>(null);
+  const uploading = useRef(false);
+  useKeepAwake(upload !== null);
+  useEffect(() => () => previews.forEach((u) => URL.revokeObjectURL(u)), [previews]);
+  useEffect(() => {
+    const checkId = state?.checkId;
+    if (!state?.ok || !checkId || uploading.current) return;
+    uploading.current = true;
+    void uploadCheckPhotos(clientId, checkId, photos, setUpload).then((r) => {
+      setUpload(null);
+      if (r.error) {
+        setUploadError(`Check salvato, ma ${r.error.charAt(0).toLowerCase()}${r.error.slice(1)} Le foto le puoi aggiungere aprendo il check.`);
+        setTimeout(() => router.push(`/staff/clienti/${clientId}/check/${checkId}`), 4000);
+        return;
+      }
+      router.push(`/staff/clienti/${clientId}/check?foto=${r.saved}`);
+    });
+  }, [state, clientId, photos, router]);
   const [date, setDate] = useState(values.check_date);
   const [weight, setWeight] = useState(values.weight_kg?.toString().replace(".", ",") ?? "");
   const [sf, setSf] = useState<Record<string, string[]>>(() => {
@@ -63,6 +99,8 @@ export function CheckForm({
     return t;
   });
 
+  // i test restano chiusi, tranne se ce ne sono già
+  const hasTests = values.strength_tests.some((t) => t.exercise || t.load !== null) || Boolean(values.tests_text.trim());
   const sites = protocolSites(sex);
   const age = ageOn(birthDate, date);
   const readings = useMemo(() => {
@@ -187,8 +225,12 @@ export function CheckForm({
         </div>
       </Card>
 
-      <Card>
-        <Eyebrow className="mb-1">Test di forza</Eyebrow>
+      <details className="group rounded-[24px] bg-card" open={hasTests}>
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
+          <span><span className="eyebrow block">Test di forza, corsa, HYROX</span><span className="mt-1 block text-sm text-muted">Facoltativi: tocca per aggiungerli</span></span>
+          <IconDown size={18} className="shrink-0 text-muted transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="px-5 pb-5 sm:px-6">
         <p className="mb-4 text-sm text-muted">Massimale stimato con la tabella RPE, arrotondato a 2,5 kg.</p>
         <div className="flex flex-col gap-3">
           <div className="hidden gap-2 text-xs font-semibold text-muted sm:grid sm:grid-cols-[minmax(0,1fr)_6rem_5rem_6rem_9rem]">
@@ -217,7 +259,8 @@ export function CheckForm({
           <Label htmlFor="tests_text" hint="corsa, cardio, HYROX, qualsiasi altro test">Altri test</Label>
           <Textarea id="tests_text" name="tests_text" rows={3} defaultValue={values.tests_text} placeholder="3 km in 13:40 · zona 2 a 10,5 km/h · 1000 m ski erg 3:58" />
         </div>
-      </Card>
+        </div>
+      </details>
 
       <Card>
         <div className="flex items-end justify-between gap-2"><Label htmlFor="notes_next_phase" hint="abitudini, andamento, cosa cambiare. Riappare nell'editor del programma">Note per la prossima fase</Label><DictateButton targetId="notes_next_phase" /></div>
@@ -228,8 +271,55 @@ export function CheckForm({
         </label>
       </Card>
 
-      <ActionMessage state={state} />
-      <div><SubmitButton>Salva check</SubmitButton></div>
+      {newCheck ? (
+        <Card className="flex flex-col gap-3">
+          <Eyebrow>Foto del check <span className="normal-case tracking-normal text-muted">· facoltative</span></Eyebrow>
+          <p className="text-sm text-muted">Sceglile tutte insieme dalla galleria: si caricano quando salvi il check, ridotte e senza dati nascosti. Puoi anche aggiungerle dopo, aprendo il check.</p>
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            aria-label="Scegli le foto da caricare con il check"
+            onChange={(e) => {
+              const files = onlyImages(Array.from(e.currentTarget.files ?? []));
+              setPhotos((p) => [...p, ...files].slice(0, 12));
+              e.currentTarget.value = "";
+            }}
+          />
+          {previews.length ? (
+            <ul className="grid grid-cols-3 gap-2 sm:grid-cols-6" aria-label="Foto scelte">
+              {previews.map((u, i) => (
+                <li key={u} className="relative aspect-[3/4] overflow-hidden rounded-xl bg-sand">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={u} alt={`Foto ${i + 1}`} className="h-full w-full object-cover" />
+                  <button type="button" onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} className="absolute top-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-ink/70 text-card" aria-label={`Togli la foto ${i + 1}`}>
+                    <IconX size={16} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <div>
+            <button type="button" onClick={() => photoInput.current?.click()} className="inline-flex min-h-11 items-center gap-2 rounded-full border-[1.5px] border-ink px-4 text-[15px] font-semibold">
+              <IconPhoto size={18} /> {photos.length ? "Aggiungi altre foto" : "Scegli le foto"}
+            </button>
+          </div>
+        </Card>
+      ) : null}
+      {photos.length ? <input type="hidden" name="with_photos" value="1" /> : null}
+
+      {upload ? (
+        <div className="rounded-2xl bg-ink px-4 py-3 text-[15px] text-card" role="status">
+          Check salvato. Carico le foto: {upload.done} di {upload.total}… tieni aperta l&apos;app.
+        </div>
+      ) : uploadError ? (
+        <div className="rounded-2xl bg-accent-soft px-4 py-3 text-[15px]" role="alert">{uploadError}</div>
+      ) : (
+        <ActionMessage state={state?.checkId ? null : state} />
+      )}
+      {upload ? null : <div><SubmitButton>{photos.length ? `Salva check e ${photos.length} foto` : "Salva check"}</SubmitButton></div>}
     </form>
   );
 }

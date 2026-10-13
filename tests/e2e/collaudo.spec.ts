@@ -100,8 +100,9 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: "Attiva il piano" }).click();
     await expect(page.getByText("Piano salvato.")).toBeVisible();
     await expect(page).toHaveURL(/\/pagamenti$/);
-    await page.getByRole("button", { name: "Registra il pagamento" }).click();
-    await expect(page.getByText(/Pagamento di .* registrato/)).toBeVisible();
+    // il pacchetto atteso si registra con "Pagato" in un tocco
+    await page.locator("#registra").getByRole("button", { name: "Pagato" }).click();
+    await expect(page.getByText(/Registrato 400/).first()).toBeVisible();
     // il vecchio avviso del piano non resta sullo schermo
     await expect(page.getByText("Piano salvato.")).toHaveCount(0);
     await page.reload();

@@ -30,6 +30,7 @@ test("cliente gratis: sparisce da pagamenti e previsioni, si può togliere", asy
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
   const base = page.url();
   await page.goto(`${base}/pagamenti`);
+  await page.locator("#sistema summary", { hasText: "Cliente gratis" }).click();
   await page.getByRole("button", { name: "Metti gratis" }).click();
   await expect(page.getByText("Non compare in pagamenti, scadenze, incassi, previsioni ed export")).toBeVisible();
   await expect(page.getByText("Gratis", { exact: true }).first()).toBeVisible();
@@ -38,6 +39,7 @@ test("cliente gratis: sparisce da pagamenti e previsioni, si può togliere", asy
   await expect(page.getByText("Demo Marta")).toHaveCount(0);
   await page.goto(`${base}/pagamenti`);
   await page.getByRole("button", { name: "Non è più gratis" }).click();
+  await page.locator("#sistema summary", { hasText: "Cliente gratis" }).click();
   await expect(page.getByRole("button", { name: "Metti gratis" })).toBeVisible();
   await page.goto("/staff/pagamenti");
   await expect(page.getByText("Demo Marta").first()).toBeVisible();
@@ -198,34 +200,41 @@ test("link per entrare preparato dal trainer: il cliente sceglie la password sen
   await client.waitForURL(/\/imposta-password/);
 });
 
-test("pagamento extra (sessioni PT in più): conta negli incassi ma non sposta la scadenza del piano", async ({ page }) => {
+test("lezioni PT a parte: non spostano la scadenza del coaching; contatore, prezzo e saldo dalla scheda", async ({ page }) => {
   await login(page, "titolare@prova.local");
   await page.goto("/staff/clienti");
   await page.locator('a[href^="/staff/clienti/"]', { hasText: "Esempio Giulia" }).filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
-  await page.goto(`${new URL(page.url()).pathname}/pagamenti`);
+  const base = new URL(page.url()).pathname;
+  await page.goto(`${base}/pagamenti`);
   const status = page.getByText(/saldato fino al/).first();
   const before = await status.textContent();
-  await page.getByText("Pagamento extra", { exact: true }).click();
-  const form = page.locator("form", { has: page.getByRole("button", { name: "Registra il pagamento extra" }) });
-  await form.locator("input[name=amount]").fill("700");
-  await form.locator("input[name=sessions]").fill("10");
-  await expect(form.locator("select[name=method]")).toHaveValue("cash");
-  await form.getByRole("button", { name: "Registra il pagamento extra" }).click();
-  await expect(page.getByText("Pagamento extra di 700 € registrato. La scadenza del piano non cambia.")).toBeVisible();
+  // un solo modo per registrare: Nuovo pagamento (già con lei scelta)
+  await page.getByRole("link", { name: "Nuovo pagamento" }).first().click();
+  await page.waitForURL(/\/staff\/pagamenti\/nuovo\?cliente=/);
+  await page.getByRole("button", { name: /^Lezioni PT/ }).click();
+  await page.getByRole("button", { name: "10 lezioni", exact: true }).click();
+  await page.locator('input[name="amount"]').fill("700");
+  // se c'è già il prezzo a lezione (giro precedente) la differenza non va sul credito
+  const keep = page.getByTestId("credit-hint").getByRole("checkbox");
+  if (await keep.isVisible().catch(() => false)) await keep.uncheck();
+  await page.getByRole("button", { name: "Salva il pagamento" }).click();
+  await expect(page.getByText("Pagamento registrato")).toBeVisible();
+  await page.goto(`${base}/pagamenti`);
   await expect(status).toHaveText(before!);
-  const row = page.locator("li", { hasText: "Sessioni PT extra" }).first();
+  const row = page.locator("li", { hasText: "Pacchetto 10 lezioni PT" }).first();
   await expect(row).toContainText("Extra");
   await expect(row).toContainText("10 sessioni");
-  // contatore delle sessioni PT: correzione, scalano quando segni una sessione, da saldare con il prezzo
+  // contatore delle sessioni PT: correzione da "Sistema i conti", scalano quando segni una sessione
   const card = page.locator("#sessioni-pt");
-  await card.locator("summary", { hasText: "Correggi il conteggio" }).click();
-  await card.locator("details", { hasText: "Correggi il conteggio" }).locator("select[name=mode]").selectOption("left");
-  await card.locator("input[name=count]").fill("5");
-  await card.getByRole("button", { name: "Salva la correzione" }).click();
+  const fix = page.locator("#sistema");
+  const counter = fix.locator("details", { hasText: "Sessioni PT: correggi il conteggio" });
+  await counter.locator("summary").click();
+  await counter.locator("select[name=mode]").selectOption("left");
+  await counter.locator("input[name=count]").fill("5");
+  await counter.getByRole("button", { name: "Salva la correzione" }).click();
   await expect(page.getByText(/Fatto: 5 sessioni pagate ancora da fare/)).toBeVisible();
   await expect(card.getByText("sessioni rimaste (pagate, da fare)")).toBeVisible();
-  const base = new URL(page.url()).pathname.replace(/\/pagamenti$/, "");
   await page.goto(`${base}/sessioni`);
   await expect(page.getByText("Sessioni PT: ne restano 5 pagate")).toBeVisible();
   await expect(page.getByText("Si scala dalle sessioni PT pagate").first()).toBeVisible();
@@ -235,27 +244,31 @@ test("pagamento extra (sessioni PT in più): conta negli incassi ma non sposta l
   await expect(page.getByText("Sessioni PT: ne restano 4 pagate")).toBeVisible();
   // da saldare: 3 sessioni a 45 €
   await page.goto(`${base}/pagamenti`);
-  await card.locator("summary", { hasText: "Correggi il conteggio" }).click();
-  await card.locator("details", { hasText: "Correggi il conteggio" }).locator("select[name=mode]").selectOption("due");
-  await card.locator("input[name=count]").fill("3");
-  await card.getByRole("button", { name: "Salva la correzione" }).click();
+  await counter.locator("summary").click();
+  await counter.locator("select[name=mode]").selectOption("due");
+  await counter.locator("input[name=count]").fill("3");
+  await counter.getByRole("button", { name: "Salva la correzione" }).click();
   await expect(page.getByText(/Fatto: 3 sessioni da saldare/)).toBeVisible();
-  await card.locator("summary", { hasText: "Prezzo a sessione" }).click();
-  await card.locator("input[name=price]").last().fill("45");
-  await card.getByRole("button", { name: "Salva il prezzo" }).click();
+  const price = fix.locator("details", { hasText: "Prezzo a lezione PT" });
+  await price.locator("summary").click();
+  await price.locator("input[name=price]").fill("45");
+  await price.getByRole("button", { name: "Salva il prezzo" }).click();
   await expect(page.getByText(/Prezzo salvato: 45\s€ a sessione/)).toBeVisible();
   await expect(card.getByText(/sessioni da saldare · 135\s€/)).toBeVisible();
-  // nella pagina Pagamenti e già scritto in chat
+  // nella pagina Pagamenti, con Pagato e Promemoria
   await page.goto("/staff/pagamenti");
-  await expect(page.locator("li", { hasText: "Esempio Giulia" }).filter({ hasText: /3 sessioni · 135\s€/ })).toBeVisible();
+  const settle = page.locator("li", { hasText: "Esempio Giulia" }).filter({ hasText: /3 sessioni · 135\s€/ });
+  await expect(settle).toBeVisible();
+  await expect(settle.getByRole("link", { name: /Promemoria/ })).toBeVisible();
   await page.goto(`${base}/pagamenti`);
   await card.getByRole("link", { name: /Scrivi in chat quante sono/ }).click();
   await page.waitForURL(/\/staff\/messaggi\//);
   await expect(page.locator("textarea").filter({ visible: true }).first()).toHaveValue(/siamo a 3 sessioni da saldare \(3 sessioni × 45\s€ = 135\s€\)/);
-  // saldo: torna in pari
+  // saldo con Pagato da Pagamenti: torna in pari
+  await page.goto("/staff/pagamenti");
+  await page.locator("li", { hasText: "Esempio Giulia" }).filter({ hasText: /3 sessioni · 135\s€/ }).getByRole("button", { name: "Pagato" }).click();
+  await expect(page.getByText(/Registrato 135/).first()).toBeVisible();
   await page.goto(`${base}/pagamenti`);
-  await card.locator("summary", { hasText: "Registra il saldo" }).click();
-  await card.getByRole("button", { name: "Registra il saldo" }).click();
   await expect(card.getByText("In pari")).toBeVisible();
   await expect(page.locator("li", { hasText: "Saldo sessioni PT" }).first()).toContainText("3 sessioni");
 });
@@ -266,29 +279,31 @@ test("pagamento già registrato: si corregge data d'incasso e periodo coperto", 
   await page.locator('a[href^="/staff/clienti/"]', { hasText: "Esempio Giulia" }).filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
   await page.goto(`${page.url()}/pagamenti`);
-  // il primo pagamento con un periodo
+  // il primo pagamento con un periodo: "Modifica" apre la finestra di correzione
   const item = page.locator("li").filter({ hasText: "copre" }).filter({ visible: true }).first();
-  await item.getByText("Modifica", { exact: true }).click();
-  const paid = item.locator('input[name="paid_on"]');
-  const start = item.locator('input[name="period_start"]');
-  const end = item.locator('input[name="period_end"]');
+  await item.getByRole("button", { name: /^Modifica/ }).click();
+  const dlg = page.getByRole("dialog");
+  const paid = dlg.locator('input[name="paid_on"]');
+  const start = dlg.locator('input[name="period_start"]');
+  const end = dlg.locator('input[name="period_end"]');
   const before = { paid: await paid.inputValue(), start: await start.inputValue(), end: await end.inputValue() };
   await paid.fill("2026-09-24");
   await start.fill("2026-09-01");
   await end.fill("2026-11-30");
-  await item.getByRole("button", { name: "Salva le modifiche" }).click();
-  await expect(item.getByText("Pagamento corretto.")).toBeVisible();
+  await dlg.getByRole("button", { name: "Salva le modifiche" }).click();
+  await expect(dlg.getByText("Pagamento corretto.")).toBeVisible();
   await page.reload();
   await expect(page.locator("li").filter({ hasText: /copre 1 set.*30 nov/ }).filter({ visible: true }).first()).toBeVisible();
 
   // rimetto com'era
   const again = page.locator("li").filter({ hasText: /copre 1 set.*30 nov/ }).filter({ visible: true }).first();
-  await again.getByText("Modifica", { exact: true }).click();
-  await again.locator('input[name="paid_on"]').fill(before.paid);
-  await again.locator('input[name="period_start"]').fill(before.start);
-  await again.locator('input[name="period_end"]').fill(before.end);
-  await again.getByRole("button", { name: "Salva le modifiche" }).click();
-  await expect(page.getByText("Pagamento corretto.").filter({ visible: true })).toBeVisible();
+  await again.getByRole("button", { name: /^Modifica/ }).click();
+  const dlg2 = page.getByRole("dialog");
+  await dlg2.locator('input[name="paid_on"]').fill(before.paid);
+  await dlg2.locator('input[name="period_start"]').fill(before.start);
+  await dlg2.locator('input[name="period_end"]').fill(before.end);
+  await dlg2.getByRole("button", { name: "Salva le modifiche" }).click();
+  await expect(dlg2.getByText("Pagamento corretto.")).toBeVisible();
 });
 
 test("cliente spot: basta il nome, sesso e durata delle fasi si decidono dopo", async ({ page }, info) => {

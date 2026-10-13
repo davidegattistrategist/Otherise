@@ -8,7 +8,7 @@ import { diffDays, formatShort, todayISO } from "@/lib/dates";
 import { parseContent } from "@/lib/program/types";
 import { completedCount, displayWeek, nextWorkout, programEndDate, timeProgress, weekPosition } from "@/lib/program/schedule";
 import { summarizeSets, type SetLog } from "@/lib/program/prescription";
-import { getUnpaidRows } from "@/lib/data/billing";
+import { getPtCounter, getUnpaidRows } from "@/lib/data/billing";
 import { billingStatus, withUnpaidRows, formatEuro, PLAN_LABELS, type BillingRow, type PlanKind } from "@/lib/billing";
 import { CHECKIN_QUESTIONS } from "@/lib/checkin";
 import { LineChart } from "@/components/line-chart";
@@ -111,6 +111,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
   const weight = checkList.filter((c) => c.weight_kg !== null && c.check_date).map((c) => ({ date: c.check_date!, value: Number(c.weight_kg) }));
 
   const b = (billing.data as BillingRow[] | null)?.[0];
+  const ptCounter = me.role === "owner" ? (await getPtCounter(supabase, id)).counter : null;
   const bStatus = me.role === "owner" ? withUnpaidRows(billingStatus(b ? { ...b, kind: b.kind as PlanKind } : null, today, settings.data?.reminder_days ?? 7), (await getUnpaidRows(supabase, id)).get(id) ?? [], today) : null;
   const lastCheckin = checkins.data?.[0];
 
@@ -150,7 +151,21 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
       ) : null}
 
       <Card className="flex flex-col gap-3">
-        <div className="flex items-center justify-between"><Eyebrow>Ultime sessioni PT</Eyebrow><Link href={`/staff/clienti/${id}/sessioni#nuova`} className="text-sm font-semibold underline">Aggiungi</Link></div>
+        <div className="flex items-center justify-between"><Eyebrow>Ultime sessioni PT</Eyebrow><Link href={`/staff/clienti/${id}/sessione-pt`} className="text-sm font-semibold underline">Aggiungi</Link></div>
+        {ptCounter ? (
+          <Link href={`/staff/clienti/${id}/pagamenti#sessioni-pt`} className="flex items-center justify-between gap-3 rounded-2xl bg-sand px-4 py-2.5 text-[15px] hover:bg-sand-deep/60">
+            <span>
+              <span className="font-semibold">
+                {ptCounter.due > 0
+                  ? `${ptCounter.due} ${ptCounter.due === 1 ? "sessione" : "sessioni"} da saldare${ptCounter.dueAmount !== null ? ` · ${formatEuro(ptCounter.dueAmount)}` : ""}`
+                  : ptCounter.left > 0
+                    ? `${ptCounter.left} ${ptCounter.left === 1 ? "sessione pagata" : "sessioni pagate"} da fare`
+                    : "Sessioni PT in pari"}
+              </span>
+            </span>
+            {ptCounter.due > 0 ? <Dot tone="accent" /> : null}
+          </Link>
+        ) : null}
         {sessions.data?.length ? (
           <ul className="flex flex-col gap-3">
             {sessions.data.map((s) => (
@@ -214,7 +229,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
         <Eyebrow>Obiettivi e note</Eyebrow>
         <p className="whitespace-pre-line text-[15px] text-ink-soft">{client.goals || <span className="text-muted">Obiettivi non indicati.</span>}</p>
         {notes.data?.notes ? <p className="whitespace-pre-line border-t border-sand-deep pt-3 text-sm text-muted">{notes.data.notes}</p> : null}
-        <ArrowCTA href={`/staff/clienti/${id}/profilo`}>Modifica la scheda</ArrowCTA>
+        <ArrowCTA href={`/staff/clienti/${id}/profilo`}>Modifica i dati</ArrowCTA>
       </Card>
     </div>
   );

@@ -39,6 +39,7 @@ export default async function EditCheckPage({ params }: { params: Promise<{ id: 
         </div>
       </Card>
       <CheckForm
+      clientId={id}
         action={saveCheck.bind(null, id, checkId)}
         sex={(c.sex ?? client.sex) as Sex}
         birthDate={client.birth_date}

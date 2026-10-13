@@ -10,8 +10,8 @@ import { formatEuro, METHOD_LABELS, PLAN_LABELS, type BillingStatus, type Paymen
 import { getBillingLines, getRevenue, getSessionsToSettle, monthLabel, type BillingLine } from "@/lib/data/billing";
 import { BarChart } from "@/components/bar-chart";
 import { QuickPay } from "@/components/quick-pay";
-import { BigNumber, Card, Dot, Eyebrow, PageTitle, buttonClass } from "@/components/ui";
-import { IconDownload, IconPlus } from "@/components/icons";
+import { BigNumber, Card, Dot, Eyebrow, PageTitle, buttonClass, cx } from "@/components/ui";
+import { IconChat, IconDownload, IconPlus } from "@/components/icons";
 
 export const metadata: Metadata = { title: "Pagamenti" };
 
@@ -143,9 +143,19 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
           <div className="mb-2 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Sessioni PT da saldare</Eyebrow></div>
           <ul className="flex flex-col">
             {toSettle.map((t) => (
-              <li key={t.clientId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-sand-deep py-3 first:border-t-0">
-                <Link href={`/staff/clienti/${t.clientId}/pagamenti`} className="font-semibold hover:underline">{t.name}</Link>
-                <span className="text-sm text-muted tabular">{t.due === 1 ? "1 sessione" : `${t.due} sessioni`}{t.dueAmount !== null ? ` · ${formatEuro(t.dueAmount)}` : ""}</span>
+              <li key={t.clientId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-sand-deep py-3 first:border-t-0">
+                <div className="min-w-0">
+                  <Link href={`/staff/clienti/${t.clientId}/pagamenti#sessioni-pt`} className="font-semibold hover:underline">{t.name}</Link>
+                  <div className="text-sm text-muted tabular">{t.due === 1 ? "1 sessione" : `${t.due} sessioni`}{t.dueAmount !== null ? ` · ${formatEuro(t.dueAmount)}` : ""}</div>
+                </div>
+                {t.dueAmount !== null ? (
+                  <QuickPay clientId={t.clientId} name={t.name} proposal={`${formatEuro(t.dueAmount)} · ${t.due === 1 ? "1 sessione" : `${t.due} sessioni`}`} reminder={`/staff/messaggi/${t.clientId}?promemoria=sessioni`} settle />
+                ) : (
+                  <span className="flex flex-wrap items-center gap-2">
+                    <Link href={`/staff/messaggi/${t.clientId}?promemoria=sessioni`} className={cx(buttonClass("secondary", "sm"), "!min-h-9 !px-3")}><IconChat size={16} /> Promemoria</Link>
+                    <Link href={`/staff/pagamenti/nuovo?cliente=${t.clientId}&tipo=lezioni&sessioni=${t.due}`} className={cx(buttonClass("primary", "sm"), "!min-h-9 !px-3")}>Pagato</Link>
+                  </span>
+                )}
               </li>
             ))}
           </ul>

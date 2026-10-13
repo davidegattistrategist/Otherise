@@ -9,6 +9,7 @@ import { estimateOneRepMax } from "./strength/e1rm";
 import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
 import { billingStatus, clientFacingStatus, unpaidPeriods, withUnpaidRows, usesCredit, nextPaymentProposal, creditChange, dueAmount, isCoaching, ptCounterView, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
 import { clientNotices, ptLeft } from "./client-notice";
+import { triageFallback, triageWithoutAi } from "./note-triage";
 import { addDays, addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
 import { displayWeek, nextDay, nextWorkout, programEndDate, weekPosition } from "./program/schedule";
 import { buildNextPhase, copyWeekToOthers } from "./program/next-phase";
@@ -1109,5 +1110,17 @@ describe("avviso gentile al cliente", () => {
     const st = clientFacingStatus(billingStatus({ ...base, kind: "package", sessions_bought: 10, sessions_used: 10, paid_until: null }, "2026-10-09"));
     const [n] = clientNotices({ ...input("2026-12-01", "2026-10-09"), status: st, kind: "package" });
     expect(n.title).toBe("Il tuo pacchetto è arrivato in fondo");
+  });
+});
+
+describe("note finali del cliente: cosa arriva al trainer", () => {
+  it("le frasi di circostanza si scartano senza chiamare l'AI", () => {
+    for (const n of ["che fatica", "alla grande!", "tutto ok", "distrutto 💀", ""]) expect(triageWithoutAi(n)).toEqual({ read: false, reason: "" });
+  });
+  it("con un segnale (dolore, domanda, carichi) decide l'AI; senza AI passa", () => {
+    expect(triageWithoutAi("male al ginocchio")).toBeNull();
+    expect(triageWithoutAi("Lo squat oggi era troppo pesante, posso scendere?")).toBeNull();
+    expect(triageFallback("fastidio alla spalla sulle trazioni").read).toBe(true);
+    expect(triageFallback("Bellissimo allenamento oggi, mi sono divertita tantissimo con tutti").read).toBe(false);
   });
 });

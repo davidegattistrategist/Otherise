@@ -8,7 +8,7 @@ import { ageOn, isISODate, todayISO } from "@/lib/dates";
 import { CIRCUMFERENCES, SKINFOLD_SITES, formulaById, type SkinfoldReadings } from "@/lib/body/skinfolds";
 import { recomputeClientChecks } from "@/lib/data/checks";
 import { estimateOneRepMax } from "@/lib/strength/e1rm";
-import type { ActionState } from "@/components/form-bits";
+import type { CheckState } from "./check-form";
 import type { Json } from "@/lib/supabase/database.types";
 import { customAlphabet } from "nanoid";
 import { z } from "zod";
@@ -34,7 +34,7 @@ export async function setClientSex(clientId: string, sex: "M" | "F") {
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
 }
 
-export async function saveCheck(clientId: string, checkId: string | null, _: ActionState, fd: FormData): Promise<ActionState> {
+export async function saveCheck(clientId: string, checkId: string | null, _: CheckState, fd: FormData): Promise<CheckState> {
   const me = await requireStaff();
   const supabase = await createClient();
   const { data: client } = await supabase.from("clients").select("sex, birth_date").eq("id", clientId).maybeSingle();
@@ -90,6 +90,8 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Act
   // cambiare per tutti i check se questo aggiunge o toglie una plica)
   await recomputeClientChecks(supabase, clientId);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
+  // foto scelte nel modulo: le carica il browser adesso che il check esiste
+  if (fd.get("with_photos") === "1") return { ok: true, message: "Check salvato.", checkId: saved.id };
   // dopo il salvataggio si propongono subito le foto di questo check
   redirect(`/staff/clienti/${clientId}/check?salvato=${saved.id}`);
 }

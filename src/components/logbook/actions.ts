@@ -10,6 +10,22 @@ import type { Json } from "@/lib/supabase/database.types";
 import { notify, staffRecipients } from "@/lib/notify";
 import { deliverPendingEmails } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { after } from "next/server";
+import { triageNote } from "@/lib/ai/note-triage";
+import { budgetExceeded, logAiRequest } from "@/lib/ai/budget";
+import { triageFallback } from "@/lib/note-triage";
+
+/**
+ * Nota finale del cliente: un'AI leggera decide se il trainer deve leggerla
+ * (card "Note dei clienti" in Oggi). Le altre restano nella sua linea del tempo.
+ */
+async function triageClientNote(clientId: string, logId: string, note: string, workout: string) {
+  const admin = createAdminClient();
+  const overBudget = await budgetExceeded(admin as never).catch(() => null);
+  const r = overBudget ? { ...triageFallback(note), usage: null } : await triageNote(note, workout);
+  await admin.from("workout_logs").update({ note_flag: r.read, note_reason: r.reason, note_seen_at: null }).eq("id", logId);
+  if (r.usage) await logAiRequest(null, clientId, "note_triage", r.usage);
+}
 
 async function alertDiscomfort(clientId: string, logId: string, text: string, where: string) {
   const admin = createAdminClient();
@@ -71,7 +87,7 @@ export async function saveWorkout(raw: SaveWorkoutInput): Promise<SaveWorkoutRes
   if (items.size === 0 && !content.days.some((d) => d.id === input.dayId)) return { ok: false, error: "Giornata non trovata." };
 
   const discomfort = input.discomfort.trim();
-  const { data: before } = await supabase.from("workout_logs").select("discomfort").eq("program_id", program.id).eq("week", input.week).eq("day_id", input.dayId).maybeSingle();
+  const { data: before } = await supabase.from("workout_logs").select("discomfort, notes, completed").eq("program_id", program.id).eq("week", input.week).eq("day_id", input.dayId).maybeSingle();
   const { data: log, error } = await supabase
     .from("workout_logs")
     .upsert(
@@ -120,6 +136,17 @@ export async function saveWorkout(raw: SaveWorkoutInput): Promise<SaveWorkoutRes
   if (discomfort && !before?.discomfort && me.role === "client") {
     const day = content.days.find((d) => d.id === input.dayId);
     await alertDiscomfort(program.client_id, log.id, discomfort, `${day?.title ?? "Allenamento"} · settimana ${input.week}`);
+  }
+
+  // nota finale del cliente nuova o cambiata: si decide (dopo la risposta) se mandarla al trainer
+  const note = input.notes.trim();
+  // solo quando l'allenamento è chiuso ("Ho finito"): i salvataggi automatici mentre scrive non contano
+  if (me.role === "client" && input.completed && (note !== (before?.notes ?? "").trim() || !before?.completed)) {
+    const day = content.days.find((d) => d.id === input.dayId);
+    const workout = `${day?.title ?? "Allenamento"} · settimana ${input.week}`;
+    const clientId = program.client_id;
+    if (note) after(() => triageClientNote(clientId, log.id, note, workout));
+    else await supabase.from("workout_logs").update({ note_flag: null, note_reason: "" }).eq("id", log.id);
   }
 
   if (input.completed) {

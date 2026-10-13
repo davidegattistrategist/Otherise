@@ -19,6 +19,7 @@ export default async function NewCheckPage({ params }: { params: Promise<{ id: s
   const folds = await foldContext(await createClient(), { ...client, sex: client.sex });
   return (
     <CheckForm
+      clientId={id} newCheck
       action={saveCheck.bind(null, id, null)}
       sex={client.sex as Sex}
       birthDate={client.birth_date}

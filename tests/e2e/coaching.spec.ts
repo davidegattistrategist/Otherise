@@ -169,7 +169,7 @@ test("Pagamenti: un periodo scaduto e quello in corso sono due righe sotto il no
   const href = await page.getByRole("link", { name }).first().getAttribute("href");
   await page.goto(href!);
   const card = page.locator("#periodo");
-  await card.getByText("Sposta il periodo (es. dopo uno stop)").click();
+  await card.locator("summary").click();
   await card.locator('input[name="start"]').fill(day(20));
   await card.getByRole("button", { name: "Sposta il periodo" }).click();
   await expect(card.getByText(/Fatto: il periodo da pagare va dal/)).toBeVisible();

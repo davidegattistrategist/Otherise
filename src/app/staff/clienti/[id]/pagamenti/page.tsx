@@ -1,16 +1,17 @@
 import { QuickPay } from "@/components/quick-pay";
+import { EditPaymentButton } from "@/components/edit-payment-dialog";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatShort, todayISO } from "@/lib/dates";
-import { billingStatus, withUnpaidRows, dueAmount, formatEuro, isPeriodic, usesCredit, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
+import { billingStatus, withUnpaidRows, dueAmount, formatEuro, isPeriodic, nextPaymentProposal, usesCredit, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
 import { getClientCredit, getPtCounter, getUnpaidRows, reminderChatLink } from "@/lib/data/billing";
-import { IconChat, IconDown } from "@/components/icons";
+import { IconArrowRight, IconChat, IconDown, IconPlus } from "@/components/icons";
 import { Card, Dot, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
-import { CreditFixForm, EditPaymentForm, NextPeriodForm, ExtraPaymentForm, PaymentForm, PlanForm, PtLeftForm, PtPriceForm, ReminderButton } from "./forms";
-import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setCredit, setNextPeriodStart, setPtLeft, setPtPrice, clearPtCorrection, updatePayment } from "./actions";
+import { CreditFixForm, NextPeriodForm, PlanForm, PtLeftForm, PtPriceForm, ReminderButton } from "./forms";
+import { closePackage, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setCredit, setNextPeriodStart, setPtLeft, setPtPrice, clearPtCorrection } from "./actions";
 import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Pagamenti" };
@@ -54,6 +55,10 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
   const suggestion = plan && kind ? suggestNextPeriod(kind, plan.start_date, row?.paid_until ?? null) : null;
   // coaching o pacchetto di lezioni: quanto deve per il prossimo periodo/pacchetto, tolto il credito (o aggiunto quello da recuperare)
   const due = plan && kind && usesCredit(kind) ? dueAmount(Number(plan.amount), credit) : null;
+  // pagamento atteso, da registrare con "Pagato" in un tocco
+  const next = plan && kind ? nextPaymentProposal({ ...plan, kind }, row?.paid_until ?? null, credit) : null;
+  const nextText = next ? `${formatEuro(next.amount)}${next.period_start && next.period_end ? ` · ${formatShort(next.period_start, 0)} – ${formatShort(next.period_end, 0)}` : next.sessions ? ` · ${next.sessions} ${next.sessions === 1 ? "sessione" : "sessioni"}` : ""}` : "";
+  const fullName = client ? `${client.first_name} ${client.last_name}`.trim() : "Cliente";
   const totalYear = (payments ?? []).filter((p) => p.paid_on.slice(0, 4) === today.slice(0, 4)).reduce((s, p) => s + Number(p.amount), 0);
   const editingPlan = piano === "modifica" && plan;
   const newPlan = !plan;
@@ -82,16 +87,8 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
                 {credit > 0 ? `Credito di ${formatEuro(credit)}` : `${formatEuro(-credit)} da recuperare`}: il prossimo rinnovo è di <strong>{formatEuro(due ?? 0)}</strong> invece di {formatEuro(plan.amount)}.
               </p>
             ) : null}
-            {paused ? <p className="text-sm text-muted-dark">Non è tra i pagamenti da incassare. Se rinnova, registra il pagamento e {client?.status === "paused" ? "riattivalo" : "riprendi il percorso"} dalla Scheda.</p> : null}
+            {paused ? <p className="text-sm text-muted-dark">Non è tra i pagamenti da incassare. Se rinnova, registra il pagamento e {client?.status === "paused" ? "riattivalo" : "riprendi il percorso"} da Dati (card Percorso).</p> : null}
             {plan.notes ? <p className="text-sm text-muted-dark">{plan.notes}</p> : null}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1 text-sm font-semibold">
-              <a href={`/staff/clienti/${id}/pagamenti?piano=modifica`} className="underline">Modifica il piano</a>
-              {kind === "package" && status.sessionsLeft !== null && status.sessionsLeft > 0 ? (
-                <form action={closePackage.bind(null, id, plan.id)}>
-                  <ConfirmButton variant="ghost" className="!min-h-0 !p-0 !text-card underline" message={`Segnare il pacchetto come terminato?\nLe ${status.sessionsLeft} sessioni rimaste non saranno più disponibili.`}>Segna il pacchetto come terminato</ConfirmButton>
-                </form>
-              ) : null}
-            </div>
             {kind === "package" && plan.package_closed_on ? (
               <div className="flex flex-wrap items-center gap-x-3 text-sm text-muted-dark">
                 Chiuso a mano il {formatShort(plan.package_closed_on, 0)} ({plan.package_closed_sessions} {plan.package_closed_sessions === 1 ? "sessione non usata" : "sessioni non usate"}).
@@ -103,63 +100,76 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
           </Card>
         ) : null}
 
-        {plan && kind && isPeriodic(kind) && suggestion && !editingPlan && !paused ? (
-          <Card className="flex flex-col gap-2" id="periodo">
-            <Eyebrow>Prossimo periodo da pagare</Eyebrow>
-            <div className="text-lg font-semibold">{formatShort(suggestion.start, 0)} → {formatShort(suggestion.end, 0)}</div>
-            <details className="group">
-              <summary className="inline-flex min-h-10 cursor-pointer list-none items-center text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Sposta il periodo (es. dopo uno stop)</summary>
-              <div className="pt-2">
-                <NextPeriodForm action={setNextPeriodStart.bind(null, id)} kind={kind} start={suggestion.start} />
+        {plan && kind && !editingPlan ? (
+          <Card className="flex flex-col gap-3" id="registra">
+            <Eyebrow>Registra un pagamento</Eyebrow>
+            {next && !paused ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-sand px-4 py-3">
+                <div className="min-w-0">
+                  <div className="text-sm text-muted">{isPeriodic(kind) ? "Prossimo periodo" : kind === "package" ? "Prossimo pacchetto" : "Prossimo pagamento"}</div>
+                  <div className="text-[17px] font-semibold tabular">{nextText}</div>
+                </div>
+                <QuickPay clientId={id} name={fullName} proposal={nextText} reminder={null} />
               </div>
-            </details>
+            ) : null}
+            <p className="text-sm text-muted">Ha pagato una cifra diversa, lezioni PT, un nuovo coaching o altro? Con <strong className="text-ink">Nuovo pagamento</strong> ti guida l&apos;app e tiene conto del credito.</p>
+            <div><LinkButton href={`/staff/pagamenti/nuovo?cliente=${id}`} size="sm"><IconPlus size={16} /> Nuovo pagamento</LinkButton></div>
           </Card>
         ) : null}
 
         {plan && kind && !editingPlan ? (
-          <Card className="flex flex-col gap-4">
-            <div>
-              <Eyebrow>Registra un pagamento</Eyebrow>
-              <p className="mt-1.5 text-sm text-muted">{isPeriodic(kind) ? "Il periodo riparte dal giorno dopo l'ultimo saldato: controlla e salva." : "Indica quante sessioni sono state pagate."}</p>
-            </div>
-            <PaymentForm
-              action={recordPayment.bind(null, id, plan.id)}
-              kind={kind}
-              defaults={{
-                paid_on: today,
-                amount: due ?? plan.amount,
-                method: plan.method,
-                period_start: suggestion?.start ?? null,
-                period_end: suggestion?.end ?? null,
-                sessions: kind === "package" ? plan.package_sessions : 1,
-              }}
-              due={due ?? undefined}
-            />
-            {isPeriodic(kind) ? (
-              <details className="group border-t border-sand-deep pt-3">
-                <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Credito del coaching o importo da recuperare</summary>
-                <div className="flex flex-col gap-3 pt-3">
-                  <p className="text-sm text-muted">Il prezzo del {PLAN_LABELS[kind].toLowerCase()}{kind === "package" && plan.package_sessions ? ` (${plan.package_sessions} lezioni)` : ""} è {formatEuro(plan.amount)} (si cambia da &quot;Modifica il piano&quot;). Se una volta ha pagato di più o di meno, qui scrivi com&apos;è la situazione oggi: il prossimo rinnovo si aggiusta da solo.</p>
+          <Card className="flex flex-col gap-1 p-0" id="sistema">
+            <div className="px-5 pt-5 pb-2 sm:px-6"><Eyebrow>Sistema i conti</Eyebrow></div>
+            <ul className="flex flex-col">
+              <li className="border-t border-sand-deep">
+                <a href={`/staff/clienti/${id}/pagamenti?piano=modifica`} className="flex min-h-14 items-center justify-between gap-3 px-5 py-3 sm:px-6">
+                  <span><span className="block font-semibold">Modifica il piano</span><span className="block text-sm text-muted">{PLAN_LABELS[kind]} · {formatEuro(plan.amount)}</span></span>
+                  <IconArrowRight size={18} className="shrink-0 text-muted" />
+                </a>
+              </li>
+              {isPeriodic(kind) && suggestion && !paused ? (
+                <FixItem id="periodo" title="Sposta il periodo da pagare" value={`${formatShort(suggestion.start, 0)} → ${formatShort(suggestion.end, 0)} (es. dopo uno stop)`}>
+                  <NextPeriodForm action={setNextPeriodStart.bind(null, id)} kind={kind} start={suggestion.start} />
+                </FixItem>
+              ) : null}
+              {isPeriodic(kind) ? (
+                <FixItem title="Credito del coaching" value={Math.abs(coachingCredit) < 0.005 ? "In pari" : coachingCredit > 0 ? `Credito di ${formatEuro(coachingCredit)}` : `${formatEuro(-coachingCredit)} da recuperare`}>
+                  <p className="text-sm text-muted">Il prezzo del {PLAN_LABELS[kind].toLowerCase()} è {formatEuro(plan.amount)}. Se una volta ha pagato di più o di meno, scrivi com&apos;è la situazione oggi: il prossimo rinnovo si aggiusta da solo.</p>
                   <CreditFixForm action={setCredit.bind(null, id, "coaching")} credit={coachingCredit} />
-                </div>
-              </details>
-            ) : null}
+                </FixItem>
+              ) : null}
+              <FixItem title="Credito sulle lezioni PT" value={Math.abs(lessonsCredit) < 0.005 ? "In pari" : lessonsCredit > 0 ? `Credito di ${formatEuro(lessonsCredit)}` : `${formatEuro(-lessonsCredit)} da recuperare`}>
+                <p className="text-sm text-muted">Se una volta ha pagato le lezioni più (o meno) del dovuto{ptPrice ? ` (${formatEuro(ptPrice)} a lezione)` : ""}, scrivi com&apos;è la situazione oggi: le prossime lezioni si aggiustano da sole. È separato dal credito del coaching.</p>
+                <CreditFixForm action={setCredit.bind(null, id, "lessons")} credit={lessonsCredit} />
+              </FixItem>
+              <FixItem title="Sessioni PT: correggi il conteggio" value={pt ? (pt.due > 0 ? `${pt.due} da saldare` : `${pt.left} rimaste`) : "Nessun conteggio"}>
+                <p className="text-sm text-muted">Se il numero non è giusto (per esempio sessioni fatte prima di usare l&apos;app), scrivi come stanno le cose oggi: da qui in poi si conta da solo.</p>
+                <PtLeftForm action={setPtLeft.bind(null, id)} left={pt ? pt.left : null} price={ptPrice} first={!pt} />
+                {pt?.corrected ? (
+                  <form action={clearPtCorrection.bind(null, id)}>
+                    <ConfirmButton variant="ghost" className="!min-h-0 !p-0 text-sm text-muted underline" message="Togliere la correzione? Il contatore torna a contare tutte le sessioni e tutti i pagamenti dall'inizio.">Togli la correzione</ConfirmButton>
+                  </form>
+                ) : null}
+              </FixItem>
+              <FixItem title="Prezzo a lezione PT" value={ptPrice !== null ? formatEuro(ptPrice) : "Non impostato"}>
+                <PtPriceForm action={setPtPrice.bind(null, id)} price={ptPrice} />
+              </FixItem>
+              {kind === "package" && status.sessionsLeft !== null && status.sessionsLeft > 0 ? (
+                <FixItem title="Chiudi il pacchetto" value={`${status.sessionsLeft} ${status.sessionsLeft === 1 ? "sessione rimasta" : "sessioni rimaste"}`}>
+                  <p className="text-sm text-muted">Se secondo i vostri accordi il pacchetto è finito anche con sessioni non usate. Si può annullare.</p>
+                  <form action={closePackage.bind(null, id, plan.id)}>
+                    <ConfirmButton variant="secondary" message={`Segnare il pacchetto come terminato?\nLe ${status.sessionsLeft} sessioni rimaste non saranno più disponibili.`}>Segna il pacchetto come terminato</ConfirmButton>
+                  </form>
+                </FixItem>
+              ) : null}
+              <FixItem title="Cliente gratis" value="Fuori da pagamenti e incassi">
+                <p className="text-sm text-muted">Per un cliente di prova o per te stesso: non comparirà in pagamenti, scadenze, incassi e previsioni.</p>
+                <form action={setClientFree.bind(null, id, true)}>
+                  <ConfirmButton variant="secondary" message="Mettere questo cliente gratis? Non comparirà più in pagamenti, scadenze, incassi e previsioni.">Metti gratis</ConfirmButton>
+                </form>
+              </FixItem>
+            </ul>
           </Card>
-        ) : null}
-
-        {plan && !editingPlan ? (
-          <details className="group rounded-[24px] bg-card">
-            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
-              <span>
-                <span className="block text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">Pagamento extra</span>
-                <span className="mt-1 block text-sm text-muted">Fuori dal piano, per esempio sessioni PT in più: conta negli incassi ma non cambia la scadenza.</span>
-              </span>
-              <IconDown size={18} className="shrink-0 transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="px-5 pb-5">
-              <ExtraPaymentForm action={recordExtraPayment.bind(null, id)} today={today} method="cash" />
-            </div>
-          </details>
         ) : null}
 
         {editingPlan || newPlan ? (
@@ -196,53 +206,30 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
               )}
               <p className="text-sm text-muted">
                 {pt.corrected ? `Dalla tua correzione del ${formatShort(pt.since, 0)}` : `Dal ${formatShort(pt.since, 0)}`}: {pt.bought} {pt.bought === 1 ? "pagata" : "pagate"} · {pt.used} {pt.used === 1 ? "fatta" : "fatte"}
-                {pt.price !== null ? ` · ${formatEuro(pt.price)} a sessione` : ""}. Si aggiorna da solo: le sessioni che segni in{" "}
-                <a href={`/staff/clienti/${id}/sessioni`} className="font-semibold text-ink underline">Sessioni PT</a> si tolgono, i pacchetti e le lezioni pagate si aggiungono (e coprono prima quelle fatte da saldare).
+                {pt.price !== null ? ` · ${formatEuro(pt.price)} a sessione` : ""}. Si aggiorna da solo con le sessioni che segni e le lezioni pagate.
               </p>
-              {pt.due > 0 ? (
-                <div className="flex flex-col gap-3 rounded-2xl bg-sand p-4">
-                  <div className="flex flex-wrap gap-2">
-                    <LinkButton href={`/staff/messaggi/${id}?promemoria=sessioni`} variant="secondary" size="sm"><IconChat size={16} /> Scrivi in chat quante sono</LinkButton>
-                  </div>
-                  <details className="group">
-                    <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Registra il saldo</summary>
-                    <div className="pt-3">
-                      <ExtraPaymentForm action={recordExtraPayment.bind(null, id)} today={today} method="cash" defaults={{ amount: pt.dueAmount, sessions: pt.due, notes: "Saldo sessioni PT" }} submitLabel="Registra il saldo" />
-                    </div>
-                  </details>
-                </div>
-              ) : null}
               {Math.abs(lessonsCredit) >= 0.005 ? (
                 <p className="text-[15px]">
                   {lessonsCredit > 0 ? <>Credito sulle lezioni: <strong>{formatEuro(lessonsCredit)}</strong>, le prossime lezioni costano meno.</> : <>Da recuperare sulle lezioni: <strong>{formatEuro(-lessonsCredit)}</strong>, si aggiungono alle prossime.</>}
                 </p>
               ) : null}
-              <div><LinkButton href={`/staff/pagamenti/nuovo?cliente=${id}&tipo=lezioni`} variant="secondary" size="sm">Registra un pacchetto o lezioni pagate</LinkButton></div>
-              <LessonsCreditBox id={id} credit={lessonsCredit} price={ptPrice} />
-              <details className="group border-t border-sand-deep pt-3">
-                <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Correggi il conteggio</summary>
-                <div className="flex flex-col gap-3 pt-3">
-                  <p className="text-sm text-muted">Se il numero non è giusto (per esempio sessioni fatte prima di usare l&apos;app), scrivi come stanno le cose oggi: da qui in poi si conta da solo.</p>
-                  <PtLeftForm action={setPtLeft.bind(null, id)} left={pt.left} price={ptPrice} />
-                  {pt.corrected ? (
-                    <form action={clearPtCorrection.bind(null, id)}>
-                      <ConfirmButton variant="ghost" className="!min-h-0 !p-0 text-sm text-muted underline" message="Togliere la correzione? Il contatore torna a contare tutte le sessioni e tutti i pagamenti dall'inizio.">Togli la correzione</ConfirmButton>
-                    </form>
-                  ) : null}
-                </div>
-              </details>
-              <details className="group">
-                <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Prezzo a sessione</summary>
-                <div className="pt-3"><PtPriceForm action={setPtPrice.bind(null, id)} price={ptPrice} /></div>
-              </details>
+              <div className="flex flex-wrap gap-2">
+                {pt.due > 0 ? (
+                  <>
+                    <LinkButton href={`/staff/pagamenti/nuovo?cliente=${id}&tipo=lezioni&sessioni=${pt.due}`} size="sm">Registra il saldo</LinkButton>
+                    <LinkButton href={`/staff/messaggi/${id}?promemoria=sessioni`} variant="secondary" size="sm"><IconChat size={16} /> Scrivi in chat quante sono</LinkButton>
+                  </>
+                ) : (
+                  <LinkButton href={`/staff/pagamenti/nuovo?cliente=${id}&tipo=lezioni`} variant="secondary" size="sm">Registra lezioni pagate</LinkButton>
+                )}
+              </div>
             </>
           ) : (
             <>
               <p className="text-sm text-muted">
-                {plan && kind && isPeriodic(kind) ? "Le sessioni PT sono comprese nel suo piano, quindi non si contano." : "Ancora niente da contare."} Se fa sessioni da pagare a parte, registra il pacchetto o le lezioni pagate; se ne ha già fatte senza pagarle, scrivi qui quante ne deve saldare. Da lì il contatore va da solo: rimaste = pagate − fatte.
+                {plan && kind && isPeriodic(kind) ? "Le sessioni PT sono comprese nel suo piano, quindi non si contano." : "Ancora niente da contare."} Se fa lezioni da pagare a parte, registrale con Nuovo pagamento → Lezioni PT; se ne ha già fatte senza pagarle, scrivilo in Sistema i conti.
               </p>
-              <PtLeftForm action={setPtLeft.bind(null, id)} left={null} price={ptPrice} first />
-              <div><LinkButton href={`/staff/pagamenti/nuovo?cliente=${id}&tipo=lezioni`} variant="secondary" size="sm">Registra un pacchetto o lezioni pagate</LinkButton></div>
+              <div><LinkButton href={`/staff/pagamenti/nuovo?cliente=${id}&tipo=lezioni`} variant="secondary" size="sm">Registra lezioni pagate</LinkButton></div>
             </>
           )}
         </Card>
@@ -284,16 +271,8 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
                     </div>
                     {Number(p.credit_change) > 0 ? <div className="text-sm text-ink-soft">+{formatEuro(p.credit_change)} sul credito (il rinnovo dopo costa meno)</div> : Number(p.credit_change) < 0 ? <div className="text-sm text-ink-soft">−{formatEuro(-Number(p.credit_change))} sul credito</div> : null}
                     {p.notes && !(p.unpaid && p.notes === "Da saldare") ? <div className="text-sm text-ink-soft">{p.notes}</div> : null}
-                    <details className="mt-1">
-                      <summary className="inline-flex min-h-9 cursor-pointer items-center text-sm font-semibold text-ink-soft underline">Modifica</summary>
-                      <div className="mt-2 rounded-2xl bg-sand p-3">
-                        <EditPaymentForm action={updatePayment.bind(null, id, p.id)} values={{ paid_on: p.paid_on, amount: p.amount, method: p.method, period_start: p.period_start, period_end: p.period_end, sessions: p.sessions, notes: p.notes ?? "", extra: !p.plan_id }} />
-                      </div>
-                    </details>
                   </div>
-                  <form action={deletePayment.bind(null, id, p.id)}>
-                    <ConfirmButton variant="ghost" message="Eliminare questo pagamento?">Elimina</ConfirmButton>
-                  </form>
+                  <EditPaymentButton clientId={id} paymentId={p.id} name={fullName} values={{ paid_on: p.paid_on, amount: Number(p.amount), method: p.method, period_start: p.period_start, period_end: p.period_end, sessions: p.sessions, notes: p.notes ?? "", extra: !p.plan_id }} className="shrink-0" />
                 </li>
               ))}
             </ul>
@@ -309,27 +288,22 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
             ))}
           </Card>
         ) : null}
-        <Card className="flex flex-col gap-2">
-          <Eyebrow>Cliente gratis</Eyebrow>
-          <p className="text-sm text-muted">Per un cliente di prova o per te stesso: non comparirà in pagamenti, scadenze, incassi e previsioni.</p>
-          <form action={setClientFree.bind(null, id, true)}>
-            <ConfirmButton variant="secondary" message="Mettere questo cliente gratis? Non comparirà più in pagamenti, scadenze, incassi e previsioni.">Metti gratis</ConfirmButton>
-          </form>
-        </Card>
       </div>
     </div>
   );
 }
 
-/** Credito sulle lezioni PT (separato da quello del coaching): si corregge a mano. */
-function LessonsCreditBox({ id, credit, price }: { id: string; credit: number; price: number | null }) {
+/** Una voce di "Sistema i conti": titolo e valore di oggi, si apre con un tocco. */
+function FixItem({ id, title, value, children }: { id?: string; title: string; value: string; children: React.ReactNode }) {
   return (
-    <details className="group border-t border-sand-deep pt-3">
-      <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Credito sulle lezioni PT</summary>
-      <div className="flex flex-col gap-3 pt-3">
-        <p className="text-sm text-muted">Se una volta ha pagato le lezioni più (o meno) del dovuto{price ? ` (${formatEuro(price)} a lezione)` : ""}, scrivi com&apos;è la situazione oggi: le prossime lezioni si aggiustano da sole. È separato dal credito del coaching.</p>
-        <CreditFixForm action={setCredit.bind(null, id, "lessons")} credit={credit} />
-      </div>
-    </details>
+    <li className="border-t border-sand-deep">
+      <details id={id} className="group scroll-mt-6">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 sm:px-6 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0"><span className="block font-semibold">{title}</span><span className="block text-sm text-muted">{value}</span></span>
+          <IconDown size={18} className="shrink-0 text-muted transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="flex flex-col gap-3 px-5 pb-5 sm:px-6">{children}</div>
+      </details>
+    </li>
   );
 }

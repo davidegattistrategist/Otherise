@@ -36,6 +36,10 @@ export type LogbookProps = {
   finishLabel?: string;
   /** Posizione della barra in basso (sopra il menu del telefono) */
   barClass?: string;
+  /** Prima di chiudere l'allenamento (es. salva la sessione PT dello staff): un testo = errore, non si chiude */
+  beforeFinish?: () => Promise<string | null>;
+  /** Contenuto in fondo, prima della barra (es. sessione PT e note della lezione) */
+  footer?: React.ReactNode;
 };
 
 const numOrNull = (v: string): number | null => {
@@ -212,6 +216,11 @@ export function Logbook(props: LogbookProps) {
     saveRef.current = async () => {
       const ok = await save(finishing.current ? { completed: true } : {});
       if (ok && finishing.current) {
+        const err = (await props.beforeFinish?.()) ?? null;
+        if (err) {
+          setStatus({ kind: "error", text: err });
+          return ok;
+        }
         finishing.current = false;
         router.push(`${props.backHref}?fatto=1${latest.current.discomfort.trim() ? "&fastidio=1" : ""}`);
         router.refresh();
@@ -345,6 +354,11 @@ export function Logbook(props: LogbookProps) {
     finishing.current = true;
     const ok = await save({ completed: true });
     if (ok) {
+      const err = (await props.beforeFinish?.()) ?? null;
+      if (err) {
+        setStatus({ kind: "error", text: err });
+        return;
+      }
       finishing.current = false;
       router.push(`${props.backHref}?fatto=1${latest.current.discomfort.trim() ? "&fastidio=1" : ""}`);
       router.refresh();
@@ -631,6 +645,8 @@ export function Logbook(props: LogbookProps) {
           />
         </div>
       </section>
+
+      {props.footer}
 
       <div className={cx("sticky z-20 flex flex-col gap-2", props.barClass ?? "bottom-[calc(var(--nav-space)+0.5rem)] md:bottom-4")}>
         <TimerBar timer={clock} />

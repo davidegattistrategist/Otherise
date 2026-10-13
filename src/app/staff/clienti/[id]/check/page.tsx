@@ -32,7 +32,7 @@ import { IconPhoto } from "@/components/icons";
 
 export const metadata: Metadata = { title: "Check" };
 
-type SP = { salvato?: string; misura?: string; formula?: string; plica?: string; "formula-salvata"?: string };
+type SP = { salvato?: string; foto?: string; misura?: string; formula?: string; plica?: string; "formula-salvata"?: string };
 
 /** Filtro del grafico che tiene gli altri filtri già scelti. */
 function ChartFilter({ name, value, options, keep, label, wide }: { name: keyof SP; value: string; options: Array<{ value: string; label: string }>; keep: Record<string, string>; label: string; wide?: boolean }) {
@@ -107,6 +107,7 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
           </Notice>
         </>
       ) : null}
+      {sp.foto ? <><ClearParams names={["foto"]} /><Notice tone="success">Check salvato{Number(sp.foto) > 0 ? ` con ${sp.foto === "1" ? "1 foto" : `${sp.foto} foto`}` : ""}.</Notice></> : null}
       {sp["formula-salvata"] ? <><ClearParams names={["formula-salvata"]} /><Notice tone="success">Formula aggiornata: ho ricalcolato la massa grassa di tutti i check.</Notice></> : null}
       {upgrade ? (
         <Card className="ring-1 ring-accent">

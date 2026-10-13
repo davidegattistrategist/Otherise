@@ -28,7 +28,8 @@ export default async function ClientLayout({ children, params }: { children: Rea
     { href: `${base}/posturale`, label: "Posturale" },
     ...(me.role === "owner" ? [{ href: `${base}/pagamenti`, label: "Pagamenti" }] : []),
     { href: `${base}/diario`, label: "Diario", dot: (flagged ?? 0) > 0 },
-    { href: `${base}/profilo`, label: "Scheda" },
+    { href: `${base}/note`, label: "Note" },
+    { href: `${base}/profilo`, label: "Dati" },
   ];
   return (
     <div className="flex flex-col gap-6">
@@ -49,7 +50,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
         </div>
         <div className="flex flex-wrap gap-2.5">
           <LinkButton href={`/staff/messaggi/${id}`} variant="secondary">Chat</LinkButton>
-          <LinkButton href={`${base}/sessioni#nuova`} variant="secondary">Nota sessione PT</LinkButton>
+          <LinkButton href={`${base}/sessione-pt`} variant="secondary">Sessione PT</LinkButton>
           <LinkButton href={`${base}/check/nuovo`}>Nuovo check</LinkButton>
         </div>
       </div>
