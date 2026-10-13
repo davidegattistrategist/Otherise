@@ -2,7 +2,7 @@ import "server-only";
 import { getBillingOverview } from "@/lib/data/shared";
 import type { ServerSupabase } from "../supabase/server";
 import { bySurname, listName } from "../names";
-import { billingStatus, dueAmount, ptCounterView, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PERIOD_NOUN, PLAN_LABELS, situationText, type BillingStatus, type PlanKind, unpaidPeriods, usesCredit } from "../billing";
+import { billingStatus, dueAmount, ptCounterView, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PERIOD_NOUN, PLAN_LABELS, situationText, type BillingStatus, type PlanKind, unpaidPeriods, usesCredit, withUnpaidRows, type UnpaidRow } from "../billing";
 import { addDays, addMonths, formatLong, formatShort, todayISO, type ISODate } from "../dates";
 import { DEFAULT_PAYMENT_MESSAGE, fillTemplate } from "../whatsapp";
 
@@ -25,42 +25,68 @@ export type BillingLine = {
    * Coaching con più periodi da pagare (uno scaduto + quello in corso, o più):
    * una riga per periodo sotto il nome. Vuoto quando c'è un solo pagamento atteso.
    */
-  periods: Array<{ start: ISODate; end: ISODate; amount: number; late: boolean; label: string }>;
+  periods: Array<{ start: ISODate; end: ISODate; amount: number; late: boolean; label: string; /** riga "da saldare" già nel registro */ paymentId?: string; /** periodo calcolato: quale (0 = il primo dopo l'ultimo pagato) */ index?: number }>;
 };
 
 /**
  * Credito di ogni cliente (solo titolare): correzione a mano + quanto hanno
  * lasciato i pagamenti. Positivo = ha pagato in più, negativo = deve ancora.
+ * Due crediti separati: "coaching" (pagamenti con un periodo) e "lessons"
+ * (lezioni PT e pacchetti di lezioni: pagamenti con le sessioni).
  */
-export async function getCredits(supabase: ServerSupabase, clientId?: string): Promise<Map<string, number>> {
-  let pays = supabase.from("payments").select("client_id, credit_change").neq("credit_change", 0);
-  let adj = supabase.from("clients").select("id, credit_adjust").neq("credit_adjust", 0);
+export type CreditScope = "coaching" | "lessons";
+export const creditScope = (kind: PlanKind | null | undefined): CreditScope => (kind === "package" || kind === "single" ? "lessons" : "coaching");
+
+export async function getCredits(supabase: ServerSupabase, clientId?: string, scope: CreditScope = "coaching"): Promise<Map<string, number>> {
+  let pays = supabase.from("payments").select("client_id, credit_change, sessions, period_start").neq("credit_change", 0);
+  let adj = supabase.from("clients").select("id, credit_adjust, pt_credit_adjust");
   if (clientId) {
     pays = pays.eq("client_id", clientId);
     adj = adj.eq("id", clientId);
   }
   const [{ data: p }, { data: a }] = await Promise.all([pays, adj]);
   const out = new Map<string, number>();
-  for (const r of a ?? []) out.set(r.id, (out.get(r.id) ?? 0) + Number(r.credit_adjust));
-  for (const r of p ?? []) out.set(r.client_id, (out.get(r.client_id) ?? 0) + Number(r.credit_change));
+  for (const r of a ?? []) {
+    const v = Number(scope === "lessons" ? r.pt_credit_adjust : r.credit_adjust);
+    if (v) out.set(r.id, (out.get(r.id) ?? 0) + v);
+  }
+  for (const r of p ?? []) {
+    const lesson = !r.period_start && r.sessions !== null;
+    if ((scope === "lessons") !== lesson) continue;
+    out.set(r.client_id, (out.get(r.client_id) ?? 0) + Number(r.credit_change));
+  }
   for (const [k, v] of out) out.set(k, Math.round(v * 100) / 100);
   return out;
 }
 
-export async function getClientCredit(supabase: ServerSupabase, clientId: string): Promise<number> {
-  return (await getCredits(supabase, clientId)).get(clientId) ?? 0;
+/** Periodi di coaching rimasti "da saldare" nel registro, per cliente. */
+export async function getUnpaidRows(supabase: ServerSupabase, clientId?: string): Promise<Map<string, UnpaidRow[]>> {
+  let q = supabase.from("payments").select("id, client_id, period_start, period_end").eq("unpaid", true).not("period_start", "is", null).not("period_end", "is", null).order("period_start");
+  if (clientId) q = q.eq("client_id", clientId);
+  const { data } = await q;
+  const out = new Map<string, UnpaidRow[]>();
+  for (const r of data ?? []) out.set(r.client_id, [...(out.get(r.client_id) ?? []), { id: r.id, period_start: r.period_start!, period_end: r.period_end! }]);
+  return out;
+}
+
+export async function getClientCredit(supabase: ServerSupabase, clientId: string, scope: CreditScope = "coaching"): Promise<number> {
+  return (await getCredits(supabase, clientId, scope)).get(clientId) ?? 0;
 }
 
 /** Stato dei pagamenti di tutti i clienti non archiviati (solo titolare). */
 export async function getBillingLines(supabase: ServerSupabase): Promise<{ lines: BillingLine[]; reminderDays: number }> {
   const today = todayISO();
-  const [{ data: clients }, { data: billing }, { data: plans }, { data: settings }, credits] = await Promise.all([
+  const [{ data: clients }, { data: billing }, { data: plans }, { data: settings }, coachingCredits, unpaidBy, lessonCredits] = await Promise.all([
     supabase.from("clients").select("id, first_name, last_name, status").neq("status", "archived").eq("free", false).order("last_name").order("first_name"),
     getBillingOverview().then((data) => ({ data })),
     supabase.from("payment_plans").select("id, client_id, kind, amount, method, start_date, package_sessions").eq("active", true),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
     getCredits(supabase),
+    getUnpaidRows(supabase),
+    getCredits(supabase, undefined, "lessons"),
   ]);
+  // pacchetti di lezioni: credito delle lezioni; coaching: credito del coaching
+  const creditOf = (clientId: string, kind: PlanKind | null | undefined) => (creditScope(kind) === "lessons" ? lessonCredits : coachingCredits).get(clientId) ?? 0;
   const reminderDays = settings?.reminder_days ?? 7;
   const byClient = new Map((billing ?? []).map((b) => [b.client_id, b]));
   const planBy = new Map((plans ?? []).map((p) => [p.client_id, p]));
@@ -72,16 +98,24 @@ export async function getBillingLines(supabase: ServerSupabase): Promise<{ lines
     // in pausa: non è tra i pagamenti da incassare (quando rinnova si registra e si riattiva)
     const status: BillingStatus = paused
       ? { state: "none", label: "In pausa", clientLabel: "", dueDate: null, daysLeft: null, sessionsLeft: null, unpaidPeriods: 0 }
-      : billingStatus(b && kind ? { ...b, kind } : null, today, reminderDays);
+      : withUnpaidRows(billingStatus(b && kind ? { ...b, kind } : null, today, reminderDays), unpaidBy.get(c.id) ?? [], today);
     let proposal: string | null = null;
     if (plan) {
-      const p = nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, b?.paid_until ?? null, credits.get(c.id) ?? 0);
+      const p = nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, b?.paid_until ?? null, creditOf(c.id, plan.kind as PlanKind));
       proposal = `${formatEuro(p.amount)}${p.period_start && p.period_end ? ` · ${formatShort(p.period_start)} – ${formatShort(p.period_end)}` : p.sessions ? ` · ${p.sessions} ${p.sessions === 1 ? "sessione" : "sessioni"}` : ""}`;
     }
     const reminder = kind && (status.state === "due_soon" || status.state === "overdue") ? reminderChatLink(c.id) : null;
-    const owed = plan && !paused && status.unpaidPeriods > 1 ? unpaidPeriods({ ...plan, kind: plan.kind as PlanKind }, b?.paid_until ?? null, today, credits.get(c.id) ?? 0) : [];
-    const periods = owed.length > 1
-      ? owed.map((o) => ({ ...o, label: `${PERIOD_NOUN[plan!.kind as PlanKind]} ${formatShort(o.start)} – ${formatShort(o.end)}` }))
+    // coaching: periodi rimasti "da saldare" nel registro + quelli dopo l'ultimo pagato, una riga ciascuno
+    const rows = paused ? [] : unpaidBy.get(c.id) ?? [];
+    const chain = plan && !paused && (status.unpaidPeriods > 1 || rows.length) ? unpaidPeriods({ ...plan, kind: plan.kind as PlanKind }, b?.paid_until ?? null, today) : [];
+    const noun = plan ? PERIOD_NOUN[plan.kind as PlanKind] : "Periodo";
+    const all = [
+      ...rows.map((r) => ({ start: r.period_start, end: r.period_end, late: r.period_end < today, paymentId: r.id })),
+      ...chain.map((o, index) => ({ start: o.start, end: o.end, late: o.late, index })),
+    ];
+    const planAmount = Number(plan?.amount ?? 0);
+    const periods = all.length > 1 || rows.length
+      ? all.map((o, i) => ({ ...o, amount: i === 0 ? dueAmount(planAmount, creditOf(c.id, plan?.kind as PlanKind)) : planAmount, label: `${noun} ${formatShort(o.start)} – ${formatShort(o.end)}` }))
       : [];
     return {
       clientId: c.id,
@@ -111,15 +145,15 @@ export const reminderChatLink = (clientId: string) => `/staff/messaggi/${clientI
  * o se chi guarda non vede i pagamenti (solo il titolare).
  */
 export async function paymentReminderText(supabase: ServerSupabase, clientId: string): Promise<string | null> {
-  const [{ data: client }, { data: billing }, { data: settings }, credit] = await Promise.all([
+  const [{ data: client }, { data: billing }, { data: settings }] = await Promise.all([
     supabase.from("clients").select("first_name").eq("id", clientId).maybeSingle(),
     supabase.rpc("client_billing", { cid: clientId }),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
-    getClientCredit(supabase, clientId),
   ]);
   const row = (billing as BillingRow[] | null)?.[0];
   if (!client || !row) return null;
   const kind = row.kind as PlanKind;
+  const credit = await getClientCredit(supabase, clientId, creditScope(kind));
   const status = billingStatus({ ...row, kind }, todayISO(), settings?.reminder_days ?? 7);
   return fillTemplate(settings?.payment_message?.trim() || DEFAULT_PAYMENT_MESSAGE, {
     nome: client.first_name,
@@ -133,7 +167,7 @@ export async function paymentReminderText(supabase: ServerSupabase, clientId: st
 export async function getRevenue(supabase: ServerSupabase, lines: BillingLine[], months = 12) {
   const today = todayISO();
   const firstMonth = addMonths(`${today.slice(0, 7)}-01`, -(months - 1));
-  const { data: payments } = await supabase.from("payments").select("paid_on, amount, clients!inner(free)").eq("clients.free", false).gte("paid_on", firstMonth);
+  const { data: payments } = await supabase.from("payments").select("paid_on, amount, clients!inner(free)").eq("clients.free", false).eq("unpaid", false).gte("paid_on", firstMonth);
   const buckets: Array<{ month: string; total: number }> = [];
   for (let i = 0; i < months; i++) buckets.push({ month: addMonths(firstMonth, i).slice(0, 7), total: 0 });
   for (const p of payments ?? []) {

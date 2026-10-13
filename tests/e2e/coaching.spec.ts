@@ -153,9 +153,17 @@ test("Pagamenti: un periodo scaduto e quello in corso sono due righe sotto il no
   await expect(lines.locator("li")).toHaveCount(2);
   await expect(lines.locator("li").first()).toContainText("Scaduto");
   await expect(lines.locator("li").nth(1)).toContainText("Da saldare");
-  // "Pagati" sulla seconda riga registra tutti e due i periodi
-  await lines.locator("li").nth(1).getByRole("button", { name: "Pagati" }).click();
-  await expect(page.getByText(/Registrati 2 pagamenti, 200/).first()).toBeVisible();
+  // le righe sono separate: paga quello in corso, quello scaduto resta da saldare
+  await lines.locator("li").nth(1).getByRole("button", { name: "Pagato" }).click();
+  await expect(page.getByText(/Il periodo prima resta da saldare/).first()).toBeVisible();
+  await page.reload();
+  await expect(lines.locator("li")).toHaveCount(1);
+  await expect(lines.locator("li").first()).toContainText("Scaduto");
+  // poi paga anche quello
+  await lines.locator("li").first().getByRole("button", { name: "Pagato" }).click();
+  await page.waitForTimeout(1500);
+  await page.reload();
+  await expect(page.getByRole("list", { name: `Pagamenti da incassare da ${name}` })).toHaveCount(0);
 
   // scheda del cliente: il prossimo periodo si sposta dopo uno stop
   const href = await page.getByRole("link", { name }).first().getAttribute("href");
@@ -165,4 +173,30 @@ test("Pagamenti: un periodo scaduto e quello in corso sono due righe sotto il no
   await card.locator('input[name="start"]').fill(day(20));
   await card.getByRole("button", { name: "Sposta il periodo" }).click();
   await expect(card.getByText(/Fatto: il periodo da pagare va dal/)).toBeVisible();
+});
+
+
+test("lezioni PT: 700 invece di 630, i 70 € restano come credito e le prossime 10 lezioni costano 560", async ({ page }, info) => {
+  await login(page, "titolare@prova.local");
+  const name = `Lezioni${info.project.name}${Date.now() % 10000}`;
+  await newClientPayment(page, name);
+  await page.getByRole("button", { name: /^Lezioni PT/ }).click();
+  await page.locator('input[name="pt_price"]').fill("63");
+  await page.getByRole("button", { name: "10 lezioni", exact: true }).click();
+  await expect(page.locator('input[name="amount"]')).toHaveValue("630");
+  await page.locator('input[name="amount"]').fill("700");
+  const hint = page.getByTestId("credit-hint");
+  await expect(hint).toContainText("70");
+  await expect(hint).toContainText("le prossime lezioni costeranno meno");
+  await page.getByRole("button", { name: "Salva il pagamento" }).click();
+  await expect(page.getByText(/Credito per le prossime lezioni: 70/)).toBeVisible();
+
+  await page.getByRole("button", { name: "Registra un altro pagamento" }).click();
+  await page.locator("#pay-search").fill(name);
+  await page.getByRole("button", { name: new RegExp(name) }).click();
+  await page.getByRole("button", { name: /^Lezioni PT/ }).click();
+  await expect(page.locator('input[name="pt_price"]')).toHaveValue("63");
+  await page.getByRole("button", { name: "10 lezioni", exact: true }).click();
+  await expect(page.getByTestId("lessons-due")).toContainText("560");
+  await expect(page.locator('input[name="amount"]')).toHaveValue("560");
 });

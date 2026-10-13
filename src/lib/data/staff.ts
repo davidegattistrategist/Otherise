@@ -4,7 +4,8 @@ import { bySurname, listName } from "../names";
 import { checkDue } from "../check-due";
 import type { ServerSupabase } from "../supabase/server";
 import type { Me } from "../auth";
-import { billingStatus, isCoaching, type BillingRow, type BillingStatus, type PlanKind } from "../billing";
+import { billingStatus, isCoaching, withUnpaidRows, type BillingRow, type BillingStatus, type PlanKind, type UnpaidRow } from "../billing";
+import { getUnpaidRows } from "./billing";
 import { diffDays, todayISO, type ISODate } from "../dates";
 import { displayWeek, programEndDate, weekPosition } from "../program/schedule";
 import { compliance, type Compliance } from "../compliance";
@@ -58,7 +59,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
   const clients = [...rows].sort(bySurname);
   const ids = clients.map((c) => c.id);
 
-  const [programs, checks, logs, coaches, billing, settings, planKinds, anyProgram] = await Promise.all([
+  const [programs, checks, logs, coaches, billing, settings, planKinds, anyProgram, unpaidBy] = await Promise.all([
     supabase.from("programs").select("id, client_id, title, weeks, start_date, status, content").in("client_id", ids).in("status", ["published", "draft"]).order("start_date", { ascending: false }),
     supabase.from("checks").select("client_id, check_date, imported").in("client_id", ids).not("check_date", "is", null).order("check_date", { ascending: false }),
     supabase.from("workout_logs").select("client_id, performed_on, completed").in("client_id", ids).order("performed_on", { ascending: false }).limit(2000),
@@ -67,6 +68,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
     supabase.from("app_settings").select("reminder_days").maybeSingle(),
     supabase.rpc("client_plan_kinds"),
     supabase.from("programs").select("client_id").in("client_id", ids),
+    me.role === "owner" ? getUnpaidRows(supabase) : Promise.resolve(new Map<string, UnpaidRow[]>()),
   ]);
   const planKindBy = new Map((planKinds.data ?? []).map((p) => [p.client_id, p.kind as PlanKind]));
   const withPrograms = new Set((anyProgram.data ?? []).map((p) => p.client_id));
@@ -126,7 +128,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
       lastLog: lastLog.get(c.id)?.performed_on ?? null,
       compliance: comp,
       coaching: isCoaching(planKindBy.get(c.id) ?? null, withPrograms.has(c.id)),
-      billing: me.role === "owner" && c.status !== "paused" ? billingStatus(b ? ({ ...b, kind: b.kind as PlanKind } as BillingRow) : null, today, reminderDays) : null,
+      billing: me.role === "owner" && c.status !== "paused" ? withUnpaidRows(billingStatus(b ? ({ ...b, kind: b.kind as PlanKind } as BillingRow) : null, today, reminderDays), unpaidBy.get(c.id) ?? [], today) : null,
     };
   });
 }

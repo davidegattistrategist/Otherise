@@ -7,7 +7,7 @@ import { checkDue } from "./check-due";
 import { DEDICATIONS, QUOTES, dedicationOfDay, quoteOfDay } from "./quotes";
 import { estimateOneRepMax } from "./strength/e1rm";
 import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
-import { billingStatus, clientFacingStatus, unpaidPeriods, usesCredit, nextPaymentProposal, creditChange, dueAmount, isCoaching, ptCounterView, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
+import { billingStatus, clientFacingStatus, unpaidPeriods, withUnpaidRows, usesCredit, nextPaymentProposal, creditChange, dueAmount, isCoaching, ptCounterView, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
 import { clientNotices, ptLeft } from "./client-notice";
 import { addDays, addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
 import { displayWeek, nextDay, nextWorkout, programEndDate, weekPosition } from "./program/schedule";
@@ -290,7 +290,17 @@ describe("pagamenti", () => {
     expect(pkg.label).toBe("2 sessioni rimaste");
     expect(billingStatus({ ...base, kind: "package", sessions_bought: 10, sessions_used: 10 }, "2026-10-09").state).toBe("overdue");
     expect(billingStatus(null, "2026-10-09").state).toBe("none");
-  });  it("credito anche sui pacchetti di lezioni PT: 700 invece di 630, il prossimo pacchetto costa 560", () => {
+  });  it("periodo saltato: resta scaduto anche se ha pagato quello dopo", () => {
+    const base = { plan_id: "p", amount: 300, sessions_bought: 0, sessions_used: 0 };
+    const ok = billingStatus({ ...base, kind: "six_weeks", paid_until: "2026-10-25" }, "2026-10-13");
+    expect(ok.state).toBe("ok");
+    const st = withUnpaidRows(ok, [{ id: "x", period_start: "2026-08-03", period_end: "2026-09-13" }], "2026-10-13");
+    expect(st.state).toBe("overdue");
+    expect(st.label).toBe("Scaduto da 30 giorni");
+    expect(st.clientLabel).toBe("Periodo scaduto");
+    expect(withUnpaidRows(ok, [], "2026-10-13")).toBe(ok);
+  });
+  it("credito anche sui pacchetti di lezioni PT: 700 invece di 630, il prossimo pacchetto costa 560", () => {
     const c = creditChange({ planAmount: 630, credit: 0, paid: 700, keep: true });
     expect(c).toBe(70);
     const next = nextPaymentProposal({ kind: "package", amount: 630, method: "cash", start_date: "2026-01-01", package_sessions: 10 }, null, c);

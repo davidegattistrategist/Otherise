@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
     .from("payments")
     .select("paid_on, amount, method, period_start, period_end, sessions, notes, clients!inner(first_name, last_name, email, free), payment_plans(kind)")
     .eq("clients.free", false)
+    .eq("unpaid", false)
     .gte("paid_on", `${year}-01-01`)
     .lte("paid_on", `${year}-12-31`)
     .order("paid_on");

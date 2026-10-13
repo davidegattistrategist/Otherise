@@ -9,7 +9,7 @@
  */
 import { formatEuro } from "@/lib/billing";
 
-export function CreditHint({ paid, due, keep, onKeep }: { paid: number; due: number; keep: boolean; onKeep: (v: boolean) => void }) {
+export function CreditHint({ paid, due, keep, onKeep, lessons = false }: { paid: number; due: number; keep: boolean; onKeep: (v: boolean) => void; /** lezioni PT: la differenza va sulle prossime lezioni */ lessons?: boolean }) {
   if (!Number.isFinite(paid) || Math.abs(paid - due) < 0.005) return <input type="hidden" name="keep_difference" value="on" />;
   const more = paid > due;
   const diff = formatEuro(Math.abs(paid - due));
@@ -18,9 +18,9 @@ export function CreditHint({ paid, due, keep, onKeep }: { paid: number; due: num
       <span>{more ? `Sono ${diff} in più del dovuto (${formatEuro(due)}).` : `Mancano ${diff} al dovuto (${formatEuro(due)}).`}</span>
       <label className="flex items-start gap-2.5">
         <input type="checkbox" checked={keep} onChange={(e) => onKeep(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-[#1b1a17]" />
-        <span>{more ? "Tienili come credito: il prossimo rinnovo costerà meno." : "Aggiungili al prossimo rinnovo."}</span>
+        <span>{more ? (lessons ? "Tienili come credito: le prossime lezioni costeranno meno." : "Tienili come credito: il prossimo rinnovo costerà meno.") : lessons ? "Aggiungili alle prossime lezioni." : "Aggiungili al prossimo rinnovo."}</span>
       </label>
-      {!keep ? <span className="text-sm text-muted">Il periodo si considera saldato così, senza {more ? "credito" : "altro da recuperare"}.</span> : null}
+      {!keep ? <span className="text-sm text-muted">{lessons ? "Il pagamento" : "Il periodo"} si considera saldato così, senza {more ? "credito" : "altro da recuperare"}.</span> : null}
       <input type="hidden" name="keep_difference" value={keep ? "on" : "off"} />
     </div>
   );

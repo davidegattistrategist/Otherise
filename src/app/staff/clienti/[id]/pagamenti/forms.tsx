@@ -144,7 +144,7 @@ export function PaymentForm({
           <Input name="sessions" type="number" min={1} defaultValue={defaults.sessions ?? 1} required className="max-w-40" />
         </Field>
       )}
-      {due !== undefined ? <CreditHint paid={paidNum} due={due} keep={keep} onKeep={setKeep} /> : null}
+      {due !== undefined ? <CreditHint paid={paidNum} due={due} keep={keep} onKeep={setKeep} lessons={kind === "package"} /> : null}
       <Field label="Note" hint="facoltative">
         <Input name="notes" placeholder="Es. pagato metà, il resto a fine mese" />
       </Field>

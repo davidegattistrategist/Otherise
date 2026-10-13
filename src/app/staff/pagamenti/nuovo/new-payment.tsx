@@ -29,8 +29,10 @@ export type PayClient = {
   startDate: string | null;
   ptPrice: number | null;
   method: string;
-  /** Credito (positivo) o importo da recuperare (negativo) del coaching */
+  /** Credito (positivo) o importo da recuperare (negativo) del piano (coaching, o lezioni per i pacchetti) */
   credit: number;
+  /** Credito sulle lezioni PT (separato da quello del coaching) */
+  lessonsCredit: number;
 };
 
 export type Type = "renew" | "plan" | "lessons" | "other";
@@ -76,7 +78,7 @@ function defaultsFor(c: PayClient | null, type: Type | null, today: string) {
     const start = planStart("quarterly", c, today);
     return { amount: "", method, start, end: periodEnd("quarterly", start) ?? "", sessions: "" };
   }
-  if (type === "lessons") return { amount: c.ptPrice ? num(c.ptPrice) : "", method, start: today, end: "", sessions: "1" };
+  if (type === "lessons") return { amount: c.ptPrice ? num(dueAmount(c.ptPrice, c.lessonsCredit)) : "", method, start: today, end: "", sessions: "1" };
   return { amount: "", method, start: today, end: "", sessions: "" };
 }
 
@@ -101,6 +103,7 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
   const [notes, setNotes] = useState("");
   const [reactivate, setReactivate] = useState(true);
   const [keep, setKeep] = useState(true);
+  const [price, setPrice] = useState(client?.ptPrice ? num(client.ptPrice) : "");
 
   /** Cambia cliente o tipo: riparte dalle proposte dell'app */
   const reset = (c: PayClient | null, t: Type | null) => {
@@ -113,6 +116,7 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
     setSessions(d.sessions);
     setKind("quarterly");
     setNotes("");
+    setPrice(c?.ptPrice ? num(c.ptPrice) : "");
   };
   const pickClient = (c: PayClient | null) => {
     setClientId(c?.id ?? null);
@@ -140,25 +144,38 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
   const sessionsN = Number(sessions);
   const amountN = euro(amount);
   // credito: rinnovo del coaching o del pacchetto, oppure un pacchetto intero di lezioni sul piano a pacchetto
-  const creditDue: number | null = !client?.plan
+  // lezioni: con il prezzo a lezione l'importo segue il numero, tolto il credito sulle lezioni (finché non lo scrivi tu)
+  const priceN = euro(price);
+  const lessonsDue = (n: number, p: number | null) => {
+    if (!Number.isInteger(n) || n <= 0) return null;
+    if (p && p > 0) return Math.round(n * p * 100) / 100;
+    if (client?.plan?.kind === "package" && n === client.plan.packageSessions) return client.plan.amount;
+    return null;
+  };
+  const planCreditDue: number | null = !client?.plan
     ? null
     : type === "renew" && usesCredit(client.plan.kind) && client.proposal && (client.plan.kind !== "package" || sessionsN === client.plan.packageSessions)
       ? client.proposal.amount
-      : type === "lessons" && client.plan.kind === "package" && sessionsN === client.plan.packageSessions
-        ? dueAmount(client.plan.amount, client.credit)
-        : null;
+      : null;
+  // lezioni PT: quanto costano (prezzo a lezione o pacchetto) e quanto deve, tolto il credito sulle lezioni
+  const lessonsFull = type === "lessons" ? lessonsDue(sessionsN, priceN) : null;
+  const lessonsDueNow = lessonsFull !== null ? dueAmount(lessonsFull, client?.lessonsCredit ?? 0) : null;
+  const creditDue = type === "lessons" ? lessonsDueNow : planCreditDue;
+  // credito che conta qui: delle lezioni (lezioni e pacchetti) o del coaching
+  const lessonsScope = type === "lessons" || client?.plan?.kind === "package";
+  const creditNow = client ? (type === "lessons" ? client.lessonsCredit : client.credit) : 0;
+  const fullPrice = type === "lessons" ? lessonsFull : client?.plan?.amount ?? null;
   const creditExtra = (() => {
-    if (creditDue === null || !client?.plan || amountN === null || Math.abs(amountN - creditDue) < 0.005) return "";
-    const after = keep ? Math.round((client.credit + amountN - client.plan.amount) * 100) / 100 : 0;
-    const next = client.plan.kind === "package" ? "pacchetto" : "rinnovo";
-    return after > 0 ? ` Restano ${formatEuro(after)} di credito per il ${next} dopo.` : after < 0 ? ` ${formatEuro(-after)} si aggiungono al ${next} dopo.` : " Il pagamento è saldato così.";
+    if (creditDue === null || fullPrice === null || amountN === null || Math.abs(amountN - creditDue) < 0.005) return "";
+    const after = keep ? Math.round((creditNow + amountN - fullPrice) * 100) / 100 : 0;
+    const next = lessonsScope ? "le prossime lezioni" : "il rinnovo dopo";
+    return after > 0 ? ` Restano ${formatEuro(after)} di credito per ${next}.` : after < 0 ? ` ${formatEuro(-after)} si aggiungono ${lessonsScope ? "alle prossime lezioni" : "al rinnovo dopo"}.` : " Il pagamento è saldato così.";
   })();
 
-  // lezioni: se c'è il prezzo a lezione, l'importo segue il numero (finché non lo scrivi tu)
-  const setLessons = (v: string) => {
+  const setLessons = (v: string, p: number | null = priceN) => {
     setSessions(v);
-    const n = Number(v);
-    if (type === "lessons" && client?.ptPrice && !amountTouched && Number.isInteger(n) && n > 0) setAmount(num(Math.round(n * client.ptPrice * 100) / 100));
+    const due = lessonsDue(Number(v), p);
+    if (type === "lessons" && !amountTouched && due !== null) setAmount(num(dueAmount(due, client?.lessonsCredit ?? 0)));
   };
 
   const summary = (() => {
@@ -352,13 +369,36 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
             </div>
           ) : null}
 
-          {creditDue !== null && client?.plan && Math.abs(client.credit) >= 0.005 ? (
+          {type === "lessons" ? (
+            <div className="flex flex-col gap-1.5">
+              <Field label="Prezzo a lezione" hint={client?.ptPrice ? "il suo prezzo (cambialo solo se è diverso)" : "si salva nella sua scheda per le prossime volte"}>
+                <Input
+                  name="pt_price"
+                  inputMode="decimal"
+                  value={price}
+                  onChange={(e) => {
+                    setPrice(e.target.value);
+                    setLessons(sessions, euro(e.target.value));
+                  }}
+                  placeholder="Es. 63"
+                  className="max-w-32"
+                />
+              </Field>
+              {lessonsFull !== null && Number.isInteger(sessionsN) && sessionsN > 0 ? (
+                <p className="text-sm text-muted" data-testid="lessons-due">
+                  {sessionsN} {sessionsN === 1 ? "lezione" : "lezioni"}{priceN ? ` × ${formatEuro(priceN)}` : ""} = {formatEuro(lessonsFull)}
+                  {client && Math.abs(client.lessonsCredit) >= 0.005 ? (client.lessonsCredit > 0 ? ` − ${formatEuro(client.lessonsCredit)} di credito = ${formatEuro(lessonsDueNow ?? 0)}` : ` + ${formatEuro(-client.lessonsCredit)} da recuperare = ${formatEuro(lessonsDueNow ?? 0)}`) : ""}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {creditDue !== null && fullPrice !== null && Math.abs(creditNow) >= 0.005 && type !== "lessons" ? (
             <p className="text-sm text-muted">
-              {client.credit > 0 ? `Ha un credito di ${formatEuro(client.credit)}` : `Ha ${formatEuro(-client.credit)} da recuperare`}: per {client.plan.kind === "package" ? "questo pacchetto" : "questo rinnovo"} deve {formatEuro(creditDue)} invece di {formatEuro(client.plan.amount)}.
+              {creditNow > 0 ? `Ha un credito di ${formatEuro(creditNow)}` : `Ha ${formatEuro(-creditNow)} da recuperare`}: per {lessonsScope ? "questo pacchetto" : "questo rinnovo"} deve {formatEuro(creditDue)} invece di {formatEuro(fullPrice)}.
             </p>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Importo" hint={type === "lessons" && client?.ptPrice ? `${formatEuro(client.ptPrice)} a lezione` : "€"}>
+            <Field label="Importo" hint="€">
               <Input name="amount" inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setAmountTouched(true); }} placeholder="Es. 300" required />
             </Field>
             <Field label="Metodo">
@@ -370,7 +410,7 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
               <Input name="paid_on" type="date" value={paidOn} max={today} onChange={(e) => setPaidOn(e.target.value)} required />
             </Field>
           </div>
-          {creditDue !== null ? <CreditHint paid={amountN ?? NaN} due={creditDue} keep={keep} onKeep={setKeep} /> : null}
+          {creditDue !== null ? <CreditHint paid={amountN ?? NaN} due={creditDue} keep={keep} onKeep={setKeep} lessons={lessonsScope} /> : null}
 
           {periodic ? (
             <div className="grid gap-3 sm:grid-cols-2">

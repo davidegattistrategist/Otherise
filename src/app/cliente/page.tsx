@@ -10,7 +10,7 @@ import { PaymentNotices } from "@/components/payment-notice";
 import { diffDays, formatHeading, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { completedCount, nextWorkout, programEndDate, timeProgress } from "@/lib/program/schedule";
 import { blockHeading } from "@/lib/program/types";
-import { billingStatus, type BillingRow, type PlanKind, clientFacingStatus } from "@/lib/billing";
+import { type BillingRow } from "@/lib/billing";
 import { checkinWeekFor } from "@/lib/checkin";
 import { LineChart } from "@/components/line-chart";
 import { ArrowCTA, BigNumber, Card, Eyebrow, LinkButton, Notice, ProgressBar, Ring, fmtNum } from "@/components/ui";
@@ -37,7 +37,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
   const quote = quoteOfDay(today);
   const row = (billing as BillingRow[] | null)?.[0];
   const coachFirst = coach?.split(" ")[0] || "il tuo coach";
-  const [logs, { notices }] = await Promise.all([
+  const [logs, { notices, pay }] = await Promise.all([
     current ? getMyLogs(current.id) : Promise.resolve([]),
     getMyPaymentNotices({ clientId: me.clientId, clientStatus: me.clientStatus, row, coach: coachFirst }),
   ]);
@@ -46,8 +46,6 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
     ? await supabase.from("checkins").select("id").eq("client_id", me.clientId).eq("week_start", checkinWeek).maybeSingle()
     : { data: null };
 
-  // in pausa: nessun promemoria di rinnovo (il cliente usa l'app come sempre)
-  const pay = row && me.clientStatus !== "paused" ? clientFacingStatus(billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7)) : null;
   const bf = (checks ?? []).filter((c) => c.body_fat_pct !== null).map((c) => ({ date: c.check_date, value: Number(c.body_fat_pct) }));
   const weight = (checks ?? []).filter((c) => c.weight_kg !== null).map((c) => ({ date: c.check_date, value: Number(c.weight_kg) }));
   const lastCheck = checks?.length ? checks[checks.length - 1] : null;

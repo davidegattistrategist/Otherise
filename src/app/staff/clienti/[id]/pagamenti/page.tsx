@@ -1,10 +1,11 @@
+import { QuickPay } from "@/components/quick-pay";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatShort, todayISO } from "@/lib/dates";
-import { billingStatus, dueAmount, formatEuro, isPeriodic, usesCredit, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
-import { getClientCredit, getPtCounter, reminderChatLink } from "@/lib/data/billing";
+import { billingStatus, withUnpaidRows, dueAmount, formatEuro, isPeriodic, usesCredit, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
+import { getClientCredit, getPtCounter, getUnpaidRows, reminderChatLink } from "@/lib/data/billing";
 import { IconChat, IconDown } from "@/components/icons";
 import { Card, Dot, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
@@ -22,10 +23,10 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
   const today = todayISO();
   const [{ data: plans }, { data: payments }, { data: billing }, { data: settings }, { data: client }] = await Promise.all([
     supabase.from("payment_plans").select("id, kind, amount, method, start_date, package_sessions, active, notes, created_at, sessions_written_off, package_closed_on, package_closed_sessions").eq("client_id", id).order("created_at", { ascending: false }),
-    supabase.from("payments").select("id, plan_id, paid_on, amount, method, period_start, period_end, sessions, notes, credit_change").eq("client_id", id).order("paid_on", { ascending: false }),
+    supabase.from("payments").select("id, plan_id, paid_on, amount, method, period_start, period_end, sessions, notes, credit_change, unpaid").eq("client_id", id).order("paid_on", { ascending: false }),
     supabase.rpc("client_billing", { cid: id }),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
-    supabase.from("clients").select("free, status").eq("id", id).maybeSingle(),
+    supabase.from("clients").select("free, status, first_name, last_name").eq("id", id).maybeSingle(),
   ]);
   if (client?.free) {
     return (
@@ -39,13 +40,16 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
     );
   }
   const plan = (plans ?? []).find((p) => p.active) ?? null;
-  const [{ counter: pt, price: ptPrice }, credit] = await Promise.all([getPtCounter(supabase, id), getClientCredit(supabase, id)]);
+  const [{ counter: pt, price: ptPrice }, coachingCredit, lessonsCredit, unpaidBy] = await Promise.all([getPtCounter(supabase, id), getClientCredit(supabase, id), getClientCredit(supabase, id, "lessons"), getUnpaidRows(supabase, id)]);
+  // il credito del piano: lezioni per i pacchetti, coaching per i periodi
+  const credit = plan?.kind === "package" ? lessonsCredit : coachingCredit;
+  const unpaidRows = unpaidBy.get(id) ?? [];
   const row = (billing as BillingRow[] | null)?.[0] ?? null;
   // in pausa o a fine percorso non è tra i pagamenti da incassare
   const paused = client?.status === "paused" || client?.status === "archived";
   const status: ReturnType<typeof billingStatus> = paused
     ? { ...billingStatus(row ? { ...row, kind: row.kind as PlanKind } : null, today, settings?.reminder_days ?? 7), state: "none", label: client?.status === "paused" ? "In pausa" : "Percorso terminato" }
-    : billingStatus(row ? { ...row, kind: row.kind as PlanKind } : null, today, settings?.reminder_days ?? 7);
+    : withUnpaidRows(billingStatus(row ? { ...row, kind: row.kind as PlanKind } : null, today, settings?.reminder_days ?? 7), unpaidRows, today);
   const kind = plan?.kind as PlanKind | undefined;
   const suggestion = plan && kind ? suggestNextPeriod(kind, plan.start_date, row?.paid_until ?? null) : null;
   // coaching o pacchetto di lezioni: quanto deve per il prossimo periodo/pacchetto, tolto il credito (o aggiunto quello da recuperare)
@@ -131,12 +135,12 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
               }}
               due={due ?? undefined}
             />
-            {usesCredit(kind) ? (
+            {isPeriodic(kind) ? (
               <details className="group border-t border-sand-deep pt-3">
-                <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Credito o importo da recuperare</summary>
+                <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Credito del coaching o importo da recuperare</summary>
                 <div className="flex flex-col gap-3 pt-3">
                   <p className="text-sm text-muted">Il prezzo del {PLAN_LABELS[kind].toLowerCase()}{kind === "package" && plan.package_sessions ? ` (${plan.package_sessions} lezioni)` : ""} è {formatEuro(plan.amount)} (si cambia da &quot;Modifica il piano&quot;). Se una volta ha pagato di più o di meno, qui scrivi com&apos;è la situazione oggi: il prossimo rinnovo si aggiusta da solo.</p>
-                  <CreditFixForm action={setCredit.bind(null, id)} credit={credit} />
+                  <CreditFixForm action={setCredit.bind(null, id, "coaching")} credit={coachingCredit} />
                 </div>
               </details>
             ) : null}
@@ -208,7 +212,13 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
                   </details>
                 </div>
               ) : null}
+              {Math.abs(lessonsCredit) >= 0.005 ? (
+                <p className="text-[15px]">
+                  {lessonsCredit > 0 ? <>Credito sulle lezioni: <strong>{formatEuro(lessonsCredit)}</strong>, le prossime lezioni costano meno.</> : <>Da recuperare sulle lezioni: <strong>{formatEuro(-lessonsCredit)}</strong>, si aggiungono alle prossime.</>}
+                </p>
+              ) : null}
               <div><LinkButton href={`/staff/pagamenti/nuovo?cliente=${id}&tipo=lezioni`} variant="secondary" size="sm">Registra un pacchetto o lezioni pagate</LinkButton></div>
+              <LessonsCreditBox id={id} credit={lessonsCredit} price={ptPrice} />
               <details className="group border-t border-sand-deep pt-3">
                 <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Correggi il conteggio</summary>
                 <div className="flex flex-col gap-3 pt-3">
@@ -259,14 +269,21 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
               {payments.map((p) => (
                 <li key={p.id} className="flex items-start justify-between gap-3 border-t border-sand-deep py-3 first:border-t-0">
                   <div className="min-w-0">
+                    {p.unpaid ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-0.5 text-sm font-semibold text-accent-deep"><Dot tone="accent" /> Da saldare</span>
+                        <QuickPay clientId={id} name={client ? `${client.first_name} ${client.last_name}`.trim() : "Cliente"} proposal={`${formatEuro(due ?? plan?.amount ?? 0)} · ${formatShort(p.period_start, 0)} – ${formatShort(p.period_end, 0)}`} reminder={null} compact unpaidId={p.id} />
+                      </div>
+                    ) : (
                     <div className="font-semibold tabular">{formatEuro(p.amount)} <span className="font-normal text-muted">· {METHOD_LABELS[p.method as PaymentMethod]}</span>{!p.plan_id ? <span className="ml-2 rounded-full bg-sand px-2 py-0.5 text-xs font-semibold text-ink-soft">Extra</span> : null}</div>
+                    )}
                     <div className="text-sm text-muted">
-                      {formatShort(p.paid_on, 0)}
-                      {p.period_start && p.period_end ? ` · copre ${formatShort(p.period_start, 0)} – ${formatShort(p.period_end, 0)}` : ""}
+                      {p.unpaid ? "Periodo" : formatShort(p.paid_on, 0)}
+                      {p.period_start && p.period_end ? `${p.unpaid ? "" : " ·"} ${p.unpaid ? "" : "copre "}${formatShort(p.period_start, 0)} – ${formatShort(p.period_end, 0)}` : ""}
                       {p.sessions ? ` · ${p.sessions} ${p.sessions === 1 ? "sessione" : "sessioni"}` : ""}
                     </div>
                     {Number(p.credit_change) > 0 ? <div className="text-sm text-ink-soft">+{formatEuro(p.credit_change)} sul credito (il rinnovo dopo costa meno)</div> : Number(p.credit_change) < 0 ? <div className="text-sm text-ink-soft">−{formatEuro(-Number(p.credit_change))} sul credito</div> : null}
-                    {p.notes ? <div className="text-sm text-ink-soft">{p.notes}</div> : null}
+                    {p.notes && !(p.unpaid && p.notes === "Da saldare") ? <div className="text-sm text-ink-soft">{p.notes}</div> : null}
                     <details className="mt-1">
                       <summary className="inline-flex min-h-9 cursor-pointer items-center text-sm font-semibold text-ink-soft underline">Modifica</summary>
                       <div className="mt-2 rounded-2xl bg-sand p-3">
@@ -301,5 +318,18 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
         </Card>
       </div>
     </div>
+  );
+}
+
+/** Credito sulle lezioni PT (separato da quello del coaching): si corregge a mano. */
+function LessonsCreditBox({ id, credit, price }: { id: string; credit: number; price: number | null }) {
+  return (
+    <details className="group border-t border-sand-deep pt-3">
+      <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Credito sulle lezioni PT</summary>
+      <div className="flex flex-col gap-3 pt-3">
+        <p className="text-sm text-muted">Se una volta ha pagato le lezioni più (o meno) del dovuto{price ? ` (${formatEuro(price)} a lezione)` : ""}, scrivi com&apos;è la situazione oggi: le prossime lezioni si aggiustano da sole. È separato dal credito del coaching.</p>
+        <CreditFixForm action={setCredit.bind(null, id, "lessons")} credit={credit} />
+      </div>
+    </details>
   );
 }

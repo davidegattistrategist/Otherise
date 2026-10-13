@@ -14,7 +14,7 @@ export async function getForecast(supabase: ServerSupabase, months: number) {
     getBillingOverview().then((data) => ({ data })),
     supabase.from("payment_plans").select("client_id, kind, amount, package_sessions").eq("active", true),
     supabase.from("pt_sessions").select("client_id, session_date").eq("counts_toward_package", true).gte("session_date", addDays(today, -84)),
-    supabase.from("payments").select("client_id, paid_on, period_end, clients!inner(free)").eq("clients.free", false).gte("paid_on", addDays(today, -420)),
+    supabase.from("payments").select("client_id, paid_on, period_end, clients!inner(free)").eq("clients.free", false).eq("unpaid", false).gte("paid_on", addDays(today, -420)),
   ]);
   const billBy = new Map((billing ?? []).map((b) => [b.client_id, b]));
   const planBy = new Map((plans ?? []).map((p) => [p.client_id, p]));

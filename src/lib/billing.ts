@@ -286,6 +286,24 @@ export function unpaidPeriods(
   return out;
 }
 
+/** Periodo di coaching rimasto "da saldare" nel registro (riga con `unpaid`). */
+export type UnpaidRow = { id: string; period_start: ISODate; period_end: ISODate };
+
+/**
+ * Stato del coaching tenendo conto delle righe "da saldare": un periodo
+ * saltato resta scaduto anche se dopo ne ha pagato un altro.
+ */
+export function withUnpaidRows(st: BillingStatus, rows: UnpaidRow[], today: ISODate): BillingStatus {
+  if (!rows.length || st.state === "none") return st;
+  const oldest = [...rows].sort((a, b) => a.period_end.localeCompare(b.period_end))[0];
+  const chain = st.state === "overdue" && st.daysLeft !== null ? st.unpaidPeriods : 0;
+  if (oldest.period_end >= today) {
+    return { ...st, state: "overdue", label: "Periodo da saldare", clientLabel: "Periodo da saldare", unpaidPeriods: Math.max(1, rows.length + chain) };
+  }
+  const late = diffDays(oldest.period_end, today);
+  return { ...st, state: "overdue", label: `Scaduto da ${late} ${late === 1 ? "giorno" : "giorni"}`, clientLabel: "Periodo scaduto", unpaidPeriods: Math.max(2, rows.length + chain) };
+}
+
 /** Quanto vale un piano in un mese (per le stime delle entrate ricorrenti) */
 export const MONTHLY_FACTOR: Partial<Record<PlanKind, number>> = { monthly: 1, six_weeks: 30.44 / 42, quarterly: 1 / 3, semiannual: 1 / 6, annual: 1 / 12 };
 

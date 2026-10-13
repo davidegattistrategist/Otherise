@@ -220,7 +220,7 @@ test("pagamento extra (sessioni PT in più): conta negli incassi ma non sposta l
   // contatore delle sessioni PT: correzione, scalano quando segni una sessione, da saldare con il prezzo
   const card = page.locator("#sessioni-pt");
   await card.locator("summary", { hasText: "Correggi il conteggio" }).click();
-  await card.locator("select[name=mode]").selectOption("left");
+  await card.locator("details", { hasText: "Correggi il conteggio" }).locator("select[name=mode]").selectOption("left");
   await card.locator("input[name=count]").fill("5");
   await card.getByRole("button", { name: "Salva la correzione" }).click();
   await expect(page.getByText(/Fatto: 5 sessioni pagate ancora da fare/)).toBeVisible();
@@ -236,7 +236,7 @@ test("pagamento extra (sessioni PT in più): conta negli incassi ma non sposta l
   // da saldare: 3 sessioni a 45 €
   await page.goto(`${base}/pagamenti`);
   await card.locator("summary", { hasText: "Correggi il conteggio" }).click();
-  await card.locator("select[name=mode]").selectOption("due");
+  await card.locator("details", { hasText: "Correggi il conteggio" }).locator("select[name=mode]").selectOption("due");
   await card.locator("input[name=count]").fill("3");
   await card.getByRole("button", { name: "Salva la correzione" }).click();
   await expect(page.getByText(/Fatto: 3 sessioni da saldare/)).toBeVisible();

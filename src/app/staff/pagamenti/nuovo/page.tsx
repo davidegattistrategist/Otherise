@@ -23,7 +23,7 @@ export default async function NewPaymentPage({ searchParams }: { searchParams: P
     getBillingOverview().then((data) => ({ data })),
     supabase.from("payments").select("client_id, method, paid_on").order("paid_on", { ascending: false }).limit(500),
   ]);
-  const credits = await getCredits(supabase);
+  const [credits, lessonCredits] = await Promise.all([getCredits(supabase), getCredits(supabase, undefined, "lessons")]);
   const planBy = new Map((plans ?? []).map((p) => [p.client_id, p]));
   const paidUntilBy = new Map((billing ?? []).map((b) => [b.client_id, b.paid_until as string | null]));
   const lastMethod = new Map<string, string>();
@@ -32,7 +32,9 @@ export default async function NewPaymentPage({ searchParams }: { searchParams: P
   const list: PayClient[] = [...(clients ?? [])].sort(bySurname).map((c) => {
     const plan = planBy.get(c.id);
     const paidUntil = paidUntilBy.get(c.id) ?? null;
-    const credit = credits.get(c.id) ?? 0;
+    const lessonsCredit = lessonCredits.get(c.id) ?? 0;
+    // credito del piano: delle lezioni per i pacchetti, del coaching per i periodi
+    const credit = plan?.kind === "package" ? lessonsCredit : credits.get(c.id) ?? 0;
     const proposal = plan ? nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, paidUntil, credit) : null;
     return {
       id: c.id,
@@ -46,6 +48,7 @@ export default async function NewPaymentPage({ searchParams }: { searchParams: P
       ptPrice: c.pt_session_price !== null ? Number(c.pt_session_price) : null,
       method: lastMethod.get(c.id) ?? plan?.method ?? "cash",
       credit,
+      lessonsCredit,
     };
   });
 

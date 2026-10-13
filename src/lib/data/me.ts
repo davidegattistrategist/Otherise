@@ -5,7 +5,7 @@ import { formatLong, todayISO } from "../dates";
 
 /** "17 ottobre" (con l'anno solo se non è quello in corso) */
 const dayMonth = (d: string) => (d.slice(0, 4) === todayISO().slice(0, 4) ? formatLong(d).replace(/ \d{4}$/, "") : formatLong(d));
-import { billingStatus, clientFacingStatus, type BillingRow, type PlanKind } from "../billing";
+import { billingStatus, clientFacingStatus, withUnpaidRows, type BillingRow, type BillingStatus, type PlanKind } from "../billing";
 import { clientNotices, ptLeft, type ClientNotice } from "../client-notice";
 import { getClientCredit } from "./billing";
 import { parseContent, type ProgramContent } from "../program/types";
@@ -99,17 +99,20 @@ export async function getMyPaymentNotices(input: {
   clientStatus: string | null;
   row: BillingRow | null | undefined;
   coach: string;
-}): Promise<{ notices: ClientNotice[]; ptLeft: number | null }> {
-  if (input.clientStatus === "paused" || input.clientStatus === "archived") return { notices: [], ptLeft: null };
+}): Promise<{ notices: ClientNotice[]; ptLeft: number | null; pay: BillingStatus | null }> {
+  if (input.clientStatus === "paused" || input.clientStatus === "archived") return { notices: [], ptLeft: null, pay: null };
   const supabase = await createClient();
-  const [{ data: pt }, { data: client }, credit] = await Promise.all([
+  const [{ data: pt }, { data: client }, credit, { data: unpaid }] = await Promise.all([
     supabase.rpc("my_pt_balance"),
     supabase.from("clients").select("pt_session_price").eq("id", input.clientId).maybeSingle(),
-    getClientCredit(supabase, input.clientId),
+    getClientCredit(supabase, input.clientId, input.row?.kind === "package" ? "lessons" : "coaching"),
+    // periodi rimasti "da saldare" (ha pagato quello dopo ma non questo)
+    supabase.from("payments").select("id, period_start, period_end").eq("client_id", input.clientId).eq("unpaid", true).not("period_start", "is", null).not("period_end", "is", null),
   ]);
   const row = input.row ?? null;
   const kind = (row?.kind ?? null) as PlanKind | null;
-  const status = row ? clientFacingStatus(billingStatus({ ...row, kind: kind! }, todayISO(), 7)) : null;
+  const rows = (unpaid ?? []).map((r) => ({ id: r.id, period_start: r.period_start!, period_end: r.period_end! }));
+  const status = row ? clientFacingStatus(withUnpaidRows(billingStatus({ ...row, kind: kind! }, todayISO(), 7), rows, todayISO())) : null;
   const balance = pt?.[0] ? { bought: Number(pt[0].bought), used: Number(pt[0].used) } : null;
   return {
     notices: clientNotices({
@@ -123,5 +126,6 @@ export async function getMyPaymentNotices(input: {
       formatDate: dayMonth,
     }),
     ptLeft: ptLeft(balance, kind),
+    pay: status,
   };
 }

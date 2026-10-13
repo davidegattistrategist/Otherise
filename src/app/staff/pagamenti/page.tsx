@@ -19,32 +19,32 @@ const ORDER: Record<BillingStatus["state"], number> = { overdue: 0, due_soon: 1,
 
 /**
  * Coaching con più periodi da pagare (es. 6 settimane scadute + quelle in corso):
- * una riga per periodo sotto il nome, ognuna con il suo "Pagato". "Pagato" su
- * una riga registra anche quelle sopra (sempre dal periodo più vecchio).
+ * una riga per periodo sotto il nome, ognuna con il suo "Pagato", separate:
+ * può pagarne uno e non l'altro (quello saltato resta "da saldare").
  */
 function PeriodLines({ l, withReminder = false }: { l: BillingLine; withReminder?: boolean }) {
-  // totale dei periodi fino a quello della riga (un "Pagati" registra anche quelli sopra)
-  const totals = l.periods.map((_, i) => l.periods.slice(0, i + 1).reduce((t, p) => t + p.amount, 0));
   return (
     <ul className="flex w-full flex-col gap-1.5" aria-label={`Pagamenti da incassare da ${l.name}`}>
-      {l.periods.map((p, i) => {
-        const total = totals[i];
-        const proposal = i === 0
-          ? `${formatEuro(p.amount)} · ${formatShort(p.start)} – ${formatShort(p.end)}`
-          : `${i + 1} pagamenti di fila, ${formatEuro(total)} in tutto (${formatShort(l.periods[0].start)} – ${formatShort(p.end)})`;
-        return (
-          <li key={p.start} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-2xl bg-sand/70 px-3 py-2">
-            <span className="min-w-0 text-sm">
-              <span className="inline-flex items-center gap-1.5 font-semibold"><Dot tone={p.late ? "accent" : "deep"} />{p.late ? "Scaduto" : "Da saldare"}</span>
-              <span className="text-muted"> · {p.label}</span>
-            </span>
-            <span className="ml-auto flex items-center gap-3">
-              <span className="font-semibold tabular">{formatEuro(p.amount)}</span>
-              <QuickPay clientId={l.clientId} name={l.name} proposal={proposal} reminder={withReminder && i === 0 ? l.reminder : null} compact label={i === 0 ? "Pagato" : "Pagati"} count={i + 1} />
-            </span>
-          </li>
-        );
-      })}
+      {l.periods.map((p, i) => (
+        <li key={p.paymentId ?? p.start} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-2xl bg-sand/70 px-3 py-2">
+          <span className="min-w-0 text-sm">
+            <span className="inline-flex items-center gap-1.5 font-semibold"><Dot tone={p.late ? "accent" : "deep"} />{p.late ? "Scaduto" : "Da saldare"}</span>
+            <span className="text-muted"> · {p.label}</span>
+          </span>
+          <span className="ml-auto flex items-center gap-3">
+            <span className="font-semibold tabular">{formatEuro(p.amount)}</span>
+            <QuickPay
+              clientId={l.clientId}
+              name={l.name}
+              proposal={`${formatEuro(p.amount)} · ${formatShort(p.start)} – ${formatShort(p.end)}${i > 0 ? "\n(solo questo periodo: gli altri restano da saldare)" : ""}`}
+              reminder={withReminder && i === 0 ? l.reminder : null}
+              compact
+              index={p.index}
+              unpaidId={p.paymentId}
+            />
+          </span>
+        </li>
+      ))}
     </ul>
   );
 }
@@ -66,12 +66,13 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
   const nextMonth = addMonths(`${month}-01`, 1);
   const [revenue, { data: recent }, toSettle, { data: history }] = await Promise.all([
     getRevenue(supabase, lines),
-    supabase.from("payments").select("id, client_id, paid_on, amount, method, period_start, period_end, sessions, notes, plan_id, clients!inner(first_name, last_name, free)").eq("clients.free", false).gte("paid_on", `${month}-01`).lt("paid_on", nextMonth).order("paid_on", { ascending: false }).order("created_at", { ascending: false }),
+    supabase.from("payments").select("id, client_id, paid_on, amount, method, period_start, period_end, sessions, notes, plan_id, clients!inner(first_name, last_name, free)").eq("clients.free", false).eq("unpaid", false).gte("paid_on", `${month}-01`).lt("paid_on", nextMonth).order("paid_on", { ascending: false }).order("created_at", { ascending: false }),
     getSessionsToSettle(supabase),
     supabase
       .from("payments")
       .select("id, client_id, paid_on, amount, method, period_start, period_end, sessions, notes, plan_id, clients!inner(first_name, last_name, free), payment_plans(kind)")
       .eq("clients.free", false)
+      .eq("unpaid", false)
       .order("paid_on", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(1000),

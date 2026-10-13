@@ -8,7 +8,8 @@ import { diffDays, formatShort, todayISO } from "@/lib/dates";
 import { parseContent } from "@/lib/program/types";
 import { completedCount, displayWeek, nextWorkout, programEndDate, timeProgress, weekPosition } from "@/lib/program/schedule";
 import { summarizeSets, type SetLog } from "@/lib/program/prescription";
-import { billingStatus, formatEuro, PLAN_LABELS, type BillingRow, type PlanKind } from "@/lib/billing";
+import { getUnpaidRows } from "@/lib/data/billing";
+import { billingStatus, withUnpaidRows, formatEuro, PLAN_LABELS, type BillingRow, type PlanKind } from "@/lib/billing";
 import { CHECKIN_QUESTIONS } from "@/lib/checkin";
 import { LineChart } from "@/components/line-chart";
 import { BarChart } from "@/components/bar-chart";
@@ -110,7 +111,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
   const weight = checkList.filter((c) => c.weight_kg !== null && c.check_date).map((c) => ({ date: c.check_date!, value: Number(c.weight_kg) }));
 
   const b = (billing.data as BillingRow[] | null)?.[0];
-  const bStatus = me.role === "owner" ? billingStatus(b ? { ...b, kind: b.kind as PlanKind } : null, today, settings.data?.reminder_days ?? 7) : null;
+  const bStatus = me.role === "owner" ? withUnpaidRows(billingStatus(b ? { ...b, kind: b.kind as PlanKind } : null, today, settings.data?.reminder_days ?? 7), (await getUnpaidRows(supabase, id)).get(id) ?? [], today) : null;
   const lastCheckin = checkins.data?.[0];
 
   return (

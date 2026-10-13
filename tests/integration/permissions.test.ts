@@ -472,6 +472,8 @@ describe.skipIf(!run)("permessi", () => {
   it("credito del coaching e tipi di piano: credito solo dal titolare, il cliente vede solo il proprio saldo PT", async () => {
     // il collaboratore non tocca il credito (neanche del suo cliente), il titolare sì
     expect((await coach.from("clients").update({ credit_adjust: 500 }).eq("id", clientAId)).error).not.toBeNull();
+    expect((await coach.from("clients").update({ pt_credit_adjust: 500 }).eq("id", clientAId)).error).not.toBeNull();
+    await owner.from("clients").update({ pt_credit_adjust: 70 }).eq("id", clientAId).throwOnError();
     await owner.from("clients").update({ credit_adjust: 50 }).eq("id", clientAId).throwOnError();
     // un pagamento con credito: lo vedono il titolare e il cliente, non il collaboratore
     await owner.from("payments").insert({ client_id: clientAId, paid_on: "2026-10-06", amount: 800, method: "cash", period_start: "2026-10-06", period_end: "2027-01-05", credit_change: 200 }).throwOnError();

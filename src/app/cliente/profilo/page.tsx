@@ -5,7 +5,7 @@ import { getMyPaymentNotices, getMyPrograms } from "@/lib/data/me";
 import { PaymentNotices } from "@/components/payment-notice";
 import { diffDays, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { programEndDate } from "@/lib/program/schedule";
-import { billingStatus, formatEuro, METHOD_LABELS, PLAN_LABELS, type BillingRow, type PaymentMethod, type PlanKind, clientFacingStatus } from "@/lib/billing";
+import { formatEuro, METHOD_LABELS, PLAN_LABELS, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
 import { Card, Dot, Eyebrow, ProgressBar } from "@/components/ui";
 import { PasswordForm } from "@/components/password-form";
 import { IconLogout } from "@/components/icons";
@@ -24,7 +24,7 @@ export default async function ClientProfilePage() {
     supabase.from("clients").select("first_name, last_name, email, start_date, goals, health_consent_at, consent_source, instagram_consent_at").eq("id", me.clientId).single(),
     supabase.rpc("my_coach_name"),
     supabase.rpc("client_billing", { cid: me.clientId }),
-    supabase.from("payments").select("id, paid_on, amount, method, period_start, period_end, sessions").eq("client_id", me.clientId).order("paid_on", { ascending: false }).limit(12),
+    supabase.from("payments").select("id, paid_on, amount, method, period_start, period_end, sessions").eq("client_id", me.clientId).eq("unpaid", false).order("paid_on", { ascending: false }).limit(12),
     getMyPrograms(me.clientId),
     supabase.rpc("my_pt_session_dates"),
   ]);
@@ -34,10 +34,8 @@ export default async function ClientProfilePage() {
   const project = saved && !isProjectEmpty(saved) ? saved : null;
   const row = (billing as BillingRow[] | null)?.[0];
   const ended = me.clientStatus === "archived";
-  // in pausa: nessun promemoria di rinnovo
-  const pay = row && me.clientStatus !== "paused" ? clientFacingStatus(billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7)) : null;
   const coachFirst = coach?.split(" ")[0] || "il tuo coach";
-  const { notices, ptLeft } = await getMyPaymentNotices({ clientId: me.clientId, clientStatus: me.clientStatus, row, coach: coachFirst });
+  const { notices, ptLeft, pay } = await getMyPaymentNotices({ clientId: me.clientId, clientStatus: me.clientStatus, row, coach: coachFirst });
   const phases = [current, upcoming, ...past].filter(Boolean).length;
   const months = client ? Math.max(0, Math.round(diffDays(client.start_date, today) / 30.44)) : 0;
 

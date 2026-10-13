@@ -7,13 +7,13 @@
  */
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { quickPayment } from "@/app/staff/clienti/[id]/pagamenti/actions";
+import { payUnpaid, quickPayment } from "@/app/staff/clienti/[id]/pagamenti/actions";
 import { buttonClass, cx } from "./ui";
 import { IconChat, IconCheck } from "./icons";
 import { toast } from "./toaster";
 import { EditPaymentButton, type PaymentValues } from "./edit-payment-dialog";
 
-export function QuickPay({ clientId, name, proposal, reminder, compact, label = "Pagato", count = 1 }: { clientId: string; name: string; proposal: string | null; reminder: string | null; compact?: boolean; label?: string; /** quanti periodi registrare di fila (righe di chi ha più periodi da pagare) */ count?: number }) {
+export function QuickPay({ clientId, name, proposal, reminder, compact, label = "Pagato", index = 0, unpaidId }: { clientId: string; name: string; proposal: string | null; reminder: string | null; compact?: boolean; label?: string; /** quale periodo da pagare registrare (0 = il primo dopo l'ultimo pagato) */ index?: number; /** periodo rimasto "da saldare" nel registro */ unpaidId?: string }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string; payment?: { id: string; values: PaymentValues } } | null>(null);
   if (msg?.ok) {
@@ -39,7 +39,7 @@ export function QuickPay({ clientId, name, proposal, reminder, compact, label = 
           onClick={() => {
             if (!window.confirm(`Registrare il pagamento di ${name}?\n${proposal}`)) return;
             start(async () => {
-              const r = await quickPayment(clientId, count);
+              const r = unpaidId ? await payUnpaid(clientId, unpaidId) : await quickPayment(clientId, index);
               if (r?.error) setMsg({ ok: false, text: r.error });
               else {
                 toast(`${name}: ${r?.message ?? "registrato"}`);

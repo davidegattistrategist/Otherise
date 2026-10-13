@@ -6,7 +6,7 @@ import { createAdminClient } from "./supabase/admin";
 import { notify, type NewNotification } from "./notify";
 import { deliverPendingEmails } from "./email";
 import { addDays, ageOn, diffDays, formatLong, isBirthday, isoWeekday, mondayOf, todayISO } from "./dates";
-import { billingStatus, clientFacingStatus, type PlanKind } from "./billing";
+import { billingStatus, clientFacingStatus, withUnpaidRows, type PlanKind, type UnpaidRow } from "./billing";
 import { checkinWeekFor } from "./checkin";
 import { programEndDate } from "./program/schedule";
 import { CHAT_BUCKET, CHAT_VIDEO_KEEP_DAYS, type ChatAttachment } from "./chat-shared";
@@ -25,11 +25,17 @@ export async function runDailyChecks(today = todayISO()) {
   const reminderDays = settings?.reminder_days ?? 7;
 
   // 1) Pagamenti
-  const { data: billing } = await admin.rpc("billing_overview");
+  const [{ data: billing }, { data: unpaid }] = await Promise.all([
+    admin.rpc("billing_overview"),
+    admin.from("payments").select("id, client_id, period_start, period_end").eq("unpaid", true).not("period_start", "is", null).not("period_end", "is", null),
+  ]);
+  const unpaidBy = new Map<string, UnpaidRow[]>();
+  for (const r of unpaid ?? []) unpaidBy.set(r.client_id, [...(unpaidBy.get(r.client_id) ?? []), { id: r.id, period_start: r.period_start!, period_end: r.period_end! }]);
   for (const b of billing ?? []) {
     const c = byId.get(b.client_id);
     if (!c) continue;
-    const st = billingStatus({ ...b, kind: b.kind as PlanKind }, today, reminderDays);
+    // un periodo saltato ("da saldare") resta scaduto anche se ha pagato quello dopo
+    const st = withUnpaidRows(billingStatus({ ...b, kind: b.kind as PlanKind }, today, reminderDays), unpaidBy.get(b.client_id) ?? [], today);
     if (st.state !== "due_soon" && st.state !== "overdue") continue;
     // "da saldare" e poi "scaduto" sono due avvisi diversi
     const key = (st.dueDate ? `${st.dueDate}` : `s${b.sessions_bought}`) + (st.unpaidPeriods > 1 ? ":scaduto" : "");
