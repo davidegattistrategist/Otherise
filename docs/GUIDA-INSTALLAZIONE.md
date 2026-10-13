@@ -48,7 +48,7 @@ Da quel momento il codice è tuo. Le modifiche le fa Claude su tua richiesta (ve
    - Database password: generane una e salvala nelle note
    - Region: **Central EU (Frankfurt)** — i dati restano in Europa
    - **Create new project** e aspetta un paio di minuti.
-3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Nella cartella `supabase/migrations/` del tuo GitHub ci sono 19 file `.sql` (oggi; con gli aggiornamenti ne arriveranno altri): vanno eseguiti **tutti, uno alla volta, in ordine di nome** (il primo è `20261009120000_schema.sql`). Per ognuno: apri il file, premi il pulsante "Copy raw file", incolla tutto in una **New query** di Supabase e premi **Run** (se chiede conferma per una "destructive operation", conferma). Deve comparire "Success. No rows returned". Gli script preparano anche gli spazi privati per le foto: in **Storage** devono comparire due contenitori, `chat` (foto, video e vocali della chat) e `checks` (foto dei check).
+3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Nella cartella `supabase/migrations/` del tuo GitHub ci sono 21 file `.sql` (oggi; con gli aggiornamenti ne arriveranno altri): vanno eseguiti **tutti, uno alla volta, in ordine di nome** (il primo è `20261009120000_schema.sql`). Per ognuno: apri il file, premi il pulsante "Copy raw file", incolla tutto in una **New query** di Supabase e premi **Run** (se chiede conferma per una "destructive operation", conferma). Deve comparire "Success. No rows returned". Gli script preparano anche gli spazi privati per le foto: in **Storage** devono comparire due contenitori, `chat` (foto, video e vocali della chat) e `checks` (foto dei check).
 4. **Chiudi le iscrizioni libere** (nell'app si entra solo su invito): **Authentication → Sign In / Providers** → disattiva **Allow new users to sign up** → Save.
 5. **Indirizzi dell'app**: **Authentication → URL Configuration**
    - Site URL: `https://app.tuodominio.it` (l'indirizzo che userai; se non hai ancora il dominio metti per ora quello che ti darà Vercel al passo 5 e cambialo dopo)
@@ -115,14 +115,14 @@ Senza questo passo l'app funziona lo stesso, ma inviti e avvisi via email parton
    - Tutte le altre (chiave secret di Supabase, Anthropic, Resend, Groq, `CRON_SECRET`) → **Secret**.
    - Copia le chiavi con il pulsante di copia accanto, non selezionando il testo: la chiave a schermo è accorciata con i puntini.
 
-   **Groq (dettatura e trascrizione dei vocali, consigliato)**: crea un account gratuito su console.groq.com, poi API Keys → Create API Key e copia la chiave. Costa circa 0,04 $ per ora di audio (mille vocali da un minuto ≈ 0,60 €) e non usa l'assistente AI. Serve a due cose: il pulsante **"Detta"** (note delle sessioni, check, assistente AI, check-up e logbook del cliente: il telefono registra e Groq trascrive, così funziona uguale su iPhone e Android) e la trascrizione dei vocali in chat. Senza questa chiave i vocali funzionano senza trascrizione e "Detta" resta solo dove il browser sa riconoscere la voce (non su iPhone, dove si usa il microfono della tastiera).
+   **Groq (dettatura e trascrizione dei vocali, consigliato)**: crea un account gratuito su console.groq.com, poi API Keys → Create API Key e copia la chiave. Costa circa 0,04 $ per ora di audio (mille vocali da un minuto ≈ 0,60 €) e non usa l'assistente AI. Serve a due cose: il pulsante **"Detta"** (note delle sessioni, check, assistente AI, diario e logbook del cliente: il telefono registra e Groq trascrive, così funziona uguale su iPhone e Android) e la trascrizione dei vocali in chat. Senza questa chiave i vocali funzionano senza trascrizione e "Detta" resta solo dove il browser sa riconoscere la voce (non su iPhone, dove si usa il microfono della tastiera).
 
    Facoltative: `ANTHROPIC_MODEL` se un giorno vuoi cambiare il modello dell'assistente (senza, usa quello predefinito); `NEXT_PUBLIC_CHAT_MAX_VIDEO_MB` se con Supabase Pro alzi il limite dei file (vedi sotto).
 
 4. **Deploy**. Dopo un paio di minuti l'app è online su un indirizzo tipo `otherise-xxx.vercel.app`.
 5. **Il tuo dominio**: nel progetto Vercel **Settings → Domains → Add** → `app.tuodominio.it`. Vercel ti dice quale record DNS aggiungere (di solito un CNAME): aggiungilo dal pannello del dominio. Quando è attivo, controlla che Site URL e Redirect URLs su Supabase (passo 2.5) e `NEXT_PUBLIC_SITE_URL` su Vercel usino proprio questo indirizzo. Se cambi una variabile su Vercel, fai **Deployments → … → Redeploy**.
 
-I controlli automatici giornalieri (scadenze, programmi in chiusura, promemoria del check-up) partono da soli ogni mattina alle 8: li attiva il file `vercel.json` insieme a `CRON_SECRET`.
+I controlli automatici giornalieri (scadenze, programmi in chiusura, promemoria del diario) partono da soli ogni mattina alle 8: li attiva il file `vercel.json` insieme a `CRON_SECRET`.
 
 ---
 

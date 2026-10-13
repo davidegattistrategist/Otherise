@@ -11,7 +11,7 @@ export default async function StaffNotificationsPage() {
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <PageTitle title="Notifiche">
-        <p className="text-[15px] text-muted">Check-up con problemi, pagamenti in scadenza, programmi che finiscono. Arrivano anche per email, se configurata, e sul telefono se attivi le notifiche.</p>
+        <p className="text-[15px] text-muted">Diari con problemi, pagamenti in scadenza, programmi che finiscono. Arrivano anche per email, se configurata, e sul telefono se attivi le notifiche.</p>
       </PageTitle>
       <PushSettings />
       <NotificationList />

@@ -51,7 +51,7 @@ export function CheckinForm({ values, coach }: { values?: Values; coach: string 
       </div>
       {missing.length ? <p role="alert" className="rounded-xl bg-accent-soft px-3 py-2 text-sm">{missing.length === 1 ? "Manca la risposta a una domanda." : `Mancano le risposte a ${missing.length} domande.`}</p> : null}
       <ActionMessage state={state} />
-      <SubmitButton className="w-full" pendingText="Invio…">{values ? "Aggiorna il check-up" : "Invia il check-up"}</SubmitButton>
+      <SubmitButton className="w-full" pendingText="Invio…">{values ? "Aggiorna il diario" : "Invia il diario"}</SubmitButton>
     </form>
   );
 }

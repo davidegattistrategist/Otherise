@@ -154,7 +154,7 @@ Come ragioni:
   2. "Da applicare in questo programma": le note prese all'ultimo check per la fase successiva (test, esercizi da cambiare, modifiche decise) e i lavori posturali. Vanno applicate;
   3. il progetto annuale nei mesi del programma: se c'è un CAMBIO DI FASE (es. da volumizzazione a intensificazione) o cambiano gli stimoli (es. più aerobico, meno forza), il programma cambia di conseguenza;
   4. com'è fatto il programma di partenza e come erano impostati i programmi precedenti;
-  5. le indicazioni del trainer sul cliente, la valutazione posturale, i test, il logbook, i check-up e le note delle sessioni;
+  5. le indicazioni del trainer sul cliente, la valutazione posturale, i test, il logbook, i diari e le note delle sessioni;
   6. il metodo, per tutto quello che i punti sopra non decidono.
 - Nel riassunto scrivi in breve come hai usato le note dell'ultimo check, la fase del progetto (e se cambia) e la posturale; se una di queste fonti manca, dillo in mezza frase.
 - Il metodo del trainer e le indicazioni sul cliente sono un modo di ragionare, non regole fisse. Quello che il trainer ha scritto davvero (programma di partenza, programmi precedenti, richiesta, risposte) vale più del metodo e delle indicazioni.
@@ -167,7 +167,7 @@ Come ragioni:
 - Usa gli esercizi dell'eserciziario quando esistono (exerciseId = il loro codice, es. "E12"); per esercizi nuovi metti exerciseId null.
 - Ogni esercizio ha esattamente una prescrizione per settimana (array lungo quanto "weeks"). Per gli stretching e i lavori posturali va bene la stessa prescrizione tutte le settimane.
 - Note posturali e infortuni noti: tienine conto nella scelta degli esercizi.
-- Dolori o fastidi recenti (logbook, check-up, note): NON cambiare il programma di tua iniziativa per questo motivo. Decide il trainer: segnalali nel riassunto. Se la richiesta del trainer dice cosa fare, segui quella.
+- Dolori o fastidi recenti (logbook, diario, note): NON cambiare il programma di tua iniziativa per questo motivo. Decide il trainer: segnalali nel riassunto. Se la richiesta del trainer dice cosa fare, segui quella.
 - Non proporre mai di tua iniziativa settimane di scarico, programmi estivi o "da viaggio", fasi di reset, test o simulazioni di gara: li inserisci solo se il trainer lo chiede.
 - Se c'è un progetto annuale, segui la fase prevista per il mese: intensificazione = aumentano soprattutto i carichi su ripetizioni più basse; volumizzazione = aumentano soprattutto serie e ripetizioni a carichi simili; transizione = fase breve di passaggio. Rispetta anche quanto spingere sugli stimoli (forza, aerobico, Vo2Max…).
 - La durata della fase è quella del programma (dipende dal piano del cliente): non cambiarla se il trainer non lo chiede.
@@ -464,7 +464,7 @@ const CHECKIN_SCHEMA = {
   },
 } as const;
 
-const CHECKIN_SYSTEM = `Sei l'assistente di un personal trainer italiano. Leggi i dati del cliente (check-up settimanali, logbook, check corporei, note di sessione) e prepari per il trainer un riassunto onesto e breve. Regole:
+const CHECKIN_SYSTEM = `Sei l'assistente di un personal trainer italiano. Leggi i dati del cliente (diari settimanali, logbook, check corporei, note di sessione) e prepari per il trainer un riassunto onesto e breve. Regole:
 - Ogni punto cita il dato da cui viene (es. "sonno 2/5 nelle ultime due settimane", "squat da 60 a 65 kg").
 - Non inventare nulla: se un dato manca, non parlarne.
 - Niente diagnosi mediche: se emergono dolori, suggerisci di parlarne in sessione.
@@ -474,7 +474,7 @@ export async function checkinBrief(input: { clientContext: string; method: strin
   const userText = [
     input.method ? `# Metodo del trainer (per il tono)\n${input.method.slice(0, 4000)}` : "",
     `# Dati del cliente\n${input.clientContext}`,
-    "Prepara il riassunto delle ultime 2-4 settimane e la bozza di risposta all'ultimo check-up.",
+    "Prepara il riassunto delle ultime 2-4 settimane e la bozza di risposta all'ultimo diario.",
   ]
     .filter(Boolean)
     .join("\n\n");

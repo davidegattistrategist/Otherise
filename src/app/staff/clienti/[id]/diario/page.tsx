@@ -12,7 +12,7 @@ import { AiCheckinBrief } from "./ai-brief";
 import { aiEnabled } from "@/lib/ai/claude";
 import { CheckinReplyDraft } from "./reply-draft";
 
-export const metadata: Metadata = { title: "Check-up" };
+export const metadata: Metadata = { title: "Diario" };
 
 const tone = (v: number) => (v <= 2 ? "bg-accent text-white" : v === 3 ? "bg-sand-deep text-ink" : v === 4 ? "bg-ink-soft text-card" : "bg-ink text-card");
 
@@ -38,10 +38,10 @@ export default async function CheckupPage({ params }: { params: Promise<{ id: st
   return (
     <div className="flex flex-col gap-4">
       {!client.weekly_checkin ? (
-        <Notice>Il check-up settimanale è spento per questo cliente. Lo attivi dalla <a className="font-semibold underline" href={`/staff/clienti/${id}/profilo`}>scheda</a>: il cliente lo compila in 3 minuti da venerdì a domenica e tu ricevi un avviso solo se qualcosa non va.</Notice>
+        <Notice>Il diario settimanale è spento per questo cliente. Lo attivi dalla <a className="font-semibold underline" href={`/staff/clienti/${id}/profilo`}>scheda</a>: il cliente lo compila in 3 minuti da venerdì a domenica e tu ricevi un avviso solo se qualcosa non va.</Notice>
       ) : null}
       {list.length === 0 ? (
-        <EmptyState title="Ancora nessun check-up" />
+        <EmptyState title="Ancora nessun diario" />
       ) : (
         <>
           {aiEnabled() ? <AiCheckinBrief clientId={id} replyTargetId={list[0] ? `r-${list[0].id}` : null} /> : null}

@@ -15,7 +15,8 @@ permissions:
 
 jobs:
   backup:
-    runs-on: ubuntu-latest
+    # versione fissa: con la prossima Ubuntu il pacchetto di Postgres potrebbe non esserci ancora
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       prova:
@@ -42,7 +43,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: steps.check.outputs.skip != '1'
 
       - name: Strumenti di Postgres 17
@@ -64,7 +65,7 @@ jobs:
 
       - name: Conserva la copia cifrata (30 giorni)
         if: steps.check.outputs.skip != '1'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: backup-${{ github.run_number }}
           path: backup-out/*.gpg

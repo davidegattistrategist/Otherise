@@ -6,7 +6,7 @@ import { CHECKIN_OPENS_ON, CHECKIN_QUESTIONS, checkinWeekFor } from "@/lib/check
 import { Card, EmptyState, Eyebrow, Notice } from "@/components/ui";
 import { CheckinForm } from "./checkin-form";
 
-export const metadata: Metadata = { title: "Check-up" };
+export const metadata: Metadata = { title: "Diario" };
 
 export default async function ClientCheckupPage({ searchParams }: { searchParams: Promise<{ inviato?: string }> }) {
   const { inviato } = await searchParams;
@@ -26,12 +26,12 @@ export default async function ClientCheckupPage({ searchParams }: { searchParams
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-[30px] leading-tight font-normal tracking-tight">Check-up settimanale</h1>
+        <h1 className="text-[30px] leading-tight font-normal tracking-tight">Diario settimanale</h1>
         <p className="mt-1 text-[15px] text-muted">Quattro domande per capire come va. Se qualcosa non va, {coachName} lo vede subito.</p>
       </div>
-      {inviato ? <Notice tone="success">Grazie! Check-up inviato.</Notice> : null}
+      {inviato ? <Notice tone="success">Grazie! Diario inviato.</Notice> : null}
       {!client?.weekly_checkin ? (
-        <EmptyState title="Il check-up non è attivo">Se ti va di usarlo, chiedi a {coachName} di attivarlo.</EmptyState>
+        <EmptyState title="Il diario non è attivo">Se ti va di usarlo, chiedi a {coachName} di attivarlo.</EmptyState>
       ) : week ? (
         <Card className="flex flex-col gap-4">
           <Eyebrow>Settimana dal {formatShort(week)} · entro {formatShort(addDays(week, 6))}</Eyebrow>
@@ -39,7 +39,7 @@ export default async function ClientCheckupPage({ searchParams }: { searchParams
         </Card>
       ) : (
         <Card className="flex flex-col gap-1">
-          <Eyebrow>Prossimo check-up</Eyebrow>
+          <Eyebrow>Prossimo diario</Eyebrow>
           <p className="text-lg font-semibold">Si apre {opensIn === 1 ? "domani" : `tra ${opensIn} giorni`}, venerdì {formatShort(addDays(today, opensIn))}</p>
           <p className="text-sm text-muted">Ti arriva un promemoria.</p>
         </Card>

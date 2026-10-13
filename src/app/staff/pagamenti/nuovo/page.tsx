@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/dates";
 import { bySurname, listName } from "@/lib/names";
 import { nextPaymentProposal, type PlanKind } from "@/lib/billing";
+import { getCredits } from "@/lib/data/billing";
 import { PageTitle } from "@/components/ui";
 import { IconArrowLeft } from "@/components/icons";
 import { NewPayment, type PayClient } from "./new-payment";
@@ -22,6 +23,7 @@ export default async function NewPaymentPage({ searchParams }: { searchParams: P
     getBillingOverview().then((data) => ({ data })),
     supabase.from("payments").select("client_id, method, paid_on").order("paid_on", { ascending: false }).limit(500),
   ]);
+  const credits = await getCredits(supabase);
   const planBy = new Map((plans ?? []).map((p) => [p.client_id, p]));
   const paidUntilBy = new Map((billing ?? []).map((b) => [b.client_id, b.paid_until as string | null]));
   const lastMethod = new Map<string, string>();
@@ -30,7 +32,8 @@ export default async function NewPaymentPage({ searchParams }: { searchParams: P
   const list: PayClient[] = [...(clients ?? [])].sort(bySurname).map((c) => {
     const plan = planBy.get(c.id);
     const paidUntil = paidUntilBy.get(c.id) ?? null;
-    const proposal = plan ? nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, paidUntil) : null;
+    const credit = credits.get(c.id) ?? 0;
+    const proposal = plan ? nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, paidUntil, credit) : null;
     return {
       id: c.id,
       name: listName(c),
@@ -42,6 +45,7 @@ export default async function NewPaymentPage({ searchParams }: { searchParams: P
       startDate: c.start_date,
       ptPrice: c.pt_session_price !== null ? Number(c.pt_session_price) : null,
       method: lastMethod.get(c.id) ?? plan?.method ?? "cash",
+      credit,
     };
   });
 

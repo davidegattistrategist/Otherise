@@ -98,7 +98,7 @@ export default async function SettingsPage() {
           <div>
             <Eyebrow>Cosa ha imparato dalle tue risposte</Eyebrow>
             <p className="mt-2 text-[15px] leading-relaxed text-muted">
-              Quando correggi o riscrivi una bozza di risposta in chat o nel check-up, l&apos;AI capisce cosa hai cambiato e se ne ricorda per le bozze successive.
+              Quando correggi o riscrivi una bozza di risposta in chat o nel diario, l&apos;AI capisce cosa hai cambiato e se ne ricorda per le bozze successive.
               Qui trovi le abitudini che valgono con tutti i clienti; quelle sul singolo cliente sono nella sua scheda, in Programma → Indicazioni per l&apos;AI.
               {learned?.ai_reply_lessons_updated_at ? ` Ultimo aggiornamento: ${formatLong(learned.ai_reply_lessons_updated_at.slice(0, 10))}.` : ""}
             </p>

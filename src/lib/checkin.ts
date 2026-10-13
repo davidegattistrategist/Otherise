@@ -1,5 +1,5 @@
 /**
- * Check-up settimanale: domande, finestra di compilazione e soglie.
+ * Diario settimanale: domande, finestra di compilazione e soglie.
  * Le soglie che fanno scattare l'avviso sono nel database (funzione
  * flag_checkin): voto 1–2, calo di 2 punti rispetto alla settimana
  * prima, oppure una richiesta scritta.
@@ -23,10 +23,10 @@ export const SCORE_LABELS: Record<number, string> = {
   5: "Benissimo",
 };
 
-/** Da venerdì a domenica si compila il check-up della settimana in corso. */
+/** Da venerdì a domenica si compila il diario della settimana in corso. */
 export const CHECKIN_OPENS_ON = 5;
 
-/** Settimana a cui si riferisce il check-up compilabile oggi (null se oggi non è il momento). */
+/** Settimana a cui si riferisce il diario compilabile oggi (null se oggi non è il momento). */
 export function checkinWeekFor(today: ISODate): ISODate | null {
   return isoWeekday(today) >= CHECKIN_OPENS_ON ? mondayOf(today) : null;
 }

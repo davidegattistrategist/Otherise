@@ -3,7 +3,7 @@
 /**
  * "Nuovo pagamento" dalla pagina Pagamenti: un solo modulo per ogni caso.
  * - renew: rinnovo del piano attivo (periodo o sessioni del pacchetto)
- * - plan: nuovo abbonamento (mensile, trimestrale…): crea il piano e registra il primo periodo
+ * - plan: nuovo coaching (mensile, trimestrale…): crea il piano e registra il primo periodo
  * - lessons: lezioni PT (pacchetto o singole): sessioni pagate a parte, o il pacchetto se è il suo piano
  * - other: pagamento libero (valutazione posturale, consulenza…)
  * Si può anche creare al volo un cliente nuovo (basta il nome).
@@ -12,7 +12,8 @@ import { revalidatePath } from "next/cache";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong, isISODate } from "@/lib/dates";
-import { formatEuro, isPeriodic, METHODS, PLAN_KINDS, type PlanKind } from "@/lib/billing";
+import { creditChange, formatEuro, isPeriodic, METHODS, PLAN_KINDS, type PlanKind } from "@/lib/billing";
+import { getClientCredit } from "@/lib/data/billing";
 import type { ActionState } from "@/components/form-bits";
 
 export type NewPaymentState = (NonNullable<ActionState> & { clientId?: string; clientName?: string }) | null;
@@ -26,6 +27,12 @@ const count = (v: FormDataEntryValue | null) => {
   return Number.isInteger(n) && n > 0 ? n : NaN;
 };
 
+function creditNote(after: number, change: number) {
+  if (change === 0) return "";
+  const v = Math.round(after * 100) / 100;
+  return v > 0 ? ` Credito per il prossimo rinnovo: ${formatEuro(v)}.` : v < 0 ? ` Da recuperare al prossimo rinnovo: ${formatEuro(-v)}.` : "";
+}
+
 export async function registerPayment(_: NewPaymentState, fd: FormData): Promise<NewPaymentState> {
   const me = await requireOwner();
   const supabase = await createClient();
@@ -34,7 +41,8 @@ export async function registerPayment(_: NewPaymentState, fd: FormData): Promise
   const paidOn = String(fd.get("paid_on") ?? "");
   if (!isISODate(paidOn)) return { error: "Data del pagamento non valida." };
   const amount = money(fd.get("amount"));
-  if (!Number.isFinite(amount) || amount <= 0) return { error: "Scrivi l'importo, per esempio 300." };
+  // con il credito un rinnovo può costare 0 €
+  if (!Number.isFinite(amount) || amount < 0 || (amount === 0 && type !== "renew")) return { error: "Scrivi l'importo, per esempio 300." };
   const method = String(fd.get("method") ?? "transfer") as (typeof METHODS)[number];
   if (!METHODS.includes(method)) return { error: "Metodo non valido." };
   const notes = String(fd.get("notes") ?? "").trim().slice(0, 500);
@@ -57,7 +65,8 @@ export async function registerPayment(_: NewPaymentState, fd: FormData): Promise
     clientName = `${c.first_name} ${c.last_name}`.trim();
   }
 
-  const { data: plan } = await supabase.from("payment_plans").select("id, kind").eq("client_id", clientId).eq("active", true).maybeSingle();
+  const { data: plan } = await supabase.from("payment_plans").select("id, kind, amount").eq("client_id", clientId).eq("active", true).maybeSingle();
+  const keep = fd.get("keep_difference") !== "off";
   const base = { client_id: clientId, paid_on: paidOn, amount, method, notes, created_by: me.id };
   let message = "";
 
@@ -70,14 +79,16 @@ export async function registerPayment(_: NewPaymentState, fd: FormData): Promise
   };
 
   if (type === "renew") {
-    if (!plan) return { error: "Il cliente non ha un piano da rinnovare: scegli \"Nuovo abbonamento\"." };
+    if (!plan) return { error: "Il cliente non ha un piano da rinnovare: scegli \"Nuovo coaching\"." };
     const kind = plan.kind as PlanKind;
     if (isPeriodic(kind)) {
       const p = period();
       if ("error" in p) return { error: p.error };
-      const { error } = await supabase.from("payments").insert({ ...base, plan_id: plan.id, period_start: p.start, period_end: p.end, sessions: null });
+      const credit = await getClientCredit(supabase, clientId);
+      const change = creditChange({ planAmount: Number(plan.amount), credit, paid: amount, keep });
+      const { error } = await supabase.from("payments").insert({ ...base, plan_id: plan.id, period_start: p.start, period_end: p.end, sessions: null, credit_change: change });
       if (error) return { error: "Salvataggio non riuscito." };
-      message = `${formatEuro(amount)} registrati: ${clientName} è a posto fino al ${formatLong(p.end)}.`;
+      message = `${formatEuro(amount)} registrati: ${clientName} è a posto fino al ${formatLong(p.end)}.${creditNote(credit + change, change)}`;
     } else {
       const s = kind === "single" ? 1 : count(fd.get("sessions"));
       if (Number.isNaN(s)) return { error: "Indica quante sessioni copre il pagamento." };
@@ -87,7 +98,7 @@ export async function registerPayment(_: NewPaymentState, fd: FormData): Promise
     }
   } else if (type === "plan") {
     const kind = String(fd.get("kind") ?? "") as PlanKind;
-    if (!PLAN_KINDS.includes(kind) || !isPeriodic(kind)) return { error: "Scegli la durata dell'abbonamento." };
+    if (!PLAN_KINDS.includes(kind) || !isPeriodic(kind)) return { error: "Scegli la durata del coaching." };
     const p = period();
     if ("error" in p) return { error: p.error };
     // un solo piano attivo: quello di prima resta nello storico
@@ -97,10 +108,10 @@ export async function registerPayment(_: NewPaymentState, fd: FormData): Promise
       .insert({ client_id: clientId, kind, amount, method, start_date: p.start, package_sessions: null, notes: "" })
       .select("id")
       .single();
-    if (planError || !created) return { error: "Non sono riuscito a creare l'abbonamento. Riprova." };
+    if (planError || !created) return { error: "Non sono riuscito a creare il coaching. Riprova." };
     const { error } = await supabase.from("payments").insert({ ...base, plan_id: created.id, period_start: p.start, period_end: p.end, sessions: null });
-    if (error) return { error: "Abbonamento creato, ma il pagamento non è stato salvato: registralo dalla scheda del cliente." };
-    message = `Abbonamento creato e ${formatEuro(amount)} registrati: ${clientName} è a posto fino al ${formatLong(p.end)}.`;
+    if (error) return { error: "Coaching creato, ma il pagamento non è stato salvato: registralo dalla scheda del cliente." };
+    message = `Coaching creato e ${formatEuro(amount)} registrati: ${clientName} è a posto fino al ${formatLong(p.end)}.`;
   } else if (type === "lessons") {
     const s = count(fd.get("sessions"));
     if (Number.isNaN(s)) return { error: "Indica quante lezioni sta pagando." };

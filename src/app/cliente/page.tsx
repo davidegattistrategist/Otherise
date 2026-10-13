@@ -5,14 +5,15 @@ import { dedicationOfDay, quoteOfDay } from "@/lib/quotes";
 import type { Metadata } from "next";
 import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { getMyLogs, getMyPrograms } from "@/lib/data/me";
+import { getMyLogs, getMyPaymentNotices, getMyPrograms } from "@/lib/data/me";
+import { PaymentNotices } from "@/components/payment-notice";
 import { diffDays, formatHeading, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { completedCount, nextWorkout, programEndDate, timeProgress } from "@/lib/program/schedule";
 import { blockHeading } from "@/lib/program/types";
 import { billingStatus, type BillingRow, type PlanKind, clientFacingStatus } from "@/lib/billing";
 import { checkinWeekFor } from "@/lib/checkin";
 import { LineChart } from "@/components/line-chart";
-import { ArrowCTA, BigNumber, Card, Dot, Eyebrow, LinkButton, Notice, ProgressBar, Ring, fmtNum } from "@/components/ui";
+import { ArrowCTA, BigNumber, Card, Eyebrow, LinkButton, Notice, ProgressBar, Ring, fmtNum } from "@/components/ui";
 import { IconPlay } from "@/components/icons";
 import { ClearParams } from "@/components/clear-param";
 import { PushPrompt } from "@/components/push";
@@ -34,13 +35,17 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
     getBusinessName().then((data) => ({ data })),
   ]);
   const quote = quoteOfDay(today);
-  const logs = current ? await getMyLogs(current.id) : [];
+  const row = (billing as BillingRow[] | null)?.[0];
+  const coachFirst = coach?.split(" ")[0] || "il tuo coach";
+  const [logs, { notices }] = await Promise.all([
+    current ? getMyLogs(current.id) : Promise.resolve([]),
+    getMyPaymentNotices({ clientId: me.clientId, clientStatus: me.clientStatus, row, coach: coachFirst }),
+  ]);
   const checkinWeek = client?.weekly_checkin ? checkinWeekFor(today) : null;
   const { data: thisCheckin } = checkinWeek
     ? await supabase.from("checkins").select("id").eq("client_id", me.clientId).eq("week_start", checkinWeek).maybeSingle()
     : { data: null };
 
-  const row = (billing as BillingRow[] | null)?.[0];
   // in pausa: nessun promemoria di rinnovo (il cliente usa l'app come sempre)
   const pay = row && me.clientStatus !== "paused" ? clientFacingStatus(billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7)) : null;
   const bf = (checks ?? []).filter((c) => c.body_fat_pct !== null).map((c) => ({ date: c.check_date, value: Number(c.body_fat_pct) }));
@@ -70,12 +75,12 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
 
       {fatto ? <><ClearParams names={["fatto", "fastidio"]} /><Notice tone="success">Allenamento registrato. Ottimo lavoro!{fastidio ? " Il tuo coach è stato avvisato del fastidio che hai segnalato: ti scrive lui come procedere." : ""}</Notice></> : null}
 
-      <PushPrompt text="Ti avviso quando ti arriva un messaggio, un nuovo programma o la risposta al check-up." />
+      <PushPrompt text="Ti avviso quando ti arriva un messaggio, un nuovo programma o la risposta al diario." />
 
       {checkinWeek && !thisCheckin ? (
-        <Link href="/cliente/checkup" className="flex items-center gap-3 rounded-[24px] bg-accent px-5 py-4 text-white">
+        <Link href="/cliente/diario" className="flex items-center gap-3 rounded-[24px] bg-accent px-5 py-4 text-white">
           <span className="flex-1">
-            <span className="block font-semibold">Check-up della settimana</span>
+            <span className="block font-semibold">Diario della settimana</span>
             <span className="block text-sm opacity-90">4 domande, 3 minuti. Si compila entro domenica.</span>
           </span>
           <span aria-hidden="true" className="text-2xl">→</span>
@@ -156,14 +161,12 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
           </Card>
         ) : null}
 
-        {pay && pay.state !== "none" ? (
+        {notices.length ? (
+          <PaymentNotices notices={notices} coach={coachFirst} />
+        ) : pay && pay.state === "ok" && pay.clientLabel ? (
           <Card className="flex flex-col gap-2">
             <Eyebrow>Percorso</Eyebrow>
-            <div className="flex items-center gap-2 text-lg font-semibold">
-              {pay.state === "overdue" || pay.state === "due_soon" ? <Dot tone="accent" /> : null}
-              {pay.dueDate ? `${pay.clientLabel} ${formatShort(pay.dueDate)}` : pay.clientLabel}
-            </div>
-            {pay.state === "due_soon" || pay.state === "overdue" ? <p className="text-sm text-muted">È il momento di rinnovare: parlane con {coach ?? "il tuo coach"}.</p> : null}
+            <div className="text-lg font-semibold">{pay.dueDate ? `${pay.clientLabel} ${formatShort(pay.dueDate)}` : pay.clientLabel}</div>
             <ArrowCTA href="/cliente/profilo">Dettagli</ArrowCTA>
           </Card>
         ) : null}
@@ -172,7 +175,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
           <Card className="flex flex-col gap-2">
             <Eyebrow>{coach ?? "Il coach"} ti ha risposto</Eyebrow>
             <p className="text-[15px] leading-relaxed whitespace-pre-line">{lastReply.coach_reply}</p>
-            <span className="text-xs text-muted">Check-up della settimana del {formatShort(lastReply.week_start)}</span>
+            <span className="text-xs text-muted">Diario della settimana del {formatShort(lastReply.week_start)}</span>
           </Card>
         ) : null}
       </div>

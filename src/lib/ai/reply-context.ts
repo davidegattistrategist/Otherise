@@ -4,7 +4,7 @@ import "server-only";
  * per rispondere bene in chat (molto meno del contesto per i programmi).
  * - gli ultimi allenamenti, esercizio per esercizio: programma vs fatto;
  * - il prossimo allenamento (per le domande su cosa fare);
- * - indicazioni del trainer, fase del progetto, ultimo check e check-up.
+ * - indicazioni del trainer, fase del progetto, ultimo check e diario.
  * Nome, cognome, email e telefono non ci sono mai.
  */
 import type { ServerSupabase } from "../supabase/server";
@@ -85,7 +85,7 @@ export async function buildReplyContext(supabase: ServerSupabase, clientId: stri
   const ci = checkins.data?.[0];
   const recent = [
     k ? `- Ultimo check: ${k.check_date}, peso ${k.weight_kg ?? "—"} kg, massa grassa ${k.body_fat_pct ?? "—"}%` : "",
-    ci ? `- Ultimo check-up (settimana del ${ci.week_start}, voti 1-5): allenamenti ${ci.training}, sonno ${ci.sleep}, stress ${ci.stress}, percorso ${ci.adherence}${ci.issues ? `; problemi: ${ci.issues}` : ""}` : "",
+    ci ? `- Ultimo diario (settimana del ${ci.week_start}, voti 1-5): allenamenti ${ci.training}, sonno ${ci.sleep}, stress ${ci.stress}, percorso ${ci.adherence}${ci.issues ? `; problemi: ${ci.issues}` : ""}` : "",
   ].filter(Boolean);
   if (recent.length) parts.push(`## Ultimi dati\n${recent.join("\n")}`);
 

@@ -2,7 +2,7 @@ import "server-only";
 import { getBillingOverview } from "@/lib/data/shared";
 import type { ServerSupabase } from "../supabase/server";
 import { bySurname, listName } from "../names";
-import { billingStatus, ptCounterView, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PLAN_LABELS, situationText, type BillingStatus, type PlanKind } from "../billing";
+import { billingStatus, dueAmount, isPeriodic, ptCounterView, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PLAN_LABELS, situationText, type BillingStatus, type PlanKind } from "../billing";
 import { addDays, addMonths, formatLong, formatShort, todayISO, type ISODate } from "../dates";
 import { DEFAULT_PAYMENT_MESSAGE, fillTemplate } from "../whatsapp";
 
@@ -23,14 +23,38 @@ export type BillingLine = {
   sessionsBought: number;
 };
 
+/**
+ * Credito di ogni cliente (solo titolare): correzione a mano + quanto hanno
+ * lasciato i pagamenti. Positivo = ha pagato in più, negativo = deve ancora.
+ */
+export async function getCredits(supabase: ServerSupabase, clientId?: string): Promise<Map<string, number>> {
+  let pays = supabase.from("payments").select("client_id, credit_change").neq("credit_change", 0);
+  let adj = supabase.from("clients").select("id, credit_adjust").neq("credit_adjust", 0);
+  if (clientId) {
+    pays = pays.eq("client_id", clientId);
+    adj = adj.eq("id", clientId);
+  }
+  const [{ data: p }, { data: a }] = await Promise.all([pays, adj]);
+  const out = new Map<string, number>();
+  for (const r of a ?? []) out.set(r.id, (out.get(r.id) ?? 0) + Number(r.credit_adjust));
+  for (const r of p ?? []) out.set(r.client_id, (out.get(r.client_id) ?? 0) + Number(r.credit_change));
+  for (const [k, v] of out) out.set(k, Math.round(v * 100) / 100);
+  return out;
+}
+
+export async function getClientCredit(supabase: ServerSupabase, clientId: string): Promise<number> {
+  return (await getCredits(supabase, clientId)).get(clientId) ?? 0;
+}
+
 /** Stato dei pagamenti di tutti i clienti non archiviati (solo titolare). */
 export async function getBillingLines(supabase: ServerSupabase): Promise<{ lines: BillingLine[]; reminderDays: number }> {
   const today = todayISO();
-  const [{ data: clients }, { data: billing }, { data: plans }, { data: settings }] = await Promise.all([
+  const [{ data: clients }, { data: billing }, { data: plans }, { data: settings }, credits] = await Promise.all([
     supabase.from("clients").select("id, first_name, last_name, status").neq("status", "archived").eq("free", false).order("last_name").order("first_name"),
     getBillingOverview().then((data) => ({ data })),
     supabase.from("payment_plans").select("id, client_id, kind, amount, method, start_date, package_sessions").eq("active", true),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
+    getCredits(supabase),
   ]);
   const reminderDays = settings?.reminder_days ?? 7;
   const byClient = new Map((billing ?? []).map((b) => [b.client_id, b]));
@@ -42,11 +66,11 @@ export async function getBillingLines(supabase: ServerSupabase): Promise<{ lines
     const paused = c.status === "paused";
     // in pausa: non è tra i pagamenti da incassare (quando rinnova si registra e si riattiva)
     const status: BillingStatus = paused
-      ? { state: "none", label: "In pausa", clientLabel: "", dueDate: null, daysLeft: null, sessionsLeft: null }
+      ? { state: "none", label: "In pausa", clientLabel: "", dueDate: null, daysLeft: null, sessionsLeft: null, unpaidPeriods: 0 }
       : billingStatus(b && kind ? { ...b, kind } : null, today, reminderDays);
     let proposal: string | null = null;
     if (plan) {
-      const p = nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, b?.paid_until ?? null);
+      const p = nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, b?.paid_until ?? null, credits.get(c.id) ?? 0);
       proposal = `${formatEuro(p.amount)}${p.period_start && p.period_end ? ` · ${formatShort(p.period_start)} – ${formatShort(p.period_end)}` : p.sessions ? ` · ${p.sessions} ${p.sessions === 1 ? "sessione" : "sessioni"}` : ""}`;
     }
     const reminder = kind && (status.state === "due_soon" || status.state === "overdue") ? reminderChatLink(c.id) : null;
@@ -77,10 +101,11 @@ export const reminderChatLink = (clientId: string) => `/staff/messaggi/${clientI
  * o se chi guarda non vede i pagamenti (solo il titolare).
  */
 export async function paymentReminderText(supabase: ServerSupabase, clientId: string): Promise<string | null> {
-  const [{ data: client }, { data: billing }, { data: settings }] = await Promise.all([
+  const [{ data: client }, { data: billing }, { data: settings }, credit] = await Promise.all([
     supabase.from("clients").select("first_name").eq("id", clientId).maybeSingle(),
     supabase.rpc("client_billing", { cid: clientId }),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
+    getClientCredit(supabase, clientId),
   ]);
   const row = (billing as BillingRow[] | null)?.[0];
   if (!client || !row) return null;
@@ -89,7 +114,7 @@ export async function paymentReminderText(supabase: ServerSupabase, clientId: st
   return fillTemplate(settings?.payment_message?.trim() || DEFAULT_PAYMENT_MESSAGE, {
     nome: client.first_name,
     situazione: situationText(status, kind, formatLong),
-    importo: formatEuro(row.amount),
+    importo: formatEuro(isPeriodic(kind) ? dueAmount(Number(row.amount), credit) : row.amount),
     scadenza: status.dueDate ? formatLong(status.dueDate) : "",
   });
 }

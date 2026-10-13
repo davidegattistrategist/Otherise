@@ -169,7 +169,7 @@ describe.skipIf(!run)("permessi", () => {
     }
   });
 
-  it("un check-up con un problema avvisa titolare e collaboratore", async () => {
+  it("un diario con un problema avvisa titolare e collaboratore", async () => {
     await clientA.from("checkins").insert({
       client_id: clientAId, week_start: "2026-10-05", training: 4, sleep: 2, stress: 3, adherence: 4, request: "",
     }).throwOnError();
@@ -183,7 +183,7 @@ describe.skipIf(!run)("permessi", () => {
     expect((await clientA.from("notifications").select("*")).data).toEqual([]);
   });
 
-  it("lo staff risponde al check-up ma non può cambiarne i voti", async () => {
+  it("lo staff risponde al diario ma non può cambiarne i voti", async () => {
     const { data: ci } = await coach.from("checkins").select("id").single();
     await coach.from("checkins").update({ coach_reply: "Ne parliamo giovedì", sleep: 5 }).eq("id", ci!.id).throwOnError();
     const { data } = await admin.from("checkins").select("sleep, coach_reply").eq("id", ci!.id).single();
@@ -191,7 +191,7 @@ describe.skipIf(!run)("permessi", () => {
     expect(data!.coach_reply).toBe("Ne parliamo giovedì");
   });
 
-  it("un check-up tranquillo non manda avvisi", async () => {
+  it("un diario tranquillo non manda avvisi", async () => {
     const before = (await owner.from("notifications").select("id")).data!.length;
     await clientA.from("checkins").insert({
       client_id: clientAId, week_start: "2026-10-12", training: 4, sleep: 3, stress: 4, adherence: 4,
@@ -271,7 +271,7 @@ describe.skipIf(!run)("permessi", () => {
     expect((await coach.from("client_projects").insert({ client_id: clientBId, data })).error).not.toBeNull();
   });
 
-  it("dolori nel logbook: il cliente li scrive, il check-up con fastidi avvisa lo staff", async () => {
+  it("dolori nel logbook: il cliente li scrive, il diario con fastidi avvisa lo staff", async () => {
     await clientA.from("workout_logs").upsert({ client_id: clientAId, program_id: publishedId, day_id: "d1", week: 1, discomfort: "ginocchio" }, { onConflict: "program_id,week,day_id" }).throwOnError();
     const { data: wl } = await coach.from("workout_logs").select("discomfort").eq("program_id", publishedId).single();
     expect(wl!.discomfort).toBe("ginocchio");
@@ -467,5 +467,27 @@ describe.skipIf(!run)("permessi", () => {
     await owner.from("payment_plans").insert({ client_id: cid, kind: "package", amount: 400, method: "cash", start_date: "2026-10-05", package_sessions: 10 }).throwOnError();
     const { data: b } = await owner.rpc("client_billing", { cid });
     expect(b![0].sessions_bought - b![0].sessions_used).toBe(4);
+  });
+
+  it("credito del coaching e tipi di piano: credito solo dal titolare, il cliente vede solo il proprio saldo PT", async () => {
+    // il collaboratore non tocca il credito (neanche del suo cliente), il titolare sì
+    expect((await coach.from("clients").update({ credit_adjust: 500 }).eq("id", clientAId)).error).not.toBeNull();
+    await owner.from("clients").update({ credit_adjust: 50 }).eq("id", clientAId).throwOnError();
+    // un pagamento con credito: lo vedono il titolare e il cliente, non il collaboratore
+    await owner.from("payments").insert({ client_id: clientAId, paid_on: "2026-10-06", amount: 800, method: "cash", period_start: "2026-10-06", period_end: "2027-01-05", credit_change: 200 }).throwOnError();
+    const mine = await clientA.from("payments").select("credit_change").eq("client_id", clientAId);
+    expect(mine.data!.some((p) => Number(p.credit_change) === 200)).toBe(true);
+    expect((await coach.from("payments").select("id").eq("client_id", clientAId)).data).toEqual([]);
+    // tipi di piano: il collaboratore solo dei suoi clienti, chi non è staff niente
+    await owner.from("payment_plans").insert({ client_id: clientBId, kind: "monthly", amount: 100 }).throwOnError();
+    const kindsCoach = (await coach.rpc("client_plan_kinds")).data ?? [];
+    expect(kindsCoach.every((r: { client_id: string }) => r.client_id === clientAId)).toBe(true);
+    const kindsOwner = (await owner.rpc("client_plan_kinds")).data ?? [];
+    expect(kindsOwner.some((r: { client_id: string }) => r.client_id === clientBId)).toBe(true);
+    expect(((await clientA.rpc("client_plan_kinds")).data ?? []).length).toBe(0);
+    // saldo PT: il cliente legge solo il proprio (o niente), un estraneo niente
+    const own = await clientA.rpc("my_pt_balance");
+    expect(own.error).toBeNull();
+    expect(((await stranger.rpc("my_pt_balance")).data ?? []).length).toBe(0);
   });
 });

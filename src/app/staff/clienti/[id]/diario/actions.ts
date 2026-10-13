@@ -19,12 +19,12 @@ export async function reviewCheckin(clientId: string, checkinId: string, fd: For
     const used = String(fd.get("draft_used") ?? "");
     await closeDrafts(supabase, { checkinId }, reply, me.id, /^[0-9a-f-]{36}$/i.test(used) ? used : null);
   }
-  // Il "visto" sulle notifiche di questo check-up per chi l'ha guardato
+  // Il "visto" sulle notifiche di questo diario per chi l'ha guardato
   await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("recipient_id", me.id).like("dedupe_key", `checkin:${checkinId}:%`).is("read_at", null);
   if (reply && reply !== before.coach_reply) {
     const { data: client } = await supabase.from("clients").select("user_id").eq("id", clientId).maybeSingle();
     if (client?.user_id) {
-      await notify([{ recipient_id: client.user_id, client_id: clientId, kind: "checkin_reply", title: `${me.fullName.split(" ")[0] || "Il tuo coach"} ha risposto al tuo check-up`, body: reply.slice(0, 280), link: "/cliente/checkup", dedupe_key: `reply:${checkinId}:${reply.length}` }]);
+      await notify([{ recipient_id: client.user_id, client_id: clientId, kind: "checkin_reply", title: `${me.fullName.split(" ")[0] || "Il tuo coach"} ha risposto al tuo diario`, body: reply.slice(0, 280), link: "/cliente/diario", dedupe_key: `reply:${checkinId}:${reply.length}` }]);
       await deliverPendingEmails();
     }
   }
@@ -35,8 +35,8 @@ export async function reviewCheckin(clientId: string, checkinId: string, fd: For
 export async function requestCheckinDraft(clientId: string, checkinId: string): Promise<{ ok: true; draft: ReplyDraft | null } | { ok: false; error: string }> {
   await requireStaff();
   const supabase = await createClient();
-  // passa dai permessi: se lo staff non vede il check-up, niente bozza
+  // passa dai permessi: se lo staff non vede il diario, niente bozza
   const { data } = await supabase.from("checkins").select("id").eq("id", checkinId).eq("client_id", clientId).maybeSingle();
-  if (!data) return { ok: false, error: "Check-up non trovato." };
+  if (!data) return { ok: false, error: "Diario non trovato." };
   return generateCheckinDraft(checkinId, { force: true });
 }

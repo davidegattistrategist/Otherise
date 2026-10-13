@@ -1,6 +1,6 @@
 # Metodo di lavoro di Davide
 
-Questo è il mio metodo, ricavato dai miei programmi reali (2024-2026), dalle mie risposte sul metodo e da una ricerca su fonti scientifiche (in fondo). Usalo per ogni bozza: programmi nuovi, nuove fasi, progressioni, riassunti dei check-up e risposte ai clienti.
+Questo è il mio metodo, ricavato dai miei programmi reali (2024-2026), dalle mie risposte sul metodo e da una ricerca su fonti scientifiche (in fondo). Usalo per ogni bozza: programmi nuovi, nuove fasi, progressioni, riassunti dei diari e risposte ai clienti.
 
 ## Come usare questo metodo
 - Sono **modi di ragionare, non regole fisse**. Ogni trainer personalizza in mille modi: quello che ho scritto davvero (programma di partenza, programmi precedenti, mia richiesta, mie risposte) vale più di questo metodo e delle indicazioni sul cliente.

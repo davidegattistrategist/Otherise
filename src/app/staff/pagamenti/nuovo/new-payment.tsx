@@ -8,7 +8,8 @@
 import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import { registerPayment, type NewPaymentState } from "../actions";
-import { formatEuro, isPeriodic, METHOD_LABELS, METHODS, periodEnd, PLAN_LABELS, type PlanKind } from "@/lib/billing";
+import { CreditHint } from "@/components/credit-hint";
+import { formatEuro, isPeriodic, METHOD_LABELS, METHODS, periodEnd, PLAN_DURATION, PLAN_LABELS, type PlanKind } from "@/lib/billing";
 import { formatLong, formatShort, isISODate } from "@/lib/dates";
 import { Card, Eyebrow, Field, Input, Select, buttonClass, cx } from "@/components/ui";
 import { SubmitButton } from "@/components/form-bits";
@@ -28,6 +29,8 @@ export type PayClient = {
   startDate: string | null;
   ptPrice: number | null;
   method: string;
+  /** Credito (positivo) o importo da recuperare (negativo) del coaching */
+  credit: number;
 };
 
 export type Type = "renew" | "plan" | "lessons" | "other";
@@ -46,7 +49,7 @@ export function NewPayment({ clients, today, initialClient, initialType = null }
 }
 
 /**
- * Da quando parte un abbonamento nuovo: dal giorno dopo l'ultimo periodo
+ * Da quando parte un coaching nuovo: dal giorno dopo l'ultimo periodo
  * saldato (se ha già pagato fino a dopo oggi, è il periodo successivo),
  * altrimenti dall'inizio del percorso. Se quel giorno è lontano, si va avanti
  * di periodo in periodo fino a quello che sta facendo adesso: il trimestre
@@ -103,6 +106,7 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
   const [sessions, setSessions] = useState(d0.sessions);
   const [notes, setNotes] = useState("");
   const [reactivate, setReactivate] = useState(true);
+  const [keep, setKeep] = useState(true);
 
   /** Cambia cliente o tipo: riparte dalle proposte dell'app */
   const reset = (c: PayClient | null, t: Type | null) => {
@@ -154,8 +158,13 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
     const how: Record<string, string> = { cash: " in contanti", transfer: " con bonifico", paypal: " con PayPal", card: " con carta", other: "" };
     const pay = `${who} paga ${formatEuro(amountN)}${how[method] ?? ""} ${paidOn === today ? "oggi" : `il ${formatLong(paidOn)}`}`;
     if (periodic && isISODate(start) && isISODate(end)) {
-      const what = type === "plan" ? `nuovo abbonamento ${PLAN_LABELS[kind].toLowerCase()}` : `rinnovo ${PLAN_LABELS[renewKind!].toLowerCase()}`;
-      return `${pay} per il ${what}: vale dal ${formatLong(start)} al ${formatLong(end)}.`;
+      const what = type === "plan" ? `nuovo ${PLAN_LABELS[kind].toLowerCase()}` : `rinnovo ${PLAN_LABELS[renewKind!].toLowerCase()}`;
+      let extra = "";
+      if (type === "renew" && client?.plan && amountN !== null && client.proposal && Math.abs(amountN - client.proposal.amount) >= 0.005) {
+        const after = keep ? Math.round((client.credit + amountN - client.plan.amount) * 100) / 100 : 0;
+        extra = after > 0 ? ` Restano ${formatEuro(after)} di credito per il rinnovo dopo.` : after < 0 ? ` ${formatEuro(-after)} si aggiungono al rinnovo dopo.` : " Il periodo è saldato così.";
+      }
+      return `${pay} per il ${what}: vale dal ${formatLong(start)} al ${formatLong(end)}.${extra}`;
     }
     if (needsSessions && Number.isInteger(sessionsN) && sessionsN > 0) {
       return `${pay} per ${sessionsN} ${sessionsN === 1 ? "lezione" : "lezioni"} PT${type === "renew" ? " del pacchetto" : ""}${sessionsN > 1 ? ` (${formatEuro(Math.round((amountN / sessionsN) * 100) / 100)} a lezione)` : ""}.`;
@@ -202,7 +211,7 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
             <div>
               <div className="text-[17px] font-semibold">{client.fullName}</div>
               <div className="text-sm text-muted">
-                {client.plan ? `${PLAN_LABELS[client.plan.kind]} · ${formatEuro(client.plan.amount)}` : "Nessun abbonamento"}
+                {client.plan ? `${PLAN_LABELS[client.plan.kind]} · ${formatEuro(client.plan.amount)}` : "Nessun piano"}
                 {client.paidUntil && client.plan && isPeriodic(client.plan.kind) ? ` · a posto fino al ${formatShort(client.paidUntil)}` : ""}
                 {client.paused ? " · in pausa" : ""}
               </div>
@@ -266,7 +275,7 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
               </button>
             ) : null}
             <button type="button" onClick={() => pickType("plan")} className={choice(type === "plan")} aria-pressed={type === "plan"}>
-              <span className="font-semibold">{client?.plan ? "Nuovo abbonamento" : "Abbonamento"}</span>
+              <span className="font-semibold">{client?.plan ? "Nuovo coaching" : "Coaching"}</span>
               <span className={cx("text-sm", type === "plan" ? "text-muted-dark" : "text-muted")}>mensile, trimestrale, semestrale…</span>
             </button>
             <button type="button" onClick={() => pickType("lessons")} className={choice(type === "lessons")} aria-pressed={type === "lessons"}>
@@ -304,7 +313,7 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
                     }}
                     className={chip(kind === k)}
                   >
-                    {PLAN_LABELS[k]}
+                    {PLAN_DURATION[k]}
                   </button>
                 ))}
               </div>
@@ -340,6 +349,11 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
             </div>
           ) : null}
 
+          {type === "renew" && client?.plan && isPeriodic(client.plan.kind) && Math.abs(client.credit) >= 0.005 ? (
+            <p className="text-sm text-muted">
+              {client.credit > 0 ? `Ha un credito di ${formatEuro(client.credit)}` : `Ha ${formatEuro(-client.credit)} da recuperare`}: per questo rinnovo deve {formatEuro(client.proposal?.amount ?? 0)} invece di {formatEuro(client.plan.amount)}.
+            </p>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Importo" hint={type === "lessons" && client?.ptPrice ? `${formatEuro(client.ptPrice)} a lezione` : "€"}>
               <Input name="amount" inputMode="decimal" value={amount} onChange={(e) => { setAmount(e.target.value); setAmountTouched(true); }} placeholder="Es. 300" required />
@@ -353,6 +367,7 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
               <Input name="paid_on" type="date" value={paidOn} max={today} onChange={(e) => setPaidOn(e.target.value)} required />
             </Field>
           </div>
+          {type === "renew" && client?.plan && isPeriodic(client.plan.kind) && client.proposal ? <CreditHint paid={amountN ?? NaN} due={client.proposal.amount} keep={keep} onKeep={setKeep} /> : null}
 
           {periodic ? (
             <div className="grid gap-3 sm:grid-cols-2">

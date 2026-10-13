@@ -27,7 +27,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
     { href: `${base}/check`, label: "Check" },
     { href: `${base}/posturale`, label: "Posturale" },
     ...(me.role === "owner" ? [{ href: `${base}/pagamenti`, label: "Pagamenti" }] : []),
-    { href: `${base}/checkup`, label: "Check-up", dot: (flagged ?? 0) > 0 },
+    { href: `${base}/diario`, label: "Diario", dot: (flagged ?? 0) > 0 },
     { href: `${base}/profilo`, label: "Scheda" },
   ];
   return (

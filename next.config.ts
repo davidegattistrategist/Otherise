@@ -10,6 +10,13 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/staff/eserciziario": ["./dati/**"],
   },
+  // il "check-up" settimanale ora si chiama "diario": i vecchi link (notifiche, segnalibri) portano alla pagina nuova
+  async redirects() {
+    return [
+      { source: "/cliente/checkup", destination: "/cliente/diario", permanent: true },
+      { source: "/staff/clienti/:id/checkup", destination: "/staff/clienti/:id/diario", permanent: true },
+    ];
+  },
   turbopack: {
     rules: {
       "*.css": {

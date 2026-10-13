@@ -14,7 +14,7 @@ import type { ActionState } from "@/components/form-bits";
 export async function submitCheckin(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireActiveClient();
   const week = checkinWeekFor(todayISO());
-  if (!week) return { error: "Il check-up si compila da venerdì a domenica." };
+  if (!week) return { error: "Il diario si compila da venerdì a domenica." };
   const scores: Record<string, number> = {};
   for (const q of CHECKIN_QUESTIONS) {
     const v = Number(fd.get(q.key));
@@ -40,5 +40,5 @@ export async function submitCheckin(_: ActionState, fd: FormData): Promise<Actio
   // Se qualcosa non va il database ha già creato l'avviso per lo staff: lo mandiamo anche per email
   await deliverPendingEmails();
   revalidatePath("/cliente", "layout");
-  redirect("/cliente/checkup?inviato=1");
+  redirect("/cliente/diario?inviato=1");
 }

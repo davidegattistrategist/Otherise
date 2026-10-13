@@ -112,7 +112,7 @@ test("un messaggio nuovo compare da solo, senza ricaricare la pagina", async ({ 
 test("menu in basso staccato dai bordi e nessuna pagina tagliata", async ({ page }, info) => {
   test.skip(info.project.name !== "telefono", "solo telefono");
   await login(page, "giulia@prova.local");
-  for (const p of ["/cliente", "/cliente/programma", "/cliente/progressi", "/cliente/messaggi", "/cliente/profilo", "/cliente/notifiche", "/cliente/checkup"]) {
+  for (const p of ["/cliente", "/cliente/programma", "/cliente/progressi", "/cliente/messaggi", "/cliente/profilo", "/cliente/notifiche", "/cliente/diario"]) {
     await page.goto(p);
     await page.waitForLoadState("networkidle");
     const nav = page.getByRole("navigation", { name: "Menu" }).filter({ visible: true });

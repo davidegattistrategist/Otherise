@@ -60,7 +60,7 @@ const AI_PRESETS = [
   "Stessa struttura, progressione secondo il mio metodo",
   "Ultima settimana di scarico",
   "Cambia i complementari, tieni i fondamentali",
-  "Tieni conto dei fastidi segnalati nei check-up e nelle note",
+  "Tieni conto dei fastidi segnalati nei diari e nelle note",
   "Più lavoro posturale e di core",
   "Usa i carichi del logbook",
 ];
@@ -201,7 +201,7 @@ export function AiPanel({
         <div>
           <Eyebrow dark>Assistente AI</Eyebrow>
           <p className="mt-1.5 max-w-prose text-[15px] leading-relaxed text-muted-dark">
-            Descrivi cosa vuoi per questa fase. L&apos;AI conosce il tuo metodo, i programmi precedenti, il logbook del cliente, i check, la posturale e i check-up. La bozza arriva qui sotto da rivedere: il cliente non vede nulla finché non pubblichi.
+            Descrivi cosa vuoi per questa fase. L&apos;AI conosce il tuo metodo, i programmi precedenti, il logbook del cliente, i check, la posturale e i diari. La bozza arriva qui sotto da rivedere: il cliente non vede nulla finché non pubblichi.
           </p>
         </div>
         <button type="button" aria-label="Chiudi assistente" onClick={() => setOpen(false)} className="rounded-full p-2 text-muted-dark hover:text-card">

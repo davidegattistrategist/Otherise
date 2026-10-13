@@ -101,13 +101,13 @@ test("su richiesta: 'Scrivo da zero' toglie la bozza, 'Prepara una bozza' la rif
   await expect(owner.locator("#ai-reply")).toHaveValue(/Saluta con Ciao/);
 });
 
-test("check-up con una richiesta: la bozza riempie la risposta", async ({ page }) => {
+test("diario con una richiesta: la bozza riempie la risposta", async ({ page }) => {
   await login(page, "titolare@prova.local");
   await page.goto("/staff/clienti");
   await page.getByRole("link", { name: /Esempio Giulia/ }).filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}/);
   const id = page.url().split("/")[5];
-  await page.goto(`/staff/clienti/${id}/checkup`);
+  await page.goto(`/staff/clienti/${id}/diario`);
   const card = page.getByLabel("Bozza di risposta");
   await expect(card).toBeVisible();
   await expect(card).toContainText("puoi spostarlo a sabato");

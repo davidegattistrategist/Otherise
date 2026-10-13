@@ -1,7 +1,13 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "../supabase/server";
-import { todayISO } from "../dates";
+import { formatLong, todayISO } from "../dates";
+
+/** "17 ottobre" (con l'anno solo se non è quello in corso) */
+const dayMonth = (d: string) => (d.slice(0, 4) === todayISO().slice(0, 4) ? formatLong(d).replace(/ \d{4}$/, "") : formatLong(d));
+import { billingStatus, clientFacingStatus, type BillingRow, type PlanKind } from "../billing";
+import { clientNotices, ptLeft, type ClientNotice } from "../client-notice";
+import { getClientCredit } from "./billing";
 import { parseContent, type ProgramContent } from "../program/types";
 import { displayWeek, weekPosition, type WeekPosition } from "../program/schedule";
 import { computeRecords } from "../strength/records";
@@ -82,3 +88,40 @@ export const getMyMaxes = cache(async (clientId: string) => {
   }
   return maxes;
 });
+
+/**
+ * Gli avvisi gentili sui pagamenti per il cliente (rinnovo del coaching,
+ * pacchetto finito, sessioni PT da sistemare) e le sessioni PT che gli restano.
+ * In pausa o a fine percorso nessun avviso.
+ */
+export async function getMyPaymentNotices(input: {
+  clientId: string;
+  clientStatus: string | null;
+  row: BillingRow | null | undefined;
+  coach: string;
+}): Promise<{ notices: ClientNotice[]; ptLeft: number | null }> {
+  if (input.clientStatus === "paused" || input.clientStatus === "archived") return { notices: [], ptLeft: null };
+  const supabase = await createClient();
+  const [{ data: pt }, { data: client }, credit] = await Promise.all([
+    supabase.rpc("my_pt_balance"),
+    supabase.from("clients").select("pt_session_price").eq("id", input.clientId).maybeSingle(),
+    getClientCredit(supabase, input.clientId),
+  ]);
+  const row = input.row ?? null;
+  const kind = (row?.kind ?? null) as PlanKind | null;
+  const status = row ? clientFacingStatus(billingStatus({ ...row, kind: kind! }, todayISO(), 7)) : null;
+  const balance = pt?.[0] ? { bought: Number(pt[0].bought), used: Number(pt[0].used) } : null;
+  return {
+    notices: clientNotices({
+      status,
+      kind,
+      planAmount: Number(row?.amount ?? 0),
+      credit,
+      pt: balance,
+      ptPrice: client?.pt_session_price ? Number(client.pt_session_price) : null,
+      coach: input.coach,
+      formatDate: dayMonth,
+    }),
+    ptLeft: ptLeft(balance, kind),
+  };
+}

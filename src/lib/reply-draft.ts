@@ -100,7 +100,7 @@ function exampleLine(e: StyleExample): string {
     if (e.status === "used" && similarity(e.draft, e.text) > 0.97) return `- Bozza approvata così com'era: ${quote(e.text)}`;
     return `- Bozza: ${quote(e.draft)}\n  ${e.status === "used" ? "L'hai corretta così" : "L'hai scartata e hai scritto"}: ${quote(e.text)}`;
   }
-  return `- ${e.kind === "checkin" ? "(risposta al check-up) " : ""}${quote(e.text)}`;
+  return `- ${e.kind === "checkin" ? "(risposta al diario) " : ""}${quote(e.text)}`;
 }
 
 /**

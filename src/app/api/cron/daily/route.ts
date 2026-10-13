@@ -2,7 +2,7 @@
  * Controlli automatici, una volta al giorno (Vercel Cron, vedi vercel.json):
  * - pagamenti in scadenza o scaduti → avviso al titolare e al cliente
  * - programmi che finiscono entro 7 giorni → avviso a chi segue il cliente
- * - check-up settimanale → promemoria al cliente il venerdì e la domenica
+ * - diario settimanale → promemoria al cliente il venerdì e la domenica
  * Poi manda per email le notifiche nuove.
  * Vercel chiama questo indirizzo con l'intestazione "Authorization: Bearer CRON_SECRET".
  */

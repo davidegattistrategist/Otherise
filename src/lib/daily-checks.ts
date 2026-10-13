@@ -31,16 +31,19 @@ export async function runDailyChecks(today = todayISO()) {
     if (!c) continue;
     const st = billingStatus({ ...b, kind: b.kind as PlanKind }, today, reminderDays);
     if (st.state !== "due_soon" && st.state !== "overdue") continue;
-    const key = st.dueDate ? `${st.dueDate}` : `s${b.sessions_bought}`;
+    // "da saldare" e poi "scaduto" sono due avvisi diversi
+    const key = (st.dueDate ? `${st.dueDate}` : `s${b.sessions_bought}`) + (st.unpaidPeriods > 1 ? ":scaduto" : "");
     for (const o of ownerIds) {
       out.push({ recipient_id: o, client_id: c.id, kind: "payment_due", title: `Pagamento: ${name(c)}`, body: st.label, link: `/staff/clienti/${c.id}/pagamenti`, dedupe_key: `pay:${c.id}:${key}:${st.state}` });
     }
-    // al cliente scriviamo solo per scadenze vicine: un ritardo lungo lo gestisce il coach di persona
+    // al cliente scriviamo con calma e solo per il periodo in corso o uno rimasto indietro: oltre lo gestisce il coach di persona
     if (c.user_id && clientFacingStatus(st)) {
       const body = st.sessionsLeft !== null
-        ? st.sessionsLeft <= 0 ? "Il tuo pacchetto di sessioni è terminato: quando vuoi rinnova con il tuo coach." : `Ti restano ${st.sessionsLeft} sessioni nel pacchetto.`
-        : st.state === "overdue" ? "Il periodo saldato è terminato: quando vuoi rinnova con il tuo coach." : `Il periodo saldato termina il ${formatLong(st.dueDate!)}.`;
-      out.push({ recipient_id: c.user_id, client_id: c.id, kind: "payment_reminder", title: "Promemoria rinnovo", body, link: "/cliente/profilo", dedupe_key: `payclient:${c.id}:${key}:${st.state}` });
+        ? st.sessionsLeft <= 0 ? "Il tuo pacchetto di sessioni è arrivato in fondo: quando ti è comodo ne prepariamo un altro." : `Ti restano ${st.sessionsLeft} sessioni nel pacchetto.`
+        : st.state !== "overdue" ? `Il periodo in corso arriva fino al ${formatLong(st.dueDate!)}: quando ti è comodo sistemiamo il rinnovo.`
+          : st.unpaidPeriods > 1 ? "C'è un periodo scaduto da sistemare: nessuna fretta, quando ti è comodo ne parliamo."
+            : "Il tuo nuovo periodo è iniziato: quando ti è comodo sistemiamo il rinnovo, nessuna fretta.";
+      out.push({ recipient_id: c.user_id, client_id: c.id, kind: "payment_reminder", title: "Un pensiero sul tuo percorso", body, link: "/cliente", dedupe_key: `payclient:${c.id}:${key}:${st.state}` });
     }
   }
 
@@ -72,7 +75,7 @@ export async function runDailyChecks(today = todayISO()) {
     }
   }
 
-  // 3) Check-up settimanale (venerdì apertura, domenica ultimo promemoria)
+  // 3) Diario settimanale (venerdì apertura, domenica ultimo promemoria)
   const week = checkinWeekFor(today);
   const dow = isoWeekday(today);
   if (week && (dow === 5 || dow === 7)) {
@@ -84,9 +87,9 @@ export async function runDailyChecks(today = todayISO()) {
         recipient_id: c.user_id,
         client_id: c.id,
         kind: "checkin_reminder",
-        title: dow === 5 ? "Il check-up della settimana è aperto" : "Ultimo giorno per il check-up",
+        title: dow === 5 ? "Il diario della settimana è aperto" : "Ultimo giorno per il diario",
         body: "Quattro domande, tre minuti.",
-        link: "/cliente/checkup",
+        link: "/cliente/diario",
         dedupe_key: `checkin:${c.id}:${week}:${dow}`,
       });
     }

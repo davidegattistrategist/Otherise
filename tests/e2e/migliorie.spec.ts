@@ -1,4 +1,4 @@
-/** Funzioni aggiunte dopo la prima versione: pagamenti rapidi, export, progressioni, registrazione per il cliente, AI sui check-up. */
+/** Funzioni aggiunte dopo la prima versione: pagamenti rapidi, export, progressioni, registrazione per il cliente, AI sui diario. */
 import { expect, test, type Page } from "@playwright/test";
 
 const PASS = "Password-di-prova-123";
@@ -164,12 +164,12 @@ test("lo staff registra l'allenamento per il cliente e vede il riassunto AI", as
     else await page.locator("main input").filter({ visible: true }).first().fill(`Fatto in sessione ${Date.now()}`);
     await expect(page.getByText(/Salvato alle/)).toBeVisible({ timeout: 3_000 });
   }).toPass({ timeout: 20_000 });
-  await page.goto(`${base}/checkup`);
+  await page.goto(`${base}/diario`);
   await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: "Prepara il riassunto" }).click();
   await expect(page.getByText("Cosa funziona")).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: /Usala come risposta/ }).click();
-  await expect(page.locator("textarea[name=coach_reply]").first()).toHaveValue(/Grazie per il check-up/);
+  await expect(page.locator("textarea[name=coach_reply]").first()).toHaveValue(/Grazie per il diario/);
 });
 
 test("il cliente vede record ed esercizi nei progressi", async ({ page }) => {
@@ -319,7 +319,7 @@ test("nuovo pagamento da Pagamenti: cliente nuovo con abbonamento, poi rinnovo e
   await page.locator("#pay-search").fill(name);
   await page.getByRole("button", { name: /Cliente nuovo/ }).click();
   await expect(page.locator('input[name="new_first_name"]')).toHaveValue(name);
-  await page.getByRole("button", { name: /^Abbonamento/ }).click();
+  await page.getByRole("button", { name: /^Coaching/ }).click();
   await page.getByRole("button", { name: "Trimestrale", exact: true }).click();
   await page.locator('input[name="amount"]').fill("300");
   await page.locator('select[name="method"]').selectOption("cash");
@@ -355,5 +355,5 @@ test("nuovo pagamento da Pagamenti: cliente nuovo con abbonamento, poi rinnovo e
   await page.goto("/staff/pagamenti");
   await page.locator("#tutti-i-pagamenti summary").click();
   await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name }).filter({ hasText: "Valutazione posturale" })).toHaveCount(1);
-  await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name }).filter({ hasText: "Trimestrale" })).toHaveCount(2);
+  await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name }).filter({ hasText: "Coaching trimestrale" })).toHaveCount(2);
 });

@@ -8,14 +8,26 @@ import { addDays, addMonths, diffDays, type ISODate } from "./dates";
 export const PLAN_KINDS = ["monthly", "six_weeks", "quarterly", "semiannual", "annual", "package", "single"] as const;
 export type PlanKind = (typeof PLAN_KINDS)[number];
 
+/** Nomi dei piani: il "coaching" è l'abbonamento a periodo, il resto sono lezioni PT. */
 export const PLAN_LABELS: Record<PlanKind, string> = {
+  monthly: "Coaching mensile",
+  six_weeks: "Coaching 6 settimane",
+  quarterly: "Coaching trimestrale",
+  semiannual: "Coaching semestrale",
+  annual: "Coaching annuale",
+  package: "Pacchetto di lezioni PT",
+  single: "Lezione PT singola",
+};
+
+/** Solo la durata (per scegliere il coaching, dove "coaching" è già scritto sopra). */
+export const PLAN_DURATION: Record<PlanKind, string> = {
   monthly: "Mensile",
   six_weeks: "6 settimane",
   quarterly: "Trimestrale",
   semiannual: "Semestrale",
   annual: "Annuale",
-  package: "Pacchetto di sessioni",
-  single: "Sessione singola",
+  package: "Pacchetto",
+  single: "Singola",
 };
 
 /** Come chiamare il periodo saldato nei testi per il cliente */
@@ -42,6 +54,17 @@ export const METHOD_LABELS: Record<PaymentMethod, string> = {
 export function isPeriodic(kind: PlanKind): boolean {
   return kind !== "package" && kind !== "single";
 }
+
+/**
+ * In coaching: piano a periodo (mensile, 6 settimane, trimestrale…). Chi ha un
+ * pacchetto o lezioni singole fa lezioni PT; chi non ha un piano conta come
+ * coaching solo se ha (o ha avuto) dei programmi.
+ */
+export function isCoaching(planKind: PlanKind | null, hasPrograms: boolean): boolean {
+  if (planKind) return isPeriodic(planKind);
+  return hasPrograms;
+}
+
 
 /** Ultimo giorno coperto da un pagamento che parte da `start`. */
 export function periodEnd(kind: PlanKind, start: ISODate): ISODate | null {
@@ -88,63 +111,88 @@ export type BillingStatus = {
   dueDate: ISODate | null;
   daysLeft: number | null;
   sessionsLeft: number | null;
+  /**
+   * Coaching non ancora saldato: quanti periodi sono da saldare, compreso
+   * quello in corso (1 = solo il periodo in corso, "da saldare"; 2 o più =
+   * ne è finito almeno uno senza pagamento, "scaduto"). 0 negli altri casi.
+   */
+  unpaidPeriods: number;
 };
 
 export const SESSIONS_WARNING = 2;
 
 export function billingStatus(row: BillingRow | null | undefined, today: ISODate, reminderDays = 7): BillingStatus {
   if (!row) {
-    return { state: "none", label: "Nessun piano", clientLabel: "", dueDate: null, daysLeft: null, sessionsLeft: null };
+    return { state: "none", label: "Nessun piano", clientLabel: "", dueDate: null, daysLeft: null, sessionsLeft: null, unpaidPeriods: 0 };
   }
   const kind = row.kind;
   if (kind === "package") {
     const left = row.sessions_bought - row.sessions_used;
     if (row.sessions_bought <= 0) {
-      return { state: "overdue", label: "Pacchetto da saldare", clientLabel: "Pacchetto da saldare", dueDate: null, daysLeft: null, sessionsLeft: 0 };
+      return { state: "overdue", label: "Pacchetto da saldare", clientLabel: "Pacchetto da saldare", dueDate: null, daysLeft: null, sessionsLeft: 0, unpaidPeriods: 0 };
     }
     const state: BillingState = left <= 0 ? "overdue" : left <= SESSIONS_WARNING ? "due_soon" : "ok";
     const word = (n: number) => (n === 1 ? "sessione" : "sessioni");
     const label = left <= 0
       ? left === 0 ? "Pacchetto finito" : `Pacchetto finito (${-left} ${word(-left)} in più)`
       : `${left} ${word(left)} ${left === 1 ? "rimasta" : "rimaste"}`;
-    return { state, label, clientLabel: label, dueDate: null, daysLeft: null, sessionsLeft: left };
+    return { state, label, clientLabel: label, dueDate: null, daysLeft: null, sessionsLeft: left, unpaidPeriods: 0 };
   }
   if (kind === "single") {
-    return { state: "ok", label: "Paga a sessione", clientLabel: "Paghi a sessione", dueDate: null, daysLeft: null, sessionsLeft: null };
+    return { state: "ok", label: "Paga a sessione", clientLabel: "Paghi a sessione", dueDate: null, daysLeft: null, sessionsLeft: null, unpaidPeriods: 0 };
   }
   if (!row.paid_until) {
-    return { state: "overdue", label: "Primo pagamento da registrare", clientLabel: "Pagamento da saldare", dueDate: null, daysLeft: null, sessionsLeft: null };
+    return { state: "overdue", label: "Primo pagamento da registrare", clientLabel: "Pagamento da saldare", dueDate: null, daysLeft: null, sessionsLeft: null, unpaidPeriods: 0 };
   }
   const daysLeft = diffDays(today, row.paid_until);
   const noun = PERIOD_NOUN[kind];
   if (daysLeft < 0) {
+    // Il periodo in corso non ancora pagato è "da saldare", non scaduto: è
+    // scaduto solo quando ne è finito uno intero senza pagamento.
+    let unpaidPeriods = 1;
+    let end = periodEnd(kind, addDays(row.paid_until, 1))!;
+    while (end < today && unpaidPeriods < 60) {
+      unpaidPeriods++;
+      end = periodEnd(kind, addDays(end, 1))!;
+    }
+    if (unpaidPeriods === 1) {
+      return { state: "overdue", label: `${noun} da saldare`, clientLabel: `${noun} da saldare`, dueDate: row.paid_until, daysLeft, sessionsLeft: null, unpaidPeriods };
+    }
+    // giorni dalla fine del primo periodo non pagato
+    const late = diffDays(periodEnd(kind, addDays(row.paid_until, 1))!, today);
     return {
       state: "overdue",
-      label: `Scaduto da ${-daysLeft} ${-daysLeft === 1 ? "giorno" : "giorni"}`,
-      clientLabel: "Rinnovo da saldare",
+      label: `Scaduto da ${late} ${late === 1 ? "giorno" : "giorni"}`,
+      clientLabel: "Periodo scaduto",
       dueDate: row.paid_until,
       daysLeft,
       sessionsLeft: null,
+      unpaidPeriods,
     };
   }
   const state: BillingState = daysLeft <= reminderDays ? "due_soon" : "ok";
   const label = state === "ok"
     ? "In regola"
     : daysLeft === 0 ? "Scade oggi" : `Scade tra ${daysLeft} ${daysLeft === 1 ? "giorno" : "giorni"}`;
-  return { state, label, clientLabel: `${noun} saldato fino al`, dueDate: row.paid_until, daysLeft, sessionsLeft: null };
+  return { state, label, clientLabel: `${noun} saldato fino al`, dueDate: row.paid_until, daysLeft, sessionsLeft: null, unpaidPeriods: 0 };
 }
 
-/** Oltre quanti giorni di ritardo il cliente non vede più avvisi di rinnovo (se ne occupa il trainer di persona). */
-export const CLIENT_OVERDUE_LIMIT = 10;
+/**
+ * Fino a quanti periodi da saldare (compreso quello in corso) il cliente vede
+ * l'avviso: il periodo in corso ("da saldare") e uno rimasto indietro
+ * ("scaduto"). Oltre (di solito un dato vecchio, per esempio dallo storico
+ * importato) se ne occupa il trainer di persona.
+ */
+export const CLIENT_UNPAID_PERIODS_LIMIT = 2;
 
 /**
- * Lo stato dei pagamenti da far vedere al cliente: in regola, in scadenza o
- * scaduto da poco. Un ritardo lungo (o un dato vecchio, per esempio dallo
- * storico importato) non si mostra e non manda promemoria: lo vede il trainer.
+ * Lo stato dei pagamenti da far vedere al cliente: in regola, in scadenza,
+ * periodo in corso da saldare o scaduto da un periodo. Un ritardo più lungo
+ * non si mostra e non manda promemoria: lo vede il trainer.
  */
 export function clientFacingStatus(st: BillingStatus): BillingStatus | null {
   if (st.state !== "overdue") return st;
-  if (st.daysLeft !== null) return -st.daysLeft <= CLIENT_OVERDUE_LIMIT ? st : null;
+  if (st.daysLeft !== null) return st.unpaidPeriods <= CLIENT_UNPAID_PERIODS_LIMIT ? st : null;
   // pacchetto finito: avviso solo se ha sforato di poco
   if (st.sessionsLeft !== null && st.sessionsLeft < 0 && st.sessionsLeft >= -2) return st;
   return st.sessionsLeft === 0 ? st : null;
@@ -168,11 +216,35 @@ export function situationText(status: BillingStatus, kind: PlanKind, formatDate:
   return "c'è un pagamento da saldare";
 }
 
-/** Prossimo pagamento proposto per un piano: importo, periodo o sessioni. */
-export function nextPaymentProposal(plan: { kind: PlanKind; amount: number | string; method: string; start_date: ISODate; package_sessions: number | null }, paidUntil: ISODate | null) {
+/**
+ * Credito del cliente (coaching). Se paga più del dovuto la differenza resta
+ * come credito e il rinnovo dopo costa meno; se paga meno, la differenza si
+ * aggiunge al rinnovo dopo (credito negativo).
+ */
+const cents = (n: number) => Math.round(n * 100) / 100 || 0;
+/** Quanto deve pagare per il prossimo periodo: prezzo del piano meno il credito (mai sotto zero). */
+export function dueAmount(planAmount: number, credit: number): number {
+  return Math.max(0, cents(planAmount - credit));
+}
+/**
+ * Di quanto cambia il credito con un pagamento di un periodo.
+ * `keep`: la differenza rispetto al dovuto resta (credito o da recuperare);
+ * altrimenti il periodo è saldato così (il credito di prima si usa tutto).
+ */
+export function creditChange(input: { planAmount: number; credit: number; paid: number; keep: boolean }): number {
+  return input.keep ? cents(input.paid - input.planAmount) : cents(-input.credit);
+}
+/** Testo breve del credito: "Credito 200 €" / "Da recuperare 50 €". */
+export function creditLabel(credit: number): string | null {
+  if (Math.abs(credit) < 0.005) return null;
+  return credit > 0 ? `Credito ${formatEuro(credit)}` : `Da recuperare ${formatEuro(-credit)}`;
+}
+
+/** Prossimo pagamento proposto per un piano: importo (meno l'eventuale credito), periodo o sessioni. */
+export function nextPaymentProposal(plan: { kind: PlanKind; amount: number | string; method: string; start_date: ISODate; package_sessions: number | null }, paidUntil: ISODate | null, credit = 0) {
   const period = suggestNextPeriod(plan.kind, plan.start_date, paidUntil);
   return {
-    amount: Number(plan.amount),
+    amount: isPeriodic(plan.kind) ? dueAmount(Number(plan.amount), credit) : Number(plan.amount),
     method: plan.method,
     period_start: period?.start ?? null,
     period_end: period?.end ?? null,

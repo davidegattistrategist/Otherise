@@ -64,7 +64,7 @@ export async function requireClient(): Promise<Me & { clientId: string }> {
 }
 
 /**
- * Pagine del percorso (programma, allenamenti, progressi, check-up): a chi ha
+ * Pagine del percorso (programma, allenamenti, progressi, diario): a chi ha
  * terminato il percorso resta solo la chat.
  */
 export async function requireActiveClient(): Promise<Me & { clientId: string }> {

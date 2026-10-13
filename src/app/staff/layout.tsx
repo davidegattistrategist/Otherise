@@ -82,7 +82,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
     </div>
       <InstallGuide appName={homeScreenName(name)} />
       <PushSync />
-      <PushPopup text="Ti avviso quando un cliente ti scrive, segnala un dolore o compila il check-up." />
+      <PushPopup text="Ti avviso quando un cliente ti scrive, segnala un dolore o compila il diario." />
     </LiveProvider>
   );
 }

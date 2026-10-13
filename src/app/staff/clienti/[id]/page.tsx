@@ -189,7 +189,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
 
       {client.weekly_checkin ? (
         <Card className="flex flex-col gap-3">
-          <div className="flex items-center justify-between"><Eyebrow>Ultimo check-up</Eyebrow>{lastCheckin ? <span className="text-sm text-muted">sett. {formatShort(lastCheckin.week_start, 0)}</span> : null}</div>
+          <div className="flex items-center justify-between"><Eyebrow>Ultimo diario</Eyebrow>{lastCheckin ? <span className="text-sm text-muted">sett. {formatShort(lastCheckin.week_start, 0)}</span> : null}</div>
           {lastCheckin ? (
             <>
               <div className="grid grid-cols-4 gap-2 text-center">
@@ -201,10 +201,10 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
                 ))}
               </div>
               {lastCheckin.flagged && !lastCheckin.reviewed_at ? <p className="text-sm"><Dot tone="accent" className="mr-1.5" />Da guardare: {lastCheckin.flag_reasons.join(", ")}</p> : null}
-              <ArrowCTA href={`/staff/clienti/${id}/checkup`}>Storico</ArrowCTA>
+              <ArrowCTA href={`/staff/clienti/${id}/diario`}>Storico</ArrowCTA>
             </>
           ) : (
-            <p className="text-[15px] text-muted">Nessun check-up compilato. Il cliente lo trova nell&apos;app da venerdì a domenica.</p>
+            <p className="text-[15px] text-muted">Nessun diario compilato. Il cliente lo trova nell&apos;app da venerdì a domenica.</p>
           )}
         </Card>
       ) : null}

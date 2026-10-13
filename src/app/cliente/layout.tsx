@@ -39,7 +39,7 @@ export default async function ClientAreaLayout({ children }: { children: React.R
       </div>
       <InstallGuide appName={homeScreenName(name)} />
       <PushSync />
-      <PushPopup text="Ti avviso quando ti scrive il tuo coach, quando è pronto il programma nuovo e quando c'è il check-up da fare." />
+      <PushPopup text="Ti avviso quando ti scrive il tuo coach, quando è pronto il programma nuovo e quando c'è il diario da compilare." />
     </LiveProvider>
   );
 }

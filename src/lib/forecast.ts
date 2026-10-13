@@ -90,7 +90,7 @@ export function buildForecast(plans: ForecastPlan[], today: ISODate, months: num
     let next = p.paidUntil ? addDays(p.paidUntil, 1) : today;
     let n = 1;
     while (next < end && n < 60) {
-      push({ date: next, clientId: p.clientId, name: p.name, amount: p.amount, kind: "recurring", probability: Math.pow(renewalRate, n), label: n === 1 && next <= today ? "Rinnovo scaduto" : "Rinnovo" });
+      push({ date: next, clientId: p.clientId, name: p.name, amount: p.amount, kind: "recurring", probability: Math.pow(renewalRate, n), label: n === 1 && next <= today ? "Rinnovo da saldare" : "Rinnovo" });
       const pe = periodEnd(p.kind, next);
       if (!pe) break;
       next = addDays(pe, 1);

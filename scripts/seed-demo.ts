@@ -5,7 +5,7 @@
  *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx scripts/seed-demo.ts
  *
  * Crea: titolare, collaboratore, tre clienti (due con account), eserciziario,
- * programmi con logbook, check, posturale, pagamenti e check-up.
+ * programmi con logbook, check, posturale, pagamenti e diario.
  * Password di tutti gli account: Password-di-prova-123
  */
 import { readFileSync } from "node:fs";
@@ -258,7 +258,7 @@ async function main() {
     },
   }).throwOnError();
 
-  // Check-up di Giulia: tre settimane tranquille, l'ultima con un problema
+  // Diario di Giulia: tre settimane tranquille, l'ultima con un problema
   const weeks = [-21, -14, -7].map((d) => mondayOf(addDays(today, d)));
   await db.from("checkins").insert({ client_id: giulia, week_start: weeks[0], training: 4, sleep: 4, stress: 3, adherence: 4 });
   await db.from("checkins").insert({ client_id: giulia, week_start: weeks[1], training: 4, sleep: 4, stress: 4, adherence: 4, coach_reply: "Brava, continua così!", reviewed_at: new Date().toISOString() });
@@ -281,7 +281,7 @@ async function main() {
     { client_id: marta, sender_id: owner, body: "Buongiorno Marta, perfetto. Per la corsa teniamo il passo concordato, ci aggiorniamo al prossimo check.", created_at: at(4, 0) },
   ]).throwOnError();
   await db.from("chat_reads").insert([{ user_id: owner, client_id: giulia, last_read_at: at(3, 2) }, { user_id: giuliaUser, client_id: giulia, last_read_at: at(3, 2) }]);
-  // una bozza già corretta dal trainer (l'assistente impara da qui) e una pronta per il check-up
+  // una bozza già corretta dal trainer (l'assistente impara da qui) e una pronta per il diario
   await db.from("ai_reply_drafts").insert([
     { client_id: giulia, source: "chat", body: "Ciao Giulia, è normale percepire più fatica in questa settimana perché il volume di lavoro è più alto. Ti consiglio di mantenere 40 kg e concentrarti sulla tecnica.", status: "used", sent_text: chat[1].body, sent_by: owner, created_at: at(6, 0.5), closed_at: at(6, 1) },
     { client_id: giulia, source: "checkin", checkin_id: lastCheckin!.id, body: "Ciao Giulia, certo che puoi spostarlo a sabato, nessun problema: l'importante è fare gli allenamenti in ordine. Visto che hai dormito poco, sabato tieni i carichi della settimana scorsa e non forzare. Ci sentiamo giovedì!" },

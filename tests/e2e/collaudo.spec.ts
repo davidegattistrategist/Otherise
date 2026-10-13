@@ -254,7 +254,7 @@ test.describe("collaboratore", () => {
 });
 
 test.describe("cliente", () => {
-  test("allenamento, progressi, check-up, percorso", async ({ page }, info) => {
+  test("allenamento, progressi, diario, percorso", async ({ page }, info) => {
     const kgValue = info.project.name === "pc" ? "61" : "62";
     const errors = await login(page, "giulia@prova.local");
     await expect(page.getByRole("heading", { name: "Ciao Giulia" })).toBeVisible();
@@ -299,7 +299,7 @@ test.describe("cliente", () => {
       await expect(page.getByText("Allenamento registrato")).toBeVisible();
     }
     // progressi, percorso, notifiche
-    for (const p of ["/cliente/progressi", "/cliente/profilo", "/cliente/notifiche", "/cliente/checkup"]) {
+    for (const p of ["/cliente/progressi", "/cliente/profilo", "/cliente/notifiche", "/cliente/diario"]) {
       await page.goto(p);
       await expect(page.locator("h1").first()).toBeVisible();
       expect(await noHorizontalScroll(page), p).toBe(true);

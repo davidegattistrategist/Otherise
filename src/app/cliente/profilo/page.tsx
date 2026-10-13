@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { requireClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { getMyPrograms } from "@/lib/data/me";
+import { getMyPaymentNotices, getMyPrograms } from "@/lib/data/me";
+import { PaymentNotices } from "@/components/payment-notice";
 import { diffDays, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { programEndDate } from "@/lib/program/schedule";
 import { billingStatus, formatEuro, METHOD_LABELS, PLAN_LABELS, type BillingRow, type PaymentMethod, type PlanKind, clientFacingStatus } from "@/lib/billing";
@@ -35,6 +36,8 @@ export default async function ClientProfilePage() {
   const ended = me.clientStatus === "archived";
   // in pausa: nessun promemoria di rinnovo
   const pay = row && me.clientStatus !== "paused" ? clientFacingStatus(billingStatus({ ...row, kind: row.kind as PlanKind }, today, 7)) : null;
+  const coachFirst = coach?.split(" ")[0] || "il tuo coach";
+  const { notices, ptLeft } = await getMyPaymentNotices({ clientId: me.clientId, clientStatus: me.clientStatus, row, coach: coachFirst });
   const phases = [current, upcoming, ...past].filter(Boolean).length;
   const months = client ? Math.max(0, Math.round(diffDays(client.start_date, today) / 30.44)) : 0;
 
@@ -77,13 +80,16 @@ export default async function ClientProfilePage() {
         </Card>
       ) : null}
 
+      {!ended ? <PaymentNotices notices={notices} coach={coachFirst} /> : null}
+
       {pay && pay.state !== "none" && row ? (
         <Card className="flex flex-col gap-3">
-          <Eyebrow>Abbonamento</Eyebrow>
+          <Eyebrow>Il tuo piano</Eyebrow>
           <div className="flex items-center gap-2 text-lg font-semibold">
             {pay.state === "overdue" || pay.state === "due_soon" ? <Dot tone="accent" /> : null}
-            {pay.dueDate ? `${pay.clientLabel} ${formatLong(pay.dueDate)}` : pay.clientLabel}
+            {pay.state === "overdue" ? pay.clientLabel : pay.dueDate ? `${pay.clientLabel} ${formatLong(pay.dueDate)}` : pay.clientLabel}
           </div>
+          {ptLeft ? <p className="text-[15px]">{ptLeft === 1 ? "Ti resta 1 sessione PT" : `Ti restano ${ptLeft} sessioni PT`} già saldate.</p> : null}
           <p className="text-sm text-muted">{PLAN_LABELS[row.kind as PlanKind]}{row.kind === "package" ? (row.sessions_bought - row.sessions_used > 0 ? ` · ${row.sessions_bought - row.sessions_used === 1 ? "ti resta 1 sessione" : `ti restano ${row.sessions_bought - row.sessions_used} sessioni`}` : " · sessioni del pacchetto finite") : ""}. I pagamenti si fanno fuori dall&apos;app, come sempre.</p>
           {payments?.length ? (
             <ul className="flex flex-col border-t border-sand-deep pt-2">

@@ -1,6 +1,6 @@
 /**
  * Grafico a linea semplice (SVG), per peso, massa grassa, massa magra,
- * circonferenze e voti del check-up. L'ultimo punto è evidenziato in arancio.
+ * circonferenze e voti del diario. L'ultimo punto è evidenziato in arancio.
  */
 import { formatShort, type ISODate } from "@/lib/dates";
 import { fmtNum } from "./ui";

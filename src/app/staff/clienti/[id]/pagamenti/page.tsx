@@ -3,13 +3,13 @@ import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatShort, todayISO } from "@/lib/dates";
-import { billingStatus, formatEuro, isPeriodic, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
-import { getPtCounter, reminderChatLink } from "@/lib/data/billing";
+import { billingStatus, dueAmount, formatEuro, isPeriodic, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
+import { getClientCredit, getPtCounter, reminderChatLink } from "@/lib/data/billing";
 import { IconChat, IconDown } from "@/components/icons";
 import { Card, Dot, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
-import { EditPaymentForm, ExtraPaymentForm, PaymentForm, PlanForm, PtLeftForm, PtPriceForm, ReminderButton } from "./forms";
-import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setPtLeft, setPtPrice, clearPtCorrection, updatePayment } from "./actions";
+import { CreditFixForm, EditPaymentForm, ExtraPaymentForm, PaymentForm, PlanForm, PtLeftForm, PtPriceForm, ReminderButton } from "./forms";
+import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setCredit, setPtLeft, setPtPrice, clearPtCorrection, updatePayment } from "./actions";
 import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Pagamenti" };
@@ -22,7 +22,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
   const today = todayISO();
   const [{ data: plans }, { data: payments }, { data: billing }, { data: settings }, { data: client }] = await Promise.all([
     supabase.from("payment_plans").select("id, kind, amount, method, start_date, package_sessions, active, notes, created_at, sessions_written_off, package_closed_on, package_closed_sessions").eq("client_id", id).order("created_at", { ascending: false }),
-    supabase.from("payments").select("id, plan_id, paid_on, amount, method, period_start, period_end, sessions, notes").eq("client_id", id).order("paid_on", { ascending: false }),
+    supabase.from("payments").select("id, plan_id, paid_on, amount, method, period_start, period_end, sessions, notes, credit_change").eq("client_id", id).order("paid_on", { ascending: false }),
     supabase.rpc("client_billing", { cid: id }),
     supabase.from("app_settings").select("reminder_days, payment_message").maybeSingle(),
     supabase.from("clients").select("free, status").eq("id", id).maybeSingle(),
@@ -39,7 +39,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
     );
   }
   const plan = (plans ?? []).find((p) => p.active) ?? null;
-  const { counter: pt, price: ptPrice } = await getPtCounter(supabase, id);
+  const [{ counter: pt, price: ptPrice }, credit] = await Promise.all([getPtCounter(supabase, id), getClientCredit(supabase, id)]);
   const row = (billing as BillingRow[] | null)?.[0] ?? null;
   // in pausa o a fine percorso non è tra i pagamenti da incassare
   const paused = client?.status === "paused" || client?.status === "archived";
@@ -48,6 +48,8 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
     : billingStatus(row ? { ...row, kind: row.kind as PlanKind } : null, today, settings?.reminder_days ?? 7);
   const kind = plan?.kind as PlanKind | undefined;
   const suggestion = plan && kind ? suggestNextPeriod(kind, plan.start_date, row?.paid_until ?? null) : null;
+  // coaching: quanto deve per il prossimo periodo, tolto il credito (o aggiunto quello da recuperare)
+  const due = plan && kind && isPeriodic(kind) ? dueAmount(Number(plan.amount), credit) : null;
   const totalYear = (payments ?? []).filter((p) => p.paid_on.slice(0, 4) === today.slice(0, 4)).reduce((s, p) => s + Number(p.amount), 0);
   const editingPlan = piano === "modifica" && plan;
   const newPlan = !plan;
@@ -71,6 +73,11 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
               {kind === "package" && pt ? ` · ${pt.left >= 0 ? `${pt.left} ${pt.left === 1 ? "sessione rimasta" : "sessioni rimaste"}` : `${-pt.left} da saldare`}` : ""}
               {kind === "package" && plan.sessions_written_off ? ` · ${plan.sessions_written_off} non usate (pacchetto chiuso)` : ""}
             </p>
+            {kind && isPeriodic(kind) && Math.abs(credit) >= 0.005 ? (
+              <p className="text-[15px] text-card">
+                {credit > 0 ? `Credito di ${formatEuro(credit)}` : `${formatEuro(-credit)} da recuperare`}: il prossimo rinnovo è di <strong>{formatEuro(due ?? 0)}</strong> invece di {formatEuro(plan.amount)}.
+              </p>
+            ) : null}
             {paused ? <p className="text-sm text-muted-dark">Non è tra i pagamenti da incassare. Se rinnova, registra il pagamento e {client?.status === "paused" ? "riattivalo" : "riprendi il percorso"} dalla Scheda.</p> : null}
             {plan.notes ? <p className="text-sm text-muted-dark">{plan.notes}</p> : null}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1 text-sm font-semibold">
@@ -103,13 +110,23 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
               kind={kind}
               defaults={{
                 paid_on: today,
-                amount: plan.amount,
+                amount: due ?? plan.amount,
                 method: plan.method,
                 period_start: suggestion?.start ?? null,
                 period_end: suggestion?.end ?? null,
                 sessions: kind === "package" ? plan.package_sessions : 1,
               }}
+              due={due ?? undefined}
             />
+            {isPeriodic(kind) ? (
+              <details className="group border-t border-sand-deep pt-3">
+                <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Credito o importo da recuperare</summary>
+                <div className="flex flex-col gap-3 pt-3">
+                  <p className="text-sm text-muted">Il prezzo del {PLAN_LABELS[kind].toLowerCase()} è {formatEuro(plan.amount)} (si cambia da &quot;Modifica il piano&quot;). Se una volta ha pagato di più o di meno, qui scrivi com&apos;è la situazione oggi: il prossimo rinnovo si aggiusta da solo.</p>
+                  <CreditFixForm action={setCredit.bind(null, id)} credit={credit} />
+                </div>
+              </details>
+            ) : null}
           </Card>
         ) : null}
 
@@ -235,6 +252,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
                       {p.period_start && p.period_end ? ` · copre ${formatShort(p.period_start, 0)} – ${formatShort(p.period_end, 0)}` : ""}
                       {p.sessions ? ` · ${p.sessions} ${p.sessions === 1 ? "sessione" : "sessioni"}` : ""}
                     </div>
+                    {Number(p.credit_change) > 0 ? <div className="text-sm text-ink-soft">+{formatEuro(p.credit_change)} sul credito (il rinnovo dopo costa meno)</div> : Number(p.credit_change) < 0 ? <div className="text-sm text-ink-soft">−{formatEuro(-Number(p.credit_change))} sul credito</div> : null}
                     {p.notes ? <div className="text-sm text-ink-soft">{p.notes}</div> : null}
                     <details className="mt-1">
                       <summary className="inline-flex min-h-9 cursor-pointer items-center text-sm font-semibold text-ink-soft underline">Modifica</summary>

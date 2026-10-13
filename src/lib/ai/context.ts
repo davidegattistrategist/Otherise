@@ -2,7 +2,7 @@ import "server-only";
 /**
  * Tutto quello che l'assistente AI deve sapere su un cliente per preparare
  * il programma: storico dei programmi, logbook reale, check, posturale,
- * check-up e note di sessione. Nome e cognome NON vengono mai inviati.
+ * diario e note di sessione. Nome e cognome NON vengono mai inviati.
  */
 import type { ServerSupabase } from "../supabase/server";
 import { addDays, ageOn, todayISO } from "../dates";
@@ -148,7 +148,7 @@ export async function buildClientContext(
 
   if (checkins.data?.length) {
     parts.push(
-      "## Check-up settimanali (voti 1–5)\n" +
+      "## Diari settimanali (voti 1–5)\n" +
         checkins.data
           .map((k) => `- settimana del ${k.week_start}: allenamenti ${k.training}, sonno ${k.sleep}, stress ${k.stress}, percorso ${k.adherence}${k.issues ? `; problemi: ${k.issues}` : ""}${k.request ? `; richiesta: ${k.request}` : ""}`)
           .join("\n"),

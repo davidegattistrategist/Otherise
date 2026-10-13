@@ -47,7 +47,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
         }
       >
         <p className="max-w-3xl text-[15px] leading-relaxed text-muted">
-          Quanto dovrebbe entrare nei prossimi mesi {f.clients === 1 ? "dall'unico cliente attivo" : `dai ${f.clients} clienti attivi`} con un piano: gli abbonamenti si rinnovano alla scadenza, i pacchetti quando finiscono le sessioni al ritmo con cui le fa ogni cliente. Clienti in pausa e archiviati sono esclusi.
+          Quanto dovrebbe entrare nei prossimi mesi {f.clients === 1 ? "dall'unico cliente attivo" : `dai ${f.clients} clienti attivi`} con un piano: i coaching si rinnovano alla scadenza, i pacchetti quando finiscono le sessioni al ritmo con cui le fa ogni cliente. Clienti in pausa e archiviati sono esclusi.
         </p>
       </PageTitle>
 
@@ -55,7 +55,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
         <Card dark>
           <Eyebrow dark>Prossimi 30 giorni</Eyebrow>
           <BigNumber className="mt-3 text-card" value={formatEuro(f.next30)} />
-          {f.overdue30 ? <p className="mt-1 text-xs text-muted-dark">di cui {formatEuro(f.overdue30)} già scaduti</p> : null}
+          {f.overdue30 ? <p className="mt-1 text-xs text-muted-dark">di cui {formatEuro(f.overdue30)} già da saldare</p> : null}
         </Card>
         <Card><Eyebrow>In {months} mesi</Eyebrow><BigNumber className="mt-3" value={formatEuro(f.total)} /></Card>
         <Card><Eyebrow>Media al mese</Eyebrow><BigNumber className="mt-3" value={formatEuro(Math.round(avg))} /></Card>
@@ -73,7 +73,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
             <p className="mt-1 text-sm text-muted">Tocca un mese per vedere chi deve pagare.</p>
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted">
-            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm" style={{ background: COLORS.recurring }} /> Abbonamenti</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm" style={{ background: COLORS.recurring }} /> Coaching</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm" style={{ background: COLORS.packages }} /> Pacchetti</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded-sm" style={{ background: COLORS.single }} /> A sessione</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-4 bg-accent-deep" /> Prudente</span>
@@ -109,7 +109,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
         </div>
         {overdue.length ? (
           <div className="rounded-2xl bg-accent-soft px-4 py-3">
-            <div className="text-sm font-semibold">Già scaduti, da sistemare</div>
+            <div className="text-sm font-semibold">Già da saldare</div>
             <EventList events={overdue} />
           </div>
         ) : null}
@@ -123,7 +123,7 @@ export default async function ForecastPage({ searchParams }: { searchParams: Pro
             <thead>
               <tr className="text-xs tracking-wider text-muted uppercase">
                 <th className="px-2 py-2 font-semibold">Mese</th>
-                <th className="hidden px-2 py-2 text-right font-semibold sm:table-cell">Abbonamenti</th>
+                <th className="hidden px-2 py-2 text-right font-semibold sm:table-cell">Coaching</th>
                 <th className="hidden px-2 py-2 text-right font-semibold sm:table-cell">Pacchetti</th>
                 <th className="hidden px-2 py-2 text-right font-semibold sm:table-cell">A sessione</th>
                 <th className="px-2 py-2 text-right font-semibold">Totale</th>

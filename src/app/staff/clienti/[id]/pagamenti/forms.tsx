@@ -5,6 +5,7 @@ import { ActionMessage, SubmitButton, type ActionState } from "@/components/form
 import { Field, Input, Select, Textarea } from "@/components/ui";
 import { isPeriodic, METHOD_LABELS, METHODS, periodEnd, PLAN_KINDS, PLAN_LABELS, type PlanKind } from "@/lib/billing";
 import { isISODate } from "@/lib/dates";
+import { CreditHint } from "@/components/credit-hint";
 
 type Action = (s: ActionState, fd: FormData) => Promise<ActionState>;
 
@@ -55,7 +56,7 @@ export function PlanForm({
           <legend className="sr-only">Come vale la modifica</legend>
           <label className="flex items-start gap-3 text-[15px]">
             <input type="radio" name="mode" value="from" checked={mode === "from"} onChange={() => setMode("from")} className="mt-1 h-5 w-5 accent-[#1b1a17]" />
-            <span><strong>Cambia da una data</strong><span className="block text-sm text-muted">Per esempio un nuovo prezzo o un altro tipo di abbonamento. Il piano di prima resta nello storico con i suoi pagamenti.</span></span>
+            <span><strong>Cambia da una data</strong><span className="block text-sm text-muted">Per esempio un nuovo prezzo o un altro tipo di piano (coaching o lezioni PT). Il piano di prima resta nello storico con i suoi pagamenti.</span></span>
           </label>
           <label className="flex items-start gap-3 text-[15px]">
             <input type="radio" name="mode" value="fix" checked={mode === "fix"} onChange={() => setMode("fix")} className="mt-1 h-5 w-5 accent-[#1b1a17]" />
@@ -76,12 +77,23 @@ export function PaymentForm({
   action,
   kind,
   defaults,
+  due,
 }: {
   action: Action;
   kind: PlanKind;
   defaults: { paid_on: string; amount: number | string; method: string; period_start: string | null; period_end: string | null; sessions: number | null };
+  /** Quanto deve per il prossimo periodo (coaching, con il credito già tolto) */
+  due?: number;
 }) {
   const [state, formAction] = useActionState(action, null);
+  const [amountText, setAmountText] = useState(String(defaults.amount).replace(".", ","));
+  const [keep, setKeep] = useState(true);
+  const [prevAmount, setPrevAmount] = useState(String(defaults.amount));
+  if (String(defaults.amount) !== prevAmount) {
+    setPrevAmount(String(defaults.amount));
+    setAmountText(String(defaults.amount).replace(".", ","));
+  }
+  const paidNum = Number(amountText.replace(/\./g, "").replace(",", "."));
   const [start, setStart] = useState(defaults.period_start ?? "");
   const [end, setEnd] = useState(defaults.period_end ?? "");
   // dopo un pagamento registrato il periodo proposto avanza: aggiorniamo i campi
@@ -101,7 +113,7 @@ export function PaymentForm({
           <Input name="paid_on" type="date" defaultValue={defaults.paid_on} required />
         </Field>
         <Field label="Importo">
-          <Input name="amount" inputMode="decimal" defaultValue={String(defaults.amount).replace(".", ",")} required />
+          <Input name="amount" inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} required />
         </Field>
         <Field label="Metodo">
           <Select name="method" defaultValue={defaults.method}>
@@ -132,6 +144,7 @@ export function PaymentForm({
           <Input name="sessions" type="number" min={1} defaultValue={defaults.sessions ?? 1} required className="max-w-40" />
         </Field>
       )}
+      {periodic && due !== undefined ? <CreditHint paid={paidNum} due={due} keep={keep} onKeep={setKeep} /> : null}
       <Field label="Note" hint="facoltative">
         <Input name="notes" placeholder="Es. pagato metà, il resto a fine mese" />
       </Field>
@@ -207,6 +220,26 @@ export function PtLeftForm({ action, left, price, first = false }: { action: Act
       ) : null}
       <ActionMessage state={state} />
       <div><SubmitButton variant="secondary" size="sm">{first ? "Inizia a contare" : "Salva la correzione"}</SubmitButton></div>
+    </form>
+  );
+}
+
+/** Correzione del credito: "ha un credito di X €" oppure "deve ancora X €". */
+export function CreditFixForm({ action, credit }: { action: Action; credit: number }) {
+  const [state, formAction] = useActionState(action, null);
+  return (
+    <form action={formAction} className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[15px]">Oggi</span>
+        <Select key={`m${credit}`} name="mode" defaultValue={credit < 0 ? "due" : "credit"} className="w-auto" aria-label="Situazione">
+          <option value="credit">ha un credito di</option>
+          <option value="due">deve ancora</option>
+        </Select>
+        <Input key={`c${credit}`} name="credit" inputMode="decimal" defaultValue={credit ? String(Math.abs(credit)).replace(".", ",") : "0"} className="max-w-28" aria-label="Importo in euro" />
+        <span className="text-[15px]">€</span>
+      </div>
+      <ActionMessage state={state} />
+      <div><SubmitButton variant="secondary" size="sm">Salva il credito</SubmitButton></div>
     </form>
   );
 }

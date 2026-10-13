@@ -1,6 +1,6 @@
 "use client";
 
-/** Riassunto AI delle ultime settimane del cliente con bozza di risposta all'ultimo check-up. */
+/** Riassunto AI delle ultime settimane del cliente con bozza di risposta all'ultimo diario. */
 import { useState } from "react";
 import { friendlyError } from "@/lib/friendly-error";
 import { Button, Card, Eyebrow, Notice } from "@/components/ui";
@@ -49,7 +49,7 @@ export function AiCheckinBrief({ clientId, replyTargetId }: { clientId: string; 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Eyebrow>Riassunto con l&apos;AI</Eyebrow>
-          <p className="mt-1 text-sm text-muted">Legge check-up, logbook, check e note di sessione: cosa funziona, cosa sta calando, su cosa concentrarsi. Prepara anche una bozza di risposta.</p>
+          <p className="mt-1 text-sm text-muted">Legge i diari, il logbook, i check e le note di sessione: cosa funziona, cosa sta calando, su cosa concentrarsi. Prepara anche una bozza di risposta.</p>
         </div>
         <Button variant="secondary" size="sm" onClick={run} disabled={busy}><IconSparkle size={16} /> {busy ? "Sto leggendo…" : brief ? "Rifai" : "Prepara il riassunto"}</Button>
       </div>
@@ -62,7 +62,7 @@ export function AiCheckinBrief({ clientId, replyTargetId }: { clientId: string; 
           <div className="rounded-2xl bg-sand px-4 py-3 sm:col-span-3">
             <div className="text-sm font-semibold">Bozza di risposta</div>
             <p className="mt-1 text-[15px] whitespace-pre-line">{brief.reply}</p>
-            {replyTargetId ? <button type="button" onClick={useReply} className="mt-2 text-sm font-semibold underline">Usala come risposta all&apos;ultimo check-up</button> : null}
+            {replyTargetId ? <button type="button" onClick={useReply} className="mt-2 text-sm font-semibold underline">Usala come risposta all&apos;ultimo diario</button> : null}
           </div>
         </div>
       ) : null}

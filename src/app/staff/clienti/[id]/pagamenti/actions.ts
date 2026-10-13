@@ -5,10 +5,11 @@ import { redirect } from "next/navigation";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong, isISODate, todayISO } from "@/lib/dates";
-import { billingStatus, formatEuro, isPeriodic, METHODS, nextPaymentProposal, PLAN_KINDS, situationText, type BillingRow, type PlanKind } from "@/lib/billing";
+import { billingStatus, creditChange, formatEuro, isPeriodic, METHODS, nextPaymentProposal, PLAN_KINDS, situationText, type BillingRow, type PlanKind } from "@/lib/billing";
 import { notify } from "@/lib/notify";
 import { deliverPendingEmails, sendEmail } from "@/lib/email";
 import type { ActionState } from "@/components/form-bits";
+import { getClientCredit } from "@/lib/data/billing";
 
 const money = (v: FormDataEntryValue | null) => {
   const n = Number(String(v ?? "").trim().replace(/\./g, "").replace(",", "."));
@@ -66,15 +67,19 @@ export async function savePlan(clientId: string, planId: string | null, _: Actio
 export async function recordPayment(clientId: string, planId: string, _: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireOwner();
   const supabase = await createClient();
-  const { data: plan } = await supabase.from("payment_plans").select("kind").eq("id", planId).eq("client_id", clientId).maybeSingle();
+  const { data: plan } = await supabase.from("payment_plans").select("kind, amount").eq("id", planId).eq("client_id", clientId).maybeSingle();
   if (!plan) return { error: "Piano non trovato." };
   const kind = plan.kind as PlanKind;
   const paidOn = String(fd.get("paid_on") ?? "");
   if (!isISODate(paidOn)) return { error: "Data del pagamento non valida." };
   const amount = money(fd.get("amount"));
-  if (!Number.isFinite(amount) || amount <= 0) return { error: "Importo non valido." };
+  // con il credito un periodo può costare 0 €
+  if (!Number.isFinite(amount) || amount < 0 || (amount === 0 && !isPeriodic(kind))) return { error: "Importo non valido." };
   const method = String(fd.get("method") ?? "transfer");
   if (!(METHODS as readonly string[]).includes(method)) return { error: "Metodo non valido." };
+  // coaching: la differenza dal prezzo diventa credito (o resta da recuperare), se scelto
+  const credit = isPeriodic(kind) ? await getClientCredit(supabase, clientId) : 0;
+  const change = isPeriodic(kind) ? creditChange({ planAmount: Number(plan.amount), credit, paid: amount, keep: fd.get("keep_difference") !== "off" }) : 0;
   let periodStart: string | null = null;
   let periodEnd: string | null = null;
   let sessions: number | null = null;
@@ -98,11 +103,13 @@ export async function recordPayment(clientId: string, planId: string, _: ActionS
     period_end: periodEnd,
     sessions,
     notes: String(fd.get("notes") ?? "").trim(),
+    credit_change: change,
     created_by: me.id,
   });
   if (error) return { error: "Salvataggio non riuscito." };
   revalidate(clientId);
-  return { ok: true, message: `Pagamento di ${formatEuro(amount)} registrato.` };
+  const after = Math.round((credit + change) * 100) / 100;
+  return { ok: true, message: `Pagamento di ${formatEuro(amount)} registrato.${change !== 0 ? ` ${after > 0 ? `Credito per il prossimo rinnovo: ${formatEuro(after)}.` : after < 0 ? `Da recuperare al prossimo rinnovo: ${formatEuro(-after)}.` : "Credito usato tutto."}` : ""}` };
 }
 
 /**
@@ -191,20 +198,23 @@ export async function clearPtCorrection(clientId: string) {
 export async function updatePayment(clientId: string, paymentId: string, _: ActionState, fd: FormData): Promise<ActionState> {
   await requireOwner();
   const supabase = await createClient();
-  const { data: old } = await supabase.from("payments").select("plan_id, period_start, period_end, sessions").eq("id", paymentId).eq("client_id", clientId).maybeSingle();
+  const { data: old } = await supabase.from("payments").select("plan_id, period_start, period_end, sessions, amount, credit_change").eq("id", paymentId).eq("client_id", clientId).maybeSingle();
   if (!old) return { error: "Pagamento non trovato." };
   const paidOn = String(fd.get("paid_on") ?? "");
   if (!isISODate(paidOn)) return { error: "Data del pagamento non valida." };
   const amount = money(fd.get("amount"));
-  if (!Number.isFinite(amount) || amount <= 0) return { error: "Importo non valido." };
+  const periodicPayment = Boolean(old.period_start && old.period_end);
+  if (!Number.isFinite(amount) || amount < 0 || (amount === 0 && !periodicPayment)) return { error: "Importo non valido." };
   const method = String(fd.get("method") ?? "transfer");
   if (!(METHODS as readonly string[]).includes(method)) return { error: "Metodo non valido." };
-  const update: { paid_on: string; amount: number; method: (typeof METHODS)[number]; notes: string; period_start?: string; period_end?: string; sessions?: number | null } = {
+  const update: { paid_on: string; amount: number; method: (typeof METHODS)[number]; notes: string; period_start?: string; period_end?: string; sessions?: number | null; credit_change?: number } = {
     paid_on: paidOn,
     amount,
     method: method as (typeof METHODS)[number],
     notes: String(fd.get("notes") ?? "").trim().slice(0, 500),
   };
+  // coaching: se cambia l'importo, la differenza passa al credito (es. ha pagato 500 e non 300)
+  if (periodicPayment && amount !== Number(old.amount)) update.credit_change = Math.round((Number(old.credit_change) + amount - Number(old.amount)) * 100) / 100;
   if (old.period_start && old.period_end) {
     const start = String(fd.get("period_start") ?? "");
     const end = String(fd.get("period_end") ?? "");
@@ -225,6 +235,29 @@ export async function updatePayment(clientId: string, paymentId: string, _: Acti
   return { ok: true, message: "Pagamento corretto." };
 }
 
+/**
+ * Correzione a mano del credito: "oggi ha un credito di X €" oppure "deve
+ * ancora X €" (si aggiunge al prossimo rinnovo). 0 = in pari.
+ */
+export async function setCredit(clientId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  await requireOwner();
+  const supabase = await createClient();
+  const raw = String(fd.get("credit") ?? "").trim();
+  const value = raw ? money(raw) : 0;
+  if (!Number.isFinite(value) || value < 0 || value > 100000) return { error: "Scrivi un importo, per esempio 200 (oppure 0 se siete in pari)." };
+  const target = fd.get("mode") === "due" ? -value : value;
+  const [{ data: client }, { data: pays }] = await Promise.all([
+    supabase.from("clients").select("credit_adjust").eq("id", clientId).maybeSingle(),
+    supabase.from("payments").select("credit_change").eq("client_id", clientId).neq("credit_change", 0),
+  ]);
+  if (!client) return { error: "Cliente non trovato." };
+  const fromPayments = (pays ?? []).reduce((t, p) => t + Number(p.credit_change), 0);
+  const { error } = await supabase.from("clients").update({ credit_adjust: Math.round((target - fromPayments) * 100) / 100 }).eq("id", clientId);
+  if (error) return { error: "Salvataggio non riuscito." };
+  revalidate(clientId);
+  return { ok: true, message: target > 0 ? `Fatto: credito di ${formatEuro(target)}, il prossimo rinnovo costa meno.` : target < 0 ? `Fatto: ${formatEuro(-target)} da recuperare, si aggiungono al prossimo rinnovo.` : "Fatto: siete in pari." };
+}
+
 export async function deletePayment(clientId: string, paymentId: string) {
   await requireOwner();
   const supabase = await createClient();
@@ -242,7 +275,9 @@ export async function quickPayment(clientId: string): Promise<ActionState> {
   ]);
   if (!plan) return { error: "Il cliente non ha un piano attivo." };
   const row = (billing as BillingRow[] | null)?.[0];
-  const p = nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, row?.paid_until ?? null);
+  const periodic = isPeriodic(plan.kind as PlanKind);
+  const credit = periodic ? await getClientCredit(supabase, clientId) : 0;
+  const p = nextPaymentProposal({ ...plan, kind: plan.kind as PlanKind }, row?.paid_until ?? null, credit);
   const { error } = await supabase.from("payments").insert({
     client_id: clientId,
     plan_id: plan.id,
@@ -252,6 +287,8 @@ export async function quickPayment(clientId: string): Promise<ActionState> {
     period_start: p.period_start,
     period_end: p.period_end,
     sessions: p.sessions,
+    // paga il dovuto: il credito (o il debito) di prima è sistemato
+    credit_change: periodic ? creditChange({ planAmount: Number(plan.amount), credit, paid: p.amount, keep: true }) : 0,
     created_by: me.id,
   });
   if (error) return { error: "Registrazione non riuscita." };

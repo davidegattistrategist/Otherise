@@ -7,7 +7,8 @@ import { checkDue } from "./check-due";
 import { DEDICATIONS, QUOTES, dedicationOfDay, quoteOfDay } from "./quotes";
 import { estimateOneRepMax } from "./strength/e1rm";
 import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
-import { billingStatus, clientFacingStatus, ptCounterView, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
+import { billingStatus, clientFacingStatus, creditChange, dueAmount, isCoaching, ptCounterView, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
+import { clientNotices, ptLeft } from "./client-notice";
 import { addDays, addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
 import { displayWeek, nextDay, nextWorkout, programEndDate, weekPosition } from "./program/schedule";
 import { buildNextPhase, copyWeekToOthers } from "./program/next-phase";
@@ -257,14 +258,53 @@ describe("pagamenti", () => {
     const soon = billingStatus({ ...base, kind: "quarterly", paid_until: "2026-10-14" }, "2026-10-09");
     expect(soon.state).toBe("due_soon");
     expect(soon.label).toBe("Scade tra 5 giorni");
-    expect(billingStatus({ ...base, kind: "quarterly", paid_until: "2026-10-08" }, "2026-10-09").label).toBe("Scaduto da 1 giorno");
+    // trimestre in corso non ancora pagato: "da saldare", non scaduto
+    const inPeriod = billingStatus({ ...base, kind: "quarterly", paid_until: "2026-10-08" }, "2026-10-09");
+    expect(inPeriod.label).toBe("Trimestre da saldare");
+    expect(inPeriod.clientLabel).toBe("Trimestre da saldare");
+    expect(inPeriod.unpaidPeriods).toBe(1);
+    expect(billingStatus({ ...base, kind: "quarterly", paid_until: "2026-10-08" }, "2027-01-08").label).toBe("Trimestre da saldare");
+    // finito anche quel trimestre senza pagamento: scaduto
+    const late = billingStatus({ ...base, kind: "quarterly", paid_until: "2026-10-08" }, "2027-01-10");
+    expect(late.label).toBe("Scaduto da 2 giorni");
+    expect(late.clientLabel).toBe("Periodo scaduto");
+    expect(late.unpaidPeriods).toBe(2);
+    expect(clientFacingStatus(inPeriod)).not.toBeNull();
+    expect(clientFacingStatus(late)).not.toBeNull();
+    // più di un periodo indietro: lo gestisce il trainer
+    expect(clientFacingStatus(billingStatus({ ...base, kind: "monthly", paid_until: "2026-06-30" }, "2026-10-09"))).toBeNull();
+    expect(billingStatus({ ...base, kind: "six_weeks", paid_until: "2026-09-30" }, "2026-10-09").label).toBe("Blocco di 6 settimane da saldare");
     expect(billingStatus({ ...base, kind: "monthly", paid_until: null }, "2026-10-09").state).toBe("overdue");
     const pkg = billingStatus({ ...base, kind: "package", sessions_bought: 10, sessions_used: 8 }, "2026-10-09");
     expect(pkg.state).toBe("due_soon");
     expect(pkg.label).toBe("2 sessioni rimaste");
     expect(billingStatus({ ...base, kind: "package", sessions_bought: 10, sessions_used: 10 }, "2026-10-09").state).toBe("overdue");
     expect(billingStatus(null, "2026-10-09").state).toBe("none");
-  });  it("contatore unico delle sessioni PT: rimaste = pagate − fatte, da saldare con il prezzo", () => {
+  });  it("credito del coaching: paga 500 invece di 300, il rinnovo dopo costa 100", () => {
+    // 6 settimane a 300 €: porta 500 → 200 di credito
+    const c1 = creditChange({ planAmount: 300, credit: 0, paid: 500, keep: true });
+    expect(c1).toBe(200);
+    expect(dueAmount(300, c1)).toBe(100);
+    // al rinnovo paga i 100 dovuti: credito finito
+    expect(c1 + creditChange({ planAmount: 300, credit: c1, paid: 100, keep: true })).toBe(0);
+    // paga meno (250): 50 da recuperare, il rinnovo dopo è 350
+    const c2 = creditChange({ planAmount: 300, credit: 0, paid: 250, keep: true });
+    expect(dueAmount(300, c2)).toBe(350);
+    // prezzo diverso solo questa volta: niente credito, e quello di prima si usa
+    expect(creditChange({ planAmount: 300, credit: 0, paid: 250, keep: false })).toBe(0);
+    expect(creditChange({ planAmount: 300, credit: 200, paid: 150, keep: false })).toBe(-200);
+    // credito più grande del prezzo: il rinnovo è gratis
+    expect(dueAmount(300, 450)).toBe(0);
+  });
+  it("coaching o lezioni PT: il programma serve solo a chi è in coaching", () => {
+    expect(isCoaching("quarterly", false)).toBe(true);
+    expect(isCoaching("six_weeks", false)).toBe(true);
+    expect(isCoaching("package", true)).toBe(false);
+    expect(isCoaching("single", false)).toBe(false);
+    expect(isCoaching(null, true)).toBe(true);
+    expect(isCoaching(null, false)).toBe(false);
+  });
+  it("contatore unico delle sessioni PT: rimaste = pagate − fatte, da saldare con il prezzo", () => {
     expect(ptCounterView(null)).toBeNull();
     expect(ptCounterView({ since: "2026-10-12", baseline_at: null, bought: 10, used: 2 })).toEqual({ bought: 10, used: 2, left: 8, due: 0, price: null, dueAmount: null, since: "2026-10-12", corrected: false });
     // 3 fatte senza pagamento, poi un pacchetto da 10: ne restano 7
@@ -272,13 +312,14 @@ describe("pagamenti", () => {
     const due = ptCounterView({ since: "2026-10-03", baseline_at: "2026-10-03T10:00:00Z", bought: 0, used: 2 }, 45);
     expect(due).toMatchObject({ left: -2, due: 2, dueAmount: 90, corrected: true });
   });
-  it("al cliente solo scadenze vicine", () => {
+  it("al cliente: in scadenza, periodo in corso da saldare o scaduto da un periodo", () => {
     const base = { plan_id: "p", amount: 600, sessions_bought: 0, sessions_used: 0, paid_until: null as string | null };
     const st = (r: Partial<typeof base> & { kind: PlanKind }) => clientFacingStatus(billingStatus({ ...base, ...r }, "2026-10-12"));
     expect(st({ kind: "quarterly", paid_until: "2026-11-01" })?.state).toBe("ok");
     expect(st({ kind: "quarterly", paid_until: "2026-10-15" })?.state).toBe("due_soon");
     expect(st({ kind: "quarterly", paid_until: "2026-10-05" })?.state).toBe("overdue");
-    expect(st({ kind: "quarterly", paid_until: "2026-06-30" })).toBeNull();
+    expect(st({ kind: "quarterly", paid_until: "2026-06-30" })?.clientLabel).toBe("Periodo scaduto");
+    expect(st({ kind: "quarterly", paid_until: "2026-03-31" })).toBeNull();
     expect(st({ kind: "monthly", paid_until: null })).toBeNull();
     expect(st({ kind: "package", sessions_bought: 10, sessions_used: 10 })?.state).toBe("overdue");
     expect(st({ kind: "package", sessions_bought: 10, sessions_used: 15 })).toBeNull();
@@ -458,7 +499,7 @@ describe("import dai fogli Google", () => {
   });
 });
 
-describe("check-up", () => {
+describe("diario", () => {
   it("si compila da venerdì a domenica", () => {
     expect(checkinWeekFor("2026-10-08")).toBeNull();
     expect(checkinWeekFor("2026-10-09")).toBe("2026-10-05");
@@ -985,5 +1026,59 @@ describe("email di avviso", async () => {
     const remind = bundleEmail([{ title: "Nuovo messaggio da Marco", body: "Ciao!", link: "/cliente/messaggi" }], "https://app.esempio.it", "reminder");
     expect(remind.text).toContain("non l'hai ancora visto");
     expect(remind.text).not.toContain("attiva le notifiche");
+  });
+});
+
+describe("avviso gentile al cliente", () => {
+  const fmt = (d: string) => d;
+  const sp = (t: string | null) => t?.replace(/\u00a0/g, " ");
+  const base = { plan_id: "p", amount: 300, sessions_bought: 0, sessions_used: 0 };
+  const input = (paidUntil: string, today: string, extra: Partial<Parameters<typeof clientNotices>[0]> = {}) => ({
+    status: clientFacingStatus(billingStatus({ ...base, kind: "six_weeks", paid_until: paidUntil }, today, 7)),
+    kind: "six_weeks" as const,
+    planAmount: 300,
+    credit: 0,
+    pt: null,
+    ptPrice: null,
+    coach: "Davide",
+    formatDate: fmt,
+    ...extra,
+  });
+  it("in regola: nessun avviso", () => {
+    expect(clientNotices(input("2026-12-01", "2026-10-09"))).toEqual([]);
+  });
+  it("nuovo periodo iniziato: da saldare, con calma e mai 'devi pagare'", () => {
+    const [n] = clientNotices(input("2026-10-05", "2026-10-09"));
+    expect(n.title).toBe("Il tuo nuovo periodo è iniziato");
+    expect(n.text).toContain("nessuna fretta");
+    expect(sp(n.amount)).toBe("Per questo periodo: 300 €");
+    expect(JSON.stringify(n).toLowerCase()).not.toMatch(/devi pagare|scadut/);
+  });
+  it("con 200 € di credito il rinnovo è di 100 €", () => {
+    const [n] = clientNotices(input("2026-10-12", "2026-10-09", { credit: 200 }));
+    expect(n.title).toBe("Sta per iniziare il tuo nuovo periodo");
+    expect(sp(n.amount)).toBe("Per il prossimo periodo: 100 € (200 € li hai già messi da parte)");
+  });
+  it("credito che copre tutto: già a posto", () => {
+    expect(clientNotices(input("2026-10-12", "2026-10-09", { credit: 300 }))[0].kind).toBe("covered");
+  });
+  it("un periodo intero non pagato: scaduto, detto con gentilezza", () => {
+    const [n] = clientNotices(input("2026-08-01", "2026-10-09"));
+    expect(n.title).toContain("scaduto");
+    expect(sp(n.amount)).toBe("In tutto: 600 € (2 periodi)");
+  });
+  it("sessioni PT scoperte (fuori dal pacchetto), con il prezzo", () => {
+    const notices = clientNotices({ ...input("2026-12-01", "2026-10-09"), pt: { bought: 4, used: 6 }, ptPrice: 40 });
+    expect(notices).toHaveLength(1);
+    expect(notices[0].title).toBe("Ci sono 2 sessioni PT da sistemare");
+    expect(sp(notices[0].amount)).toBe("In tutto: 80 €");
+    // troppe scoperte: lo gestisce il trainer di persona
+    expect(clientNotices({ ...input("2026-12-01", "2026-10-09"), pt: { bought: 0, used: 9 } })).toEqual([]);
+    expect(ptLeft({ bought: 10, used: 7 }, "monthly")).toBe(3);
+  });
+  it("pacchetto finito", () => {
+    const st = clientFacingStatus(billingStatus({ ...base, kind: "package", sessions_bought: 10, sessions_used: 10, paid_until: null }, "2026-10-09"));
+    const [n] = clientNotices({ ...input("2026-12-01", "2026-10-09"), status: st, kind: "package" });
+    expect(n.title).toBe("Il tuo pacchetto è arrivato in fondo");
   });
 });

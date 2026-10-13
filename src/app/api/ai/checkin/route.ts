@@ -1,4 +1,4 @@
-/** Riassunto AI dei check-up di un cliente + bozza di risposta (solo staff). */
+/** Riassunto AI dei diari di un cliente + bozza di risposta (solo staff). */
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getMe } from "@/lib/auth";

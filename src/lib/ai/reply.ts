@@ -3,7 +3,7 @@ import "server-only";
  * Bozze di risposta ai clienti scritte "come il trainer".
  *
  * Quando un cliente fa una domanda in chat (o scrive una richiesta nel
- * check-up) l'assistente prepara una bozza che lo staff vede sopra la casella
+ * diario) l'assistente prepara una bozza che lo staff vede sopra la casella
  * di scrittura: può usarla, correggerla o scrivere da zero. Più il trainer
  * risponde e corregge, più le bozze somigliano al suo modo di scrivere: nel
  * prompt finiscono i suoi messaggi veri e le coppie "bozza → testo inviato".
@@ -182,11 +182,11 @@ export async function generateChatDraft(clientId: string, opts: { force?: boolea
   return { ok: true, draft: saved ? { id: saved.id, body: saved.body, createdAt: saved.created_at } : null };
 }
 
-/** Bozza di risposta a un check-up con una richiesta o un problema scritto. */
+/** Bozza di risposta a un diario con una richiesta o un problema scritto. */
 export async function generateCheckinDraft(checkinId: string, opts: { force?: boolean } = {}): Promise<Result> {
   const admin = createAdminClient();
   const { data: c } = await admin.from("checkins").select("id, client_id, week_start, training, sleep, stress, adherence, issues, request, coach_reply").eq("id", checkinId).maybeSingle();
-  if (!c) return { ok: false, error: "Check-up non trovato." };
+  if (!c) return { ok: false, error: "Diario non trovato." };
   if (!opts.force && (!c.request.trim() || c.coach_reply.trim())) return { ok: true, draft: null };
   const client = await loadClient(admin, c.client_id);
   const blocked = await canRun(admin, client);
@@ -198,8 +198,8 @@ export async function generateCheckinDraft(checkinId: string, opts: { force?: bo
   const names = [client.first_name, client.last_name, client.email, client.phone];
   const scores = CHECKIN_QUESTIONS.map((q) => `${q.short} ${c[q.key]}/5`).join(", ");
   const userText = await promptFor(admin, responder, client, [
-    `## Check-up settimanale appena compilato (settimana del ${c.week_start}, voti da 1 a 5)\n${scores}${c.issues.trim() ? `\nProblemi: ${pseudonymize(c.issues, names)}` : ""}${c.request.trim() ? `\nRichiesta al coach: ${pseudonymize(c.request, names)}` : ""}`,
-    "Scrivi la risposta al check-up che il cliente leggerà nell'app: rispondi alla richiesta e, se ci sono, ai problemi. needsReply è true.",
+    `## Diario settimanale appena compilato (settimana del ${c.week_start}, voti da 1 a 5)\n${scores}${c.issues.trim() ? `\nProblemi: ${pseudonymize(c.issues, names)}` : ""}${c.request.trim() ? `\nRichiesta al coach: ${pseudonymize(c.request, names)}` : ""}`,
+    "Scrivi la risposta al diario che il cliente leggerà nell'app: rispondi alla richiesta e, se ci sono, ai problemi. needsReply è true.",
   ]);
 
   let out;

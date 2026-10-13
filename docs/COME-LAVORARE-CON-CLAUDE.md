@@ -33,5 +33,5 @@ Cose utili da chiedere:
 - **Il metodo in Impostazioni è il suo manuale.** Scrivilo come lo spiegheresti a un nuovo collaboratore bravo ma che non ti conosce: come imposti le fasi, come progredisci, cosa eviti, come scrivi le prescrizioni. Rileggilo ogni tanto e aggiungi quello che correggi spesso nelle bozze.
 - **Segna 2–3 programmi come "esempio del mio stile"**: valgono più di molte parole.
 - **Le richieste brevi funzionano.** Detta mentre sistemi i pesi: *"stessa struttura, passiamo a forza: 5x5 sui fondamentali, complementari 3x8, togli il circuito del giorno 3, aggiungi lavoro per le spalle che sono rigide"*.
-- **Usa le note di sessione e il check-up**: l'assistente li legge. Se scrivi "ginocchio sinistro fastidioso negli affondi", la bozza successiva ne terrà conto.
+- **Usa le note di sessione e il diario**: l'assistente li legge. Se scrivi "ginocchio sinistro fastidioso negli affondi", la bozza successiva ne terrà conto.
 - **Rivedi sempre.** L'assistente prepara, tu decidi: le righe cambiate sono evidenziate con il motivo, e niente arriva al cliente finché non premi Pubblica.

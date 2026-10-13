@@ -72,18 +72,18 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
 
       {sp["solo-titolare"] ? <><ClearParams names={["solo-titolare"]} /><Notice>Quella pagina la vede solo il titolare: pagamenti, impostazioni e collaboratori sono gestiti da lui.</Notice></> : null}
       <FirstSteps supabase={supabase} me={me} />
-      <PushPrompt text="Ti avviso quando un cliente ti scrive, segnala un dolore o compila il check-up." />
+      <PushPrompt text="Ti avviso quando un cliente ti scrive, segnala un dolore o compila il diario." />
 
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
         <Card>
-          <div className="mb-3 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Check-up da guardare</Eyebrow></div>
+          <div className="mb-3 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Diari da guardare</Eyebrow></div>
           {checkins && checkins.length > 0 ? (
             <ul className="flex flex-col">
               {checkins.map((c) => {
                 const cl = c.clients as unknown as { first_name: string; last_name: string } | null;
                 return (
                   <li key={c.id} className="border-t border-sand-deep first:border-t-0">
-                    <Link href={`/staff/clienti/${c.client_id}/checkup`} className="flex min-h-12 flex-col justify-center py-2.5 hover:opacity-70">
+                    <Link href={`/staff/clienti/${c.client_id}/diario`} className="flex min-h-12 flex-col justify-center py-2.5 hover:opacity-70">
                       <span className="font-semibold">{cl ? listName(cl) : "Cliente"}</span>
                       <span className="text-sm text-muted">{c.flag_reasons.join(", ")}{c.request ? ` · “${c.request.slice(0, 80)}”` : ""}</span>
                     </Link>
@@ -92,7 +92,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
               })}
             </ul>
           ) : (
-            <p className="text-[15px] text-muted">Nessun check-up con problemi. Gli altri restano nella scheda dei clienti.</p>
+            <p className="text-[15px] text-muted">Nessun diario con problemi. Gli altri restano nella scheda dei clienti.</p>
           )}
         </Card>
 

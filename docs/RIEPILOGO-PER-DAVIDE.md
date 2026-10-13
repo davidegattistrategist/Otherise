@@ -2,8 +2,8 @@
 
 ## Cosa c'è
 **Area staff** (titolare e collaboratori)
-- "Oggi": check-up da guardare, programmi in chiusura o da pubblicare, pagamenti, check da fare.
-- Clienti: lista con ricerca e archivio; scheda con Panoramica, Programma, Sessioni PT, Check, Posturale, Pagamenti (solo titolare), Check-up, Scheda.
+- "Oggi": diario da guardare, programmi in chiusura o da pubblicare, pagamenti, check da fare.
+- Clienti: lista con ricerca e archivio; scheda con Panoramica, Programma, Sessioni PT, Check, Posturale, Pagamenti (solo titolare), Diario, Scheda.
 - Check corporei: pliche (fino a 3 misure per sito), JP7 uomo / 5 pliche donna, Siri, massa grassa e magra, circonferenze, test di forza con massimale stimato (tabella RPE), test liberi, note per la prossima fase (riservate), grafici.
 - Editor programmi: griglia esercizi × settimane, blocchi singolo/superserie/circuito/AMRAP/EMOM/intervalli/testo, copia settimana, ultimo log sotto ogni esercizio, Ctrl+S, bozza/pubblicato/archiviato, modelli, "nuova fase" che riparte dal logbook reale, import delle schede Google (CSV), eserciziario con 175 esercizi e video dal tuo foglio.
 - Assistente AI: bozza o modifica del programma da testo/dettatura/foto, "Progredisci" e "Alternative" sulla riga; usa metodo scritto, programmi d'esempio, eserciziario e storico del cliente (senza nome); righe cambiate evidenziate con il motivo; registro dei costi e tetto mensile.
@@ -12,14 +12,14 @@
 - Notifiche in app + email (Resend), controlli automatici ogni mattina (Vercel Cron).
 
 **Area cliente** (da telefono)
-- Oggi: prossimo allenamento, avanzamento fase, composizione corporea, stato del percorso, risposta del coach, invito al check-up.
+- Oggi: prossimo allenamento, avanzamento fase, composizione corporea, stato del percorso, risposta del coach, invito al diario.
 - Programma per settimane con video; logbook con serie/kg/ripetizioni, "fatto come scritto", timer di recupero, ultima volta, salvataggio automatico e bozza locale se salta la rete.
-- Progressi (grafici, test, posturale visibile, andamento check-up), Percorso (fasi, sessioni, pagamenti, cambio password), Check-up settimanale.
+- Progressi (grafici, test, posturale visibile, andamento diario), Percorso (fasi, sessioni, pagamenti, cambio password), Diario settimanale.
 
 ## Seconda passata (9 ottobre, sera)
 Confronto con le app più usate dai coach (Trainerize, TrueCoach, Everfit, TrainHeroic, Hevy, CoachRx, Harbiz, MyPTHub) e migliorie applicate:
 - **Chat** cliente ↔ staff con foto e video (niente audio), non letti, notifiche.
-- **Programmi**: progressione automatica per riga o per giorno (+1 ripetizione, +2,5/5 kg, +% massimale, +1 serie, scarico finale), prescrizioni in % del massimale calcolate per ogni cliente, editor a settimane dal telefono, richieste rapide per l'AI, riassunto AI dei check-up con bozza di risposta.
+- **Programmi**: progressione automatica per riga o per giorno (+1 ripetizione, +2,5/5 kg, +% massimale, +1 serie, scarico finale), prescrizioni in % del massimale calcolate per ogni cliente, editor a settimane dal telefono, richieste rapide per l'AI, riassunto AI dei diari con bozza di risposta.
 - **Logbook**: valori già proposti (programma o ultima volta), "Nuovo record!", timer ±15 s, schermo sempre acceso; lo staff può registrare al posto del cliente.
 - **Pagamenti**: "Pagato" in un tocco da Oggi e da Pagamenti, promemoria WhatsApp già scritto (testo modificabile), incassi per mese, entrate attese a 30 giorni, export CSV per il commercialista.
 - **Avvisi**: un'unica email di riepilogo al mattino per lo staff; clienti che non si allenano da 7 giorni o con costanza sotto il 50%; costanza nella lista clienti.
@@ -55,13 +55,13 @@ Confronto con le app più usate dai coach (Trainerize, TrueCoach, Everfit, Train
   - EMOM spiegato al cliente;
   - metodo aggiornato in `docs/METODO-BOZZA.md`.
 - **Ultime due richieste**:
-  - bozze di risposta dell'AI ai clienti, in chat e nelle richieste del check-up: scritte nel tuo stile, una sola risposta per punti se le domande sono più di una, "Usa e modifica" o "Scrivo da zero"; imparano dai tuoi messaggi e dalle tue correzioni, distinguendo le abitudini che hai con tutti dal tono con il singolo cliente (confidenza, soprannomi); non partono mai da sole;
+  - bozze di risposta dell'AI ai clienti, in chat e nelle richieste del diario: scritte nel tuo stile, una sola risposta per punti se le domande sono più di una, "Usa e modifica" o "Scrivo da zero"; imparano dai tuoi messaggi e dalle tue correzioni, distinguendo le abitudini che hai con tutti dal tono con il singolo cliente (confidenza, soprannomi); non partono mai da sole;
   - previsione degli incassi a 3, 6 o 12 mesi (Pagamenti → Previsione dei prossimi mesi), con scenario prudente calcolato sui rinnovi veri.
 
 ## Come l'ho provata
 - 51 test sui calcoli (anche progressioni, costanza, record, numeri WhatsApp) (pliche verificate sui valori del foglio di una cliente, prescrizioni, pagamenti, calendario, import).
 - 14 test sui permessi direttamente sul database (anche la chat: nessuno legge o scrive conversazioni non sue) (collaboratore vede solo i suoi, cliente non vede note PT/note fase/bozze, nessuno può cambiarsi ruolo, ecc.).
-- 12 scenari end-to-end nel browser, ognuno provato sia da computer sia da telefono (clienti, check, posturale, sessioni, pagamenti, programmi, AI, import, eserciziario, chat con foto e video, permessi del collaboratore, logbook) + prove manuali automatizzate: logbook, check-up con avviso, pagamento, nota PT, risposta, invito collaboratore e cliente con le email in italiano, password dimenticata, controlli giornalieri, nessuno scorrimento orizzontale a 390 px.
+- 12 scenari end-to-end nel browser, ognuno provato sia da computer sia da telefono (clienti, check, posturale, sessioni, pagamenti, programmi, AI, import, eserciziario, chat con foto e video, permessi del collaboratore, logbook) + prove manuali automatizzate: logbook, diario con avviso, pagamento, nota PT, risposta, invito collaboratore e cliente con le email in italiano, password dimenticata, controlli giornalieri, nessuno scorrimento orizzontale a 390 px.
 - Assistente AI provato con un finto server Anthropic (tutto il percorso: contesto, risposta, bozza, registro costi). **Non l'ho provato con una chiave vera**: è la prima cosa da fare appena c'è la chiave (Impostazioni deve mostrare "Assistente AI attivo", poi una richiesta su un programma di prova).
 - Dati usati nelle prove: solo persone inventate (`scripts/seed-demo.ts`).
 

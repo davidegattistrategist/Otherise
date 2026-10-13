@@ -162,7 +162,7 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
 
       {checkins && checkins.length > 1 ? (
         <Card className="flex flex-col gap-2">
-          <Eyebrow>Come stai · check-up settimanali</Eyebrow>
+          <Eyebrow>Come stai · diari settimanali</Eyebrow>
           <div className="grid gap-4 sm:grid-cols-2">
             <div><div className="mb-1 text-sm font-semibold">Sonno e recupero</div><LineChart label="Sonno" height={110} digits={0} yMin={1} yMax={5} points={checkins.map((c) => ({ date: c.week_start, value: c.sleep }))} /></div>
             <div><div className="mb-1 text-sm font-semibold">Stress</div><LineChart label="Stress" height={110} digits={0} yMin={1} yMax={5} points={checkins.map((c) => ({ date: c.week_start, value: c.stress }))} /></div>

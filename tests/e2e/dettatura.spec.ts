@@ -104,7 +104,7 @@ test("microfono negato: lo dice e spiega come consentirlo", async ({ browser }) 
   await expect(page.getByText(/Il microfono non è consentito/).filter({ visible: true }).first()).toBeVisible();
 });
 
-test("il cliente detta nel logbook e nel check-up (iPhone)", async ({ browser }) => {
+test("il cliente detta nel logbook e nel diario (iPhone)", async ({ browser }) => {
   const page = await iphone(browser);
   await login(page, "giulia@prova.local");
   await page.goto("/cliente");

@@ -73,7 +73,7 @@ export function ClientForm({
       ) : null}
       <label className="flex items-start gap-3 text-[15px]">
         <input type="checkbox" name="weekly_checkin" defaultChecked={values.weekly_checkin ?? false} className="mt-1 h-5 w-5 accent-[#1b1a17]" />
-        <span><strong>Check-up settimanale</strong><br /><span className="text-muted">Il cliente riceve il questionario da 3 minuti ogni fine settimana.</span></span>
+        <span><strong>Diario settimanale</strong><br /><span className="text-muted">Il cliente riceve il questionario da 3 minuti ogni fine settimana.</span></span>
       </label>
       {isNew ? (
         <label className="flex items-start gap-3 text-[15px]">

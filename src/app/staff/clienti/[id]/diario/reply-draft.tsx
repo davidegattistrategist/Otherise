@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Bozza di risposta a un check-up preparata dall'assistente: si usa (e si
+ * Bozza di risposta a un diario preparata dall'assistente: si usa (e si
  * corregge) nella casella della risposta, oppure si scrive da zero.
  */
 import { useState } from "react";

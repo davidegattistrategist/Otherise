@@ -39,21 +39,21 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
         <li><strong>Dati anagrafici e di contatto</strong>: nome, cognome, sesso, data di nascita, email, telefono.</li>
         <li><strong>Dati relativi alla salute</strong> (categoria particolare, art. 9 GDPR): peso, pliche, composizione corporea, circonferenze, valutazioni posturali, test di forza e di performance, dolori, fastidi o infortuni che ci segnali, qualità del sonno, stress e andamento del percorso.</li>
         <li><strong>Immagini</strong>: foto e video fatti durante gli allenamenti o che ci mandi in chat (per esempio per correggere la tecnica o vedere i progressi).</li>
-        <li><strong>Dati di allenamento</strong>: obiettivi, programmi, allenamenti registrati (carichi, ripetizioni, tempi), sessioni con il coach, check-up settimanali, messaggi della chat (anche vocali, con la loro trascrizione scritta).</li>
-        <li><strong>Dati amministrativi</strong>: tipo di abbonamento, importi e date dei pagamenti, dati per la fatturazione. Nell&apos;app non trattiamo mai dati di carte o conti: i pagamenti avvengono fuori.</li>
+        <li><strong>Dati di allenamento</strong>: obiettivi, programmi, allenamenti registrati (carichi, ripetizioni, tempi), sessioni con il coach, diari settimanali, messaggi della chat (anche vocali, con la loro trascrizione scritta).</li>
+        <li><strong>Dati amministrativi</strong>: tipo di servizio (coaching o lezioni PT), importi e date dei pagamenti, dati per la fatturazione. Nell&apos;app non trattiamo mai dati di carte o conti: i pagamenti avvengono fuori.</li>
         <li><strong>Dati tecnici</strong>: account, data degli accessi e registri tecnici necessari a far funzionare l&apos;app in sicurezza.</li>
       </ul>
       <p>I dati li raccogliamo da te (durante i check, le sessioni e nell&apos;app) e dal tuo coach, che li registra durante il percorso.</p>
 
       <H>3. Perché li trattiamo e su quale base</H>
       <ul>
-        <li><strong>Seguirti nel percorso di allenamento</strong>: preparare e aggiornare i programmi, leggere i tuoi allenamenti, fare check e sessioni, risponderti in chat e ai check-up. Base: il contratto con te (art. 6.1.b GDPR).</li>
+        <li><strong>Seguirti nel percorso di allenamento</strong>: preparare e aggiornare i programmi, leggere i tuoi allenamenti, fare check e sessioni, risponderti in chat e ai diari. Base: il contratto con te (art. 6.1.b GDPR).</li>
         <li><strong>Usare i dati relativi alla salute</strong> per valutare il tuo stato e programmare in modo sicuro ed efficace. Base: il tuo <strong>consenso esplicito</strong> (art. 9.2.a GDPR), che ti chiediamo nell&apos;app o su carta.</li>
         <li><strong>Fare foto e video durante gli allenamenti</strong>, solo per il servizio: correggere la tecnica, seguire i progressi, spiegarti un esercizio. Restano tra te e chi ti allena e non vengono pubblicati. Base: il contratto (art. 6.1.b) e il tuo consenso, che dai insieme a quello sui dati relativi alla salute.</li>
         <li><strong>Pubblicare su Instagram</strong> (e sugli altri social del brand) alcuni video e foto delle sedute di personal training fatte insieme, per promuovere l&apos;attività. Solo se ce lo permetti: è un consenso a parte e <strong>facoltativo</strong> (art. 6.1.a GDPR), vedi il punto 5.</li>
         <li><strong>Usare strumenti di intelligenza artificiale</strong> per offrirti un&apos;esperienza migliore e programmi di qualità più alta (punto 4). Base: il contratto (art. 6.1.b) e, per i dati relativi alla salute, il tuo consenso esplicito (art. 9.2.a).</li>
-        <li><strong>Gestire l&apos;abbonamento</strong>: tenere il registro dei pagamenti e ricordarti le scadenze. Base: il contratto (art. 6.1.b). I documenti fiscali li gestiamo fuori dall&apos;app per obbligo di legge (art. 6.1.c).</li>
-        <li><strong>Mandarti avvisi di servizio</strong> nell&apos;app e per email (nuovo programma, risposta al check-up, messaggi, scadenze). Base: il contratto (art. 6.1.b).</li>
+        <li><strong>Gestire coaching e lezioni</strong>: tenere il registro dei pagamenti e ricordarti le scadenze. Base: il contratto (art. 6.1.b). I documenti fiscali li gestiamo fuori dall&apos;app per obbligo di legge (art. 6.1.c).</li>
+        <li><strong>Mandarti avvisi di servizio</strong> nell&apos;app e per email (nuovo programma, risposta al diario, messaggi, scadenze). Base: il contratto (art. 6.1.b).</li>
         <li><strong>Proporti per email servizi simili</strong> a quelli che hai già acquistato, usando l&apos;indirizzo che ci hai dato (art. 130, comma 4 del Codice privacy). Base: il nostro legittimo interesse. Puoi opporti in ogni momento, anche rispondendo all&apos;email, senza alcuna conseguenza.</li>
         <li><strong>Tenere la contabilità e adempiere agli obblighi fiscali</strong> (fatture, registri, controlli delle autorità). Base: obbligo di legge (art. 6.1.c).</li>
         <li><strong>Tenere l&apos;app sicura</strong> e prevenire accessi non autorizzati, e <strong>tutelare i nostri diritti</strong> in caso di contestazioni. Base: il nostro legittimo interesse (art. 6.1.f).</li>
