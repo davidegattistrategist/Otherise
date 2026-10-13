@@ -12,6 +12,13 @@ Claude ti serve in due modi: **dentro l'app** (l'assistente che prepara i progra
 6. **Fai verificare.** "Controlla che funzioni anche da telefono", "prova il caso in cui il cliente non ha ancora un programma". Claude sa provare il proprio lavoro se glielo chiedi.
 7. **Mai segreti in chat.** Chiavi, password e dati dei clienti non si incollano. Se serve un esempio, inventa i dati ("Mario Rossi, 35 anni…").
 
+## Pensa in grande, lascia fare a Claude
+
+- **Il limite è la fantasia.** Se riesci a descrivere una cosa (una pagina, un avviso, un grafico, un modo nuovo di seguire i clienti), Claude la può costruire. Non chiederti "si può fare?", chiediti "cosa mi servirebbe?".
+- **Sogna in grande, poi scegli il primo passo.** "Come sarebbe perfetto?" e poi "cosa facciamo oggi?".
+- **Tieni una lista dei desideri.** Ogni idea che ti viene durante la giornata va lì; ogni tanto chiedi a Claude di metterla in ordine.
+- **Collega i connettori** (GitHub, Supabase, Vercel, Google Drive, Gmail, Calendar…): così Claude carica, pubblica, controlla e prova da solo, e tu guardi il risultato e decidi. Le cose che costano, cancellano dati o scrivono ai clienti le confermi sempre tu.
+
 ## Modificare l'app con Claude Code
 
 Claude Code è la versione di Claude che lavora direttamente sul codice: legge il progetto, fa le modifiche, le prova e le carica su GitHub. Vercel poi pubblica da solo.

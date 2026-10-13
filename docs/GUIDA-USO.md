@@ -8,9 +8,9 @@ Una pagina per le cose di tutti i giorni. L'app funziona da computer e da telefo
 - **Cliente**: vede solo sé stesso, solo i programmi pubblicati, e i check/valutazioni posturali che rendi visibili. Le note delle sessioni PT e le "note per la prossima fase" non le vede mai.
 
 ## La pagina "Oggi"
-Le cose da fare: diario con qualcosa che non va, programmi che finiscono o da pubblicare, pagamenti in scadenza (con i pulsanti **Pagato** e **Promemoria**, solo titolare), clienti che non registrano allenamenti da una settimana o con costanza sotto il 50%, clienti senza check da più di 5 settimane.
+Le cose da fare: diario con qualcosa che non va, dolori e fastidi, note dei clienti da leggere, programmi che finiscono o da pubblicare, pagamenti da incassare (con i pulsanti **Pagato** e **Promemoria**, solo titolare), clienti che non registrano allenamenti da una settimana o con costanza sotto il 50%, check da fare, compleanni di oggi (con gli auguri già pronti in chat). Se non senti un cliente da più di 10 giorni ti arriva una notifica con un saluto già scritto.
 
-Ogni mattina alle 8 arriva **una sola email di riepilogo** con pagamenti, programmi da preparare e clienti da sentire. Diari con problemi e messaggi in chat arrivano invece subito.
+Non c'è un'email di riepilogo: il riepilogo è questa pagina. Le novità importanti arrivano come notifica sul telefono (vedi "Avvisi per email").
 
 Dal telefono il menu è in basso: Oggi, Clienti, Messaggi, Pagamenti e "Altro" per il resto.
 

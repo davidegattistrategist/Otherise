@@ -118,6 +118,14 @@ test("pagamenti: segna pagato in un tocco ed export CSV", async ({ page }) => {
   if (await box.getByRole("button", { name: "Pagato" }).count()) {
     await box.getByRole("button", { name: "Pagato" }).click();
     await expect(page.getByRole("status").filter({ hasText: /Registrato .*€/ }).first()).toBeVisible();
+    // la riga può sparire dall'elenco (non c'è più niente da incassare), ma il messaggio
+    // in basso ha "Modifica": lo elimina da lì, così i dati di prova restano com'erano
+    await expect(page.getByRole("status").first()).not.toContainText("-1");
+    await page.getByRole("status").getByRole("button", { name: /^Modifica: pagamento di / }).first().click();
+    const dialog = page.getByRole("dialog", { name: /^Correggi il pagamento di / });
+    await dialog.getByRole("button", { name: "Elimina il pagamento" }).click();
+    await dialog.getByRole("button", { name: "Sì, elimina" }).click();
+    await expect(dialog).toHaveCount(0);
   }
   const res = await page.request.get("/api/pagamenti/export?anno=2026");
   expect(res.status()).toBe(200);

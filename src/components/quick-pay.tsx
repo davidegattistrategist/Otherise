@@ -42,13 +42,11 @@ export function QuickPay({ clientId, name, proposal, reminder, compact, label = 
               const r = settle ? await settleSessions(clientId) : unpaidId ? await payUnpaid(clientId, unpaidId) : await quickPayment(clientId, index);
               if (r?.error) setMsg({ ok: false, text: r.error });
               else {
-                toast(`${name}: ${r?.message ?? "registrato"}`);
                 const pay = r && "payment" in r ? r.payment : undefined;
-                setMsg({
-                  ok: true,
-                  text: r?.message ?? "Registrato",
-                  payment: pay ? { id: pay.id, values: { paid_on: pay.paid_on, amount: pay.amount, method: pay.method, period_start: pay.period_start, period_end: pay.period_end, sessions: pay.sessions, notes: "", extra: false } } : undefined,
-                });
+                const payment = pay ? { id: pay.id, values: { paid_on: pay.paid_on, amount: pay.amount, method: pay.method, period_start: pay.period_start, period_end: pay.period_end, sessions: pay.sessions, notes: "", extra: false } } : undefined;
+                // il messaggio in basso porta anche "Modifica": la riga può sparire dall'elenco appena pagato
+                toast(`${name}: ${r?.message ?? "registrato"}`, payment ? { clientId, paymentId: payment.id, name, values: payment.values } : undefined);
+                setMsg({ ok: true, text: r?.message ?? "Registrato", payment });
               }
             });
           }}

@@ -1,11 +1,10 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useState } from "react";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 import { Field, Input, Select, Textarea } from "@/components/ui";
-import { isPeriodic, METHOD_LABELS, METHODS, periodEnd, PLAN_KINDS, PLAN_LABELS, type PlanKind } from "@/lib/billing";
+import { METHOD_LABELS, METHODS, periodEnd, PLAN_KINDS, PLAN_LABELS, type PlanKind } from "@/lib/billing";
 import { isISODate } from "@/lib/dates";
-import { CreditHint } from "@/components/credit-hint";
 
 type Action = (s: ActionState, fd: FormData) => Promise<ActionState>;
 
@@ -69,129 +68,6 @@ export function PlanForm({
       </Field>
       <ActionMessage state={state} />
       <div><SubmitButton>{submitLabel}</SubmitButton></div>
-    </form>
-  );
-}
-
-export function PaymentForm({
-  action,
-  kind,
-  defaults,
-  due,
-}: {
-  action: Action;
-  kind: PlanKind;
-  defaults: { paid_on: string; amount: number | string; method: string; period_start: string | null; period_end: string | null; sessions: number | null };
-  /** Quanto deve per il prossimo periodo o pacchetto (coaching o pacchetto di lezioni, con il credito già tolto) */
-  due?: number;
-}) {
-  const [state, formAction] = useActionState(action, null);
-  const [amountText, setAmountText] = useState(String(defaults.amount).replace(".", ","));
-  const [keep, setKeep] = useState(true);
-  const [prevAmount, setPrevAmount] = useState(String(defaults.amount));
-  if (String(defaults.amount) !== prevAmount) {
-    setPrevAmount(String(defaults.amount));
-    setAmountText(String(defaults.amount).replace(".", ","));
-  }
-  const paidNum = Number(amountText.replace(/\./g, "").replace(",", "."));
-  const [start, setStart] = useState(defaults.period_start ?? "");
-  const [end, setEnd] = useState(defaults.period_end ?? "");
-  // dopo un pagamento registrato il periodo proposto avanza: aggiorniamo i campi
-  const [prevDefaults, setPrevDefaults] = useState(`${defaults.period_start}|${defaults.period_end}`);
-  const currentDefaults = `${defaults.period_start}|${defaults.period_end}`;
-  if (currentDefaults !== prevDefaults) {
-    setPrevDefaults(currentDefaults);
-    setStart(defaults.period_start ?? "");
-    setEnd(defaults.period_end ?? "");
-  }
-  const formRef = useRef<HTMLFormElement>(null);
-  const periodic = isPeriodic(kind);
-  return (
-    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Pagato il">
-          <Input name="paid_on" type="date" defaultValue={defaults.paid_on} required />
-        </Field>
-        <Field label="Importo">
-          <Input name="amount" inputMode="decimal" value={amountText} onChange={(e) => setAmountText(e.target.value)} required />
-        </Field>
-        <Field label="Metodo">
-          <Select name="method" defaultValue={defaults.method}>
-            {METHODS.map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
-          </Select>
-        </Field>
-      </div>
-      {periodic ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Copre dal">
-            <Input
-              name="period_start"
-              type="date"
-              value={start}
-              onChange={(e) => {
-                setStart(e.target.value);
-                if (isISODate(e.target.value)) setEnd(periodEnd(kind, e.target.value) ?? "");
-              }}
-              required
-            />
-          </Field>
-          <Field label="Al" hint="calcolato in automatico">
-            <Input name="period_end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} required />
-          </Field>
-        </div>
-      ) : (
-        <Field label="Sessioni pagate" hint={due !== undefined ? "con il pacchetto intero la differenza dal prezzo passa al prossimo" : undefined}>
-          <Input name="sessions" type="number" min={1} defaultValue={defaults.sessions ?? 1} required className="max-w-40" />
-        </Field>
-      )}
-      {due !== undefined ? <CreditHint paid={paidNum} due={due} keep={keep} onKeep={setKeep} lessons={kind === "package"} /> : null}
-      <Field label="Note" hint="facoltative">
-        <Input name="notes" placeholder="Es. pagato metà, il resto a fine mese" />
-      </Field>
-      <ActionMessage state={state} />
-      <div><SubmitButton>Registra il pagamento</SubmitButton></div>
-    </form>
-  );
-}
-
-/**
- * Pagamento fuori dal piano (sessioni PT in più, una consulenza…): entra negli
- * incassi ma non sposta la scadenza del piano e non tocca le sessioni del pacchetto.
- */
-export function ExtraPaymentForm({ action, today, method, defaults, submitLabel = "Registra il pagamento extra" }: { action: Action; today: string; method: string; defaults?: { amount?: number | null; sessions?: number | null; notes?: string }; submitLabel?: string }) {
-  const [state, formAction] = useActionState(action, null);
-  // dopo un salvataggio riuscito i campi tornano vuoti (il form si ricrea)
-  const [prev, setPrev] = useState(state);
-  const [round, setRound] = useState(0);
-  if (state !== prev) {
-    setPrev(state);
-    if (state && "ok" in state && state.ok) setRound((r) => r + 1);
-  }
-  return (
-    <form key={round} action={formAction} className="flex flex-col gap-4">
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Pagato il">
-          <Input name="paid_on" type="date" defaultValue={today} required />
-        </Field>
-        <Field label="Importo">
-          <Input name="amount" inputMode="decimal" placeholder="Es. 700" defaultValue={defaults?.amount ? String(defaults.amount).replace(".", ",") : undefined} required />
-        </Field>
-        <Field label="Metodo">
-          <Select name="method" defaultValue={method}>
-            {METHODS.map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
-          </Select>
-        </Field>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)]">
-        <Field label="Sessioni" hint="se le scrivi, scalano da sole">
-          <Input name="sessions" type="number" min={1} placeholder="Es. 10" defaultValue={defaults?.sessions ?? undefined} />
-        </Field>
-        <Field label="Per cosa">
-          <Input name="notes" defaultValue={defaults?.notes ?? "Sessioni PT extra"} required />
-        </Field>
-      </div>
-      <ActionMessage state={state} />
-      <div><SubmitButton variant="secondary">{submitLabel}</SubmitButton></div>
     </form>
   );
 }

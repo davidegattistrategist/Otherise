@@ -64,91 +64,6 @@ export async function savePlan(clientId: string, planId: string | null, _: Actio
   redirect(`/staff/clienti/${clientId}/pagamenti?piano=salvato`);
 }
 
-export async function recordPayment(clientId: string, planId: string, _: ActionState, fd: FormData): Promise<ActionState> {
-  const me = await requireOwner();
-  const supabase = await createClient();
-  const { data: plan } = await supabase.from("payment_plans").select("kind, amount, package_sessions").eq("id", planId).eq("client_id", clientId).maybeSingle();
-  if (!plan) return { error: "Piano non trovato." };
-  const kind = plan.kind as PlanKind;
-  const paidOn = String(fd.get("paid_on") ?? "");
-  if (!isISODate(paidOn)) return { error: "Data del pagamento non valida." };
-  const amount = money(fd.get("amount"));
-  // con il credito un periodo può costare 0 €
-  if (!Number.isFinite(amount) || amount < 0 || (amount === 0 && !usesCredit(kind))) return { error: "Importo non valido." };
-  const method = String(fd.get("method") ?? "transfer");
-  if (!(METHODS as readonly string[]).includes(method)) return { error: "Metodo non valido." };
-  // coaching e pacchetto intero di lezioni: la differenza dal prezzo diventa credito (o resta da recuperare), se scelto
-  const fullPackage = kind === "package" && int(fd.get("sessions")) === (plan.package_sessions ?? NaN);
-  const withCredit = isPeriodic(kind) || fullPackage;
-  const credit = withCredit ? await getClientCredit(supabase, clientId, creditScope(kind)) : 0;
-  const change = withCredit ? creditChange({ planAmount: Number(plan.amount), credit, paid: amount, keep: fd.get("keep_difference") !== "off" }) : 0;
-  let periodStart: string | null = null;
-  let periodEnd: string | null = null;
-  let sessions: number | null = null;
-  if (isPeriodic(kind)) {
-    periodStart = String(fd.get("period_start") ?? "");
-    periodEnd = String(fd.get("period_end") ?? "");
-    if (!isISODate(periodStart) || !isISODate(periodEnd)) return { error: "Indica il periodo coperto dal pagamento." };
-    if (periodEnd < periodStart) return { error: "Il periodo finisce prima di iniziare." };
-  } else {
-    const s = int(fd.get("sessions"));
-    if (Number.isNaN(s) || !s) return { error: "Indica quante sessioni copre il pagamento." };
-    sessions = s;
-  }
-  const { error } = await supabase.from("payments").insert({
-    client_id: clientId,
-    plan_id: planId,
-    paid_on: paidOn,
-    amount,
-    method: method as (typeof METHODS)[number],
-    period_start: periodStart,
-    period_end: periodEnd,
-    sessions,
-    notes: String(fd.get("notes") ?? "").trim(),
-    credit_change: change,
-    created_by: me.id,
-  });
-  if (error) return { error: "Salvataggio non riuscito." };
-  revalidate(clientId);
-  const after = Math.round((credit + change) * 100) / 100;
-  return { ok: true, message: `Pagamento di ${formatEuro(amount)} registrato.${change !== 0 ? ` ${after > 0 ? `Credito per il prossimo rinnovo: ${formatEuro(after)}.` : after < 0 ? `Da recuperare al prossimo rinnovo: ${formatEuro(-after)}.` : "Credito usato tutto."}` : ""}` };
-}
-
-/**
- * Pagamento fuori dal piano (es. sessioni PT in più): senza piano e senza
- * periodo, quindi conta negli incassi ma non cambia la scadenza né il pacchetto.
- */
-export async function recordExtraPayment(clientId: string, _: ActionState, fd: FormData): Promise<ActionState> {
-  const me = await requireOwner();
-  const supabase = await createClient();
-  const paidOn = String(fd.get("paid_on") ?? "");
-  if (!isISODate(paidOn)) return { error: "Data del pagamento non valida." };
-  const amount = money(fd.get("amount"));
-  if (!Number.isFinite(amount) || amount <= 0) return { error: "Scrivi l'importo, per esempio 700." };
-  const method = String(fd.get("method") ?? "cash");
-  if (!(METHODS as readonly string[]).includes(method)) return { error: "Metodo non valido." };
-  const rawSessions = String(fd.get("sessions") ?? "").trim();
-  const sessions = rawSessions ? int(rawSessions) : null;
-  if (sessions !== null && (Number.isNaN(sessions) || sessions < 1)) return { error: "Il numero di sessioni non è valido: lascialo vuoto se non serve." };
-  const notes = String(fd.get("notes") ?? "").trim();
-  if (!notes) return { error: "Scrivi per cosa è il pagamento, per esempio \"Sessioni PT extra\"." };
-  const { error } = await supabase.from("payments").insert({
-    client_id: clientId,
-    plan_id: null,
-    paid_on: paidOn,
-    amount,
-    method: method as (typeof METHODS)[number],
-    period_start: null,
-    period_end: null,
-    sessions,
-    notes,
-    created_by: me.id,
-  });
-  if (error) return { error: "Salvataggio non riuscito." };
-  revalidate(clientId);
-  return { ok: true, message: `Pagamento extra di ${formatEuro(amount)} registrato. La scadenza del piano non cambia.` };
-}
-
 /**
  * Correzione a mano del contatore delle sessioni PT: "oggi gliene restano N"
  * oppure "ne deve saldare N". Il conteggio riparte da adesso: da qui in poi si
@@ -327,7 +242,8 @@ export async function quickPayment(clientId: string, index = 0): Promise<ActionS
   const credit = withCredit ? await getClientCredit(supabase, clientId, creditScope(kind)) : 0;
   let paidUntil = row?.paid_until ?? null;
   // periodi saltati prima di quello che paga: restano "da saldare"
-  const skip = isPeriodic(kind) ? Math.min(Math.max(0, Math.floor(index) || 0), unpaidPeriods({ ...plan, kind }, paidUntil, todayISO()).length - 1) : 0;
+  // (se paga in anticipo non ci sono periodi scoperti: niente da saltare)
+  const skip = isPeriodic(kind) ? Math.max(0, Math.min(Math.floor(index) || 0, unpaidPeriods({ ...plan, kind }, paidUntil, todayISO()).length - 1)) : 0;
   for (let i = 0; i < skip; i++) {
     const p = nextPaymentProposal({ ...plan, kind }, paidUntil, 0);
     const { error } = await supabase.from("payments").insert({

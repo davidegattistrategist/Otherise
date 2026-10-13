@@ -75,7 +75,22 @@ test("Oggi: 'Nessun programma pubblicato' solo per chi è in coaching, non per c
   await expect(page.locator("a", { hasText: pt }).filter({ hasText: "Nessun programma pubblicato" })).toHaveCount(0);
 });
 
-test("il cliente vede un avviso gentile per il rinnovo, mai 'devi pagare'", async ({ page }) => {
+test("il cliente vede un avviso gentile per il rinnovo, mai 'devi pagare'", async ({ browser }, info) => {
+  // prima il trainer fa iniziare il prossimo periodo di Giulia fra due giorni,
+  // così l'avviso c'è sempre, qualunque cosa abbiano fatto le altre prove
+  const staff = await (await browser.newContext(info.project.use)).newPage();
+  await login(staff, "titolare@prova.local");
+  await staff.goto("/staff/clienti?q=Esempio");
+  const href = await staff.locator('a[href^="/staff/clienti/"]', { hasText: "Esempio Giulia" }).filter({ visible: true }).first().getAttribute("href");
+  await staff.goto(`${href}/pagamenti`);
+  const card = staff.locator("#periodo");
+  await card.locator("summary").click();
+  await card.locator('input[name="start"]').fill(new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10));
+  await card.getByRole("button", { name: "Sposta il periodo" }).click();
+  await expect(card.getByText(/Fatto: il periodo da pagare va dal/)).toBeVisible();
+  await staff.context().close();
+
+  const page = await (await browser.newContext(info.project.use)).newPage();
   await login(page, "giulia@prova.local");
   await page.goto("/cliente");
   const notice = page.getByRole("region", { name: "Un pensiero sul tuo percorso" });
@@ -85,6 +100,7 @@ test("il cliente vede un avviso gentile per il rinnovo, mai 'devi pagare'", asyn
   expect((await notice.innerText()).toLowerCase()).not.toMatch(/devi pagare|scadut/);
   await page.goto("/cliente/profilo");
   await expect(page.getByRole("region", { name: "Un pensiero sul tuo percorso" })).toBeVisible();
+  await page.context().close();
 });
 
 test("diario: i vecchi indirizzi del check-up portano al diario", async ({ page }) => {

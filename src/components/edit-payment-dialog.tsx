@@ -6,7 +6,8 @@
  * il modulo di correzione (data, importo, metodo, periodo o sessioni, note)
  * e la possibilità di eliminarlo, senza dover aprire la scheda del cliente.
  */
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { deletePayment, updatePayment } from "@/app/staff/clienti/[id]/pagamenti/actions";
 import { EditPaymentForm } from "@/app/staff/clienti/[id]/pagamenti/forms";
 import { IconX } from "./icons";
@@ -30,6 +31,7 @@ export function EditPaymentButton({
   values,
   label = "Modifica",
   className,
+  onOpenChange,
 }: {
   clientId: string;
   paymentId: string;
@@ -37,15 +39,29 @@ export function EditPaymentButton({
   values: PaymentValues;
   label?: string;
   className?: string;
+  /** avvisa chi contiene il pulsante quando la finestra si apre o si chiude */
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  const notify = useRef(onOpenChange);
+  useEffect(() => {
+    notify.current = onOpenChange;
+  });
+  const setOpen = (v: boolean) => {
+    setOpenState(v);
+    notify.current?.(v);
+  };
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, startDelete] = useTransition();
   const [deleted, setDeleted] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpenState(false);
+      notify.current?.(false);
+    };
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKey);
@@ -70,7 +86,7 @@ export function EditPaymentButton({
       >
         {label}
       </button>
-      {open ? (
+      {open ? createPortal(
         <div
           className="fixed inset-0 z-[95] flex items-end justify-center bg-ink/40 sm:items-center"
           role="dialog"
@@ -115,7 +131,8 @@ export function EditPaymentButton({
               <button type="button" onClick={() => setOpen(false)} className="ml-auto min-h-10 px-2 text-sm font-semibold underline">Chiudi</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );
