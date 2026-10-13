@@ -8,6 +8,7 @@
  * griglie. Lo staff e il cliente le guardano a tutto schermo e le possono salvare.
  */
 import { useEffect, useRef, useState } from "react";
+import { useKeepAwake } from "./use-keep-awake";
 import { useRouter } from "next/navigation";
 import { MAX_PHOTOS_PER_UPLOAD, PHOTO_LONG_SIDE, PHOTO_QUALITY, THUMB_LONG_SIDE, type CheckPhoto } from "@/lib/check-photos-shared";
 import { deleteCheckPhoto, preparePhotoUploads, saveCheckPhotos } from "@/app/staff/clienti/[id]/check/actions";
@@ -121,6 +122,7 @@ export function CheckPhotoUploader({ clientId, checkId, label = "Aggiungi le fot
   };
 
   const busy = state !== null;
+  useKeepAwake(busy);
   const pct = state ? Math.round(((state.done + state.progress) / state.total) * 100) : 0;
   return (
     <div className={cx("flex flex-col gap-1.5", className)}>

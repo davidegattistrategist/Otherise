@@ -13,6 +13,7 @@ import { cx } from "@/components/ui";
 import { IconDownload, IconPaperclip, IconPlay, IconSend, IconSparkle, IconX } from "@/components/icons";
 import { prepareImage, saveAttachment, uploadWithProgress, videoSize } from "./media";
 import { VoicePlayer, useVoiceRecorder, voiceSupported } from "./voice";
+import { useKeepAwake } from "../use-keep-awake";
 import { METHOD_LABELS, canCompressVideo, compressVideo, shouldCompress, type CompressMethod } from "./compress-video";
 
 const MicIcon = () => (
@@ -270,11 +271,10 @@ export function ChatThread({
   const busyWithMedia = preparingVideo || uploadingVideo;
 
   // mentre un video si riduce o sale: schermo acceso e avviso se provi a chiudere la pagina
+  // schermo acceso mentre il video si riduce e sale (e mentre si invia con allegati)
+  useKeepAwake(busyWithMedia || (sending && pending.length > 0));
   useEffect(() => {
     if (!busyWithMedia) return;
-    let lock: { release: () => Promise<void> } | null = null;
-    const nav = navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } };
-    nav.wakeLock?.request("screen").then((l) => (lock = l)).catch(() => undefined);
     const warn = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "";
@@ -282,7 +282,6 @@ export function ChatThread({
     window.addEventListener("beforeunload", warn);
     return () => {
       window.removeEventListener("beforeunload", warn);
-      void lock?.release().catch(() => undefined);
     };
   }, [busyWithMedia]);
 

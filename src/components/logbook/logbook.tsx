@@ -1,5 +1,6 @@
 "use client";
 
+import { useKeepAwake } from "../use-keep-awake";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { blockHeading, itemLabel, type ProgramDay } from "@/lib/program/types";
@@ -252,20 +253,8 @@ export function Logbook(props: LogbookProps) {
     return () => document.removeEventListener("visibilitychange", onHide);
   }, [save]);
 
-  // schermo sempre acceso durante l'allenamento (dove il telefono lo permette)
-  useEffect(() => {
-    let lock: { release: () => Promise<void> } | null = null;
-    const nav = navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } };
-    const get = () => {
-      if (document.visibilityState === "visible" && nav.wakeLock) nav.wakeLock.request("screen").then((l) => (lock = l)).catch(() => undefined);
-    };
-    get();
-    document.addEventListener("visibilitychange", get);
-    return () => {
-      document.removeEventListener("visibilitychange", get);
-      void lock?.release().catch(() => undefined);
-    };
-  }, []);
+  // schermo sempre acceso durante l'allenamento
+  useKeepAwake(true);
 
   const itemById = useMemo(() => new Map(day.blocks.flatMap((b) => b.items).map((it) => [it.id, it])), [day]);
   const update = (itemId: string, fn: (s: ItemState) => ItemState) => {
