@@ -8,7 +8,7 @@ Questo file mette insieme tutto quello che serve sulla privacy (GDPR) per usare 
 3. **Accetta i contratti dei fornitori** (DPA, vedi sotto) e salva i PDF in una cartella "Privacy".
 4. Se lavori con **collaboratori**, fai firmare a ognuno la lettera di autorizzazione (modello sotto).
 5. Compila il **registro dei trattamenti** (modello sotto) e tienilo nella stessa cartella.
-6. Passa a **Supabase Pro**, che fa i backup automatici, prima di mettere dati veri.
+6. Attiva il **backup notturno** (docs/BACKUP.md): ogni mattina l'app ti conferma che è andato bene. Supabase Pro serve solo quando lo spazio per foto e video si avvicina al limite (te lo dice l'app).
 
 ## Cosa fa già l'app
 - **Informativa pubblica** su `/privacy`, con i tuoi dati presi dalle Impostazioni.
@@ -41,11 +41,13 @@ Per ognuno accetta o scarica il **DPA** (Data Processing Agreement, "accordo sul
 
 | Fornitore | A cosa serve | Dove sono i dati | Dove trovi il DPA |
 |---|---|---|---|
-| Supabase | database, accessi, foto e video della chat | UE (Francoforte) | supabase.com/legal/dpa (si firma online) |
-| Vercel | pubblicazione dell'app | UE/USA | vercel.com/legal/dpa |
-| Anthropic | assistente AI | USA | anthropic.com/legal (il DPA è incluso nei termini commerciali delle API) |
-| Groq | trascrizione dei messaggi vocali | USA | groq.com (termini e DPA per le API) |
-| Resend | invio delle email | USA/UE | resend.com/legal/dpa |
+| Supabase | database, accessi, foto e video della chat | UE (Francoforte) | fa parte dei termini che hai accettato: salva in PDF la pagina supabase.com/legal/dpa |
+| Vercel | pubblicazione dell'app | UE/USA | vercel.com/legal/dpa: vale **solo per i piani Pro ed Enterprise**, non per il piano gratuito (Hobby) |
+| Anthropic | assistente AI | USA | incluso nei termini commerciali delle API: salva in PDF anthropic.com/legal/data-processing-addendum |
+| Groq | trascrizione dei messaggi vocali | USA | incluso nei termini dei servizi: salva in PDF console.groq.com/docs/legal/customer-data-processing-addendum |
+| Resend | invio delle email | USA/UE | già firmato da loro: scaricalo da resend.com → Settings → Documents |
+
+Per tutti tranne Resend non c'è niente da firmare: il DPA vale da quando hai accettato i termini. Basta salvarne una copia (dal browser: Stampa → Salva come PDF) nella cartella "Privacy", con la data.
 
 I trasferimenti verso gli USA sono coperti dalle clausole contrattuali standard contenute nei DPA o, per i fornitori aderenti, dall'EU-US Data Privacy Framework. Il testo dell'informativa li descrive già.
 
