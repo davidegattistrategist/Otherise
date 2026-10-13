@@ -7,7 +7,7 @@ import { checkDue } from "./check-due";
 import { DEDICATIONS, QUOTES, dedicationOfDay, quoteOfDay } from "./quotes";
 import { estimateOneRepMax } from "./strength/e1rm";
 import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
-import { billingStatus, clientFacingStatus, creditChange, dueAmount, isCoaching, ptCounterView, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
+import { billingStatus, clientFacingStatus, unpaidPeriods, usesCredit, nextPaymentProposal, creditChange, dueAmount, isCoaching, ptCounterView, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
 import { clientNotices, ptLeft } from "./client-notice";
 import { addDays, addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
 import { displayWeek, nextDay, nextWorkout, programEndDate, weekPosition } from "./program/schedule";
@@ -245,12 +245,22 @@ describe("date", () => {
 });
 
 describe("pagamenti", () => {
-  it("periodi", () => {
-    expect(periodEnd("quarterly", "2026-10-13")).toBe("2027-01-12");
+  it("periodi: dal 22 luglio al 21 ottobre, il rinnovo dal giorno dopo", () => {
+    expect(periodEnd("quarterly", "2026-07-22")).toBe("2026-10-21");
+    expect(periodEnd("monthly", "2026-10-10")).toBe("2026-11-09");
     expect(periodEnd("six_weeks", "2026-10-01")).toBe("2026-11-11");
     expect(periodEnd("monthly", "2026-01-31")).toBe("2026-02-27");
-    expect(suggestNextPeriod("quarterly", "2026-01-01", "2026-03-31")).toEqual({ start: "2026-04-01", end: "2026-06-30" });
+    expect(suggestNextPeriod("quarterly", "2026-01-01", "2026-10-21")).toEqual({ start: "2026-10-22", end: "2027-01-21" });
     expect(suggestNextPeriod("package", "2026-01-01", null)).toBeNull();
+  });
+  it("coaching rimasto indietro: una riga per periodo, il credito sul primo", () => {
+    const plan = { kind: "six_weeks" as const, amount: 300, start_date: "2026-01-01" };
+    const rows = unpaidPeriods(plan, "2026-08-02", "2026-10-13", 200);
+    expect(rows.map((r) => [r.start, r.end, r.amount, r.late])).toEqual([
+      ["2026-08-03", "2026-09-13", 100, true],
+      ["2026-09-14", "2026-10-25", 300, false],
+    ]);
+    expect(unpaidPeriods(plan, "2026-10-20", "2026-10-13")).toEqual([]);
   });
   it("stati", () => {
     const base = { plan_id: "p", amount: 600, sessions_bought: 0, sessions_used: 0, paid_until: null as string | null };
@@ -280,7 +290,16 @@ describe("pagamenti", () => {
     expect(pkg.label).toBe("2 sessioni rimaste");
     expect(billingStatus({ ...base, kind: "package", sessions_bought: 10, sessions_used: 10 }, "2026-10-09").state).toBe("overdue");
     expect(billingStatus(null, "2026-10-09").state).toBe("none");
-  });  it("credito del coaching: paga 500 invece di 300, il rinnovo dopo costa 100", () => {
+  });  it("credito anche sui pacchetti di lezioni PT: 700 invece di 630, il prossimo pacchetto costa 560", () => {
+    const c = creditChange({ planAmount: 630, credit: 0, paid: 700, keep: true });
+    expect(c).toBe(70);
+    const next = nextPaymentProposal({ kind: "package", amount: 630, method: "cash", start_date: "2026-01-01", package_sessions: 10 }, null, c);
+    expect(next.amount).toBe(560);
+    expect(next.sessions).toBe(10);
+    expect(usesCredit("package")).toBe(true);
+    expect(usesCredit("single")).toBe(false);
+  });
+  it("credito del coaching: paga 500 invece di 300, il rinnovo dopo costa 100", () => {
     // 6 settimane a 300 €: porta 500 → 200 di credito
     const c1 = creditChange({ planAmount: 300, credit: 0, paid: 500, keep: true });
     expect(c1).toBe(200);

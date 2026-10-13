@@ -65,7 +65,7 @@ export async function registerPayment(_: NewPaymentState, fd: FormData): Promise
     clientName = `${c.first_name} ${c.last_name}`.trim();
   }
 
-  const { data: plan } = await supabase.from("payment_plans").select("id, kind, amount").eq("client_id", clientId).eq("active", true).maybeSingle();
+  const { data: plan } = await supabase.from("payment_plans").select("id, kind, amount, package_sessions").eq("client_id", clientId).eq("active", true).maybeSingle();
   const keep = fd.get("keep_difference") !== "off";
   const base = { client_id: clientId, paid_on: paidOn, amount, method, notes, created_by: me.id };
   let message = "";
@@ -92,9 +92,14 @@ export async function registerPayment(_: NewPaymentState, fd: FormData): Promise
     } else {
       const s = kind === "single" ? 1 : count(fd.get("sessions"));
       if (Number.isNaN(s)) return { error: "Indica quante sessioni copre il pagamento." };
-      const { error } = await supabase.from("payments").insert({ ...base, plan_id: plan.id, period_start: null, period_end: null, sessions: s });
+      // pacchetto intero: la differenza dal prezzo passa al pacchetto dopo (credito)
+      const full = kind === "package" && s === plan.package_sessions;
+      const credit = full ? await getClientCredit(supabase, clientId) : 0;
+      const change = full ? creditChange({ planAmount: Number(plan.amount), credit, paid: amount, keep }) : 0;
+      if (amount === 0 && !full) return { error: "Scrivi l'importo, per esempio 300." };
+      const { error } = await supabase.from("payments").insert({ ...base, plan_id: plan.id, period_start: null, period_end: null, sessions: s, credit_change: change });
       if (error) return { error: "Salvataggio non riuscito." };
-      message = `${formatEuro(amount)} registrati: ${s} ${s === 1 ? "sessione" : "sessioni"} per ${clientName}.`;
+      message = `${formatEuro(amount)} registrati: ${s} ${s === 1 ? "sessione" : "sessioni"} per ${clientName}.${creditNote(credit + change, change)}`;
     }
   } else if (type === "plan") {
     const kind = String(fd.get("kind") ?? "") as PlanKind;
@@ -117,16 +122,21 @@ export async function registerPayment(_: NewPaymentState, fd: FormData): Promise
     if (Number.isNaN(s)) return { error: "Indica quante lezioni sta pagando." };
     // se il suo piano è un pacchetto di sessioni, le lezioni vanno lì; altrimenti sono "a parte"
     const onPlan = plan && plan.kind === "package";
+    // pacchetto intero: la differenza dal prezzo passa al pacchetto dopo (credito)
+    const full = Boolean(onPlan && plan && s === plan.package_sessions);
+    const credit = full ? await getClientCredit(supabase, clientId) : 0;
+    const change = full && plan ? creditChange({ planAmount: Number(plan.amount), credit, paid: amount, keep }) : 0;
     const { error } = await supabase.from("payments").insert({
       ...base,
       plan_id: onPlan ? plan.id : null,
       period_start: null,
       period_end: null,
       sessions: s,
+      credit_change: change,
       notes: notes || (s === 1 ? "Lezione PT" : `Pacchetto ${s} lezioni PT`),
     });
     if (error) return { error: "Salvataggio non riuscito." };
-    message = `${formatEuro(amount)} registrati: ${s} ${s === 1 ? "lezione" : "lezioni"} PT per ${clientName}. Le lezioni si scalano quando segni le sessioni PT.`;
+    message = `${formatEuro(amount)} registrati: ${s} ${s === 1 ? "lezione" : "lezioni"} PT per ${clientName}. Le lezioni si scalano quando segni le sessioni PT.${creditNote(credit + change, change)}`;
   } else {
     if (!notes) return { error: "Scrivi per cosa è il pagamento, per esempio \"Valutazione posturale\"." };
     const { error } = await supabase.from("payments").insert({ ...base, plan_id: null, period_start: null, period_end: null, sessions: null });

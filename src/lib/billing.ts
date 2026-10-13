@@ -60,13 +60,25 @@ export function isPeriodic(kind: PlanKind): boolean {
  * pacchetto o lezioni singole fa lezioni PT; chi non ha un piano conta come
  * coaching solo se ha (o ha avuto) dei programmi.
  */
+/**
+ * Piani con credito: il coaching e i pacchetti di lezioni PT. Se paga più del
+ * dovuto la differenza resta per il rinnovo dopo (o si aggiunge, se paga meno).
+ */
+export function usesCredit(kind: PlanKind): boolean {
+  return isPeriodic(kind) || kind === "package";
+}
+
 export function isCoaching(planKind: PlanKind | null, hasPrograms: boolean): boolean {
   if (planKind) return isPeriodic(planKind);
   return hasPrograms;
 }
 
 
-/** Ultimo giorno coperto da un pagamento che parte da `start`. */
+/**
+ * Ultimo giorno coperto da un pagamento che parte da `start` (dal 22 luglio al
+ * 21 ottobre): il periodo dopo parte il giorno successivo, così ogni giorno è
+ * saldato una volta sola.
+ */
 export function periodEnd(kind: PlanKind, start: ISODate): ISODate | null {
   switch (kind) {
     case "monthly":
@@ -244,12 +256,34 @@ export function creditLabel(credit: number): string | null {
 export function nextPaymentProposal(plan: { kind: PlanKind; amount: number | string; method: string; start_date: ISODate; package_sessions: number | null }, paidUntil: ISODate | null, credit = 0) {
   const period = suggestNextPeriod(plan.kind, plan.start_date, paidUntil);
   return {
-    amount: isPeriodic(plan.kind) ? dueAmount(Number(plan.amount), credit) : Number(plan.amount),
+    amount: usesCredit(plan.kind) ? dueAmount(Number(plan.amount), credit) : Number(plan.amount),
     method: plan.method,
     period_start: period?.start ?? null,
     period_end: period?.end ?? null,
     sessions: plan.kind === "package" ? plan.package_sessions ?? 1 : plan.kind === "single" ? 1 : null,
   };
+}
+
+/**
+ * Coaching rimasto indietro: i periodi ancora da pagare fino a quello in corso,
+ * dal più vecchio. Il primo costa il prezzo meno il credito, gli altri il prezzo
+ * pieno. `late` = periodo già finito (scaduto). Vuoto se non c'è nulla da pagare.
+ */
+export function unpaidPeriods(
+  plan: { kind: PlanKind; amount: number | string; start_date: ISODate },
+  paidUntil: ISODate | null,
+  today: ISODate,
+  credit = 0,
+  max = 6,
+): Array<{ start: ISODate; end: ISODate; amount: number; late: boolean }> {
+  if (!isPeriodic(plan.kind)) return [];
+  const out: Array<{ start: ISODate; end: ISODate; amount: number; late: boolean }> = [];
+  let next = suggestNextPeriod(plan.kind, plan.start_date, paidUntil);
+  while (next && next.start <= today && out.length < max) {
+    out.push({ start: next.start, end: next.end, amount: out.length === 0 ? dueAmount(Number(plan.amount), credit) : Number(plan.amount), late: next.end < today });
+    next = suggestNextPeriod(plan.kind, plan.start_date, next.end);
+  }
+  return out;
 }
 
 /** Quanto vale un piano in un mese (per le stime delle entrate ricorrenti) */

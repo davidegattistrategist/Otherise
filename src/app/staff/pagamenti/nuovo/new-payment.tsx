@@ -9,8 +9,8 @@ import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import { registerPayment, type NewPaymentState } from "../actions";
 import { CreditHint } from "@/components/credit-hint";
-import { formatEuro, isPeriodic, METHOD_LABELS, METHODS, periodEnd, PLAN_DURATION, PLAN_LABELS, type PlanKind } from "@/lib/billing";
-import { formatLong, formatShort, isISODate } from "@/lib/dates";
+import { dueAmount, formatEuro, isPeriodic, usesCredit, METHOD_LABELS, METHODS, periodEnd, PLAN_DURATION, PLAN_LABELS, type PlanKind } from "@/lib/billing";
+import { addDays, formatLong, formatShort, isISODate } from "@/lib/dates";
 import { Card, Eyebrow, Field, Input, Select, buttonClass, cx } from "@/components/ui";
 import { SubmitButton } from "@/components/form-bits";
 import { IconCheck, IconPlus } from "@/components/icons";
@@ -56,12 +56,12 @@ export function NewPayment({ clients, today, initialClient, initialType = null }
  * non parte dal giorno del pagamento, ma dal suo ciclo.
  */
 export function planStart(kind: PlanKind, c: { paidUntil: string | null; startDate: string | null }, today: string): string {
-  let start = c.paidUntil ? addDay(c.paidUntil) : c.startDate ?? today;
+  let start = c.paidUntil ? addDays(c.paidUntil, 1) : c.startDate ?? today;
   if (start > today) return start;
   for (let i = 0; i < 400; i++) {
     const end = periodEnd(kind, start);
     if (!end || end >= today) return start;
-    start = addDay(end);
+    start = addDays(end, 1);
   }
   return today;
 }
@@ -78,12 +78,6 @@ function defaultsFor(c: PayClient | null, type: Type | null, today: string) {
   }
   if (type === "lessons") return { amount: c.ptPrice ? num(c.ptPrice) : "", method, start: today, end: "", sessions: "1" };
   return { amount: "", method, start: today, end: "", sessions: "" };
-}
-
-function addDay(d: string) {
-  const t = new Date(`${d}T12:00:00Z`);
-  t.setUTCDate(t.getUTCDate() + 1);
-  return t.toISOString().slice(0, 10);
 }
 
 function Wizard({ clients, today, initialClient, initialType, onAgain }: { clients: PayClient[]; today: string; initialClient: string | null; initialType: Type | null; onAgain: () => void }) {
@@ -145,6 +139,20 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
   const needsSessions = (type === "renew" && renewKind === "package") || type === "lessons";
   const sessionsN = Number(sessions);
   const amountN = euro(amount);
+  // credito: rinnovo del coaching o del pacchetto, oppure un pacchetto intero di lezioni sul piano a pacchetto
+  const creditDue: number | null = !client?.plan
+    ? null
+    : type === "renew" && usesCredit(client.plan.kind) && client.proposal && (client.plan.kind !== "package" || sessionsN === client.plan.packageSessions)
+      ? client.proposal.amount
+      : type === "lessons" && client.plan.kind === "package" && sessionsN === client.plan.packageSessions
+        ? dueAmount(client.plan.amount, client.credit)
+        : null;
+  const creditExtra = (() => {
+    if (creditDue === null || !client?.plan || amountN === null || Math.abs(amountN - creditDue) < 0.005) return "";
+    const after = keep ? Math.round((client.credit + amountN - client.plan.amount) * 100) / 100 : 0;
+    const next = client.plan.kind === "package" ? "pacchetto" : "rinnovo";
+    return after > 0 ? ` Restano ${formatEuro(after)} di credito per il ${next} dopo.` : after < 0 ? ` ${formatEuro(-after)} si aggiungono al ${next} dopo.` : " Il pagamento è saldato così.";
+  })();
 
   // lezioni: se c'è il prezzo a lezione, l'importo segue il numero (finché non lo scrivi tu)
   const setLessons = (v: string) => {
@@ -159,15 +167,10 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
     const pay = `${who} paga ${formatEuro(amountN)}${how[method] ?? ""} ${paidOn === today ? "oggi" : `il ${formatLong(paidOn)}`}`;
     if (periodic && isISODate(start) && isISODate(end)) {
       const what = type === "plan" ? `nuovo ${PLAN_LABELS[kind].toLowerCase()}` : `rinnovo ${PLAN_LABELS[renewKind!].toLowerCase()}`;
-      let extra = "";
-      if (type === "renew" && client?.plan && amountN !== null && client.proposal && Math.abs(amountN - client.proposal.amount) >= 0.005) {
-        const after = keep ? Math.round((client.credit + amountN - client.plan.amount) * 100) / 100 : 0;
-        extra = after > 0 ? ` Restano ${formatEuro(after)} di credito per il rinnovo dopo.` : after < 0 ? ` ${formatEuro(-after)} si aggiungono al rinnovo dopo.` : " Il periodo è saldato così.";
-      }
-      return `${pay} per il ${what}: vale dal ${formatLong(start)} al ${formatLong(end)}.${extra}`;
+      return `${pay} per il ${what}: vale dal ${formatLong(start)} al ${formatLong(end)}.${creditExtra}`;
     }
     if (needsSessions && Number.isInteger(sessionsN) && sessionsN > 0) {
-      return `${pay} per ${sessionsN} ${sessionsN === 1 ? "lezione" : "lezioni"} PT${type === "renew" ? " del pacchetto" : ""}${sessionsN > 1 ? ` (${formatEuro(Math.round((amountN / sessionsN) * 100) / 100)} a lezione)` : ""}.`;
+      return `${pay} per ${sessionsN} ${sessionsN === 1 ? "lezione" : "lezioni"} PT${type === "renew" ? " del pacchetto" : ""}${sessionsN > 1 ? ` (${formatEuro(Math.round((amountN / sessionsN) * 100) / 100)} a lezione)` : ""}.${creditExtra}`;
     }
     if (type === "renew" && renewKind === "single") return `${pay} per una sessione.`;
     if (type === "other" && notes.trim()) return `${pay} per: ${notes.trim()}.`;
@@ -349,9 +352,9 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
             </div>
           ) : null}
 
-          {type === "renew" && client?.plan && isPeriodic(client.plan.kind) && Math.abs(client.credit) >= 0.005 ? (
+          {creditDue !== null && client?.plan && Math.abs(client.credit) >= 0.005 ? (
             <p className="text-sm text-muted">
-              {client.credit > 0 ? `Ha un credito di ${formatEuro(client.credit)}` : `Ha ${formatEuro(-client.credit)} da recuperare`}: per questo rinnovo deve {formatEuro(client.proposal?.amount ?? 0)} invece di {formatEuro(client.plan.amount)}.
+              {client.credit > 0 ? `Ha un credito di ${formatEuro(client.credit)}` : `Ha ${formatEuro(-client.credit)} da recuperare`}: per {client.plan.kind === "package" ? "questo pacchetto" : "questo rinnovo"} deve {formatEuro(creditDue)} invece di {formatEuro(client.plan.amount)}.
             </p>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-3">
@@ -367,7 +370,7 @@ function Wizard({ clients, today, initialClient, initialType, onAgain }: { clien
               <Input name="paid_on" type="date" value={paidOn} max={today} onChange={(e) => setPaidOn(e.target.value)} required />
             </Field>
           </div>
-          {type === "renew" && client?.plan && isPeriodic(client.plan.kind) && client.proposal ? <CreditHint paid={amountN ?? NaN} due={client.proposal.amount} keep={keep} onKeep={setKeep} /> : null}
+          {creditDue !== null ? <CreditHint paid={amountN ?? NaN} due={creditDue} keep={keep} onKeep={setKeep} /> : null}
 
           {periodic ? (
             <div className="grid gap-3 sm:grid-cols-2">

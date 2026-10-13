@@ -3,13 +3,13 @@ import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatShort, todayISO } from "@/lib/dates";
-import { billingStatus, dueAmount, formatEuro, isPeriodic, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
+import { billingStatus, dueAmount, formatEuro, isPeriodic, usesCredit, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
 import { getClientCredit, getPtCounter, reminderChatLink } from "@/lib/data/billing";
 import { IconChat, IconDown } from "@/components/icons";
 import { Card, Dot, EmptyState, Eyebrow, LinkButton, Notice } from "@/components/ui";
 import { ConfirmButton } from "@/components/form-bits";
-import { CreditFixForm, EditPaymentForm, ExtraPaymentForm, PaymentForm, PlanForm, PtLeftForm, PtPriceForm, ReminderButton } from "./forms";
-import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setCredit, setPtLeft, setPtPrice, clearPtCorrection, updatePayment } from "./actions";
+import { CreditFixForm, EditPaymentForm, NextPeriodForm, ExtraPaymentForm, PaymentForm, PlanForm, PtLeftForm, PtPriceForm, ReminderButton } from "./forms";
+import { closePackage, deletePayment, recordExtraPayment, recordPayment, reopenPackage, savePlan, sendPaymentReminder, setClientFree, setCredit, setNextPeriodStart, setPtLeft, setPtPrice, clearPtCorrection, updatePayment } from "./actions";
 import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Pagamenti" };
@@ -48,8 +48,8 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
     : billingStatus(row ? { ...row, kind: row.kind as PlanKind } : null, today, settings?.reminder_days ?? 7);
   const kind = plan?.kind as PlanKind | undefined;
   const suggestion = plan && kind ? suggestNextPeriod(kind, plan.start_date, row?.paid_until ?? null) : null;
-  // coaching: quanto deve per il prossimo periodo, tolto il credito (o aggiunto quello da recuperare)
-  const due = plan && kind && isPeriodic(kind) ? dueAmount(Number(plan.amount), credit) : null;
+  // coaching o pacchetto di lezioni: quanto deve per il prossimo periodo/pacchetto, tolto il credito (o aggiunto quello da recuperare)
+  const due = plan && kind && usesCredit(kind) ? dueAmount(Number(plan.amount), credit) : null;
   const totalYear = (payments ?? []).filter((p) => p.paid_on.slice(0, 4) === today.slice(0, 4)).reduce((s, p) => s + Number(p.amount), 0);
   const editingPlan = piano === "modifica" && plan;
   const newPlan = !plan;
@@ -73,7 +73,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
               {kind === "package" && pt ? ` · ${pt.left >= 0 ? `${pt.left} ${pt.left === 1 ? "sessione rimasta" : "sessioni rimaste"}` : `${-pt.left} da saldare`}` : ""}
               {kind === "package" && plan.sessions_written_off ? ` · ${plan.sessions_written_off} non usate (pacchetto chiuso)` : ""}
             </p>
-            {kind && isPeriodic(kind) && Math.abs(credit) >= 0.005 ? (
+            {kind && usesCredit(kind) && Math.abs(credit) >= 0.005 ? (
               <p className="text-[15px] text-card">
                 {credit > 0 ? `Credito di ${formatEuro(credit)}` : `${formatEuro(-credit)} da recuperare`}: il prossimo rinnovo è di <strong>{formatEuro(due ?? 0)}</strong> invece di {formatEuro(plan.amount)}.
               </p>
@@ -99,6 +99,19 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
           </Card>
         ) : null}
 
+        {plan && kind && isPeriodic(kind) && suggestion && !editingPlan && !paused ? (
+          <Card className="flex flex-col gap-2" id="periodo">
+            <Eyebrow>Prossimo periodo da pagare</Eyebrow>
+            <div className="text-lg font-semibold">{formatShort(suggestion.start, 0)} → {formatShort(suggestion.end, 0)}</div>
+            <details className="group">
+              <summary className="inline-flex min-h-10 cursor-pointer list-none items-center text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Sposta il periodo (es. dopo uno stop)</summary>
+              <div className="pt-2">
+                <NextPeriodForm action={setNextPeriodStart.bind(null, id)} kind={kind} start={suggestion.start} />
+              </div>
+            </details>
+          </Card>
+        ) : null}
+
         {plan && kind && !editingPlan ? (
           <Card className="flex flex-col gap-4">
             <div>
@@ -118,11 +131,11 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
               }}
               due={due ?? undefined}
             />
-            {isPeriodic(kind) ? (
+            {usesCredit(kind) ? (
               <details className="group border-t border-sand-deep pt-3">
                 <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Credito o importo da recuperare</summary>
                 <div className="flex flex-col gap-3 pt-3">
-                  <p className="text-sm text-muted">Il prezzo del {PLAN_LABELS[kind].toLowerCase()} è {formatEuro(plan.amount)} (si cambia da &quot;Modifica il piano&quot;). Se una volta ha pagato di più o di meno, qui scrivi com&apos;è la situazione oggi: il prossimo rinnovo si aggiusta da solo.</p>
+                  <p className="text-sm text-muted">Il prezzo del {PLAN_LABELS[kind].toLowerCase()}{kind === "package" && plan.package_sessions ? ` (${plan.package_sessions} lezioni)` : ""} è {formatEuro(plan.amount)} (si cambia da &quot;Modifica il piano&quot;). Se una volta ha pagato di più o di meno, qui scrivi com&apos;è la situazione oggi: il prossimo rinnovo si aggiusta da solo.</p>
                   <CreditFixForm action={setCredit.bind(null, id)} credit={credit} />
                 </div>
               </details>

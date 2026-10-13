@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { EditPaymentButton, type PaymentValues } from "@/components/edit-payment-dialog";
 import { listName } from "@/lib/names";
 import type { Metadata } from "next";
@@ -6,7 +7,7 @@ import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { addMonths, formatShort, todayISO } from "@/lib/dates";
 import { formatEuro, METHOD_LABELS, PLAN_LABELS, type BillingStatus, type PaymentMethod } from "@/lib/billing";
-import { getBillingLines, getRevenue, getSessionsToSettle, monthLabel } from "@/lib/data/billing";
+import { getBillingLines, getRevenue, getSessionsToSettle, monthLabel, type BillingLine } from "@/lib/data/billing";
 import { BarChart } from "@/components/bar-chart";
 import { QuickPay } from "@/components/quick-pay";
 import { BigNumber, Card, Dot, Eyebrow, PageTitle, buttonClass } from "@/components/ui";
@@ -15,6 +16,38 @@ import { IconDownload, IconPlus } from "@/components/icons";
 export const metadata: Metadata = { title: "Pagamenti" };
 
 const ORDER: Record<BillingStatus["state"], number> = { overdue: 0, due_soon: 1, none: 2, ok: 3 };
+
+/**
+ * Coaching con più periodi da pagare (es. 6 settimane scadute + quelle in corso):
+ * una riga per periodo sotto il nome, ognuna con il suo "Pagato". "Pagato" su
+ * una riga registra anche quelle sopra (sempre dal periodo più vecchio).
+ */
+function PeriodLines({ l, withReminder = false }: { l: BillingLine; withReminder?: boolean }) {
+  // totale dei periodi fino a quello della riga (un "Pagati" registra anche quelli sopra)
+  const totals = l.periods.map((_, i) => l.periods.slice(0, i + 1).reduce((t, p) => t + p.amount, 0));
+  return (
+    <ul className="flex w-full flex-col gap-1.5" aria-label={`Pagamenti da incassare da ${l.name}`}>
+      {l.periods.map((p, i) => {
+        const total = totals[i];
+        const proposal = i === 0
+          ? `${formatEuro(p.amount)} · ${formatShort(p.start)} – ${formatShort(p.end)}`
+          : `${i + 1} pagamenti di fila, ${formatEuro(total)} in tutto (${formatShort(l.periods[0].start)} – ${formatShort(p.end)})`;
+        return (
+          <li key={p.start} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-2xl bg-sand/70 px-3 py-2">
+            <span className="min-w-0 text-sm">
+              <span className="inline-flex items-center gap-1.5 font-semibold"><Dot tone={p.late ? "accent" : "deep"} />{p.late ? "Scaduto" : "Da saldare"}</span>
+              <span className="text-muted"> · {p.label}</span>
+            </span>
+            <span className="ml-auto flex items-center gap-3">
+              <span className="font-semibold tabular">{formatEuro(p.amount)}</span>
+              <QuickPay clientId={l.clientId} name={l.name} proposal={proposal} reminder={withReminder && i === 0 ? l.reminder : null} compact label={i === 0 ? "Pagato" : "Pagati"} count={i + 1} />
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 /** Valori di un pagamento per la finestra "Modifica". */
 function paymentValues(p: { paid_on: string; amount: number | string; method: string; period_start: string | null; period_end: string | null; sessions: number | null; notes: string | null; plan_id: string | null }): PaymentValues {
@@ -92,9 +125,12 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
               <li key={l.clientId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-sand-deep py-3 first:border-t-0">
                 <div className="min-w-0">
                   <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="font-semibold hover:underline">{l.name}</Link>
-                  <div className="text-sm text-muted">{l.status.label}{l.proposal ? ` · prossimo: ${l.proposal}` : ""}</div>
+                  <div className="text-sm text-muted">
+                    {l.status.label}
+                    {l.periods.length ? ` · ${l.periods.length} pagamenti da incassare, ${formatEuro(l.periods.reduce((t, p) => t + p.amount, 0))} in tutto` : l.proposal ? ` · prossimo: ${l.proposal}` : ""}
+                  </div>
                 </div>
-                <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={l.reminder} />
+                {l.periods.length ? <PeriodLines l={l} withReminder /> : <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={l.reminder} />}
               </li>
             ))}
           </ul>
@@ -212,8 +248,9 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
                     {l.status.dueDate ? ` · ${formatShort(l.status.dueDate)}` : l.status.sessionsLeft !== null ? ` · ${l.sessionsUsed}/${l.sessionsBought} sessioni` : ""}
                   </span>
                 </span>
-                {l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" || l.paused ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="shrink-0 text-sm font-semibold underline">Imposta piano</Link>}
+                {l.periods.length ? null : l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" || l.paused ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="shrink-0 text-sm font-semibold underline">Imposta piano</Link>}
               </div>
+              {l.periods.length ? <PeriodLines l={l} /> : null}
             </li>
           ))}
         </ul>
@@ -232,7 +269,8 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
           </thead>
           <tbody>
             {rows.map((l) => (
-              <tr key={l.clientId} className="border-t border-sand-deep hover:bg-white/60">
+              <Fragment key={l.clientId}>
+              <tr className="border-t border-sand-deep hover:bg-white/60">
                 <td className="px-5 py-3"><Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="font-semibold hover:underline">{l.name}</Link></td>
                 <td className="px-3 py-3 text-muted">{l.planLabel}</td>
                 <td className="px-3 py-3">
@@ -242,8 +280,14 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
                   </span>
                 </td>
                 <td className="px-3 py-3 text-right text-muted tabular">{l.status.dueDate ? formatShort(l.status.dueDate) : l.status.sessionsLeft !== null ? `${l.sessionsUsed}/${l.sessionsBought} sessioni` : "—"}</td>
-                <td className="px-5 py-3 text-right">{l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" || l.paused ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="text-sm font-semibold underline">Imposta piano</Link>}</td>
+                <td className="px-5 py-3 text-right">{l.periods.length ? <span className="text-sm text-muted">{l.periods.length} pagamenti ↓</span> : l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" || l.paused ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="text-sm font-semibold underline">Imposta piano</Link>}</td>
               </tr>
+              {l.periods.length ? (
+                <tr>
+                  <td colSpan={5} className="px-5 pb-3"><PeriodLines l={l} /></td>
+                </tr>
+              ) : null}
+              </Fragment>
             ))}
           </tbody>
         </table>

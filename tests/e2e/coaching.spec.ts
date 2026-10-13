@@ -134,3 +134,35 @@ test("Pagamenti: dopo 'Pagato' e da 'Tutti i pagamenti' si corregge il pagamento
   await page.locator("#tutti-i-pagamenti summary").click();
   await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name })).toHaveCount(1);
 });
+
+test("Pagamenti: un periodo scaduto e quello in corso sono due righe sotto il nome, ognuna col suo Pagato; si sposta il periodo dopo uno stop", async ({ page }, info) => {
+  await login(page, "titolare@prova.local");
+  const name = `Arretrato${info.project.name}${Date.now() % 10000}`;
+  const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  await newClientPayment(page, name);
+  await page.getByRole("button", { name: /^Coaching/ }).click();
+  await page.getByRole("button", { name: "Mensile", exact: true }).click();
+  await page.locator('input[name="amount"]').fill("100");
+  await page.locator('input[name="period_start"]').fill(day(-75));
+  await page.getByRole("button", { name: "Salva il pagamento" }).click();
+  await expect(page.getByText("Pagamento registrato")).toBeVisible();
+
+  await page.goto("/staff/pagamenti");
+  await page.waitForLoadState("networkidle");
+  const lines = page.getByRole("list", { name: `Pagamenti da incassare da ${name}` }).first();
+  await expect(lines.locator("li")).toHaveCount(2);
+  await expect(lines.locator("li").first()).toContainText("Scaduto");
+  await expect(lines.locator("li").nth(1)).toContainText("Da saldare");
+  // "Pagati" sulla seconda riga registra tutti e due i periodi
+  await lines.locator("li").nth(1).getByRole("button", { name: "Pagati" }).click();
+  await expect(page.getByText(/Registrati 2 pagamenti, 200/).first()).toBeVisible();
+
+  // scheda del cliente: il prossimo periodo si sposta dopo uno stop
+  const href = await page.getByRole("link", { name }).first().getAttribute("href");
+  await page.goto(href!);
+  const card = page.locator("#periodo");
+  await card.getByText("Sposta il periodo (es. dopo uno stop)").click();
+  await card.locator('input[name="start"]').fill(day(20));
+  await card.getByRole("button", { name: "Sposta il periodo" }).click();
+  await expect(card.getByText(/Fatto: il periodo da pagare va dal/)).toBeVisible();
+});

@@ -82,7 +82,7 @@ export function PaymentForm({
   action: Action;
   kind: PlanKind;
   defaults: { paid_on: string; amount: number | string; method: string; period_start: string | null; period_end: string | null; sessions: number | null };
-  /** Quanto deve per il prossimo periodo (coaching, con il credito già tolto) */
+  /** Quanto deve per il prossimo periodo o pacchetto (coaching o pacchetto di lezioni, con il credito già tolto) */
   due?: number;
 }) {
   const [state, formAction] = useActionState(action, null);
@@ -140,11 +140,11 @@ export function PaymentForm({
           </Field>
         </div>
       ) : (
-        <Field label="Sessioni pagate">
+        <Field label="Sessioni pagate" hint={due !== undefined ? "con il pacchetto intero la differenza dal prezzo passa al prossimo" : undefined}>
           <Input name="sessions" type="number" min={1} defaultValue={defaults.sessions ?? 1} required className="max-w-40" />
         </Field>
       )}
-      {periodic && due !== undefined ? <CreditHint paid={paidNum} due={due} keep={keep} onKeep={setKeep} /> : null}
+      {due !== undefined ? <CreditHint paid={paidNum} due={due} keep={keep} onKeep={setKeep} /> : null}
       <Field label="Note" hint="facoltative">
         <Input name="notes" placeholder="Es. pagato metà, il resto a fine mese" />
       </Field>
@@ -240,6 +240,24 @@ export function CreditFixForm({ action, credit }: { action: Action; credit: numb
       </div>
       <ActionMessage state={state} />
       <div><SubmitButton variant="secondary" size="sm">Salva il credito</SubmitButton></div>
+    </form>
+  );
+}
+
+/** Sposta il periodo di coaching da pagare: si sceglie da quando parte, la fine si calcola da sola. */
+export function NextPeriodForm({ action, kind, start }: { action: Action; kind: PlanKind; start: string }) {
+  const [state, formAction] = useActionState(action, null);
+  const [from, setFrom] = useState(start);
+  const end = isISODate(from) ? periodEnd(kind, from) : null;
+  const fmt = (d: string) => new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${d}T12:00:00Z`));
+  return (
+    <form action={formAction} className="flex flex-col gap-3">
+      <Field label="Il periodo da pagare parte dal">
+        <Input name="start" type="date" value={from} onChange={(e) => setFrom(e.target.value)} required className="max-w-56" />
+      </Field>
+      {end ? <p className="text-sm text-muted">Sarà dal {fmt(from)} al {fmt(end)}. L&apos;ultimo periodo pagato arriva fino al giorno prima, così un eventuale stop resta coperto e non risulta da pagare.</p> : null}
+      <ActionMessage state={state} />
+      <div><SubmitButton variant="secondary" size="sm">Sposta il periodo</SubmitButton></div>
     </form>
   );
 }

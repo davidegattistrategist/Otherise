@@ -2,7 +2,7 @@ import "server-only";
 import { getBillingOverview } from "@/lib/data/shared";
 import type { ServerSupabase } from "../supabase/server";
 import { bySurname, listName } from "../names";
-import { billingStatus, dueAmount, isPeriodic, ptCounterView, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PLAN_LABELS, situationText, type BillingStatus, type PlanKind } from "../billing";
+import { billingStatus, dueAmount, ptCounterView, formatEuro, type BillingRow, MONTHLY_FACTOR, nextPaymentProposal, PERIOD_NOUN, PLAN_LABELS, situationText, type BillingStatus, type PlanKind, unpaidPeriods, usesCredit } from "../billing";
 import { addDays, addMonths, formatLong, formatShort, todayISO, type ISODate } from "../dates";
 import { DEFAULT_PAYMENT_MESSAGE, fillTemplate } from "../whatsapp";
 
@@ -21,6 +21,11 @@ export type BillingLine = {
   reminder: string | null;
   sessionsUsed: number;
   sessionsBought: number;
+  /**
+   * Coaching con più periodi da pagare (uno scaduto + quello in corso, o più):
+   * una riga per periodo sotto il nome. Vuoto quando c'è un solo pagamento atteso.
+   */
+  periods: Array<{ start: ISODate; end: ISODate; amount: number; late: boolean; label: string }>;
 };
 
 /**
@@ -74,6 +79,10 @@ export async function getBillingLines(supabase: ServerSupabase): Promise<{ lines
       proposal = `${formatEuro(p.amount)}${p.period_start && p.period_end ? ` · ${formatShort(p.period_start)} – ${formatShort(p.period_end)}` : p.sessions ? ` · ${p.sessions} ${p.sessions === 1 ? "sessione" : "sessioni"}` : ""}`;
     }
     const reminder = kind && (status.state === "due_soon" || status.state === "overdue") ? reminderChatLink(c.id) : null;
+    const owed = plan && !paused && status.unpaidPeriods > 1 ? unpaidPeriods({ ...plan, kind: plan.kind as PlanKind }, b?.paid_until ?? null, today, credits.get(c.id) ?? 0) : [];
+    const periods = owed.length > 1
+      ? owed.map((o) => ({ ...o, label: `${PERIOD_NOUN[plan!.kind as PlanKind]} ${formatShort(o.start)} – ${formatShort(o.end)}` }))
+      : [];
     return {
       clientId: c.id,
       name: listName(c),
@@ -87,6 +96,7 @@ export async function getBillingLines(supabase: ServerSupabase): Promise<{ lines
       reminder,
       sessionsUsed: b?.sessions_used ?? 0,
       sessionsBought: b?.sessions_bought ?? 0,
+      periods,
     };
   });
   return { lines, reminderDays };
@@ -114,7 +124,7 @@ export async function paymentReminderText(supabase: ServerSupabase, clientId: st
   return fillTemplate(settings?.payment_message?.trim() || DEFAULT_PAYMENT_MESSAGE, {
     nome: client.first_name,
     situazione: situationText(status, kind, formatLong),
-    importo: formatEuro(isPeriodic(kind) ? dueAmount(Number(row.amount), credit) : row.amount),
+    importo: formatEuro(usesCredit(kind) ? dueAmount(Number(row.amount), credit) : row.amount),
     scadenza: status.dueDate ? formatLong(status.dueDate) : "",
   });
 }
