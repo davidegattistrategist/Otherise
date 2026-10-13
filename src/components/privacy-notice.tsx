@@ -84,7 +84,7 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
       <H>7. Chi può vedere i tuoi dati</H>
       <ul>
         <li>Il titolare e i <strong>collaboratori</strong> che ti seguono, autorizzati per iscritto e tenuti alla riservatezza (art. 29 GDPR). Un collaboratore vede solo i clienti che segue.</li>
-        <li>I <strong>fornitori</strong> che ci permettono di far funzionare l&apos;app, nominati responsabili del trattamento (art. 28 GDPR): Supabase (database e archivio dei file, con server nell&apos;Unione europea, a Francoforte), Vercel (pubblicazione dell&apos;app), Anthropic (intelligenza artificiale), Groq (trascrizione dei messaggi vocali), Resend (invio delle email).</li>
+        <li>I <strong>fornitori</strong> che ci permettono di far funzionare l&apos;app, nominati responsabili del trattamento (art. 28 GDPR): Supabase (database e archivio dei file, con server nell&apos;Unione europea, a Francoforte), Vercel (pubblicazione dell&apos;app), Anthropic (intelligenza artificiale), Groq (trascrizione dei messaggi vocali), Resend (invio delle email), GitHub (conservazione delle copie di sicurezza, cifrate: GitHub non può leggerle).</li>
         <li>Il nostro commercialista e consulenti fiscali, banche e istituti di credito, solo per i dati amministrativi necessari.</li>
         <li>Compagnie di assicurazione, avvocati e consulenti, solo se serve per un sinistro o per tutelare i nostri diritti.</li>
         <li>Le autorità (per esempio l&apos;Agenzia delle Entrate), solo se la legge lo impone.</li>
@@ -94,7 +94,7 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
 
       <H>8. Trasferimenti fuori dall&apos;Unione europea</H>
       <p>
-        Il database si trova nell&apos;Unione europea. Alcuni fornitori (Vercel, Anthropic, Groq, Resend, la società che gestisce Supabase e, solo per i contenuti social del punto 5, Meta) hanno sede negli Stati Uniti e possono trattare alcuni dati anche lì. In questi casi il trasferimento avviene con le garanzie previste dal GDPR: la decisione di adeguatezza della Commissione europea (EU-US Data Privacy Framework) per i fornitori aderenti, oppure le clausole contrattuali standard approvate dalla Commissione (art. 46 GDPR). Puoi chiederci una copia delle garanzie scrivendo all&apos;indirizzo del punto 1.
+        Il database si trova nell&apos;Unione europea. Alcuni fornitori (Vercel, Anthropic, Groq, Resend, GitHub, la società che gestisce Supabase e, solo per i contenuti social del punto 5, Meta) hanno sede negli Stati Uniti e possono trattare alcuni dati anche lì. In questi casi il trasferimento avviene con le garanzie previste dal GDPR: la decisione di adeguatezza della Commissione europea (EU-US Data Privacy Framework) per i fornitori aderenti, oppure le clausole contrattuali standard approvate dalla Commissione (art. 46 GDPR). Puoi chiederci una copia delle garanzie scrivendo all&apos;indirizzo del punto 1.
       </p>
 
       <H>9. Come proteggiamo i dati</H>
@@ -103,6 +103,7 @@ export function PrivacyNotice({ owner }: { owner: PrivacyOwner }) {
         <li>I permessi sono controllati direttamente dal database: ognuno vede solo quello che deve vedere.</li>
         <li>Le connessioni sono cifrate; foto, video e vocali della chat stanno in un archivio privato e si aprono solo con link temporanei.</li>
         <li>Agli strumenti di intelligenza artificiale non arrivano nome, cognome e contatti.</li>
+        <li>Ogni notte facciamo una copia di sicurezza dei dati, verificata e cifrata, conservata per 30 giorni.</li>
       </ul>
 
       <H>10. Per quanto tempo li conserviamo</H>
