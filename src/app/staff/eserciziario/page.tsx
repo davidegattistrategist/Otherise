@@ -1,9 +1,10 @@
+import { LiveSearch } from "@/components/live-search";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { youtubeThumb } from "@/lib/import/exercises";
-import { Card, Eyebrow, Input, LinkButton, PageTitle } from "@/components/ui";
+import { Card, Eyebrow, LinkButton, PageTitle } from "@/components/ui";
 import { importBundledExercises, importExercisesCsv } from "./actions";
 import { ImportPanel } from "./import-panel";
 
@@ -27,8 +28,7 @@ export default async function ExercisesPage({ searchParams }: { searchParams: Pr
       </PageTitle>
 
       <form className="flex flex-wrap items-center gap-3" role="search">
-        <label htmlFor="q" className="sr-only">Cerca esercizio</label>
-        <Input id="q" name="q" defaultValue={q} placeholder="Cerca un esercizio" className="max-w-sm" />
+        <LiveSearch defaultValue={q} placeholder="Cerca un esercizio" label="Cerca esercizio" />
         <nav className="flex gap-3 text-sm font-semibold">
           <Link href="/staff/eserciziario" className={!filtro ? "underline underline-offset-4" : "text-muted"}>Tutti</Link>
           <Link href="/staff/eserciziario?filtro=senza-video" className={filtro === "senza-video" ? "underline underline-offset-4" : "text-muted"}>Senza video</Link>

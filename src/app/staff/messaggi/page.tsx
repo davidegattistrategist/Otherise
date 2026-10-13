@@ -5,7 +5,8 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { previewOf } from "@/lib/chat";
 import type { ChatAttachment } from "@/lib/chat-shared";
-import { Dot, EmptyState, Input, PageTitle } from "@/components/ui";
+import { Dot, EmptyState, PageTitle } from "@/components/ui";
+import { LiveSearch } from "@/components/live-search";
 
 export const metadata: Metadata = { title: "Messaggi" };
 
@@ -65,10 +66,9 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
             Da rispondere{toAnswer ? <span className={`rounded-full px-1.5 text-xs ${onlyToAnswer ? "bg-card text-ink" : "bg-accent text-white"}`}>{toAnswer}</span> : null}
           </Link>
         </div>
-        <form className="min-w-0 flex-1">
+        <form className="min-w-0 flex-1" role="search">
           {onlyToAnswer ? <input type="hidden" name="vista" value="da-rispondere" /> : null}
-          <label htmlFor="q" className="sr-only">Cerca un cliente</label>
-          <Input id="q" name="q" defaultValue={q} placeholder="Cerca un cliente" className="max-w-sm" />
+          <LiveSearch defaultValue={q} placeholder="Cerca un cliente" label="Cerca un cliente" />
         </form>
       </div>
       {shown.length === 0 ? (

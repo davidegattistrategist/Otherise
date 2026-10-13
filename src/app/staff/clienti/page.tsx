@@ -1,3 +1,4 @@
+import { LiveSearch } from "@/components/live-search";
 import Link from "next/link";
 import { nameMatches } from "@/lib/names";
 import type { Metadata } from "next";
@@ -5,7 +6,7 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getClientsOverview } from "@/lib/data/staff";
 import { formatShort, todayISO } from "@/lib/dates";
-import { Dot, EmptyState, Input, LinkButton, PageTitle, cx } from "@/components/ui";
+import { Dot, EmptyState, LinkButton, PageTitle, cx } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Clienti" };
 
@@ -27,8 +28,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
     <div className="flex flex-col gap-6">
       <PageTitle title={archivio === "1" ? "Ex clienti" : "Clienti"} actions={<LinkButton href="/staff/clienti/nuovo">Nuovo cliente</LinkButton>} />
       <form className="flex flex-wrap items-center gap-3" role="search">
-        <label htmlFor="q" className="sr-only">Cerca cliente</label>
-        <Input id="q" name="q" defaultValue={q} placeholder="Cerca per nome o email" className="max-w-sm" />
+        <LiveSearch defaultValue={q} placeholder="Cerca per nome o email" label="Cerca cliente" />
         {archivio === "1" ? <input type="hidden" name="archivio" value="1" /> : null}
         <Link href={archivio === "1" ? "/staff/clienti" : "/staff/clienti?archivio=1"} className="text-sm font-semibold underline-offset-4 hover:underline">
           {archivio === "1" ? "Clienti attivi" : "Ex clienti"}

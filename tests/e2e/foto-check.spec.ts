@@ -139,3 +139,22 @@ test("chat vista: esce da Da rispondere anche senza risposta, Segna da leggere l
   await owner.waitForURL(/vista=da-rispondere/);
   await expect(owner.getByRole("link", { name: /Esempio Giulia/ })).toContainText(`Tutto ok oggi ${tag}`);
 });
+
+test("la ricerca dei clienti filtra mentre scrivi, senza premere Invio (Messaggi, Clienti)", async ({ page }) => {
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/messaggi");
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("link", { name: /Prova Luca/ })).toBeVisible();
+  await page.getByPlaceholder("Cerca un cliente").pressSequentially("giul", { delay: 40 });
+  await expect(page.getByRole("link", { name: /Prova Luca/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Esempio Giulia/ })).toBeVisible();
+  await expect(page).toHaveURL(/q=giul/);
+  // svuotando torna tutto
+  await page.getByPlaceholder("Cerca un cliente").fill("");
+  await expect(page.getByRole("link", { name: /Prova Luca/ })).toBeVisible();
+  await page.goto("/staff/clienti");
+  await page.waitForLoadState("networkidle");
+  await page.getByPlaceholder("Cerca per nome o email").pressSequentially("luca", { delay: 40 });
+  await expect(page.locator('a[href^="/staff/clienti/"]', { hasText: "Esempio Giulia" }).filter({ visible: true })).toHaveCount(0);
+  await expect(page.locator('a[href^="/staff/clienti/"]', { hasText: "Prova Luca" }).filter({ visible: true }).first()).toBeVisible();
+});
