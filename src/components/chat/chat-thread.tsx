@@ -13,7 +13,7 @@ import { cx } from "@/components/ui";
 import { IconDownload, IconPaperclip, IconPlay, IconSend, IconSparkle, IconX } from "@/components/icons";
 import { prepareImage, saveAttachment, uploadWithProgress, videoSize } from "./media";
 import { VoicePlayer, useVoiceRecorder, voiceSupported } from "./voice";
-import { canCompressVideo, compressVideo, shouldCompress } from "./compress-video";
+import { METHOD_LABELS, canCompressVideo, compressVideo, shouldCompress, type CompressMethod } from "./compress-video";
 
 const MicIcon = () => (
   <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -34,8 +34,9 @@ type Pending = {
   height?: number;
   /** Peso del video prima della riduzione (per mostrare quanto si è risparmiato) */
   originalSize?: number;
-  /** Secondi impiegati per ridurlo */
+  /** Secondi impiegati per ridurlo e come */
   reduceSeconds?: number;
+  reduceMethod?: CompressMethod;
   /** Il video sta già salendo mentre scrivi il messaggio */
   uploading?: boolean;
 };
@@ -215,7 +216,7 @@ export function ChatThread({
       setPending((cur) => cur.filter((x) => x.id !== id));
       return;
     }
-    setPending((cur) => cur.map((x) => (x.id === id ? { ...x, file, preparing: undefined, width: res?.width, height: res?.height, originalSize: res ? original.size : undefined, reduceSeconds: res ? Math.max(1, Math.round((performance.now() - started) / 1000)) : undefined } : x)));
+    setPending((cur) => cur.map((x) => (x.id === id ? { ...x, file, preparing: undefined, width: res?.width, height: res?.height, originalSize: res ? original.size : undefined, reduceSeconds: res ? Math.max(1, Math.round((performance.now() - started) / 1000)) : undefined, reduceMethod: res?.method } : x)));
     preUpload({ id, file, kind: "video", width: res?.width, height: res?.height });
   };
 
@@ -265,7 +266,7 @@ export function ChatThread({
   const preparingVideo = pending.some((p) => p.preparing !== undefined);
   const uploadingVideo = pending.some((p) => p.uploading) || (sending && pending.some((p) => p.kind === "video"));
   const reduced = pending.find((p) => p.originalSize && p.preparing === undefined);
-  const videoNote = reduced ? `Video ridotto da ${mb(reduced.originalSize!)} a ${mb(reduced.file.size)}${reduced.reduceSeconds ? ` in ${reduced.reduceSeconds} s` : ""}.` : "";
+  const videoNote = reduced ? `Video ridotto da ${mb(reduced.originalSize!)} a ${mb(reduced.file.size)}${reduced.reduceSeconds ? ` in ${reduced.reduceSeconds} s` : ""}${reduced.reduceMethod ? ` (${METHOD_LABELS[reduced.reduceMethod]})` : ""}.` : "";
   const busyWithMedia = preparingVideo || uploadingVideo;
 
   // mentre un video si riduce o sale: schermo acceso e avviso se provi a chiudere la pagina

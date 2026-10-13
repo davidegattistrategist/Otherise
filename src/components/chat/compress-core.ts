@@ -12,7 +12,9 @@ export const COMPRESS_FPS = 24;
 /** Sotto questa dimensione il video si manda com'è (se è già un mp4). */
 export const COMPRESS_MIN_BYTES = 4 * 1024 * 1024;
 
-export type CompressResult = { file: File; width: number; height: number };
+export type CompressResult = { file: File; width: number; height: number; method?: CompressMethod };
+/** Come è stato ridotto: lettore del telefono, decodifica nella pagina o in un worker. */
+export type CompressMethod = "player" | "page" | "worker";
 
 /**
  * Formato di uscita: in produzione sempre mp4 H.264 + AAC (si apre ovunque).
@@ -120,7 +122,8 @@ async function fastCompress(mb: Mb, file: File, format: CompressFormat, onProgre
             if (!canvas) {
               // dimensioni del fotogramma prima della rotazione (la rotazione resta nel file)
               ({ width: w, height: h } = targetSize(frame.displayWidth, frame.displayHeight));
-              canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(w, h) : Object.assign(document.createElement("canvas"), { width: w, height: h });
+              // nella pagina una canvas normale (sull'iPhone lavora sul chip grafico); nel worker l'unica possibile
+              canvas = typeof document !== "undefined" ? Object.assign(document.createElement("canvas"), { width: w, height: h }) : new OffscreenCanvas(w, h);
               ctx = canvas.getContext("2d", { alpha: false }) as OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D | null;
               if (!ctx) throw new Error("canvas 2d non disponibile");
               ctx.imageSmoothingEnabled = true;
