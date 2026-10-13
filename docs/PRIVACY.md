@@ -78,10 +78,10 @@ Il registro è obbligatorio quando si trattano dati relativi alla salute in modo
 | Categorie di interessati | Clienti (anche potenziali); collaboratori |
 | Categorie di dati | Anagrafici e di contatto; dati relativi alla salute (misure, pliche, composizione corporea, postura, test, dolori, sonno, stress, foto e video); dati di allenamento; messaggi; dati amministrativi (importi e date dei pagamenti); dati tecnici di accesso |
 | Basi giuridiche | Contratto (art. 6.1.b); consenso esplicito per i dati relativi alla salute (art. 9.2.a); consenso facoltativo per la pubblicazione sui social (art. 6.1.a); obbligo legale per i documenti fiscali (art. 6.1.c); legittimo interesse per sicurezza, tutela dei diritti e email su servizi simili (art. 6.1.f e art. 130 c.4 Codice privacy) |
-| Destinatari | Collaboratori autorizzati; responsabili: Supabase, Vercel, Anthropic, Resend; commercialista (solo dati amministrativi) |
-| Trasferimenti extra UE | USA (Vercel, Anthropic, Resend, Supabase Inc.), con clausole contrattuali standard o Data Privacy Framework |
+| Destinatari | Collaboratori autorizzati; responsabili: Supabase, Vercel, Anthropic, Groq, Resend, GitHub (solo copie di sicurezza cifrate); commercialista (solo dati amministrativi) |
+| Trasferimenti extra UE | USA (Vercel, Anthropic, Groq, Resend, Supabase Inc., GitHub), con clausole contrattuali standard o Data Privacy Framework |
 | Conservazione | Dati sulla salute, foto e video: durata del percorso + 5 anni (i video della chat si cancellano da soli dopo 6 mesi); anagrafica e contratto: 10 anni; documenti fiscali 10 anni (fuori dall'app); contenuti social: fino a revoca |
-| Misure di sicurezza | Accesso solo su invito con password personale; permessi a livello di database; cifratura delle connessioni; archivio privato per i file; pseudonimizzazione verso l'AI; backup giornalieri (Supabase Pro); revoca immediata degli accessi dei collaboratori |
+| Misure di sicurezza | Accesso solo su invito con password personale; permessi a livello di database; cifratura delle connessioni; archivio privato per i file; pseudonimizzazione verso l'AI; backup notturno cifrato e verificato su GitHub (conferma ogni mattina nell'app); revoca immediata degli accessi dei collaboratori |
 
 ## Se succede qualcosa (violazione dei dati)
 Esempi: un telefono perso con l'app aperta, una password finita in mano ad altri, dati mandati alla persona sbagliata.
