@@ -102,7 +102,7 @@ const PauseIcon = () => (
 );
 
 /** Lettore del vocale, con la trascrizione da aprire sotto. */
-export function VoicePlayer({ url, seconds, transcript, mine }: { url: string | null; seconds?: number | null; transcript?: Transcript | null; mine: boolean }) {
+export function VoicePlayer({ url, seconds, transcript, mine, expired = false }: { url: string | null; seconds?: number | null; transcript?: Transcript | null; mine: boolean; /** audio cancellato dopo 2 mesi: resta la trascrizione */ expired?: boolean }) {
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(0);
@@ -132,7 +132,7 @@ export function VoicePlayer({ url, seconds, transcript, mine }: { url: string | 
           <div className={cx("h-1.5 w-full rounded-full", mine ? "bg-card/25" : "bg-sand-deep")}>
             <div className={cx("h-1.5 rounded-full", mine ? "bg-card" : "bg-accent")} style={{ width: `${length ? Math.min(100, (pos / length) * 100) : 0}%` }} />
           </div>
-          <span className={cx("text-[12px] tabular", mine ? "text-card/70" : "text-muted")}>{voiceLength(playing || pos ? pos : length)}</span>
+          <span className={cx("text-[12px] tabular", mine ? "text-card/70" : "text-muted")}>{expired ? "Vocale scaduto: dopo 2 mesi si cancella da solo" : voiceLength(playing || pos ? pos : length)}</span>
         </div>
       </div>
       {url ? (

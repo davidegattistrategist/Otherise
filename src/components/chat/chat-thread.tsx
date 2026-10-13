@@ -8,7 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { friendlyError } from "@/lib/friendly-error";
 import { deleteMessage, dismissReplyDraft, prepareUpload, requestReplyDraft, sendMessage } from "@/app/chat/actions";
 import type { ReplyDraft } from "@/lib/ai/reply";
-import { MAX_ATTACHMENTS, attachmentKind, sizeError, videoExpired, voiceLength, type ChatAttachment, type ChatMessage, type Transcript } from "@/lib/chat-shared";
+import { MAX_ATTACHMENTS, attachmentKind, sizeError, mediaExpired, voiceLength, type ChatAttachment, type ChatMessage, type Transcript } from "@/lib/chat-shared";
 import { cx } from "@/components/ui";
 import { IconDownload, IconPaperclip, IconPlay, IconSend, IconSparkle, IconX } from "@/components/icons";
 import { prepareImage, saveAttachment, uploadWithProgress, videoSize } from "./media";
@@ -427,14 +427,14 @@ export function ChatThread({
               {showName && m.senderName ? <div className="mt-1 mb-0.5 px-2 text-xs font-semibold text-muted">{m.senderName}</div> : null}
               <div className={cx("flex max-w-[85%] flex-col gap-1 sm:max-w-[70%]", m.mine ? "items-end self-end" : "items-start self-start")}>
                 {m.attachments.filter((a) => a.kind === "audio").map((a) => (
-                  <VoicePlayer key={a.path} url={a.url} seconds={a.seconds} transcript={m.transcript} mine={m.mine} />
+                  <VoicePlayer key={a.path} url={mediaExpired("audio", m.createdAt) ? null : a.url} seconds={a.seconds} transcript={m.transcript} mine={m.mine} expired={mediaExpired("audio", m.createdAt)} />
                 ))}
                 {m.attachments.some((a) => a.kind !== "audio") ? (
                   <div className={cx("grid gap-1", m.attachments.filter((a) => a.kind !== "audio").length > 1 ? "grid-cols-2" : "grid-cols-1")}>
                     {m.attachments.filter((a) => a.kind !== "audio").map((a) =>
-                      !a.url || (a.kind === "video" && videoExpired(m.createdAt)) ? (
+                      !a.url || mediaExpired(a.kind, m.createdAt) ? (
                         <div key={a.path} className="flex h-32 w-40 items-center justify-center rounded-2xl bg-sand px-3 text-center text-xs text-muted">
-                          {a.kind === "video" && videoExpired(m.createdAt) ? "Video scaduto: dopo 6 mesi si cancella da solo per fare spazio" : "Non disponibile"}
+                          {mediaExpired(a.kind, m.createdAt) ? "Video scaduto: dopo 2 mesi si cancella da solo per fare spazio" : "Non disponibile"}
                         </div>
                       ) : (
                         <div key={a.path} className={cx("flex flex-col gap-0.5", m.mine ? "items-end" : "items-start")}>

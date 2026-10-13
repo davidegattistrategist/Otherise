@@ -1025,7 +1025,7 @@ describe("timer dell'allenamento", async () => {
 
 describe("video della chat", async () => {
   const { targetSize, shouldCompress } = await import("../components/chat/compress-video");
-  const { videoExpired, CHAT_VIDEO_KEEP_DAYS } = await import("./chat-shared");
+  const { mediaExpired, CHAT_MEDIA_KEEP_DAYS } = await import("./chat-shared");
   it("riduce a 480p sul lato corto (multipli di 16), senza mai ingrandire, con numeri pari", () => {
     expect(targetSize(1080, 1920)).toEqual({ width: 480, height: 848 });
     expect(targetSize(3840, 2160)).toEqual({ width: 848, height: 480 });
@@ -1036,11 +1036,13 @@ describe("video della chat", async () => {
     expect(shouldCompress(new File([new Uint8Array(10)], "a.mov", { type: "video/quicktime" }))).toBe(true);
     expect(shouldCompress(new File([new Uint8Array(10)], "a.mp4", { type: "video/mp4" }))).toBe(false);
   });
-  it("i video si cancellano dopo 6 mesi", () => {
+  it("video e vocali si cancellano dopo 2 mesi, le foto restano", () => {
     const now = Date.parse("2026-10-12T12:00:00Z");
-    expect(videoExpired("2026-03-01T10:00:00Z", now)).toBe(true);
-    expect(videoExpired("2026-06-01T10:00:00Z", now)).toBe(false);
-    expect(CHAT_VIDEO_KEEP_DAYS).toBeGreaterThanOrEqual(180);
+    expect(mediaExpired("video", "2026-08-01T10:00:00Z", now)).toBe(true);
+    expect(mediaExpired("audio", "2026-08-01T10:00:00Z", now)).toBe(true);
+    expect(mediaExpired("video", "2026-09-01T10:00:00Z", now)).toBe(false);
+    expect(mediaExpired("image", "2025-01-01T10:00:00Z", now)).toBe(false);
+    expect(CHAT_MEDIA_KEEP_DAYS).toBeGreaterThanOrEqual(59);
   });
 });
 

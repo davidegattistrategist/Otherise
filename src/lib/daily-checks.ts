@@ -9,7 +9,7 @@ import { addDays, ageOn, diffDays, formatLong, isBirthday, isoWeekday, mondayOf,
 import { billingStatus, clientFacingStatus, withUnpaidRows, type PlanKind, type UnpaidRow } from "./billing";
 import { checkinWeekFor } from "./checkin";
 import { programEndDate } from "./program/schedule";
-import { CHAT_BUCKET, CHAT_VIDEO_KEEP_DAYS, type ChatAttachment } from "./chat-shared";
+import { CHAT_BUCKET, CHAT_MEDIA_KEEP_DAYS, EXPIRING_KINDS, type ChatAttachment } from "./chat-shared";
 import { backupNotice, type BackupRun } from "./backup-notice";
 
 export async function runDailyChecks(today = todayISO()) {
@@ -196,7 +196,7 @@ export async function runDailyChecks(today = todayISO()) {
 
   await notify(out);
   const backup = await backupCheck(ownerIds);
-  const videosRemoved = await removeOldChatVideos(today);
+  const videosRemoved = await removeOldChatMedia(today);
   // niente riepilogo per email: il riepilogo è "Oggi" nell'app
   const emailed = await deliverPendingEmails();
   // pulizia: notifiche lette più vecchie di 6 mesi
@@ -205,26 +205,30 @@ export async function runDailyChecks(today = todayISO()) {
 }
 
 /**
- * I video della chat più vecchi di 6 mesi si cancellano dallo spazio file
- * (deciso dal titolare per non riempire lo spazio). Il messaggio resta: al
- * posto del video compare "Video scaduto". Foto e vocali restano.
+ * Video e vocali della chat più vecchi di 2 mesi si cancellano dallo spazio
+ * file (deciso dal titolare per non riempire lo spazio). Il messaggio resta: al
+ * posto del video compare "Video scaduto", il vocale tiene la trascrizione
+ * scritta. Le foto restano.
  */
-export async function removeOldChatVideos(today: string): Promise<number> {
+export async function removeOldChatMedia(today: string): Promise<number> {
   const admin = createAdminClient();
-  const cutoff = `${addDays(today, -CHAT_VIDEO_KEEP_DAYS)}T00:00:00Z`;
-  const { data, error } = await admin
-    .from("messages")
-    .select("attachments")
-    .lt("created_at", cutoff)
-    .is("deleted_at", null)
-    // stringa JSON: con un array supabase-js scriverebbe la sintassi degli array di Postgres
-    .contains("attachments", JSON.stringify([{ kind: "video" }]))
-    .limit(2000);
-  if (error) {
-    console.error("pulizia video", error);
-    return 0;
+  const cutoff = `${addDays(today, -CHAT_MEDIA_KEEP_DAYS)}T00:00:00Z`;
+  const paths: string[] = [];
+  for (const kind of EXPIRING_KINDS) {
+    const { data, error } = await admin
+      .from("messages")
+      .select("attachments")
+      .lt("created_at", cutoff)
+      .is("deleted_at", null)
+      // stringa JSON: con un array supabase-js scriverebbe la sintassi degli array di Postgres
+      .contains("attachments", JSON.stringify([{ kind }]))
+      .limit(2000);
+    if (error) {
+      console.error("pulizia video e vocali", error);
+      continue;
+    }
+    for (const m of data ?? []) paths.push(...((m.attachments as ChatAttachment[] | null) ?? []).filter((a) => a.kind === kind).map((a) => a.path));
   }
-  const paths = (data ?? []).flatMap((m) => ((m.attachments as ChatAttachment[] | null) ?? []).filter((a) => a.kind === "video").map((a) => a.path));
   if (!paths.length) return 0;
   // remove restituisce solo i file che c'erano davvero: quelli già cancellati non contano
   let removed = 0;

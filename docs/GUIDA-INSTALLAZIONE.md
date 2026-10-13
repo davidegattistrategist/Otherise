@@ -154,7 +154,7 @@ Per importare le vecchie schede: apri la scheda Google del cliente, scegli la sc
 
 - I video della chat possono pesare al massimo 50 MB (circa 30–60 secondi girati col telefono): è il limite del piano gratuito di Supabase. Con il piano Pro puoi alzarlo in **Storage → Settings → Upload file size limit** e nel contenitore `chat` (**Storage → chat → Edit bucket**), poi su Vercel aggiungi `NEXT_PUBLIC_CHAT_MAX_VIDEO_MB` con il nuovo valore (es. `200`) e fai Redeploy.
 - **I video si riducono da soli prima dell'invio, come su WhatsApp**: il telefono li porta a 540p (circa 6 MB al minuto invece di 60–100), in un formato che si apre su iPhone, Android e computer. Con il limite di 50 MB si mandano quindi video fino a circa 8 minuti. Per cambiare qualità: `COMPRESS_SHORT_SIDE` e `COMPRESS_VIDEO_BITRATE` in `src/components/chat/compress-video.ts`. Se il telefono è troppo vecchio per ridurli, parte l'originale (se sta nel limite).
-- **I video più vecchi di 6 mesi si cancellano da soli** (controllo di ogni mattina), per non riempire lo spazio: il messaggio resta, al posto del video compare "Video scaduto". Foto e vocali restano. Per cambiare la durata: `CHAT_VIDEO_KEEP_DAYS` in `src/lib/chat-shared.ts`.
+- **Video e vocali più vecchi di 2 mesi si cancellano da soli** (controllo di ogni mattina), per non riempire lo spazio: il messaggio resta, al posto del video compare "Video scaduto", del vocale resta la trascrizione. Le foto restano. Per cambiare la durata: `CHAT_MEDIA_KEEP_DAYS` in `src/lib/chat-shared.ts`.
 - Le foto vengono ridotte automaticamente prima dell'invio, quindi occupano poco spazio. I messaggi vocali si registrano direttamente nella chat; con la chiave di Groq (passo 5) arrivano anche trascritti.
 
 ## 9. Sicurezza e manutenzione

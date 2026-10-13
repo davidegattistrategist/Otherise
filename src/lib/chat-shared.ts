@@ -41,12 +41,19 @@ export const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm", "video
 /** Audio dei vocali registrati nell'app (iPhone: mp4, Android e computer: webm o ogg) */
 export const AUDIO_TYPES = ["audio/mp4", "audio/webm", "audio/ogg", "audio/mpeg", "audio/aac", "audio/x-m4a", "audio/wav"];
 
-/** I video della chat si cancellano da soli dopo 6 mesi (controllo giornaliero), per non riempire lo spazio. */
-export const CHAT_VIDEO_KEEP_DAYS = 183;
+/**
+ * Video e vocali della chat si cancellano da soli dopo 2 mesi (controllo
+ * giornaliero), per non riempire lo spazio; le foto restano. Dei vocali resta la
+ * trascrizione scritta.
+ */
+export const CHAT_MEDIA_KEEP_DAYS = 61;
+/** Allegati che scadono. */
+export const EXPIRING_KINDS = ["video", "audio"] as const;
 
-/** Il video di questo messaggio è già stato cancellato perché troppo vecchio? */
-export function videoExpired(createdAt: string, now = Date.now()): boolean {
-  return now - new Date(createdAt).getTime() > CHAT_VIDEO_KEEP_DAYS * 86_400_000;
+/** Il video o il vocale di questo messaggio è già stato cancellato perché troppo vecchio? */
+export function mediaExpired(kind: string, createdAt: string, now = Date.now()): boolean {
+  if (!(EXPIRING_KINDS as readonly string[]).includes(kind)) return false;
+  return now - new Date(createdAt).getTime() > CHAT_MEDIA_KEEP_DAYS * 86_400_000;
 }
 
 /** "audio/webm;codecs=opus" → "audio/webm" */

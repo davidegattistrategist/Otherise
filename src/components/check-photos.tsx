@@ -2,7 +2,7 @@
 
 /**
  * Foto dei check. Lo staff le carica tutte insieme dalla galleria del telefono
- * con un solo tocco: il telefono le riduce un po' (lato lungo 2560 px, JPEG di
+ * con un solo tocco: il telefono le riduce un po' (lato lungo 1600 px, JPEG di
  * alta qualità) e così spariscono anche i dati nascosti che le appesantiscono
  * (posizione GPS, modello del telefono…); in più prepara una miniatura per le
  * griglie. Lo staff e il cliente le guardano a tutto schermo e le possono salvare.
@@ -72,7 +72,7 @@ export async function preparePhoto(file: File): Promise<Ready> {
 export const onlyImages = (files: File[]) => files.filter((f) => f.type.startsWith("image/") || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name));
 
 /**
- * Riduce e carica le foto di un check (2560 px + miniatura, senza dati
+ * Riduce e carica le foto di un check (1600 px + miniatura, senza dati
  * nascosti) e le registra. Usato dal pulsante delle foto e dal modulo del
  * check (foto scelte prima di salvare).
  */

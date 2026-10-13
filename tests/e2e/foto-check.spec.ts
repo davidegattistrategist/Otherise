@@ -62,13 +62,13 @@ test("foto del check: si caricano dalla galleria ridotte e senza dati nascosti, 
     await img.decode().catch(() => undefined);
     return { w: img.naturalWidth, h: img.naturalHeight, src: img.src };
   });
-  // la foto da 4000×3000 è ridotta a 2560 di lato lungo, JPEG, senza dati EXIF (GPS, modello del telefono)
-  expect(Math.max(full.w, full.h)).toBe(2560);
+  // la foto da 4000×3000 è ridotta a 1600 di lato lungo, JPEG, senza dati EXIF (GPS, modello del telefono)
+  expect(Math.max(full.w, full.h)).toBe(1600);
   const bytes = await (await staff.request.get(full.src)).body();
   expect(bytes.subarray(0, 2).toString("hex")).toBe("ffd8");
   expect(bytes.includes(Buffer.from("Exif"))).toBe(false);
   expect(bytes.includes(Buffer.from("Fotocamera di prova"))).toBe(false);
-  expect(bytes.length).toBeLessThan(1_500_000);
+  expect(bytes.length).toBeLessThan(600_000);
   await viewer.getByRole("button", { name: "Foto successiva" }).click();
   await expect(viewer.getByText(new RegExp(`${before + 2} di ${before + 2}`))).toBeVisible();
   await viewer.getByRole("button", { name: "Chiudi" }).click();
