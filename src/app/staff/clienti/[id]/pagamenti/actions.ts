@@ -5,16 +5,13 @@ import { redirect } from "next/navigation";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { addDays, formatLong, isISODate, todayISO } from "@/lib/dates";
-import { billingStatus, creditChange, dueAmount, formatEuro, isPeriodic, unpaidPeriods, usesCredit, METHODS, nextPaymentProposal, periodEnd, PLAN_KINDS, situationText, type BillingRow, type PlanKind } from "@/lib/billing";
+import { billingStatus, creditChange, dueAmount, formatEuro, isPeriodic, unpaidPeriods, usesCredit, METHODS, nextPaymentProposal, periodEnd, PLAN_KINDS, situationText, type BillingRow, type PlanKind, parseEuro } from "@/lib/billing";
 import { notify } from "@/lib/notify";
 import { deliverPendingEmails, sendEmail } from "@/lib/email";
 import type { ActionState } from "@/components/form-bits";
 import { creditScope, getClientCredit } from "@/lib/data/billing";
 
-const money = (v: FormDataEntryValue | null) => {
-  const n = Number(String(v ?? "").trim().replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
-};
+const money = (v: FormDataEntryValue | null) => parseEuro(String(v ?? ""));
 const int = (v: FormDataEntryValue | null) => {
   const s = String(v ?? "").trim();
   if (!s) return null;

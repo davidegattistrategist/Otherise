@@ -172,12 +172,28 @@ export async function inviteLinkAction(clientId: string, _: InviteLinkState): Pr
   if (!client) return { error: "Cliente non trovato." };
   if (!client.email) return { error: "Aggiungi prima l'email del cliente." };
   const admin = createAdminClient();
+  // Il link di recupero apre l'account dell'email a cui è intestato: si usa
+  // solo per l'account collegato al cliente (mai un'email scritta a mano nella
+  // scheda, che potrebbe essere quella del titolare) e solo se è un cliente.
   let type: "invite" | "recovery" = client.user_id ? "recovery" : "invite";
-  let res = await admin.auth.admin.generateLink({ type, email: client.email });
+  let email = client.email;
+  if (client.user_id) {
+    const [{ data: u }, { data: prof }] = await Promise.all([admin.auth.admin.getUserById(client.user_id), admin.from("profiles").select("role").eq("id", client.user_id).maybeSingle()]);
+    if (!u.user?.email || (prof && prof.role !== "client" && prof.role !== "none")) return { error: "Questo account non è di un cliente: il link non si può preparare." };
+    email = u.user.email;
+  }
+  let res = await admin.auth.admin.generateLink({ type, email });
   if (res.error && type === "invite" && /already/i.test(res.error.message)) {
-    // l'account c'è già (per esempio invitato prima): link per scegliere la password
+    // l'account c'è già (per esempio registrato prima): link per scegliere la password,
+    // ma solo se è un cliente (non un membro dello staff) e non è mai entrato
+    const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const user = list?.users.find((x) => x.email?.toLowerCase() === email.toLowerCase());
+    if (!user) return { error: "Esiste già un account con questa email ma non riesco a trovarlo." };
+    const { data: prof } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
+    if (prof && prof.role !== "client" && prof.role !== "none") return { error: "Questa email appartiene a un membro dello staff." };
+    if (user.last_sign_in_at) return { error: "Esiste già un account con questa email che è già entrato: può usare “Password dimenticata”." };
     type = "recovery";
-    res = await admin.auth.admin.generateLink({ type, email: client.email });
+    res = await admin.auth.admin.generateLink({ type, email });
   }
   const hash = res.data?.properties?.hashed_token;
   if (res.error || !hash) return { error: `Non sono riuscito a preparare il link. ${res.error ? friendlyError(res.error) : ""}`.trim() };

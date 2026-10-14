@@ -340,3 +340,16 @@ export function ptCounterView(row: { since: ISODate; baseline_at: string | null;
   const due = Math.max(0, -left);
   return { bought: row.bought, used: row.used, left, due, price, dueAmount: price !== null ? Math.round(due * price * 100) / 100 : null, since: row.since, corrected: Boolean(row.baseline_at) };
 }
+
+/**
+ * Importo scritto a mano: "1.250", "1.250,50", "45,5", "45.5" e "45.50" (tastiera
+ * inglese: il punto come virgola). Un punto seguito da 1–2 cifre e senza
+ * virgola è il separatore dei decimali, non delle migliaia. NaN se non è un numero.
+ */
+export function parseEuro(raw: string): number {
+  let s = raw.trim().replace(/\s|€/g, "");
+  if (!s) return NaN;
+  if (!s.includes(",") && /^\d+\.\d{1,2}$/.test(s)) s = s.replace(".", ",");
+  const n = Number(s.replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+}

@@ -140,6 +140,8 @@ export function Logbook(props: LogbookProps) {
   const saveRef = useRef<(() => Promise<boolean>) | null>(null);
   const finishing = useRef(false);
   // chili copiati in automatico dalla serie precedente ("itemId:serie"): seguono la prima serie finché non li cambi
+  /** testo dei chili mentre si scrive (così "37," resta "37," finché non si finisce) */
+  const [typing, setTyping] = useState<Record<string, string>>({});
   const autoKg = useRef(new Set<string>());
   const [unchecked, setUnchecked] = useState<{ name: string; missing: number; total: number }[] | null>(null);
   const latest = useRef({ items, notes, discomfort, performedOn, completed });
@@ -452,8 +454,11 @@ export function Logbook(props: LogbookProps) {
                             inputMode="decimal"
                             className="h-11 w-full rounded-xl border border-sand-deep bg-sand px-3 text-[16px] font-semibold tabular"
                             placeholder={fmt(suggestion(it, si).kg)}
-                            value={fmt(s.kg)}
+                            value={typing[`${it.id}:${si}`] ?? fmt(s.kg)}
+                            onBlur={() => setTyping((t) => { const next = { ...t }; delete next[`${it.id}:${si}`]; return next; })}
                             onChange={(e) => {
+                              // si tiene il testo com'è scritto (es. "37,"), altrimenti la virgola sparirebbe
+                              setTyping((t) => ({ ...t, [`${it.id}:${si}`]: e.target.value }));
                               const kg = numOrNull(e.target.value);
                               autoKg.current.delete(`${it.id}:${si}`);
                               // lo stesso carico va proposto nelle serie successive ancora da fare

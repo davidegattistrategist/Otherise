@@ -8,7 +8,7 @@ import { checkDue } from "./check-due";
 import { DEDICATIONS, QUOTES, dedicationOfDay, quoteOfDay } from "./quotes";
 import { estimateOneRepMax } from "./strength/e1rm";
 import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
-import { billingStatus, clientFacingStatus, unpaidPeriods, withUnpaidRows, usesCredit, nextPaymentProposal, creditChange, dueAmount, isCoaching, ptCounterView, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
+import { parseEuro, billingStatus, clientFacingStatus, unpaidPeriods, withUnpaidRows, usesCredit, nextPaymentProposal, creditChange, dueAmount, isCoaching, ptCounterView, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
 import { clientNotices, ptLeft } from "./client-notice";
 import { triageFallback, triageWithoutAi } from "./note-triage";
 import { backupNotice, formatBytes, spaceSummary } from "./backup-notice";
@@ -1309,5 +1309,18 @@ describe("bozze tra due dispositivi", () => {
     expect(isDraftPatch([{ path: ["__proto__", "x"], value: 1 }])).toBe(false);
     expect(isDraftPatch({})).toBe(false);
     expect(applyPatch({ a: [1, 2] }, [{ path: ["a", 1] }])).toEqual({ a: [1, null] });
+  });
+});
+
+describe("importi scritti a mano", () => {
+  it("capisce virgola, punto delle migliaia e punto dei decimali", () => {
+    expect(parseEuro("45,50")).toBe(45.5);
+    expect(parseEuro("45.50")).toBe(45.5);
+    expect(parseEuro("45.5")).toBe(45.5);
+    expect(parseEuro("1.250")).toBe(1250);
+    expect(parseEuro("1.250,50")).toBe(1250.5);
+    expect(parseEuro(" 300 € ")).toBe(300);
+    expect(parseEuro("abc")).toBeNaN();
+    expect(parseEuro("")).toBeNaN();
   });
 });

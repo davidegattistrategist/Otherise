@@ -9,7 +9,7 @@ import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import { registerPayment, type NewPaymentState } from "../actions";
 import { CreditHint } from "@/components/credit-hint";
-import { dueAmount, formatEuro, isPeriodic, usesCredit, METHOD_LABELS, METHODS, periodEnd, PLAN_DURATION, PLAN_LABELS, type PlanKind } from "@/lib/billing";
+import { dueAmount, formatEuro, isPeriodic, usesCredit, METHOD_LABELS, METHODS, periodEnd, PLAN_DURATION, PLAN_LABELS, type PlanKind, parseEuro } from "@/lib/billing";
 import { addDays, formatLong, formatShort, isISODate } from "@/lib/dates";
 import { Card, Eyebrow, Field, Input, Select, buttonClass, cx } from "@/components/ui";
 import { SubmitButton } from "@/components/form-bits";
@@ -40,7 +40,7 @@ const SUBSCRIPTIONS: PlanKind[] = ["monthly", "six_weeks", "quarterly", "semiann
 const OTHER_PRESETS = ["Valutazione posturale", "Consulenza", "Programma online", "Check corporeo"];
 
 const euro = (s: string) => {
-  const n = Number(s.trim().replace(/\./g, "").replace(",", "."));
+  const n = parseEuro(s);
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 const num = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n).replace(".", ","));

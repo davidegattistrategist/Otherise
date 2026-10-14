@@ -132,8 +132,9 @@ export async function saveWorkout(raw: SaveWorkoutInput): Promise<SaveWorkoutRes
   }
   if (toDelete.length) await supabase.from("exercise_logs").delete().eq("workout_log_id", log.id).in("item_id", toDelete);
 
-  // dolore o fastidio scritto dal cliente: avviso subito allo staff (una volta per allenamento)
-  if (discomfort && !before?.discomfort && me.role === "client") {
+  // dolore o fastidio scritto dal cliente: avviso allo staff quando chiude l'allenamento
+  // (non mentre scrive: il salvataggio automatico manderebbe una frase a metà), una volta per allenamento
+  if (discomfort && input.completed && (!before?.completed || !before.discomfort) && me.role === "client") {
     const day = content.days.find((d) => d.id === input.dayId);
     await alertDiscomfort(program.client_id, log.id, discomfort, `${day?.title ?? "Allenamento"} · settimana ${input.week}`);
   }

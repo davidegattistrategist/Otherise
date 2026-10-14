@@ -12,16 +12,13 @@ import { revalidatePath } from "next/cache";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong, isISODate } from "@/lib/dates";
-import { creditChange, formatEuro, isPeriodic, METHODS, PLAN_KINDS, type PlanKind } from "@/lib/billing";
+import { creditChange, formatEuro, isPeriodic, METHODS, PLAN_KINDS, type PlanKind, parseEuro } from "@/lib/billing";
 import { getClientCredit } from "@/lib/data/billing";
 import type { ActionState } from "@/components/form-bits";
 
 export type NewPaymentState = (NonNullable<ActionState> & { clientId?: string; clientName?: string }) | null;
 
-const money = (v: FormDataEntryValue | null) => {
-  const n = Number(String(v ?? "").trim().replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
-};
+const money = (v: FormDataEntryValue | null) => parseEuro(String(v ?? ""));
 const count = (v: FormDataEntryValue | null) => {
   const n = Number(String(v ?? "").trim());
   return Number.isInteger(n) && n > 0 ? n : NaN;
