@@ -6,6 +6,8 @@
  */
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
+import { loadDraft, useDraft } from "@/components/use-draft";
 import { MONTHS, PROJECT_PHASES, PHASE_BY_KEY, levelLabel, projectMonths, rowId, type Project } from "@/lib/project";
 import { Button, Card, Eyebrow, Input, Notice, Textarea, cx } from "@/components/ui";
 import { IconPlus, IconX } from "@/components/icons";
@@ -36,6 +38,23 @@ export function ProjectEditor({
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
+  // le modifiche non salvate restano (anche se chiudi l'app) finché non salvi
+  const draftKey = `progetto:${usePathname()}`;
+  const { adopt } = useDraft(draftKey, dirty ? p : null, { isEmpty: (v) => v === null });
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void loadDraft<Project>(draftKey).then((d) => {
+      if (!alive || !d?.data) return;
+      adopt(d.data, d.at);
+      setP(d.data);
+      setDirty(true);
+      setRestored(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [draftKey, adopt]);
   const months = projectMonths(p.start);
   const now = months.findIndex((m) => m.key === today.slice(0, 7));
 
@@ -79,7 +98,7 @@ export function ProjectEditor({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {isNew && !dirty ? <span className="text-sm text-muted">Non ancora salvato</span> : dirty ? <span className="text-sm text-muted">Modifiche da salvare</span> : null}
+            {isNew && !dirty ? <span className="text-sm text-muted">Non ancora salvato</span> : dirty ? <span className="text-sm text-muted">{restored ? "Ho ripreso le modifiche non salvate: salva quando vuoi" : "Modifiche da salvare (restano qui anche se esci)"}</span> : null}
             <Button onClick={() => onSave()} disabled={pending}>{pending ? "Salvataggio…" : "Salva"}</Button>
           </div>
         </div>
@@ -238,7 +257,7 @@ function NotifyDialog({ clientName, pending, onChoose, onClose }: { clientName: 
             <IconX size={20} />
           </button>
         </div>
-        <p className="text-[15px] leading-relaxed text-muted">Il progetto è visibile nel suo Percorso. Con una notifica sa subito che c'è qualcosa di nuovo da guardare.</p>
+        <p className="text-[15px] leading-relaxed text-muted">Il progetto è visibile nel suo Percorso. Con una notifica sa subito che c&apos;è qualcosa di nuovo da guardare.</p>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
           <Button ref={first} onClick={() => onChoose(true)} disabled={pending} className="w-full sm:w-auto">Sì, manda la notifica</Button>
           <Button variant="secondary" onClick={() => onChoose(false)} disabled={pending} className="w-full sm:w-auto">Salva senza notifica</Button>

@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { getCheckMode } from "@/lib/check-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +14,12 @@ export async function GET() {
   const me = await getMe();
   if (!me) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   const supabase = await createClient();
-  const [{ count }, { data: latest }, { data: chats }] = await Promise.all([
+  const staffUser = me.role === "owner" || me.role === "coach";
+  const [{ count }, { data: latest }, { data: chats }, checkMode] = await Promise.all([
     supabase.from("notifications").select("id", { count: "exact", head: true }).eq("recipient_id", me.id).neq("kind", "chat").is("read_at", null),
     supabase.from("notifications").select("id, kind, title, body, link, client_id").eq("recipient_id", me.id).neq("kind", "chat").is("read_at", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.rpc("my_unread_chats"),
+    staffUser ? getCheckMode(supabase, me.id) : Promise.resolve(null),
   ]);
   const list = chats ?? [];
   const staff = me.role === "owner" || me.role === "coach";
@@ -34,6 +37,8 @@ export async function GET() {
       chats: staff ? list.length : list.reduce((n, c) => n + c.unread, 0),
       latest: latest ?? null,
       chat: newest ? { clientId: newest.client_id, at: newest.last_at, from: chatFrom } : null,
+      // modalità check in corso (staff): gli altri dispositivi entrano ed escono da soli
+      checkMode: checkMode ? { clientId: checkMode.clientId, clientName: checkMode.clientName, paused: checkMode.paused } : null,
     },
     { headers: { "cache-control": "no-store" } },
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { FormDraft } from "@/components/draft-note";
 import { useActionState, useRef } from "react";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 import { Field, Input, Label, Textarea } from "@/components/ui";
@@ -9,8 +10,9 @@ type Action = (s: ActionState, fd: FormData) => Promise<ActionState>;
 
 export function SettingsForm({ action, values, defaultMessage }: { action: Action; values: { business_name: string; reminder_days: number; ai_monthly_budget_eur: number | string; payment_message: string }; defaultMessage: string }) {
   const [state, formAction] = useActionState(action, null);
+  const formRef = useRef<HTMLFormElement>(null);
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
       <Field label="Nome dell'attività" hint="compare nell'app e nelle email">
         <Input name="business_name" defaultValue={values.business_name} required />
       </Field>
@@ -26,7 +28,7 @@ export function SettingsForm({ action, values, defaultMessage }: { action: Actio
         <Textarea name="payment_message" rows={3} defaultValue={values.payment_message} placeholder={defaultMessage} />
       </Field>
       <ActionMessage state={state} />
-      <div><SubmitButton>Salva</SubmitButton></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>Salva</SubmitButton><FormDraft form={formRef} name="impostazioni" /></div>
     </form>
   );
 }
@@ -34,15 +36,16 @@ export function SettingsForm({ action, values, defaultMessage }: { action: Actio
 export function MethodForm({ action, value }: { action: Action; value: string }) {
   const [state, formAction] = useActionState(action, null);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   return (
-    <form action={formAction} className="flex flex-col gap-3">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-3">
       <div className="flex items-end justify-between gap-2">
         <Label htmlFor="coaching_method">Il tuo metodo, in parole tue</Label>
         <DictateButton target={ref} />
       </div>
       <Textarea ref={ref} id="coaching_method" name="coaching_method" rows={22} defaultValue={value} className="font-[inherit] text-[15px]" />
       <ActionMessage state={state} />
-      <div><SubmitButton>Salva il metodo</SubmitButton></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>Salva il metodo</SubmitButton><FormDraft form={formRef} name="metodo" /></div>
     </form>
   );
 }

@@ -173,7 +173,8 @@ async function main() {
     await db.from("checks").insert({
       client_id: giulia, check_date: c.date, weight_kg: c.weight, age_years: age, sex: "F", skinfolds: skinfolds as never,
       skinfold_sum_mm: comp.ok ? comp.sumMm : null, body_fat_pct: comp.ok ? comp.bodyFatPct : null, fat_mass_kg: comp.ok ? comp.fatMassKg : null, lean_mass_kg: comp.ok ? comp.leanMassKg : null, body_fat_formula: comp.ok ? comp.formula.id : null,
-      circumferences: { vita: 72 - i * 1.5, fianchi: 98 - i, coscia_dx: 56 - i * 0.5, braccio_dx: 27 + i * 0.3 } as never,
+      // tutte le circonferenze: la fila dei bottoni è lunga come nella realtà (prova del telefono)
+      circumferences: { spalle: 104 + i * 0.4, torace: 88 - i * 0.5, vita: 72 - i * 1.5, fianchi: 98 - i, coscia_sx: 55.5 - i * 0.5, coscia_dx: 56 - i * 0.5, braccio_sx: 26.8 + i * 0.3, braccio_dx: 27 + i * 0.3, polpaccio_sx: 36, polpaccio_dx: 36.2 } as never,
       strength_tests: [
         { exercise: "Back squat", load: squat, reps: 5, rpe: 8, e1rm: estimateOneRepMax(squat, 5, 8) },
         { exercise: "Panca piana bilanciere", load: 40 + i * 2.5, reps: 6, rpe: 8, e1rm: estimateOneRepMax(40 + i * 2.5, 6, 8) },

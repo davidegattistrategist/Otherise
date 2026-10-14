@@ -1,5 +1,6 @@
 "use client";
 
+import { loadDraft, useDraft } from "@/components/use-draft";
 /**
  * Assistente AI nell'editor del programma:
  * - pannello "Chiedi all'AI": descrivi a voce o per iscritto cosa cambiare, allega i test
@@ -82,6 +83,20 @@ export function AiPanel({
 }) {
   const [open, setOpen] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("ai") === "1");
   const [instruction, setInstruction] = useState("");
+  // la richiesta all'assistente resta anche se esci prima di mandarla
+  const instructionKey = `assistente:${programId}`;
+  const { adopt: adoptInstruction, clear: clearInstruction } = useDraft(instructionKey, instruction, { isEmpty: (t) => !t.trim() });
+  useEffect(() => {
+    let alive = true;
+    void loadDraft<string>(instructionKey).then((d) => {
+      if (!alive || !d || typeof d.data !== "string" || !d.data.trim()) return;
+      adoptInstruction(d.data, d.at);
+      setInstruction((v) => v || d.data);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [instructionKey, adoptInstruction]);
   const [images, setImages] = useState<Img[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,6 +154,8 @@ export function AiPanel({
     }
     if (!res.content) throw new Error("L'assistente non ha preparato la bozza: riprova.");
     onApply(res.content, res.notes ?? {}, res.weeks, res.sessionMinutes);
+    // richiesta eseguita: non serve più ritrovarla alla prossima apertura
+    clearInstruction();
     setSummary(res.summary ?? "");
     setQuestions(null);
     setAnswers([]);

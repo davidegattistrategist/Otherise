@@ -6,11 +6,14 @@ import "server-only";
  * confrontabili. Va ricalcolata quando cambia un check o la formula.
  */
 import type { ServerSupabase } from "../supabase/server";
-import { ageOn, todayISO } from "../dates";
-import { sortChecks } from "../check-order";
+import { ageOn, formatLong, todayISO } from "../dates";
+import { checkLabel, sortChecks } from "../check-order";
+import { circOf, toNumber, type BodyPoint, type FormulaSeries } from "../body/progress";
 import {
   averagesOf,
+  commonSites,
   computeBodyComposition,
+  formulasFor,
   protocolSites,
   referenceFormula,
   sumOf,
@@ -93,3 +96,66 @@ export async function foldContext(supabase: ServerSupabase, client: { id: string
 }
 
 export type { Row as CheckRow };
+
+/** Check come servono a grafici e confronti dello staff (pagina dei check e modalità check). */
+export type StaffCheckRow = Row & { fat_mass_kg: number | string | null; lean_mass_kg: number | string | null; body_fat_pct: number | string | null; circumferences: unknown };
+
+/**
+ * Punti per i grafici e il confronto (con i numeri salvati nei check, cioè la
+ * formula di riferimento) e, per cambiare formula al volo nel grafico, i valori
+ * di ogni formula che si può usare.
+ */
+export function staffBodyData<T extends StaffCheckRow>(rows: T[], sex: Sex, birthDate: string | null, clientFormula: string | null) {
+  const list = sortChecks(rows).map((c) => ({ ...c, avg: averagesOf(c.skinfolds as SkinfoldReadings) }));
+  const folds = list.map((c) => ({ averages: c.avg }));
+  const ref = referenceFormula(sex, folds, clientFormula);
+  const refYear = Number(todayISO().slice(0, 4));
+  const points: BodyPoint[] = list.map((c, i) => ({
+    id: c.id,
+    date: c.check_date,
+    label: checkLabel(c, refYear) + (i === list.length - 1 ? " · ultimo" : ""),
+    weight: toNumber(c.weight_kg),
+    fatPct: toNumber(c.body_fat_pct),
+    fatKg: toNumber(c.fat_mass_kg),
+    leanKg: toNumber(c.lean_mass_kg),
+    folds: c.avg,
+    circ: circOf(c.circumferences),
+  }));
+  const dated = list.filter((c) => c.check_date);
+  const formulas: FormulaSeries[] = formulasFor(sex)
+    .filter((f) => dated.some((c) => f.sites.every((s) => c.avg[s] !== undefined)))
+    .map((f) => ({
+      id: f.id,
+      label: f.label,
+      ref: f.id === ref?.id,
+      values: Object.fromEntries(
+        dated.map((c) => {
+          const r = computeBodyComposition({ sex, age: checkAge(c, birthDate), weightKg: c.weight_kg === null ? null : Number(c.weight_kg), skinfolds: c.skinfolds as SkinfoldReadings, formula: f.id });
+          return [c.id, r.ok && !r.fallback ? { pct: r.bodyFatPct, kg: r.fatMassKg, lean: r.leanMassKg } : { pct: null, kg: null, lean: null }];
+        }),
+      ),
+    }));
+  const common = commonSites(sex, folds);
+  return { list, points, formulas, ref, common, sumSites: common.length ? common : protocolSites(sex) };
+}
+
+/** Il check prima di questo (o l'ultimo, per un check nuovo): le sue misure vanno accanto a quelle che scrivi. */
+export async function previousCheck(supabase: ServerSupabase, clientId: string, checkId?: string | null) {
+  const { data } = await supabase
+    .from("checks")
+    .select("id, check_date, sequence, created_at, order_hint, skinfolds, weight_kg, body_fat_pct, fat_mass_kg, lean_mass_kg, circumferences")
+    .eq("client_id", clientId);
+  const list = sortChecks(data ?? []);
+  const i = checkId ? list.findIndex((c) => c.id === checkId) : list.length;
+  const prev = i > 0 ? list[i - 1] : null;
+  if (!prev) return null;
+  return {
+    label: prev.check_date ? formatLong(prev.check_date) : checkLabel(prev),
+    weight: toNumber(prev.weight_kg),
+    folds: averagesOf(prev.skinfolds as SkinfoldReadings),
+    circ: circOf(prev.circumferences),
+    fatPct: toNumber(prev.body_fat_pct),
+    fatKg: toNumber(prev.fat_mass_kg),
+    leanKg: toNumber(prev.lean_mass_kg),
+  };
+}

@@ -1,7 +1,8 @@
 "use client";
 
+import { FormDraft } from "@/components/draft-note";
 import { DictateButton } from "@/components/dictate-button";
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 import { Label, Select, Textarea, Input } from "@/components/ui";
 import type { AiProfile } from "@/lib/ai-profile";
@@ -11,11 +12,12 @@ type Action = (state: ActionState, fd: FormData) => Promise<ActionState>;
 /** Indicazioni per l'AI sul cliente: livello, tempo, spinte verticali, gambe, tecniche di intensità. */
 export function AiProfileForm({ action, values, actualSquat }: { action: Action; values: AiProfile; actualSquat: number | null }) {
   const [state, formAction] = useActionState(action, null);
+  const formRef = useRef<HTMLFormElement>(null);
   const [auto, setAuto] = useState(values.squat_share === null);
   const [share, setShare] = useState(values.squat_share ?? actualSquat ?? 50);
   const tech = values.intensity_techniques === null ? "" : values.intensity_techniques ? "si" : "no";
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
         <div>
           <Label htmlFor="ai-minutes" hint="minuti">Tempo per seduta</Label>
@@ -92,7 +94,7 @@ export function AiProfileForm({ action, values, actualSquat }: { action: Action;
         <Textarea id="ai-reply" name="reply_lessons" rows={3} defaultValue={values.reply_lessons} placeholder="Si riempie da solo quando correggi le bozze di risposta. Puoi anche scriverlo tu: es. La chiamo Giuly; con lei niente emoji" />
       </div>
       <ActionMessage state={state} />
-      <div><SubmitButton variant="secondary">Salva le indicazioni</SubmitButton></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton variant="secondary">Salva le indicazioni</SubmitButton><FormDraft form={formRef} name="indicazioni-ai" /></div>
     </form>
   );
 }

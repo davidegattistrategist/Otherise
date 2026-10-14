@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { FormDraft } from "@/components/draft-note";
+import { useActionState, useRef } from "react";
 import { Field, Input, Textarea } from "@/components/ui";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 
@@ -12,8 +13,9 @@ export function ExerciseForm({
   values?: { name: string; video_url: string | null; description: string; category: string; archived: boolean };
 }) {
   const [state, formAction] = useActionState(action, null);
+  const formRef = useRef<HTMLFormElement>(null);
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
       <Field label="Nome"><Input name="name" defaultValue={values?.name} required /></Field>
       <Field label="Video" hint="link YouTube o di un'altra piattaforma"><Input name="video_url" type="url" defaultValue={values?.video_url ?? ""} placeholder="https://youtu.be/…" /></Field>
       <Field label="Descrizione" hint="la vede il cliente quando apre l'esercizio"><Textarea name="description" rows={4} defaultValue={values?.description} /></Field>
@@ -25,7 +27,7 @@ export function ExerciseForm({
         </label>
       ) : null}
       <ActionMessage state={state} />
-      <div><SubmitButton>Salva</SubmitButton></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>Salva</SubmitButton><FormDraft form={formRef} name={values ? `esercizio-${values.name}` : "esercizio-nuovo"} /></div>
     </form>
   );
 }

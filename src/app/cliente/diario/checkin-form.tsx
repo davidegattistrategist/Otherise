@@ -1,7 +1,8 @@
 "use client";
 
 import { DictateButton } from "@/components/dictate-button";
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
+import { FormDraft } from "@/components/draft-note";
 import { CHECKIN_QUESTIONS, SCORE_LABELS } from "@/lib/checkin";
 import { ActionMessage, SubmitButton } from "@/components/form-bits";
 import { Label, Textarea } from "@/components/ui";
@@ -12,6 +13,7 @@ type Values = Partial<Record<(typeof CHECKIN_QUESTIONS)[number]["key"], number>>
 export function CheckinForm({ values, coach }: { values?: Values; coach: string }) {
   const [state, action] = useActionState(submitCheckin, null);
   const [missing, setMissing] = useState<string[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
   // controllo nostro (non quello del browser): porta alla prima domanda senza risposta
   const check = (e: React.FormEvent<HTMLFormElement>) => {
     const fd = new FormData(e.currentTarget);
@@ -23,7 +25,7 @@ export function CheckinForm({ values, coach }: { values?: Values; coach: string 
     }
   };
   return (
-    <form action={action} onSubmit={check} noValidate className="flex flex-col gap-6">
+    <form ref={formRef} action={action} onSubmit={check} noValidate className="flex flex-col gap-6">
       {CHECKIN_QUESTIONS.map((q) => (
         <fieldset key={q.key} id={`q-${q.key}`} onChange={() => setMissing((m) => m.filter((k) => k !== q.key))} className="flex flex-col gap-2.5">
           <legend className="mb-2.5 text-[17px] leading-snug font-semibold">{q.label}</legend>
@@ -51,6 +53,7 @@ export function CheckinForm({ values, coach }: { values?: Values; coach: string 
       </div>
       {missing.length ? <p role="alert" className="rounded-xl bg-accent-soft px-3 py-2 text-sm">{missing.length === 1 ? "Manca la risposta a una domanda." : `Mancano le risposte a ${missing.length} domande.`}</p> : null}
       <ActionMessage state={state} />
+      <FormDraft form={formRef} name="diario" />
       <SubmitButton className="w-full" pendingText="Invio…">{values ? "Aggiorna il diario" : "Invia il diario"}</SubmitButton>
     </form>
   );

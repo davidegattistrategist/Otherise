@@ -13,11 +13,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { openNotification } from "@/app/notifiche/actions";
+import { startCheckMode } from "@/app/check/actions";
 import { IconBell, IconChat, IconX } from "./icons";
 
 type Counts = { notifications: number; chats: number };
 type Latest = { id: string; kind: string; title: string; body: string; link: string | null; client_id: string | null } | null;
-type Live = Counts & { latest: Latest; chat: { clientId: string; at: string; from: string | null } | null };
+type CheckModeInfo = { clientId: string; clientName: string; paused: boolean } | null;
+type Live = Counts & { latest: Latest; chat: { clientId: string; at: string; from: string | null } | null; checkMode?: CheckModeInfo };
 type Banner = { key: string; title: string; body: string; link: string; notificationId?: string; chat?: boolean };
 
 const LiveContext = createContext<Counts | null>(null);
@@ -33,9 +35,27 @@ const MAX_BANNERS = 3;
 // pagine di riepilogo che si possono ricaricare senza disturbare chi scrive
 const REFRESH = [/^\/cliente$/, /^\/cliente\/notifiche$/, /^\/staff$/, /^\/staff\/notifiche$/, /^\/staff\/messaggi$/, /^\/staff\/clienti$/, /^\/staff\/pagamenti$/];
 
-export function LiveProvider({ initial, role, children }: { initial: Counts; role: "client" | "staff"; children: React.ReactNode }) {
+export function LiveProvider({ initial, role, children, initialCheckMode = null }: { initial: Counts; role: "client" | "staff"; children: React.ReactNode; initialCheckMode?: CheckModeInfo }) {
   const router = useRouter();
   const path = usePathname();
+  // modalità check (staff): se è attiva su un dispositivo, anche gli altri ci entrano (o ne escono) da soli
+  const [checkMode, setCheckMode] = useState<CheckModeInfo>(initialCheckMode);
+  const followCheckMode = useCallback(
+    (cm: CheckModeInfo, here: string) => {
+      const inMode = here.startsWith("/check/");
+      if (cm && !cm.paused && !inMode) router.push(`/check/${cm.clientId}`);
+      else if (inMode && (!cm || cm.paused)) {
+        const id = here.split("/")[2];
+        router.push(cm ? `/staff/clienti/${cm.clientId}` : `/staff/clienti/${id}/check`);
+      }
+    },
+    [router],
+  );
+  useEffect(() => {
+    if (role === "staff") followCheckMode(initialCheckMode, window.location.pathname);
+    // solo all'apertura: poi ci pensa il controllo periodico
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [counts, setCounts] = useState(initial);
   // quando il server ridisegna il layout (navigazione, azione) ripartiamo dai suoi numeri
   const [seen, setSeen] = useState(initial);
@@ -67,6 +87,10 @@ export function LiveProvider({ initial, role, children }: { initial: Counts; rol
     const prev = last.current;
     last.current = { latestId: d.latest?.id ?? prev?.latestId ?? null, chatAt: d.chat?.at ?? prev?.chatAt ?? null, counts: { notifications: d.notifications, chats: d.chats } };
     setCounts({ notifications: d.notifications, chats: d.chats });
+    if (role === "staff") {
+      setCheckMode(d.checkMode ?? null);
+      followCheckMode(d.checkMode ?? null, pathRef.current);
+    }
     if (!prev) return; // primo controllo: solo i numeri
     const here = pathRef.current;
     const newChat = d.chat && d.chat.at !== prev.chatAt && (!prev.chatAt || d.chat.at > prev.chatAt);
@@ -79,7 +103,7 @@ export function LiveProvider({ initial, role, children }: { initial: Counts; rol
     }
     const changed = newChat || newNotif || prev.counts.notifications !== d.notifications || prev.counts.chats !== d.chats;
     if (changed && REFRESH.some((re) => re.test(here))) router.refresh();
-  }, [role, router, push]);
+  }, [role, router, push, followCheckMode]);
 
   useEffect(() => {
     const first = setTimeout(check, 1500);
@@ -129,6 +153,18 @@ export function LiveProvider({ initial, role, children }: { initial: Counts; rol
   return (
     <LiveContext.Provider value={counts}>
       {children}
+      {checkMode?.paused && !path.startsWith("/check/") ? (
+        <form
+          action={startCheckMode.bind(null, checkMode.clientId, undefined)}
+          className="fixed bottom-[calc(var(--nav-space)+0.75rem)] left-1/2 z-[70] max-w-[calc(100%-2rem)] -translate-x-1/2 lg:bottom-5"
+        >
+          <button type="submit" className="flex w-full items-center gap-2 rounded-full bg-ink py-2.5 pr-4 pl-3 text-sm font-semibold text-card shadow-xl">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />
+            <span className="truncate">Check in corso con {checkMode.clientName}</span>
+            <span className="shrink-0 underline">Riprendi</span>
+          </button>
+        </form>
+      ) : null}
       {banners.length ? (
         <div className="fixed inset-x-0 top-[calc(0.75rem+env(safe-area-inset-top))] z-[80] flex flex-col items-center gap-2 px-4 md:inset-x-auto md:right-5 md:items-end">
           {banners.map((b) => <LiveBanner key={b.key} banner={b} onClose={() => close(b.key)} />)}

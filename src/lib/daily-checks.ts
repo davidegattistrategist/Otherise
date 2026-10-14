@@ -215,6 +215,8 @@ export async function runDailyChecks(today = todayISO()) {
   const videosRemoved = await removeOldChatMedia(today);
   // niente riepilogo per email: il riepilogo è "Oggi" nell'app
   const emailed = await deliverPendingEmails();
+  // pulizia: bozze dimenticate da più di 2 mesi
+  await admin.from("drafts").delete().lt("updated_at", `${addDays(today, -60)}T00:00:00Z`);
   // pulizia: notifiche lette più vecchie di 6 mesi
   await admin.from("notifications").delete().lt("created_at", `${addDays(today, -180)}T00:00:00Z`).not("read_at", "is", null);
   return { ok: true, today, notifications: out.length, emailed, videosRemoved, backup };

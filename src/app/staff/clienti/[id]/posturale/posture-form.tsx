@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useRef } from "react";
+import { FormDraft } from "@/components/draft-note";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 import { Input, Label, Textarea } from "@/components/ui";
 import { DictateButton } from "@/components/dictate-button";
@@ -16,6 +17,7 @@ const SECTIONS = [
 
 export function PostureForm({ action, values, today }: { action: (s: ActionState, fd: FormData) => Promise<ActionState>; values?: Values; today: string }) {
   const [state, formAction] = useActionState(action, null);
+  const formRef = useRef<HTMLFormElement>(null);
   const refs = {
     tight_muscles: useRef<HTMLTextAreaElement>(null),
     what_works: useRef<HTMLTextAreaElement>(null),
@@ -23,7 +25,7 @@ export function PostureForm({ action, values, today }: { action: (s: ActionState
     notes: useRef<HTMLTextAreaElement>(null),
   };
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-4">
         <div>
           <Label htmlFor="assessed_on">Data</Label>
@@ -44,7 +46,7 @@ export function PostureForm({ action, values, today }: { action: (s: ActionState
         </div>
       ))}
       <ActionMessage state={state} />
-      <div><SubmitButton>{values ? "Salva modifiche" : "Salva la valutazione"}</SubmitButton></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>{values ? "Salva modifiche" : "Salva la valutazione"}</SubmitButton><FormDraft form={formRef} name={values ? `posturale-${values.assessed_on ?? ""}` : "posturale-nuova"} /></div>
     </form>
   );
 }

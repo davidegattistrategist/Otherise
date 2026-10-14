@@ -5,6 +5,8 @@
  * Si aggiorna da sola ogni pochi secondi mentre è aperta.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { loadDraft, useDraft } from "../use-draft";
+import { Linkified } from "./linkify";
 import { friendlyError } from "@/lib/friendly-error";
 import { deleteMessage, dismissReplyDraft, prepareUpload, requestReplyDraft, sendMessage } from "@/app/chat/actions";
 import type { ReplyDraft } from "@/lib/ai/reply";
@@ -77,6 +79,21 @@ export function ChatThread({
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initial);
   const [text, setText] = useState(prefill ?? "");
+  // quello che stai scrivendo resta anche se chiudi l'app (si cancella all'invio)
+  const textDraftKey = `chat:${clientId}`;
+  const { adopt: adoptText } = useDraft(textDraftKey, text, { isEmpty: (t) => !t.trim() });
+  useEffect(() => {
+    if (prefill) return;
+    let alive = true;
+    void loadDraft<string>(textDraftKey).then((d) => {
+      if (!alive || !d || typeof d.data !== "string" || !d.data.trim()) return;
+      adoptText(d.data, d.at);
+      setText((t) => t || d.data);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [textDraftKey, prefill, adoptText]);
   const [pending, setPending] = useState<Pending[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -462,17 +479,19 @@ export function ChatThread({
                 {m.deleted ? (
                   <div className="rounded-2xl border border-dashed border-sand-deep px-3.5 py-2 text-sm text-muted italic">Messaggio eliminato</div>
                 ) : m.body ? (
-                  <button
-                    type="button"
+                  // un div (non un pulsante) così i link nel testo si possono toccare
+                  <div
+                    role={m.mine ? "button" : undefined}
+                    tabIndex={m.mine ? 0 : undefined}
                     onClick={() => m.mine && setSelected(selected === m.id ? null : m.id)}
+                    onKeyDown={(e) => m.mine && (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setSelected(selected === m.id ? null : m.id))}
                     className={cx(
                       "rounded-[20px] px-3.5 py-2 text-left text-[15px] leading-snug whitespace-pre-wrap break-words",
-                      m.mine ? "rounded-br-md bg-ink text-card" : "rounded-bl-md bg-sand text-ink",
-                      !m.mine && "cursor-text",
+                      m.mine ? "cursor-pointer rounded-br-md bg-ink text-card" : "rounded-bl-md bg-sand text-ink",
                     )}
                   >
-                    {m.body}
-                  </button>
+                    <Linkified text={m.body} />
+                  </div>
                 ) : null}
                 <div className="flex items-center gap-3 px-1 text-[11px] text-muted">
                   <span>{timeOf(m.createdAt)}</span>

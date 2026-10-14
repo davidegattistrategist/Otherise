@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { FormDraft } from "@/components/draft-note";
+import { useActionState, useRef } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 
@@ -34,8 +35,9 @@ export function ClientForm({
   isNew?: boolean;
 }) {
   const [state, formAction] = useActionState(action, null);
+  const formRef = useRef<HTMLFormElement>(null);
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Nome"><Input name="first_name" defaultValue={values.first_name} required autoComplete="off" /></Field>
         <Field label="Cognome"><Input name="last_name" defaultValue={values.last_name} autoComplete="off" /></Field>
@@ -82,7 +84,7 @@ export function ClientForm({
         </label>
       ) : null}
       <ActionMessage state={state} />
-      <div><SubmitButton>{isNew ? "Crea cliente" : "Salva"}</SubmitButton></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>{isNew ? "Crea cliente" : "Salva"}</SubmitButton><FormDraft form={formRef} name={isNew ? "nuovo-cliente" : "dati-cliente"} /></div>
     </form>
   );
 }

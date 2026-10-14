@@ -1,5 +1,6 @@
 "use client";
 
+import { FormDraft } from "@/components/draft-note";
 import { useActionState, useEffect, useRef } from "react";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 import { Input, Label, Textarea } from "@/components/ui";
@@ -51,7 +52,7 @@ export function SessionForm({
         <Textarea ref={notesRef} id={`n-${uid}`} name="notes" rows={compact ? 3 : 5} defaultValue={values?.notes ?? ""} placeholder="Es. Squat 4x6 a 80 kg, ginocchio sinistro ok. Da rivedere lo stacco: schiena che si arrotonda all'ultima ripetizione." />
       </div>
       <ActionMessage state={state} />
-      <div><SubmitButton size={compact ? "sm" : "md"}>{values ? "Salva modifiche" : "Salva la sessione"}</SubmitButton></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton size={compact ? "sm" : "md"}>{values ? "Salva modifiche" : "Salva la sessione"}</SubmitButton><FormDraft form={formRef} name={`sessione-${uid}`} /></div>
     </form>
   );
 }

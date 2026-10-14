@@ -1,52 +1,33 @@
-import { checkLabel, sortChecks } from "@/lib/check-order";
+import { checkLabel } from "@/lib/check-order";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getStaffClient } from "@/lib/data/client";
-import { checkAge } from "@/lib/data/checks";
+import { staffBodyData } from "@/lib/data/checks";
 import {
-  CIRCUMFERENCES,
-  SKINFOLD_SITES,
-  averagesOf,
-  commonSites,
-  computeBodyComposition,
   formulaById,
   formulaUpgrade,
   formulasFor,
   protocolSites,
-  referenceFormula,
   siteLabel,
   sumOf,
   type Sex,
-  type SkinfoldReadings,
   type SkinfoldSite,
 } from "@/lib/body/skinfolds";
-import { LineChart } from "@/components/line-chart";
-import { Button, Card, EmptyState, Eyebrow, LinkButton, Notice, fmtNum } from "@/components/ui";
+import { BodyCharts, CheckCompare } from "@/components/body-progress";
+import { Button, Card, EmptyState, Eyebrow, Notice, fmtNum } from "@/components/ui";
 import { ClearParams } from "@/components/clear-param";
 import { setSkinfoldFormula } from "./actions";
+import { startCheckMode } from "@/app/check/actions";
 import { SexPrompt } from "./sex-prompt";
-import { CheckPhotoUploader } from "@/components/check-photos";
+import { CheckPhotoUploader, PhotoAlbums, PhotoCompare } from "@/components/check-photos";
+import { staffCheckPhotos } from "@/lib/check-photos";
 import { IconPhoto } from "@/components/icons";
 
 export const metadata: Metadata = { title: "Check" };
 
-type SP = { salvato?: string; foto?: string; misura?: string; formula?: string; plica?: string; "formula-salvata"?: string };
-
-/** Filtro del grafico che tiene gli altri filtri già scelti. */
-function ChartFilter({ name, value, options, keep, label, wide }: { name: keyof SP; value: string; options: Array<{ value: string; label: string }>; keep: Record<string, string>; label: string; wide?: boolean }) {
-  return (
-    <form className={`flex min-w-0 items-center gap-2 ${wide ? "w-full" : ""}`}>
-      {Object.entries(keep).filter(([k, v]) => k !== name && v).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
-      <label htmlFor={`f-${name}`} className="sr-only">{label}</label>
-      <select key={value} id={`f-${name}`} name={name} defaultValue={value} className={`${wide ? "flex-1" : "max-w-[12rem]"} min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-1 text-sm`}>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <button type="submit" className="min-h-10 px-2 text-sm font-semibold underline">Mostra</button>
-    </form>
-  );
-}
+type SP = { salvato?: string; foto?: string; "formula-salvata"?: string };
 
 const lower = (l: SkinfoldSite[]) => l.map((s) => siteLabel(s).toLowerCase()).join(", ");
 
@@ -63,38 +44,17 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
     .select("id, check_date, sequence, created_at, order_hint, age_years, skinfolds, weight_kg, body_fat_pct, fat_mass_kg, lean_mass_kg, body_fat_formula, circumferences, strength_tests, tests_text, notes_next_phase, visible_to_client")
     .eq("client_id", id)
     .order("check_date", { ascending: true });
-  // nell'elenco solo quante foto ha ogni check (si guardano aprendo il check)
-  const { data: photoRows } = await supabase.from("check_photos").select("check_id").eq("client_id", id);
-  const photos = new Map<string, { length: number }>();
-  for (const r of photoRows ?? []) photos.set(r.check_id, { length: (photos.get(r.check_id)?.length ?? 0) + 1 });
+  // foto: nell'elenco solo quante sono; si aprono dal check, dall'elenco qui sotto o nel confronto
+  const photos = await staffCheckPhotos(supabase, id);
   const sex = client.sex as Sex;
-  const list = sortChecks(checks ?? []).map((c) => ({ ...c, avg: averagesOf(c.skinfolds as SkinfoldReadings) }));
+  const body = staffBodyData(checks ?? [], sex, client.birth_date, client.skinfold_formula);
+  const list = body.list;
   const folds = list.map((c) => ({ averages: c.avg }));
   const manual = formulaById(client.skinfold_formula);
-  const ref = referenceFormula(sex, folds, client.skinfold_formula);
+  const ref = body.ref;
   const upgrade = manual ? null : formulaUpgrade(sex, folds, ref);
-  const dated = list.filter((c) => c.check_date);
-
-  // formule che si possono usare in almeno un check con data (per il grafico)
-  const usable = formulasFor(sex).filter((f) => dated.some((c) => f.sites.every((s) => c.avg[s] !== undefined)));
-  const shown = usable.find((f) => f.id === sp.formula) ?? (ref && usable.includes(ref) ? ref : usable[0] ?? null);
-  const comp = (c: (typeof list)[number]) =>
-    shown ? computeBodyComposition({ sex, age: checkAge(c, client.birth_date), weightKg: c.weight_kg === null ? null : Number(c.weight_kg), skinfolds: c.skinfolds as SkinfoldReadings, formula: shown.id }) : null;
-  const comps = new Map(dated.map((c) => [c.id, comp(c)]));
-  const pick = (c: (typeof list)[number], k: "bodyFatPct" | "leanMassKg") => {
-    const r = comps.get(c.id);
-    return r?.ok && !r.fallback ? r[k] : null;
-  };
-
   const withFolds = list.filter((c) => Object.keys(c.avg).length > 0);
-  const common = commonSites(sex, folds);
-  const sumSites = common.length ? common : protocolSites(sex);
-  const plica = SKINFOLD_SITES.find((s) => s.key === sp.plica && withFolds.some((c) => c.avg[s.key] !== undefined))?.key ?? null;
-
-  const circKey = CIRCUMFERENCES.find((c) => c.key === sp.misura)?.key ?? "vita";
-  const keep = { misura: sp.misura ?? "", formula: sp.formula ?? "", plica: sp.plica ?? "" };
-  const series = (get: (c: (typeof list)[number]) => number | null) =>
-    dated.map((c) => ({ date: c.check_date!, value: get(c) })).filter((p): p is { date: string; value: number } => p.value !== null && p.value !== undefined);
+  const photoAlbums = list.filter((c) => photos.get(c.id)?.length).map((c) => ({ id: c.id, title: checkLabel(c, 0), photos: photos.get(c.id)! }));
 
   return (
     <div className="flex flex-col gap-5">
@@ -123,50 +83,23 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
           </form>
         </Card>
       ) : null}
-      <div className="flex justify-end"><LinkButton href={`/staff/clienti/${id}/check/nuovo`}>Nuovo check</LinkButton></div>
+      <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+        <Link href={`/staff/clienti/${id}/check/nuovo`} className="text-sm font-semibold underline">Solo il modulo</Link>
+        <form action={startCheckMode.bind(null, id, null)}><Button type="submit">Inizia il check</Button></form>
+      </div>
       {list.length === 0 ? (
         <EmptyState title="Ancora nessun check">Registra pliche, circonferenze e test: i grafici si costruiscono da soli.</EmptyState>
       ) : (
         <>
-          <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
-            <Card><Eyebrow className="mb-2">Peso · kg</Eyebrow><LineChart label="Peso" unit="kg" points={series((c) => (c.weight_kg === null ? null : Number(c.weight_kg)))} /></Card>
-            {shown ? (
-              <>
-                <Card>
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <Eyebrow>Massa grassa · %</Eyebrow>
-                    {usable.length > 1 ? <ChartFilter wide name="formula" label="Formula" value={shown.id} keep={keep} options={usable.map((f) => ({ value: f.id, label: f.id === ref?.id ? `${f.label} · riferimento` : f.label }))} /> : null}
-                  </div>
-                  <LineChart label="Massa grassa" unit="%" points={series((c) => pick(c, "bodyFatPct"))} />
-                  {shown.id !== ref?.id ? <p className="mt-1 text-xs text-muted">Formula diversa da quella di riferimento: i numeri non coincidono con quelli dei check.</p> : null}
-                </Card>
-                <Card><Eyebrow className="mb-2">Massa magra · kg</Eyebrow><LineChart label="Massa magra" unit="kg" points={series((c) => pick(c, "leanMassKg"))} /></Card>
-              </>
-            ) : null}
-            {withFolds.length ? (
-              <Card>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <Eyebrow>Pliche · mm</Eyebrow>
-                  <ChartFilter
-                    name="plica"
-                    label="Plica"
-                    value={plica ?? ""}
-                    keep={keep}
-                    options={[{ value: "", label: "Somma" }, ...SKINFOLD_SITES.filter((s) => withFolds.some((c) => c.avg[s.key] !== undefined)).map((s) => ({ value: s.key, label: s.label }))]}
-                  />
-                </div>
-                <LineChart label={plica ? siteLabel(plica) : "Somma pliche"} unit="mm" points={series((c) => (plica ? c.avg[plica] ?? null : sumSites.every((s) => c.avg[s] !== undefined) ? sumOf(c.avg, sumSites) : null))} />
-                {!plica ? <p className="mt-1 text-xs text-muted">Somma di {lower(sumSites)}{common.length ? ", le pliche prese in tutti i check" : ""}.</p> : null}
-              </Card>
-            ) : null}
-            <Card>
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <Eyebrow>Circonferenze · cm</Eyebrow>
-                <ChartFilter name="misura" label="Misura" value={circKey} keep={keep} options={CIRCUMFERENCES.map((c) => ({ value: c.key, label: c.label }))} />
-              </div>
-              <LineChart label={CIRCUMFERENCES.find((c) => c.key === circKey)!.label} unit="cm" points={series((c) => (c.circumferences as Record<string, number>)?.[circKey] ?? null)} />
+          <BodyCharts points={body.points} sumSites={body.sumSites} formulas={body.formulas} />
+          <CheckCompare points={body.points} sumSites={body.sumSites} />
+          {photoAlbums.length ? (
+            <Card className="flex flex-col gap-2">
+              <Eyebrow>Le foto dei check</Eyebrow>
+              <PhotoAlbums albums={[...photoAlbums].reverse()} />
+              <PhotoCompare albums={photoAlbums} />
             </Card>
-          </div>
+          ) : null}
 
           {withFolds.length ? (
             <Card>

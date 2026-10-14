@@ -12,14 +12,16 @@ import { Toaster } from "@/components/toaster";
 import { IconLogout } from "@/components/icons";
 import { signOut } from "../login/actions";
 import { BrandName } from "@/components/brand";
+import { getCheckMode } from "@/lib/check-mode";
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const me = await requireStaff();
   const supabase = await createClient();
-  const [{ count: unread }, { data: name }, { data: chats }] = await Promise.all([
+  const [{ count: unread }, { data: name }, { data: chats }, checkMode] = await Promise.all([
     supabase.from("notifications").select("id", { count: "exact", head: true }).neq("kind", "chat").is("read_at", null),
     getBusinessName().then((data) => ({ data })),
     supabase.rpc("my_unread_chats"),
+    getCheckMode(supabase, me.id),
   ]);
   const unreadChats = (chats ?? []).length;
   const owner = me.role === "owner";
@@ -46,7 +48,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   ];
   const moreMobile = items.filter((i) => !mainMobile.some((m) => m.href === i.href)) as MobileItem[];
   return (
-    <LiveProvider role="staff" initial={{ notifications: unread ?? 0, chats: unreadChats }}>
+    <LiveProvider role="staff" initial={{ notifications: unread ?? 0, chats: unreadChats }} initialCheckMode={checkMode ? { clientId: checkMode.clientId, clientName: checkMode.clientName, paused: checkMode.paused } : null}>
     <div className="flex min-h-dvh flex-wrap content-start items-stretch">
       {/* telefono: barra in alto e menu in basso */}
       <header className="flex w-full items-center justify-between gap-3 pt-[calc(1rem+env(safe-area-inset-top))] pr-[var(--edge-right)] pl-[var(--edge-left)] sm:px-8 lg:hidden">

@@ -37,6 +37,7 @@ import {
 } from "../actions";
 import { AiPanel, RowAiButtons } from "./ai-tools";
 import { estimateDayMinutes } from "@/lib/program/balance";
+import { clearDraft, loadDraft, useDraft } from "@/components/use-draft";
 
 export type EditorProgram = {
   id: string;
@@ -123,6 +124,47 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
     });
   }, [program.id, program.is_template, title, description, weeks, startDate, minutes, content, updatedAt, aiNotes]);
 
+  // Salvataggio automatico:
+  // - bozze e modelli si salvano da soli 2 secondi dopo l'ultima modifica;
+  // - un programma pubblicato no (il cliente vedrebbe le modifiche a metà):
+  //   le modifiche restano come bozza su questo dispositivo e sul server e,
+  //   se esci senza salvare, alla riapertura le ritrovi.
+  type Snapshot = { base: string; title: string; description: string; weeks: number; startDate: string; minutes: string; content: ProgramContent };
+  const draftKey = `programma:${program.id}`;
+  const snapshot: Snapshot | null = dirty ? { base: updatedAt, title, description, weeks, startDate, minutes, content } : null;
+  const backup = useDraft(draftKey, snapshot, { isEmpty: (v) => v === null });
+  const [restored, setRestored] = useState<number | null>(null);
+  const { adopt: adoptBackup } = backup;
+  useEffect(() => {
+    let alive = true;
+    void loadDraft<Snapshot>(draftKey).then((d) => {
+      if (!alive || !d?.data) return;
+      // solo se nel frattempo il programma non è stato salvato da un'altra parte
+      if (d.data.base !== program.updated_at) {
+        clearDraft(draftKey);
+        return;
+      }
+      adoptBackup(d.data, d.at);
+      setTitle(d.data.title);
+      setDescription(d.data.description);
+      setWeeks(d.data.weeks);
+      setStartDate(d.data.startDate);
+      setMinutes(d.data.minutes);
+      setContent(normalizeWeeks(d.data.content, d.data.weeks));
+      setDirty(true);
+      setRestored(d.at);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [draftKey, program.updated_at, adoptBackup]);
+  const autoSave = status !== "published" || program.is_template;
+  useEffect(() => {
+    if (!dirty || !autoSave || pending) return;
+    const t = setTimeout(() => doSave(), 2000);
+    return () => clearTimeout(t);
+  }, [dirty, autoSave, pending, doSave]);
+
   // Ctrl/Cmd+S salva
   const saveRef = useRef(doSave);
   useEffect(() => {
@@ -139,9 +181,10 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // avviso se si esce con modifiche non salvate
+  // avviso se si esce con modifiche non salvate (un programma pubblicato: le
+  // modifiche restano comunque come bozza e si ritrovano alla riapertura)
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || autoSave) return;
     const onBefore = (e: BeforeUnloadEvent) => {
       e.preventDefault();
     };
@@ -162,7 +205,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
       window.removeEventListener("beforeunload", onBefore);
       document.removeEventListener("click", onClick, true);
     };
-  }, [dirty]);
+  }, [dirty, autoSave]);
 
   const changeWeeks = (n: number) => {
     const losing = content.days.some((d) => d.blocks.some((b) => b.items.some((it) => it.prescriptions.slice(n).some((p) => p.trim()))));
@@ -219,11 +262,12 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             <div className="mt-2 flex flex-wrap items-center gap-2 px-1 text-sm text-muted">
               <Pill active={status === "published"}>{program.is_template ? "Modello" : STATUS_LABEL[status]}</Pill>
               {program.source === "ai" ? <Pill><IconSparkle size={14} /> Bozza preparata con l&apos;AI</Pill> : null}
-              <span aria-live="polite">{pending ? "Salvataggio…" : dirty ? "Modifiche non salvate" : savedAt ? `Salvato alle ${savedAt}` : ""}</span>
+              <span aria-live="polite">{pending ? "Salvataggio…" : dirty ? (autoSave ? "Salvo tra un attimo…" : "Modifiche da salvare (intanto restano qui anche se esci)") : savedAt ? `Salvato alle ${savedAt}${autoSave ? " (si salva da solo)" : ""}` : ""}</span>
+              {restored ? <span className="rounded-full bg-accent-soft px-3 py-1 text-ink">Ho ripreso le modifiche che non avevi salvato.</span> : null}
             </div>
           </div>
           <div className="flex flex-wrap gap-2.5">
-            <Button onClick={doSave} disabled={pending || !dirty} variant={dirty ? "primary" : "secondary"}>
+            <Button onClick={doSave} disabled={pending} variant={dirty ? "primary" : "secondary"}>
               Salva
             </Button>
             {!program.is_template && status === "draft" ? (

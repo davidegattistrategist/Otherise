@@ -90,10 +90,14 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
   // cambiare per tutti i check se questo aggiunge o toglie una plica)
   await recomputeClientChecks(supabase, clientId);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
-  // foto scelte nel modulo: le carica il browser adesso che il check esiste
-  if (fd.get("with_photos") === "1") return { ok: true, message: "Check salvato.", checkId: saved.id };
-  // dopo il salvataggio si propongono subito le foto di questo check
-  redirect(`/staff/clienti/${clientId}/check?salvato=${saved.id}`);
+  // la bozza del modulo non serve più (anche sull'altro dispositivo)
+  const draftKey = String(fd.get("draft_key") ?? "");
+  if (draftKey.startsWith(`check:${clientId}:`)) {
+    await supabase.from("drafts").delete().eq("user_id", me.id).eq("key", draftKey);
+  }
+  // il browser cancella la bozza e poi: carica le foto scelte nel modulo,
+  // oppure va alla pagina dei check che propone subito le foto di questo check
+  return { ok: true, message: "Check salvato.", checkId: saved.id, redirectTo: `/staff/clienti/${clientId}/check?salvato=${saved.id}` };
 }
 
 export async function deleteCheck(clientId: string, checkId: string) {

@@ -88,6 +88,16 @@ body {
 }
 
 /* La griglia del programma scorre in orizzontale su schermi stretti */
+/*
+ * Le celle di una griglia non si allargano più dello schermo: senza questa
+ * regola una fila di bottoni scorrevole (es. le circonferenze nei Progressi)
+ * allargava tutta la colonna e sull'iPhone la pagina usciva di lato.
+ * Specificità zero: una classe min-w-… sulla cella vince sempre.
+ */
+:where(.grid) > * {
+  min-width: 0;
+}
+
 .scroll-x {
   position: relative; /* tiene dentro anche le etichette nascoste (sr-only) */
   overflow-x: auto;

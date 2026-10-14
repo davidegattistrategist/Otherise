@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatShort } from "@/lib/dates";
 import { CHECKIN_QUESTIONS, SCORE_LABELS } from "@/lib/checkin";
 import { Card, Dot, EmptyState, Eyebrow, Notice, Textarea, cx } from "@/components/ui";
+import { AutosaveForm } from "@/components/draft-note";
 import { SubmitButton } from "@/components/form-bits";
 import { reviewCheckin } from "./actions";
 import { AiCheckinBrief } from "./ai-brief";
@@ -88,7 +89,7 @@ export default async function CheckupPage({ params }: { params: Promise<{ id: st
               </div>
               {c.issues ? <p className="text-[15px] text-ink-soft"><span className="font-semibold">Problemi:</span> {c.issues}</p> : null}
               {c.request ? <p className="rounded-2xl bg-accent-soft px-4 py-3 text-[15px]"><span className="font-semibold">Richiesta:</span> {c.request}</p> : null}
-              <form action={reviewCheckin.bind(null, id, c.id)} className="flex flex-col gap-2">
+              <AutosaveForm action={reviewCheckin.bind(null, id, c.id)} name={`risposta-${c.id}`} className="flex flex-col gap-2">
                 <div className="flex items-end justify-between gap-2"><label htmlFor={`r-${c.id}`} className="text-sm font-semibold">Risposta al cliente <span className="font-normal text-muted">(facoltativa, la vede nell&apos;app)</span></label><DictateButton targetId={`r-${c.id}`} /></div>
                 {draftsOn && !c.coach_reply ? (
                   <CheckinReplyDraft clientId={id} checkinId={c.id} targetId={`r-${c.id}`} initial={draftOf.get(c.id) ?? null} canRequest={Boolean(c.request || c.issues)} />
@@ -98,7 +99,7 @@ export default async function CheckupPage({ params }: { params: Promise<{ id: st
                   <SubmitButton size="sm" variant={c.reviewed_at ? "secondary" : "primary"}>{c.reviewed_at ? "Aggiorna risposta" : "Segna come visto"}</SubmitButton>
                   {c.reviewed_at ? <span className="text-sm text-muted">Visto il {formatShort(c.reviewed_at.slice(0, 10), 0)}</span> : null}
                 </div>
-              </form>
+              </AutosaveForm>
             </Card>
           ))}
         </>

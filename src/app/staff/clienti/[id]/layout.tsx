@@ -4,7 +4,8 @@ import { getStaffClient } from "@/lib/data/client";
 import { createClient } from "@/lib/supabase/server";
 import { ageOn, todayISO } from "@/lib/dates";
 import { Tabs } from "@/components/tabs";
-import { LinkButton, Pill } from "@/components/ui";
+import { LinkButton, Pill, buttonClass } from "@/components/ui";
+import { startCheckMode } from "@/app/check/actions";
 
 export default async function ClientLayout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -51,7 +52,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
         <div className="flex flex-wrap gap-2.5">
           <LinkButton href={`/staff/messaggi/${id}`} variant="secondary">Chat</LinkButton>
           <LinkButton href={`${base}/sessione-pt`} variant="secondary">Sessione PT</LinkButton>
-          <LinkButton href={`${base}/check/nuovo`}>Nuovo check</LinkButton>
+          <form action={startCheckMode.bind(null, id, null)}><button type="submit" className={buttonClass("primary")}>Inizia il check</button></form>
         </div>
       </div>
       <Tabs items={tabs} />

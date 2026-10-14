@@ -12,6 +12,8 @@ import { clientNotices, ptLeft } from "./client-notice";
 import { triageFallback, triageWithoutAi } from "./note-triage";
 import { backupNotice, formatBytes, spaceSummary } from "./backup-notice";
 import { clientPaymentText, paymentEvent, staffPaymentText } from "./payment-alerts";
+import { compareRows, defaultPair, firstToLast, sitesInAll, type BodyPoint } from "./body/progress";
+import { splitLinks } from "../components/chat/linkify";
 import { chatSilence, chatSilenceAlert, romeDay, snoozeUntil } from "./chat-silence";
 import { romeHour } from "./dates";
 import { addDays, addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
@@ -1239,5 +1241,44 @@ describe("chat silenziosa da 10 giorni", () => {
     expect(romeHour(new Date("2026-10-14T06:10:00Z"))).toBe(8);
     expect(romeHour(new Date("2026-11-04T06:10:00Z"))).toBe(7);
     expect(romeHour(new Date("2026-11-04T07:10:00Z"))).toBe(8);
+  });
+});
+
+describe("progressi: confronto tra check e dal primo check", () => {
+  const pt = (id: string, date: string | null, o: Partial<BodyPoint> = {}): BodyPoint => ({ id, date, label: id, weight: null, fatPct: null, fatKg: null, leanKg: null, folds: {}, circ: {}, ...o });
+  const a = pt("a", "2026-01-10", { weight: 80, fatPct: null, folds: { tricipite: 12, addominale: 20 }, circ: { vita: 90 } });
+  const b = pt("b", "2026-04-10", { weight: 78, fatPct: 18, fatKg: 14, leanKg: 64, folds: { tricipite: 10, addominale: 18, coscia: 15 }, circ: { vita: 87.5 } });
+  const c = pt("c", "2026-07-10", { weight: 77, fatPct: 16.5, fatKg: 12.7, leanKg: 64.3, folds: { tricipite: 9.5, addominale: 17 }, circ: { vita: 86 } });
+
+  it("ogni misura dal primo check che ce l'ha", () => {
+    expect(firstToLast([a, b, c], (p) => p.weight)).toMatchObject({ from: 80, to: 77, diff: -3 });
+    expect(firstToLast([a, b, c], (p) => p.fatPct)).toMatchObject({ from: 18, to: 16.5, diff: -1.5, fromLabel: "b" });
+    expect(firstToLast([a], (p) => p.weight)).toBeNull();
+  });
+
+  it("confronto: tutte le misure con la differenza, somma solo delle pliche comuni", () => {
+    const sites = sitesInAll([a, b, c]);
+    expect(sites).toEqual(["tricipite", "addominale"]);
+    const rows = compareRows(b, c, sites);
+    expect(rows.find((r) => r.key === "weight")).toMatchObject({ a: 78, b: 77, diff: -1, better: null });
+    expect(rows.find((r) => r.key === "fatKg")).toMatchObject({ diff: -1.3, better: "down" });
+    expect(rows.find((r) => r.key === "sum")).toMatchObject({ a: 28, b: 26.5, diff: -1.5 });
+    // la coscia c'è solo prima: resta, con il vuoto dopo
+    expect(rows.find((r) => r.key === "f:coscia")).toMatchObject({ a: 15, b: null, diff: null });
+    expect(rows.find((r) => r.key === "c:vita")).toMatchObject({ diff: -1.5 });
+    expect(defaultPair([a, b, c])).toEqual(["b", "c"]);
+  });
+});
+
+describe("link nei messaggi della chat", () => {
+  it("riconosce gli indirizzi e lascia fuori la punteggiatura", () => {
+    expect(splitLinks("Guarda https://example.com/a?b=1. Ciao")).toEqual([
+      { text: "Guarda " },
+      { text: "https://example.com/a?b=1", href: "https://example.com/a?b=1" },
+      { text: ". Ciao" },
+    ]);
+    expect(splitLinks("vai su www.otherise.com, poi")).toEqual([{ text: "vai su " }, { text: "www.otherise.com", href: "https://www.otherise.com" }, { text: ", poi" }]);
+    expect(splitLinks("(https://it.wikipedia.org/wiki/Squat_(esercizio))")[1]).toEqual({ text: "https://it.wikipedia.org/wiki/Squat_(esercizio)", href: "https://it.wikipedia.org/wiki/Squat_(esercizio)" });
+    expect(splitLinks("niente link qui")).toEqual([{ text: "niente link qui" }]);
   });
 });

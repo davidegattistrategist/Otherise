@@ -119,6 +119,8 @@ test("chat vista: esce da Da rispondere anche senza risposta, Segna da leggere l
   await client.fill("textarea", `Tutto ok oggi ${tag}`);
   await client.getByRole("button", { name: "Invia" }).click();
   await expect(client.getByText(`Tutto ok oggi ${tag}`)).toBeVisible();
+  // inviato davvero (la casella si svuota solo quando il server l'ha salvato)
+  await expect(client.locator("textarea")).toHaveValue("");
   await client.context().close();
 
   const owner = await (await browser.newContext(info.project.use)).newPage();

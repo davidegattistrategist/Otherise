@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { getStaffClient } from "@/lib/data/client";
-import { foldContext } from "@/lib/data/checks";
+import { foldContext, previousCheck } from "@/lib/data/checks";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/dates";
 import type { Sex } from "@/lib/body/skinfolds";
@@ -16,7 +16,8 @@ export default async function NewCheckPage({ params }: { params: Promise<{ id: s
   await requireStaff();
   const client = await getStaffClient(id);
   if (!client.sex) return <SexPrompt clientId={id} />;
-  const folds = await foldContext(await createClient(), { ...client, sex: client.sex });
+  const supabase = await createClient();
+  const [folds, previous] = await Promise.all([foldContext(supabase, { ...client, sex: client.sex }), previousCheck(supabase, id)]);
   return (
     <CheckForm
       clientId={id} newCheck
@@ -26,6 +27,7 @@ export default async function NewCheckPage({ params }: { params: Promise<{ id: s
       formula={folds.ref?.id ?? null}
       manual={Boolean(client.skinfold_formula)}
       lastMissing={folds.lastMissing}
+      previous={previous}
       values={{ check_date: todayISO(), weight_kg: null, skinfolds: {}, circumferences: {}, strength_tests: [], tests_text: "", notes_next_phase: "", visible_to_client: true }}
     />
   );

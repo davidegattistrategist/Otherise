@@ -126,6 +126,8 @@ describe.skipIf(!run)("permessi", () => {
     const checks = (await clientA.rpc("my_checks")).data! as Array<Record<string, unknown>>;
     expect(checks.map((c) => Number(c.weight_kg))).toEqual([59.5]);
     expect(Object.keys(checks[0])).not.toContain("notes_next_phase");
+    // le pliche sì (per confrontarle nei progressi)
+    expect(Object.keys(checks[0])).toContain("skinfolds");
     expect((await clientA.from("posture_assessments").select("*")).data).toEqual([]);
     const dates = await clientA.rpc("my_pt_session_dates");
     expect(dates.data).toHaveLength(1);
@@ -278,6 +280,21 @@ describe.skipIf(!run)("permessi", () => {
     expect((await clientA.from("backup_runs").select("*")).data).toEqual([]);
     expect((await owner.from("backup_runs").insert({ ok: false })).error).not.toBeNull();
     expect((await coach.from("backup_runs").insert({ ok: false })).error).not.toBeNull();
+  });
+
+  it("bozze salvate da sole: ognuno vede e scrive solo le proprie", async () => {
+    const coachUid = (await coach.auth.getUser()).data.user!.id;
+    const clientUid = (await clientA.auth.getUser()).data.user!.id;
+    await coach.from("drafts").upsert({ user_id: coachUid, key: "check:x:nuovo", data: { weight: "70" } }).throwOnError();
+    await clientA.from("drafts").upsert({ user_id: clientUid, key: "chat:x", data: "ciao" }).throwOnError();
+    expect((await coach.from("drafts").select("key")).data).toEqual([{ key: "check:x:nuovo" }]);
+    expect((await clientA.from("drafts").select("key")).data).toEqual([{ key: "chat:x" }]);
+    // a nome di un altro no
+    expect((await clientA.from("drafts").insert({ user_id: coachUid, key: "falsa", data: {} })).error).not.toBeNull();
+    await clientA.from("drafts").delete().eq("user_id", coachUid);
+    expect((await admin.from("drafts").select("key").eq("user_id", coachUid)).data).toHaveLength(1);
+    expect((await stranger.from("drafts").select("*")).data ?? []).toEqual([]);
+    await admin.from("drafts").delete().in("user_id", [coachUid, clientUid]);
   });
 
   it("chat rimandata ('Non senti X'): solo lo staff che segue il cliente, il cliente non la vede", async () => {

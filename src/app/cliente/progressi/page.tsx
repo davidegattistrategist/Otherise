@@ -1,23 +1,24 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatLong, formatShort } from "@/lib/dates";
-import { CIRCUMFERENCES } from "@/lib/body/skinfolds";
+import { averagesOf, type SkinfoldReadings } from "@/lib/body/skinfolds";
+import { circOf, firstToLast, sitesInAll, toNumber, type BodyPoint } from "@/lib/body/progress";
+import { BodyCharts, CheckCompare } from "@/components/body-progress";
 import { LineChart } from "@/components/line-chart";
 import { ExerciseProgress } from "@/components/exercise-progress";
 import { getExerciseProgress } from "@/lib/data/progress";
 import { IconTrophy } from "@/components/icons";
-import { BigNumber, Card, EmptyState, Eyebrow, cx, fmtNum } from "@/components/ui";
+import { BigNumber, Card, EmptyState, Eyebrow, fmtNum } from "@/components/ui";
 import { myCheckPhotos } from "@/lib/check-photos";
-import { PhotoAlbums } from "@/components/check-photos";
+import { PhotoAlbums, PhotoCompare } from "@/components/check-photos";
 
 export const metadata: Metadata = { title: "Progressi" };
 
 type Test = { exercise?: string; load?: number | null; reps?: number | null; rpe?: number | null; e1rm?: number | null };
 
-export default async function ProgressPage({ searchParams }: { searchParams: Promise<{ misura?: string; esercizio?: string }> }) {
-  const { misura, esercizio } = await searchParams;
+export default async function ProgressPage({ searchParams }: { searchParams: Promise<{ esercizio?: string }> }) {
+  const { esercizio } = await searchParams;
   const me = await requireActiveClient();
   const supabase = await createClient();
   const [{ data: checks }, { data: posture }, { data: checkins }, { data: sessions }] = await Promise.all([
@@ -31,10 +32,25 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
   // foto dei check, dal più recente
   const photoChecks = [...photos.values()].filter((g) => g.length).sort((a, b) => (b[0].checkDate ?? "").localeCompare(a[0].checkDate ?? ""));
   const records = exerciseSeries.filter((x) => x.record).slice(0, 6);
-  const series = (pick: (c: (typeof list)[number]) => number | string | null) =>
-    list.map((c) => ({ date: c.check_date, value: pick(c) })).filter((p) => p.value !== null && p.value !== undefined).map((p) => ({ date: p.date, value: Number(p.value) }));
-  const circKey = CIRCUMFERENCES.find((c) => c.key === misura)?.key ?? CIRCUMFERENCES.find((c) => list.some((k) => (k.circumferences as Record<string, number>)?.[c.key]))?.key ?? "vita";
-  const circLabel = CIRCUMFERENCES.find((c) => c.key === circKey)!.label;
+  const year = new Date().getFullYear();
+  const points: BodyPoint[] = list.map((c) => ({
+    id: c.id,
+    date: c.check_date,
+    label: formatShort(c.check_date, year),
+    weight: toNumber(c.weight_kg),
+    fatPct: toNumber(c.body_fat_pct),
+    fatKg: toNumber(c.fat_mass_kg),
+    leanKg: toNumber(c.lean_mass_kg),
+    folds: averagesOf(c.skinfolds as SkinfoldReadings),
+    circ: circOf(c.circumferences),
+  }));
+  // ogni misura dal primo check che ce l'ha (non tutti i check hanno le pliche)
+  const summary = [
+    { label: "Peso", d: firstToLast(points, (p) => p.weight), unit: "kg" },
+    { label: "Massa grassa", d: firstToLast(points, (p) => p.fatKg), unit: "kg" },
+    { label: "Massa grassa", d: firstToLast(points, (p) => p.fatPct), unit: "%" },
+    { label: "Massa magra", d: firstToLast(points, (p) => p.leanKg), unit: "kg" },
+  ];
 
   // Test di forza: ultimo valore per esercizio e andamento
   const byExercise = new Map<string, Array<{ date: string; value: number; text: string }>>();
@@ -49,9 +65,6 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
     }
   }
   const testsText = list.filter((c) => c.tests_text).slice(-3).reverse();
-  const first = list[0];
-  const last = list[list.length - 1];
-  const delta = (a: unknown, b: unknown) => (a === null || b === null || a === undefined || b === undefined ? null : Number(b) - Number(a));
   const ptThisYear = (sessions ?? []).filter((d) => String(d).slice(0, 4) === new Date().getFullYear().toString()).length;
 
   return (
@@ -61,37 +74,22 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
         <EmptyState title="Ancora nessun check">Dopo il primo check con il tuo coach qui trovi peso, massa grassa, massa magra, circonferenze e test.</EmptyState>
       ) : (
         <>
-          {first && last && first !== last ? (
+          {summary.some((x) => x.d) ? (
             <Card dark className="flex flex-col gap-3">
-              <Eyebrow dark>Dal {formatLong(first.check_date)}</Eyebrow>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: "Peso", d: delta(first.weight_kg, last.weight_kg), unit: "kg" },
-                  { label: "Massa grassa", d: delta(first.body_fat_pct, last.body_fat_pct), unit: "%" },
-                  { label: "Massa magra", d: delta(first.lean_mass_kg, last.lean_mass_kg), unit: "kg" },
-                ].map((x) => (
+              <Eyebrow dark>Dal primo check</Eyebrow>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-4">
+                {summary.map((x) => (
                   <div key={x.label}>
                     <div className="text-xs text-muted-dark">{x.label}</div>
-                    <BigNumber value={x.d === null ? "–" : `${x.d > 0 ? "+" : x.d < 0 ? "−" : ""}${fmtNum(Math.abs(x.d))}`} unit={x.unit} className="text-card" />
+                    <BigNumber value={x.d === null ? "–" : `${x.d.diff > 0 ? "+" : x.d.diff < 0 ? "−" : ""}${fmtNum(Math.abs(x.d.diff))}`} unit={x.unit} className="text-card" />
+                    {x.d ? <div className="mt-0.5 text-xs text-muted-dark tabular">{fmtNum(x.d.from)} → {fmtNum(x.d.to)}</div> : null}
                   </div>
                 ))}
               </div>
             </Card>
           ) : null}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Card><Eyebrow className="mb-2">Massa grassa · %</Eyebrow><LineChart label="Massa grassa" unit="%" points={series((c) => c.body_fat_pct)} /></Card>
-            <Card><Eyebrow className="mb-2">Massa magra · kg</Eyebrow><LineChart label="Massa magra" unit="kg" points={series((c) => c.lean_mass_kg)} /></Card>
-            <Card><Eyebrow className="mb-2">Peso · kg</Eyebrow><LineChart label="Peso" unit="kg" points={series((c) => c.weight_kg)} /></Card>
-            <Card>
-              <Eyebrow className="mb-2">Circonferenze · cm</Eyebrow>
-              <div className="scroll-x mb-2 flex gap-1.5 overflow-x-auto pb-1">
-                {CIRCUMFERENCES.filter((c) => list.some((k) => (k.circumferences as Record<string, number>)?.[c.key])).map((c) => (
-                  <Link key={c.key} href={`/cliente/progressi?misura=${c.key}`} scroll={false} className={cx("shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold", c.key === circKey ? "bg-ink text-card" : "bg-sand-deep/60")}>{c.label}</Link>
-                ))}
-              </div>
-              <LineChart label={circLabel} unit="cm" points={series((c) => (c.circumferences as Record<string, number>)?.[circKey] ?? null)} />
-            </Card>
-          </div>
+          <BodyCharts points={points} sumSites={sitesInAll(points)} />
+          <CheckCompare points={points} sumSites={sitesInAll(points)} title="Confronta due check" />
         </>
       )}
 
@@ -99,6 +97,7 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
         <Card className="flex flex-col gap-2">
           <Eyebrow>Le foto dei check</Eyebrow>
           <PhotoAlbums albums={photoChecks.map((g) => ({ id: g[0].checkId, title: g[0].checkDate ? formatLong(g[0].checkDate) : "Check", photos: g }))} />
+          <PhotoCompare albums={[...photoChecks].reverse().map((g) => ({ id: g[0].checkId, title: g[0].checkDate ? formatShort(g[0].checkDate) : "Check", photos: g }))} label="Confronta due check" />
         </Card>
       ) : null}
 

@@ -213,6 +213,9 @@ test("dettatura del browser che non trascrive: si ferma da sola e spiega cosa fa
   // e si può sempre scrivere e mandare
   await page.locator("#ai-instruction").fill("Teniamo la forza.");
   await expect(page.getByRole("button", { name: "Prepara la bozza" })).toBeEnabled();
+  // la richiesta resterebbe salvata come bozza per la prova dopo: la svuoto
+  await page.locator("#ai-instruction").fill("");
+  await page.waitForTimeout(500);
 });
 
 test("su iPhone senza trascrizione sul server: niente Detta, si usa il microfono della tastiera", async ({ browser }) => {

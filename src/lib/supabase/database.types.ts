@@ -149,6 +149,20 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"drafts": {
+                  Row: {
+                    "data": Json,"key": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "data"?: Json,"key": string,"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "data"?: Json,"key"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"checkins": {
                   Row: {
                     "adherence": number,"client_id": string,"coach_reply": string,"flag_reasons": (string)[],"flagged": boolean,"id": string,"issues": string,"request": string,"reviewed_at": string | null,"sleep": number,"stress": number,"submitted_at": string,"training": number,"week_start": string
@@ -706,7 +720,7 @@ isOneToOne: false
                            },
 "my_checks":
 { Args: Record<PropertyKey, never>; Returns: {
-              "body_fat_pct": number,"check_date": string,"circumferences": Json,"fat_mass_kg": number,"id": string,"lean_mass_kg": number,"strength_tests": Json,"tests_text": string,"weight_kg": number
+              "body_fat_pct": number,"check_date": string,"circumferences": Json,"fat_mass_kg": number,"id": string,"lean_mass_kg": number,"skinfold_sum_mm": number,"skinfolds": Json,"strength_tests": Json,"tests_text": string,"weight_kg": number
             }[]
                            },
 "my_check_photos":
