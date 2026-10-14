@@ -9,6 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const TABLES = [
   "programs",
   "workout_logs",
+  "free_workouts",
   "exercise_logs",
   "pt_sessions",
   "checks",

@@ -26,7 +26,7 @@ async function iphone(browser: Browser) {
     hasTouch: true,
     locale: "it-IT",
     permissions: ["microphone"],
-    storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }] }] },
+    storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }, { name: "otherise:days-open", value: "all" }] }] },
   });
   return ctx.newPage();
 }

@@ -1,3 +1,4 @@
+import { applyPatch, diffDraft, isDraftPatch, mergeDraft } from "./draft-merge";
 import { fillName, looksLikeQuestion, pendingClientMessages, pseudonymize, similarity, styleParts, styleSections, worthLearning, type StyleExample } from "./reply-draft";
 import { prescriptionRule, setDifferences, workoutVsPlan } from "./reply-context";
 import { describe, expect, it } from "vitest";
@@ -1280,5 +1281,33 @@ describe("link nei messaggi della chat", () => {
     expect(splitLinks("vai su www.otherise.com, poi")).toEqual([{ text: "vai su " }, { text: "www.otherise.com", href: "https://www.otherise.com" }, { text: ", poi" }]);
     expect(splitLinks("(https://it.wikipedia.org/wiki/Squat_(esercizio))")[1]).toEqual({ text: "https://it.wikipedia.org/wiki/Squat_(esercizio)", href: "https://it.wikipedia.org/wiki/Squat_(esercizio)" });
     expect(splitLinks("niente link qui")).toEqual([{ text: "niente link qui" }]);
+  });
+});
+
+describe("bozze tra due dispositivi", () => {
+  const base = { weight: "64", sf: { tri: ["12", "", ""], add: ["", "", ""] }, notes: "ciao" };
+  it("si manda solo quello che è cambiato", () => {
+    const next = { ...base, sf: { ...base.sf, tri: ["12", "13", ""] } };
+    expect(diffDraft(base, next)).toEqual([{ path: ["sf", "tri", 1], value: "13" }]);
+    expect(diffDraft(base, base)).toEqual([]);
+    expect(diffDraft({ a: 1, b: 2 }, { a: 1 })).toEqual([{ path: ["b"] }]);
+  });
+  it("le modifiche dei due dispositivi restano tutte e due", () => {
+    const phone = { ...base, sf: { ...base.sf, add: ["20", "", ""] } };
+    const pc = { ...base, weight: "64,5" };
+    const merged = mergeDraft(base, phone, pc);
+    expect(merged).toEqual({ weight: "64,5", sf: { tri: ["12", "", ""], add: ["20", "", ""] }, notes: "ciao" });
+    // il server applica la stessa cosa
+    expect(applyPatch(pc, diffDraft(base, phone))).toEqual(merged);
+    // stesso campo: vince chi scrive qui
+    expect(mergeDraft(base, { ...base, notes: "A" }, { ...base, notes: "B" }).notes).toBe("A");
+    // senza una base: si parte da un oggetto vuoto
+    expect(mergeDraft(null, { x: "1" }, { y: "2" })).toEqual({ x: "1", y: "2" });
+  });
+  it("controlla i dati che arrivano dal browser", () => {
+    expect(isDraftPatch([{ path: ["a", 0], value: "1" }])).toBe(true);
+    expect(isDraftPatch([{ path: ["__proto__", "x"], value: 1 }])).toBe(false);
+    expect(isDraftPatch({})).toBe(false);
+    expect(applyPatch({ a: [1, 2] }, [{ path: ["a", 1] }])).toEqual({ a: [1, null] });
   });
 });

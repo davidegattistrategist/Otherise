@@ -38,7 +38,7 @@ export async function GET() {
       latest: latest ?? null,
       chat: newest ? { clientId: newest.client_id, at: newest.last_at, from: chatFrom } : null,
       // modalità check in corso (staff): gli altri dispositivi entrano ed escono da soli
-      checkMode: checkMode ? { clientId: checkMode.clientId, clientName: checkMode.clientName, paused: checkMode.paused } : null,
+      checkMode: checkMode ? { clientId: checkMode.clientId, checkId: checkMode.checkId, clientName: checkMode.clientName, paused: checkMode.paused } : null,
     },
     { headers: { "cache-control": "no-store" } },
   );

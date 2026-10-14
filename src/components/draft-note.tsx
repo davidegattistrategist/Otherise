@@ -1,6 +1,6 @@
 "use client";
 
-/** Riga sotto i moduli con il salvataggio automatico e, se è stata ripresa una bozza, "Ricomincia da capo". */
+/** Riga sotto i moduli con il salvataggio automatico e, se è stata ripresa una bozza, "Svuota il modulo". */
 import { useRef, type ReactNode, type RefObject } from "react";
 import { draftText, useFormDraft, type DraftState } from "./use-draft";
 import { cx } from "./ui";
@@ -12,10 +12,10 @@ export function DraftNote({ status, restored, onDiscard, className, dark }: { st
   return (
     <div className={cx("flex flex-wrap items-center gap-x-3 gap-y-1 text-sm", dark ? "text-muted-dark" : "text-muted", className)} aria-live="polite">
       {restored ? (
-        <span className={cx("rounded-full px-3 py-1", dark ? "bg-line-dark text-card" : "bg-accent-soft text-ink")}>
-          Ho ripreso quello che avevi scritto ({time}).
+        <span className={cx("rounded-full px-3 py-1", dark ? "bg-line-dark text-card" : "bg-sand-deep text-ink")}>
+          Non si è perso niente: sei ripartito da dove eri rimasto ({time}).
           {onDiscard ? (
-            <button type="button" onClick={onDiscard} className="ml-2 font-semibold underline">Ricomincia da capo</button>
+            <button type="button" onClick={onDiscard} className="ml-2 text-muted underline">Svuota il modulo</button>
           ) : null}
         </span>
       ) : null}

@@ -1,5 +1,6 @@
 "use server";
 
+import { draftTombstone } from "@/lib/draft-merge";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
@@ -15,6 +16,14 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CHECK_PHOTOS_BUCKET } from "@/lib/check-photos";
 import { MAX_PHOTOS_PER_UPLOAD } from "@/lib/check-photos-shared";
+import { getCheckMode } from "@/lib/check-mode";
+import type { ServerSupabase } from "@/lib/supabase/server";
+
+/** Check nuovo in modalità check: l'id è già deciso e le foto si caricano prima di salvarlo. */
+async function isPendingCheck(supabase: ServerSupabase, userId: string, clientId: string, checkId: string) {
+  const mode = await getCheckMode(supabase, userId);
+  return Boolean(mode && mode.clientId === clientId && !mode.checkId && mode.newId === checkId);
+}
 
 const photoId = customAlphabet("abcdefghijkmnpqrstuvwxyz23456789", 16);
 
@@ -82,10 +91,37 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
     visible_to_client: fd.get("visible_to_client") === "on",
     created_by: me.id,
   };
+  // modalità check: il check nuovo prende l'id già deciso (le foto sono già nella sua cartella)
+  const newId = String(fd.get("new_id") ?? "");
+  const presetId = !checkId && /^[0-9a-f-]{36}$/i.test(newId) && (await isPendingCheck(supabase, me.id, clientId, newId)) ? newId : null;
   const { data: saved, error } = checkId
     ? await supabase.from("checks").update(row).eq("id", checkId).eq("client_id", clientId).select("id").maybeSingle()
-    : await supabase.from("checks").insert(row).select("id").single();
+    : await supabase.from("checks").insert({ ...row, id: presetId ?? undefined }).select("id").single();
   if (error || !saved) return { error: "Salvataggio non riuscito." };
+  // foto caricate durante la modalità check: ora si registrano nel check
+  const pendingRaw = String(fd.get("pending_photos") ?? "");
+  if (pendingRaw) {
+    let list: unknown = null;
+    try {
+      list = JSON.parse(pendingRaw);
+    } catch {
+      list = null;
+    }
+    const parsed = photosSchema.safeParse(list);
+    const prefix = `${clientId}/${saved.id}/`;
+    if (parsed.success) {
+      const { data: already } = await supabase.from("check_photos").select("path, sort_order").eq("check_id", saved.id);
+      const known = new Set((already ?? []).map((p) => p.path));
+      const start = Math.max(-1, ...(already ?? []).map((p) => p.sort_order)) + 1;
+      const fresh = parsed.data.filter((p) => p.path.startsWith(prefix) && p.thumbPath.startsWith(prefix) && !p.path.includes("..") && !known.has(p.path));
+      if (fresh.length) {
+        await supabase.from("check_photos").insert(
+          fresh.map((p, i) => ({ check_id: saved.id, client_id: clientId, path: p.path, thumb_path: p.thumbPath, width: p.width, height: p.height, size_bytes: p.size, sort_order: start + i })),
+        );
+        revalidatePath("/cliente/progressi");
+      }
+    }
+  }
   // % di grasso e masse con la formula di riferimento del cliente (può
   // cambiare per tutti i check se questo aggiunge o toglie una plica)
   await recomputeClientChecks(supabase, clientId);
@@ -93,7 +129,7 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
   // la bozza del modulo non serve più (anche sull'altro dispositivo)
   const draftKey = String(fd.get("draft_key") ?? "");
   if (draftKey.startsWith(`check:${clientId}:`)) {
-    await supabase.from("drafts").delete().eq("user_id", me.id).eq("key", draftKey);
+    await supabase.from("drafts").upsert({ user_id: me.id, key: draftKey, data: draftTombstone(Date.now()), updated_at: new Date().toISOString() });
   }
   // il browser cancella la bozza e poi: carica le foto scelte nel modulo,
   // oppure va alla pagina dei check che propone subito le foto di questo check
@@ -137,14 +173,23 @@ export async function setSkinfoldFormula(clientId: string, fd: FormData) {
 
 export type PhotoTicket = { path: string; thumbPath: string; url: string; thumbUrl: string };
 
+/** Il check esiste (e puoi seguire il cliente) oppure è il check nuovo della tua modalità check. */
+async function canUseCheckFolder(supabase: ServerSupabase, userId: string, clientId: string, checkId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(checkId)) return false;
+  const { data: check } = await supabase.from("checks").select("id").eq("id", checkId).eq("client_id", clientId).maybeSingle();
+  if (check) return true;
+  const { data: client } = await supabase.from("clients").select("id").eq("id", clientId).maybeSingle();
+  return Boolean(client) && (await isPendingCheck(supabase, userId, clientId, checkId));
+}
+
 export async function preparePhotoUploads(clientId: string, checkId: string, count: number): Promise<{ tickets: PhotoTicket[] } | { error: string }> {
-  await requireStaff();
+  const me = await requireStaff();
   if (!Number.isInteger(count) || count < 1) return { error: "Scegli almeno una foto." };
   if (count > MAX_PHOTOS_PER_UPLOAD) return { error: `Al massimo ${MAX_PHOTOS_PER_UPLOAD} foto per volta.` };
   const supabase = await createClient();
-  // il check deve esistere ed essere di un cliente che puoi seguire (permessi del database)
-  const { data: check } = await supabase.from("checks").select("id").eq("id", checkId).eq("client_id", clientId).maybeSingle();
-  if (!check) return { error: "Check non trovato." };
+  // il check deve esistere ed essere di un cliente che puoi seguire (permessi del database),
+  // oppure essere il check nuovo della modalità check
+  if (!(await canUseCheckFolder(supabase, me.id, clientId, checkId))) return { error: "Check non trovato." };
   const storage = createAdminClient().storage.from(CHECK_PHOTOS_BUCKET);
   const tickets: PhotoTicket[] = [];
   for (let i = 0; i < count; i++) {
@@ -197,5 +242,31 @@ export async function deleteCheckPhoto(clientId: string, photoId: string): Promi
   await createAdminClient().storage.from(CHECK_PHOTOS_BUCKET).remove([photo.path, photo.thumb_path]);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
   revalidatePath("/cliente/progressi");
+  return { ok: true };
+}
+
+/** Link per vedere le foto della modalità check non ancora registrate (anche dall'altro dispositivo). */
+export async function pendingPhotoLinks(clientId: string, checkId: string, paths: string[]): Promise<Record<string, string>> {
+  const me = await requireStaff();
+  const prefix = `${clientId}/${checkId}/`;
+  const list = (Array.isArray(paths) ? paths : []).filter((p) => typeof p === "string" && p.startsWith(prefix) && !p.includes("..")).slice(0, 80);
+  if (!list.length) return {};
+  const supabase = await createClient();
+  if (!(await canUseCheckFolder(supabase, me.id, clientId, checkId))) return {};
+  const { data } = await createAdminClient().storage.from(CHECK_PHOTOS_BUCKET).createSignedUrls(list, 60 * 60 * 6);
+  return Object.fromEntries((data ?? []).flatMap((d) => (d.path && d.signedUrl ? [[d.path, d.signedUrl] as const] : [])));
+}
+
+/** Togli una foto della modalità check non ancora registrata. */
+export async function removePendingPhoto(clientId: string, checkId: string, path: string, thumbPath: string): Promise<{ ok: boolean }> {
+  const me = await requireStaff();
+  const prefix = `${clientId}/${checkId}/`;
+  if (![path, thumbPath].every((p) => typeof p === "string" && p.startsWith(prefix) && !p.includes(".."))) return { ok: false };
+  const supabase = await createClient();
+  if (!(await canUseCheckFolder(supabase, me.id, clientId, checkId))) return { ok: false };
+  // una foto già registrata si toglie dal check, non da qui
+  const { data: registered } = await supabase.from("check_photos").select("id").eq("path", path).maybeSingle();
+  if (registered) return { ok: false };
+  await createAdminClient().storage.from(CHECK_PHOTOS_BUCKET).remove([path, thumbPath]);
   return { ok: true };
 }

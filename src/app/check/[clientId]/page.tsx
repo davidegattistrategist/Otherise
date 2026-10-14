@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getStaffClient } from "@/lib/data/client";
 import { foldContext, previousCheck, staffBodyData } from "@/lib/data/checks";
 import { getCheckMode } from "@/lib/check-mode";
+import { staffCheckPhotos } from "@/lib/check-photos";
 import { getBillingLines } from "@/lib/data/billing";
 import { displayWeek } from "@/lib/program/schedule";
 import { parseContent } from "@/lib/program/types";
@@ -13,6 +14,7 @@ import { formatEuro, METHOD_LABELS, type PaymentMethod } from "@/lib/billing";
 import type { Sex } from "@/lib/body/skinfolds";
 import { Card, Eyebrow, buttonClass, fmtNum } from "@/components/ui";
 import { ProgramDayView } from "@/components/program-day";
+import { IconDown } from "@/components/icons";
 import { QuickPay } from "@/components/quick-pay";
 import type { CheckValues } from "@/app/staff/clienti/[id]/check/check-form";
 import { saveCheck } from "@/app/staff/clienti/[id]/check/actions";
@@ -52,7 +54,7 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
   const checkId = mode.checkId;
 
   const today = todayISO();
-  const [{ data: checks }, existing, previous, folds, { data: programs }, billing, { data: payments }] = await Promise.all([
+  const [{ data: checks }, existing, previous, folds, { data: programs }, billing, { data: payments }, saved] = await Promise.all([
     supabase
       .from("checks")
       .select("id, check_date, sequence, created_at, order_hint, age_years, skinfolds, weight_kg, body_fat_pct, fat_mass_kg, lean_mass_kg, circumferences, strength_tests, tests_text")
@@ -63,6 +65,7 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
     supabase.from("programs").select("id, title, weeks, start_date, content").eq("client_id", clientId).eq("status", "published").order("start_date", { ascending: false }),
     me.role === "owner" ? getBillingLines(supabase) : Promise.resolve(null),
     me.role === "owner" ? supabase.from("payments").select("id, paid_on, amount, method, period_start, period_end, sessions").eq("client_id", clientId).eq("unpaid", false).order("paid_on", { ascending: false }).limit(4) : Promise.resolve({ data: null }),
+    checkId ? staffCheckPhotos(supabase, clientId, checkId) : Promise.resolve(null),
   ]);
   if (checkId && !existing) notFound();
   const sex = (client.sex ?? null) as Sex | null;
@@ -112,6 +115,8 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
       clientId={clientId}
       clientName={`${client.first_name} ${client.last_name}`.trim()}
       checkId={checkId}
+      photoFolder={checkId ?? mode.newId ?? null}
+      savedPhotos={checkId ? (saved?.get(checkId) ?? []) : []}
       sex={sex}
       birthDate={client.birth_date}
       formula={folds.ref?.id ?? null}
@@ -153,11 +158,20 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
               </div>
               {leave(`/staff/programmi/${current.id}`, "Apri nell'editor")}
             </Card>
+            {/* giorni chiusi: si aprono con un tocco */}
             {content.days.map((d) => (
-              <Card key={d.id}>
-                <Eyebrow className="mb-3">{d.title}</Eyebrow>
-                <ProgramDayView day={d} week={week} videos={{}} compact />
-              </Card>
+              <details key={d.id} className="group rounded-[24px] bg-card">
+                <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
+                  <span className="min-w-0">
+                    <span className="block font-semibold">{d.title}</span>
+                    <span className="line-clamp-1 block text-sm text-muted">{d.blocks.flatMap((b) => b.items.map((it) => it.name)).filter(Boolean).join(" · ") || "Nessun esercizio"}</span>
+                  </span>
+                  <IconDown size={18} className="shrink-0 text-muted transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="px-5 pb-5 sm:px-6">
+                  <ProgramDayView day={d} week={week} videos={{}} compact />
+                </div>
+              </details>
             ))}
           </div>
         ) : (

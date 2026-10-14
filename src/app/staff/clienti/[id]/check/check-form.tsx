@@ -14,7 +14,8 @@
 import { DictateButton } from "@/components/dictate-button";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { onlyImages, uploadCheckPhotos } from "@/components/check-photos";
+import { PendingPhotos, PhotoGrid, onlyImages, uploadCheckPhotos } from "@/components/check-photos";
+import type { CheckPhoto, PendingPhoto } from "@/lib/check-photos-shared";
 import { useKeepAwake } from "@/components/use-keep-awake";
 import { useDraft, loadDraft } from "@/components/use-draft";
 import { DraftNote } from "@/components/draft-note";
@@ -23,7 +24,8 @@ import { IconDown, IconPhoto, IconX } from "@/components/icons";
 import { CIRCUMFERENCES, SKINFOLD_SITES, averagesOf, computeBodyComposition, formulaById, protocolSites, siteAverage, siteLabel, sumOf, type FormulaId, type Sex, type SkinfoldAverages, type SkinfoldSite } from "@/lib/body/skinfolds";
 import { estimateOneRepMax, RPE_VALUES } from "@/lib/strength/e1rm";
 import { ageOn } from "@/lib/dates";
-import { Card, Eyebrow, Input, Label, Textarea, cx, fmtNum } from "@/components/ui";
+import { Card, Eyebrow, Input, Label, cx, fmtNum } from "@/components/ui";
+import { NoteArea } from "@/components/note-area";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 
 export type CheckValues = {
@@ -61,6 +63,8 @@ export type CheckFormData = {
   tests_text: string;
   notes_next_phase: string;
   visible: boolean;
+  /** modalità check: foto già caricate, da registrare con "Check finito" (per percorso, così due dispositivi non si pestano) */
+  photos?: Record<string, PendingPhoto & { at: number }>;
 };
 
 const toNum = (s: string) => {
@@ -113,6 +117,8 @@ export function CheckForm({
   submitLabel,
   formId,
   view = "all",
+  photoFolder = null,
+  savedPhotos = [],
 }: {
   clientId: string;
   /** check già salvato (modifica) */
@@ -140,6 +146,10 @@ export function CheckForm({
   formId?: string;
   /** modalità check: quale parte mostrare (le altre restano nel modulo, nascoste) */
   view?: "all" | "misure" | "appunti";
+  /** modalità check: id del check (o di quello nuovo, già deciso) in cui caricare subito le foto */
+  photoFolder?: string | null;
+  /** modalità check su un check salvato: le sue foto */
+  savedPhotos?: CheckPhoto[];
 }) {
   const hideMisure = view === "appunti";
   const hideAppunti = view === "misure";
@@ -153,21 +163,29 @@ export function CheckForm({
   const draft = useDraft(key, f, { live, onRemote: (d) => setF(d) });
   const { adopt, clear } = draft;
 
-  // riprende quello che avevi scritto (anche sull'altro dispositivo)
+  // riprende quello che avevi scritto (anche sull'altro dispositivo). Solo
+  // all'apertura: se la pagina si ridisegna (es. un pagamento registrato in
+  // modalità check) il modulo resta com'è. In modalità check la bozza è il
+  // check in corso, quindi niente avviso "Ho ripreso…".
+  const startRef = useRef(start);
   useEffect(() => {
     let alive = true;
     void loadDraft<CheckFormData>(key).then((d) => {
       if (!alive || !d) return;
-      if (JSON.stringify(d.data) === JSON.stringify(start)) return;
+      if (JSON.stringify(d.data) === JSON.stringify(startRef.current)) {
+        adopt(d.data, d.at);
+        return;
+      }
       adopt(d.data, d.at);
       setF(d.data);
-      setRestored(d.at);
+      if (!live) setRestored(d.at);
     });
     return () => {
       alive = false;
     };
-  }, [key, start, adopt]);
+  }, [key, adopt, live]);
 
+  const pendingList = Object.values(f.photos ?? {}).sort((a, b) => a.at - b.at);
   const set = <K extends keyof CheckFormData>(k: K, v: CheckFormData[K]) => setF((x) => ({ ...x, [k]: v }));
 
   // foto scelte prima di salvare (solo per un check nuovo): si caricano appena il check è salvato
@@ -345,53 +363,29 @@ export function CheckForm({
         </div>
       </Card>
 
-      <details className={cx("group rounded-[24px] bg-card", hideMisure && "hidden")} open={hasTests}>
-        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
-          <span><span className="eyebrow block">Test di forza, corsa, HYROX</span><span className="mt-1 block text-sm text-muted">Facoltativi: tocca per aggiungerli</span></span>
-          <IconDown size={18} className="shrink-0 text-muted transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="px-5 pb-5 sm:px-6">
-        <p className="mb-4 text-sm text-muted">Massimale stimato con la tabella RPE, arrotondato a 2,5 kg.</p>
-        <div className="flex flex-col gap-3">
-          <div className="hidden gap-2 text-xs font-semibold text-muted sm:grid sm:grid-cols-[minmax(0,1fr)_6rem_5rem_6rem_9rem]">
-            <span>Esercizio</span><span>Carico kg</span><span>Ripetizioni</span><span>RPE</span><span className="text-right">Massimale stimato</span>
-          </div>
-          {f.tests.map((t, i) => {
-            const e = toNum(t.load) && toNum(t.reps) && toNum(t.rpe) ? estimateOneRepMax(toNum(t.load)!, toNum(t.reps)!, toNum(t.rpe)!) : null;
-            const setT = (k: keyof typeof t, v: string) => set("tests", f.tests.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
-            return (
-              <div key={i} className="grid grid-cols-3 items-center gap-2 border-t border-sand-deep pt-3 first:border-t-0 first:pt-0 sm:grid-cols-[minmax(0,1fr)_6rem_5rem_6rem_9rem] sm:border-t-0 sm:pt-0">
-                <input aria-label={`Test ${i + 1}, esercizio`} name={`test_${i}_exercise`} value={t.exercise} onChange={(ev) => setT("exercise", ev.target.value)} placeholder={i === 0 ? "Squat" : "Esercizio"} className="col-span-3 w-full rounded-lg border border-sand-deep bg-sand px-2 py-2 sm:col-span-1" />
-                <input aria-label={`Test ${i + 1}, carico`} name={`test_${i}_load`} inputMode="decimal" value={t.load} onChange={(ev) => setT("load", ev.target.value)} placeholder="kg" className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-center" />
-                <input aria-label={`Test ${i + 1}, ripetizioni`} name={`test_${i}_reps`} inputMode="numeric" value={t.reps} onChange={(ev) => setT("reps", ev.target.value)} placeholder="rip." className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-center" />
-                <select aria-label={`Test ${i + 1}, RPE`} name={`test_${i}_rpe`} value={t.rpe} onChange={(ev) => setT("rpe", ev.target.value)} className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2">
-                  <option value="">RPE</option>
-                  {RPE_VALUES.map((r) => <option key={r} value={r}>{String(r).replace(".", ",")}</option>)}
-                </select>
-                <span className="col-span-3 text-right text-sm font-semibold tabular sm:col-span-1 sm:text-[15px]">
-                  <span className="font-normal text-muted sm:hidden">Massimale stimato </span>{e ? `${fmtNum(e, 1)} kg` : "—"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-5">
-          <Label htmlFor="tests_text" hint="corsa, cardio, HYROX, qualsiasi altro test">Altri test</Label>
-          <Textarea id="tests_text" name="tests_text" rows={3} value={f.tests_text} onChange={(e) => set("tests_text", e.target.value)} placeholder="3 km in 13:40 · zona 2 a 10,5 km/h · 1000 m ski erg 3:58" />
-        </div>
-        </div>
-      </details>
-
-      <Card className={cx(hideAppunti && "hidden")}>
-        <div className="flex items-end justify-between gap-2"><Label htmlFor="notes_next_phase" hint="abitudini, andamento, cosa cambiare. Riappare nell'editor del programma">Note per la prossima fase</Label><DictateButton onText={(t) => setF((x) => ({ ...x, notes_next_phase: x.notes_next_phase ? `${x.notes_next_phase.trimEnd()} ${t}` : t }))} /></div>
-        <Textarea id="notes_next_phase" name="notes_next_phase" rows={4} value={f.notes_next_phase} onChange={(e) => set("notes_next_phase", e.target.value)} />
-        <label className="mt-4 flex items-center gap-3 text-[15px]">
-          <input type="checkbox" name="visible_to_client" checked={f.visible} onChange={(e) => set("visible", e.target.checked)} className="h-5 w-5 accent-[#1b1a17]" />
-          Il cliente vede questo check nei suoi progressi (le note per la prossima fase restano private)
-        </label>
-      </Card>
-
-      {newCheck ? (
+      {photoFolder ? (
+        <Card className={cx("flex flex-col gap-3", hideMisure && "hidden")}>
+          <Eyebrow>Foto del check <span className="normal-case tracking-normal text-muted">· facoltative</span></Eyebrow>
+          <p className="text-sm text-muted">Si caricano subito, ridotte e senza dati nascosti, e le vedi anche sull&apos;altro dispositivo. Entrano nel check con &quot;Check finito&quot;.</p>
+          {savedPhotos.length ? <PhotoGrid photos={savedPhotos} clientId={clientId} canDelete title="Foto già nel check" /> : null}
+          <PendingPhotos
+            clientId={clientId}
+            checkId={photoFolder}
+            photos={pendingList}
+            onAdd={(p) => setF((x) => ({ ...x, photos: { ...(x.photos ?? {}), [p.path]: { ...p, at: Date.now() } } }))}
+            onRemove={(path) =>
+              setF((x) => {
+                const next = { ...(x.photos ?? {}) };
+                delete next[path];
+                return { ...x, photos: next };
+              })
+            }
+          />
+          {newCheck ? <input type="hidden" name="new_id" value={photoFolder} /> : null}
+          {pendingList.length ? <input type="hidden" name="pending_photos" value={JSON.stringify(pendingList.map(({ path, thumbPath, width, height, size }) => ({ path, thumbPath, width, height, size })))} /> : null}
+        </Card>
+      ) : null}
+      {newCheck && !photoFolder ? (
         <Card className={cx("flex flex-col gap-3", hideMisure && "hidden")}>
           <Eyebrow>Foto del check <span className="normal-case tracking-normal text-muted">· facoltative</span></Eyebrow>
           <p className="text-sm text-muted">Sceglile tutte insieme dalla galleria: si caricano quando salvi il check, ridotte e senza dati nascosti. Puoi anche aggiungerle dopo, aprendo il check.</p>
@@ -428,6 +422,52 @@ export function CheckForm({
           </div>
         </Card>
       ) : null}
+      <details className={cx("group rounded-[24px] bg-card", hideMisure && "hidden")} open={hasTests}>
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
+          <span><span className="eyebrow block">Test di forza, corsa, HYROX</span><span className="mt-1 block text-sm text-muted">Facoltativi: tocca per aggiungerli</span></span>
+          <IconDown size={18} className="shrink-0 text-muted transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="px-5 pb-5 sm:px-6">
+        <p className="mb-4 text-sm text-muted">Massimale stimato con la tabella RPE, arrotondato a 2,5 kg.</p>
+        <div className="flex flex-col gap-3">
+          <div className="hidden gap-2 text-xs font-semibold text-muted sm:grid sm:grid-cols-[minmax(0,1fr)_6rem_5rem_6rem_9rem]">
+            <span>Esercizio</span><span>Carico kg</span><span>Ripetizioni</span><span>RPE</span><span className="text-right">Massimale stimato</span>
+          </div>
+          {f.tests.map((t, i) => {
+            const e = toNum(t.load) && toNum(t.reps) && toNum(t.rpe) ? estimateOneRepMax(toNum(t.load)!, toNum(t.reps)!, toNum(t.rpe)!) : null;
+            const setT = (k: keyof typeof t, v: string) => set("tests", f.tests.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+            return (
+              <div key={i} className="grid grid-cols-3 items-center gap-2 border-t border-sand-deep pt-3 first:border-t-0 first:pt-0 sm:grid-cols-[minmax(0,1fr)_6rem_5rem_6rem_9rem] sm:border-t-0 sm:pt-0">
+                <input aria-label={`Test ${i + 1}, esercizio`} name={`test_${i}_exercise`} value={t.exercise} onChange={(ev) => setT("exercise", ev.target.value)} placeholder={i === 0 ? "Squat" : "Esercizio"} className="col-span-3 w-full rounded-lg border border-sand-deep bg-sand px-2 py-2 sm:col-span-1" />
+                <input aria-label={`Test ${i + 1}, carico`} name={`test_${i}_load`} inputMode="decimal" value={t.load} onChange={(ev) => setT("load", ev.target.value)} placeholder="kg" className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-center" />
+                <input aria-label={`Test ${i + 1}, ripetizioni`} name={`test_${i}_reps`} inputMode="numeric" value={t.reps} onChange={(ev) => setT("reps", ev.target.value)} placeholder="rip." className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-center" />
+                <select aria-label={`Test ${i + 1}, RPE`} name={`test_${i}_rpe`} value={t.rpe} onChange={(ev) => setT("rpe", ev.target.value)} className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2">
+                  <option value="">RPE</option>
+                  {RPE_VALUES.map((r) => <option key={r} value={r}>{String(r).replace(".", ",")}</option>)}
+                </select>
+                <span className="col-span-3 text-right text-sm font-semibold tabular sm:col-span-1 sm:text-[15px]">
+                  <span className="font-normal text-muted sm:hidden">Massimale stimato </span>{e ? `${fmtNum(e, 1)} kg` : "—"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-5">
+          <Label htmlFor="tests_text" hint="corsa, cardio, HYROX, qualsiasi altro test">Altri test</Label>
+          <NoteArea title="Altri test" id="tests_text" name="tests_text" rows={3} value={f.tests_text} onChange={(e) => set("tests_text", e.target.value)} placeholder="3 km in 13:40 · zona 2 a 10,5 km/h · 1000 m ski erg 3:58" />
+        </div>
+        </div>
+      </details>
+
+      <Card className={cx(hideAppunti && "hidden")}>
+        <div className="flex items-end justify-between gap-2"><Label htmlFor="notes_next_phase" hint="abitudini, andamento, cosa cambiare. Riappare nell'editor del programma">Note per la prossima fase</Label><DictateButton onText={(t) => setF((x) => ({ ...x, notes_next_phase: x.notes_next_phase ? `${x.notes_next_phase.trimEnd()} ${t}` : t }))} /></div>
+        <NoteArea title="Note per la prossima fase" id="notes_next_phase" name="notes_next_phase" rows={4} value={f.notes_next_phase} onChange={(e) => set("notes_next_phase", e.target.value)} />
+        <label className="mt-4 flex items-center gap-3 text-[15px]">
+          <input type="checkbox" name="visible_to_client" checked={f.visible} onChange={(e) => set("visible", e.target.checked)} className="h-5 w-5 accent-[#1b1a17]" />
+          Il cliente vede questo check nei suoi progressi (le note per la prossima fase restano private)
+        </label>
+      </Card>
+
       {photos.length ? <input type="hidden" name="with_photos" value="1" /> : null}
 
       {upload ? (

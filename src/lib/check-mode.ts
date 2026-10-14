@@ -15,6 +15,8 @@ export type CheckMode = {
   clientId: string;
   /** check già salvato che si sta correggendo (null = check nuovo) */
   checkId: string | null;
+  /** check nuovo: l'id che avrà una volta salvato (le foto si caricano prima, in quella cartella) */
+  newId?: string;
   clientName: string;
   startedAt: string;
   /** "Chiudi per ora": la modalità resta, ma nessun dispositivo ci entra da solo */

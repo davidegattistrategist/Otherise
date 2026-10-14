@@ -1,10 +1,15 @@
 "use server";
 
+import { draftTombstone } from "@/lib/draft-merge";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { randomUUID } from "node:crypto";
 import { getCheckMode, setCheckMode } from "@/lib/check-mode";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { CHECK_PHOTOS_BUCKET } from "@/lib/check-photos";
+import type { PendingPhoto } from "@/lib/check-photos-shared";
 
 /**
  * "Inizia il check" (o "Riprendi"): entra in modalità check su questo cliente,
@@ -25,6 +30,7 @@ export async function startCheckMode(clientId: string, checkId?: string | null) 
     checkId: id,
     clientName: `${c.first_name} ${c.last_name}`.trim(),
     startedAt: same ? current.startedAt : new Date().toISOString(),
+    newId: id ? undefined : same && current.newId ? current.newId : randomUUID(),
     paused: false,
   });
   redirect(`/check/${clientId}`);
@@ -58,7 +64,17 @@ export async function cancelCheckMode(clientId: string) {
   const me = await requireStaff();
   const supabase = await createClient();
   const mode = await getCheckMode(supabase, me.id);
-  await supabase.from("drafts").delete().eq("user_id", me.id).eq("key", `check:${clientId}:${mode?.checkId ?? "nuovo"}`);
+  const key = `check:${clientId}:${mode?.checkId ?? "nuovo"}`;
+  // le foto caricate in questo check e non ancora registrate: via anche i file
+  const { data: draft } = await supabase.from("drafts").select("data").eq("user_id", me.id).eq("key", key).maybeSingle();
+  const pending = ((draft?.data as { photos?: PendingPhoto[] } | null)?.photos ?? []).filter((p) => p && typeof p.path === "string" && p.path.startsWith(`${clientId}/`) && typeof p.thumbPath === "string" && p.thumbPath.startsWith(`${clientId}/`));
+  if (pending.length) {
+    const { data: registered } = await supabase.from("check_photos").select("path").in("path", pending.map((p) => p.path));
+    const keep = new Set((registered ?? []).map((r) => r.path));
+    const remove = pending.filter((p) => !keep.has(p.path)).flatMap((p) => [p.path, p.thumbPath]);
+    if (remove.length) await createAdminClient().storage.from(CHECK_PHOTOS_BUCKET).remove(remove);
+  }
+  await supabase.from("drafts").upsert({ user_id: me.id, key, data: draftTombstone(Date.now()), updated_at: new Date().toISOString() });
   await setCheckMode(supabase, me.id, null);
   redirect(`/staff/clienti/${clientId}`);
 }

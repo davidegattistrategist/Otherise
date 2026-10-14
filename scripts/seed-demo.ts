@@ -152,6 +152,11 @@ async function main() {
   for (let w = 1; w <= 4; w++) await logWeek(past!.id, pastContent, w, 3, addDays(start, -28 + (w - 1) * 7), -5);
   await logWeek(current!.id, content, 1, 3, start);
   await logWeek(current!.id, content, 2, 3, addDays(start, 7));
+  // allenamenti liberi fuori dal programma
+  await db.from("free_workouts").insert([
+    { client_id: giulia, kind: "spinning", minutes: 45, effort: 3, performed_on: addDays(today, -3), notes: "Lezione del martedì" },
+    { client_id: giulia, kind: "camminata", minutes: 60, effort: 1, performed_on: addDays(today, -9), notes: "" },
+  ]).throwOnError();
   await logWeek(current!.id, content, 3, 1, addDays(start, 14));
 
   // Check di Giulia (pliche inventate). Il primo senza coscia (non si riusciva a

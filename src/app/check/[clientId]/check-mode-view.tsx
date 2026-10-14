@@ -11,6 +11,7 @@ import { useState, type ReactNode } from "react";
 import { CheckForm, type CheckState, type CheckValues, type PreviousCheck } from "@/app/staff/clienti/[id]/check/check-form";
 import { BodyCharts, CheckCompare } from "@/components/body-progress";
 import type { BodyPoint, FormulaSeries } from "@/lib/body/progress";
+import type { CheckPhoto } from "@/lib/check-photos-shared";
 import type { FormulaId, Sex, SkinfoldSite } from "@/lib/body/skinfolds";
 import { buttonClass, cx } from "@/components/ui";
 import { cancelCheckMode, endCheckMode, pauseCheckMode } from "../actions";
@@ -23,6 +24,8 @@ export function CheckModeView(props: {
   clientId: string;
   clientName: string;
   checkId: string | null;
+  photoFolder: string | null;
+  savedPhotos: CheckPhoto[];
   sex: Sex | null;
   birthDate: string | null;
   formula: FormulaId | null;
@@ -111,6 +114,8 @@ export function CheckModeView(props: {
             lastMissing={props.lastMissing}
             previous={props.previous}
             live
+            photoFolder={props.photoFolder}
+            savedPhotos={props.savedPhotos}
             formId={FORM_ID}
             view={formView}
             submitLabel="Check finito"

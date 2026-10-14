@@ -37,6 +37,7 @@ import {
 } from "../actions";
 import { AiPanel, RowAiButtons } from "./ai-tools";
 import { estimateDayMinutes } from "@/lib/program/balance";
+import { useOpenDays } from "@/components/use-open-days";
 import { clearDraft, loadDraft, useDraft } from "@/components/use-draft";
 
 export type EditorProgram = {
@@ -87,6 +88,8 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   const [status, setStatus] = useState(program.status);
   const [isExample, setIsExample] = useState(program.is_ai_example);
   const [mobileWeek, setMobileWeek] = useState(0);
+  // giorni chiusi di partenza, tranne quelli ancora vuoti
+  const days = useOpenDays(() => normalizeWeeks(initialContent, program.weeks).days.filter((d) => !d.blocks.some((b) => b.items.some((it) => it.name.trim()))).map((d) => d.id));
 
   const exerciseByName = useMemo(() => new Map(exercises.map((e) => [e.name.trim().toLowerCase(), e])), [exercises]);
   const exerciseById = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
@@ -263,7 +266,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               <Pill active={status === "published"}>{program.is_template ? "Modello" : STATUS_LABEL[status]}</Pill>
               {program.source === "ai" ? <Pill><IconSparkle size={14} /> Bozza preparata con l&apos;AI</Pill> : null}
               <span aria-live="polite">{pending ? "Salvataggio…" : dirty ? (autoSave ? "Salvo tra un attimo…" : "Modifiche da salvare (intanto restano qui anche se esci)") : savedAt ? `Salvato alle ${savedAt}${autoSave ? " (si salva da solo)" : ""}` : ""}</span>
-              {restored ? <span className="rounded-full bg-accent-soft px-3 py-1 text-ink">Ho ripreso le modifiche che non avevi salvato.</span> : null}
+              {restored ? <span className="rounded-full bg-sand-deep px-3 py-1 text-ink">Non si è perso niente: ci sono le modifiche che non avevi salvato.</span> : null}
             </div>
           </div>
           <div className="flex flex-wrap gap-2.5">
@@ -395,6 +398,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             if (nextWeeks && nextWeeks !== weeks) setWeeks(nextWeeks);
             if (nextMinutes) setMinutes(String(nextMinutes));
             setContent(normalizeWeeks(next, nextWeeks ?? weeks));
+            days.setAll(next.days.map((d) => d.id), true);
             setAiNotes(notes);
             setDirty(true);
             setMessage({ tone: "info", text: "Bozza dell'AI applicata: le modifiche sono evidenziate. Rivedi le caselle e salva quando sei soddisfatto." });
@@ -404,10 +408,29 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         />
       ) : null}
 
-      {/* giorni */}
-      {content.days.map((day, dayIdx) => (
+      {/* giorni: chiusi di partenza, si aprono e chiudono a piacimento */}
+      {content.days.length > 1 ? (
+        <div className="-mb-2 flex flex-wrap items-center justify-end gap-2">
+          <button type="button" className={buttonClass("ghost", "sm")} onClick={() => days.setAll(content.days.map((d) => d.id), true)}>Apri tutti i giorni</button>
+          <button type="button" className={buttonClass("ghost", "sm")} onClick={() => days.setAll(content.days.map((d) => d.id), false)}>Chiudi tutti</button>
+        </div>
+      ) : null}
+      {content.days.map((day, dayIdx) => {
+        const open = days.isOpen(day.id);
+        const names = day.blocks.flatMap((b) => b.items.map((it) => it.name.trim())).filter(Boolean);
+        return (
         <Card key={day.id} className="!p-0">
-          <div className="flex flex-wrap items-center gap-3 px-5 pt-5 sm:px-6">
+          <div className={cx("flex flex-wrap items-center gap-3 px-5 pt-5 sm:px-6", !open && "pb-1")}>
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={`daybody-${day.id}`}
+              aria-label={`${open ? "Chiudi" : "Apri"} ${day.title || "il giorno"}`}
+              onClick={() => days.toggle(day.id)}
+              className="-ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full hover:bg-sand"
+            >
+              <IconDown size={20} className={cx("transition-transform", open && "rotate-180")} />
+            </button>
             <label htmlFor={`day-${day.id}`} className="sr-only">Nome del giorno</label>
             <input
               id={`day-${day.id}`}
@@ -428,7 +451,18 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             <div className="flex gap-1">
               <IconBtn label="Sposta su" disabled={dayIdx === 0} onClick={() => mutate((d) => swap(d.days, dayIdx, dayIdx - 1))}><IconUp size={18} /></IconBtn>
               <IconBtn label="Sposta giù" disabled={dayIdx === content.days.length - 1} onClick={() => mutate((d) => swap(d.days, dayIdx, dayIdx + 1))}><IconDown size={18} /></IconBtn>
-              <IconBtn label="Duplica giorno" onClick={() => { setContent((c) => duplicateDay(c, day.id)); setDirty(true); }}><IconCopy size={18} /></IconBtn>
+              <IconBtn
+                label="Duplica giorno"
+                onClick={() => {
+                  const next = duplicateDay(content, day.id);
+                  const known = new Set(content.days.map((d) => d.id));
+                  for (const d of next.days) if (!known.has(d.id)) days.setOpen(d.id);
+                  setContent(next);
+                  setDirty(true);
+                }}
+              >
+                <IconCopy size={18} />
+              </IconBtn>
               <IconBtn
                 label="Elimina giorno"
                 onClick={() => {
@@ -439,6 +473,12 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               </IconBtn>
             </div>
           </div>
+          {!open ? (
+            <button type="button" onClick={() => days.toggle(day.id)} className="block w-full px-5 pt-1 pb-5 text-left text-sm text-muted sm:px-6">
+              <span className="line-clamp-2">{names.length ? names.join(" · ") : "Nessun esercizio"}</span>
+            </button>
+          ) : (
+          <div id={`daybody-${day.id}`}>
           <div className="px-5 pt-2 sm:px-6">
             <label htmlFor={`daynotes-${day.id}`} className="sr-only">Note del giorno</label>
             <input
@@ -568,11 +608,21 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               </button>
             ))}
           </div>
+          </div>
+          )}
         </Card>
-      ))}
+        );
+      })}
 
       <div>
-        <Button variant="secondary" onClick={() => mutate((d) => void d.days.push(emptyDay(weeks, d.days.length)))}>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            const nd = emptyDay(weeks, content.days.length);
+            days.setOpen(nd.id);
+            mutate((d) => void d.days.push(nd));
+          }}
+        >
           <IconPlus size={18} /> Aggiungi giorno
         </Button>
       </div>

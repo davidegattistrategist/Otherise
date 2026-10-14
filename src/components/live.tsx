@@ -18,7 +18,7 @@ import { IconBell, IconChat, IconX } from "./icons";
 
 type Counts = { notifications: number; chats: number };
 type Latest = { id: string; kind: string; title: string; body: string; link: string | null; client_id: string | null } | null;
-type CheckModeInfo = { clientId: string; clientName: string; paused: boolean } | null;
+type CheckModeInfo = { clientId: string; checkId?: string | null; clientName: string; paused: boolean } | null;
 type Live = Counts & { latest: Latest; chat: { clientId: string; at: string; from: string | null } | null; checkMode?: CheckModeInfo };
 type Banner = { key: string; title: string; body: string; link: string; notificationId?: string; chat?: boolean };
 
@@ -30,6 +30,7 @@ export function useLiveCounts(fallback: Counts): Counts {
 }
 
 const EVERY_MS = 12_000;
+const CHECK_MODE_EVERY_MS = 4_000;
 const HIDDEN_EVERY_MS = 60_000;
 const MAX_BANNERS = 3;
 // pagine di riepilogo che si possono ricaricare senza disturbare chi scrive
@@ -38,24 +39,37 @@ const REFRESH = [/^\/cliente$/, /^\/cliente\/notifiche$/, /^\/staff$/, /^\/staff
 export function LiveProvider({ initial, role, children, initialCheckMode = null }: { initial: Counts; role: "client" | "staff"; children: React.ReactNode; initialCheckMode?: CheckModeInfo }) {
   const router = useRouter();
   const path = usePathname();
-  // modalità check (staff): se è attiva su un dispositivo, anche gli altri ci entrano (o ne escono) da soli
+  // modalità check (staff): se si accende su un dispositivo, anche gli altri ci
+  // entrano da soli; se si chiude, ne escono. Si segue solo quello che arriva
+  // fresco da /api/live (mai i dati della pagina, che possono essere di qualche
+  // secondo prima) e solo i cambiamenti: così un dispositivo non entra ed esce
+  // da solo per una risposta arrivata in ritardo.
   const [checkMode, setCheckMode] = useState<CheckModeInfo>(initialCheckMode);
+  const seenMode = useRef<CheckModeInfo | undefined>(undefined);
   const followCheckMode = useCallback(
     (cm: CheckModeInfo, here: string) => {
+      const prev = seenMode.current;
+      seenMode.current = cm;
+      const active = (m: CheckModeInfo | undefined) => Boolean(m && !m.paused);
       const inMode = here.startsWith("/check/");
-      if (cm && !cm.paused && !inMode) router.push(`/check/${cm.clientId}`);
-      else if (inMode && (!cm || cm.paused)) {
-        const id = here.split("/")[2];
-        router.push(cm ? `/staff/clienti/${cm.clientId}` : `/staff/clienti/${id}/check`);
+      if (prev === undefined) {
+        // appena aperta l'app: se c'è un check in corso (non in pausa) si entra
+        if (active(cm) && !inMode) router.push(`/check/${cm!.clientId}`);
+        return;
+      }
+      if (!active(prev) && active(cm)) {
+        if (!inMode || here.split("/")[2] !== cm!.clientId) router.push(`/check/${cm!.clientId}`);
+        else router.refresh();
+      } else if (active(prev) && !active(cm)) {
+        if (inMode) router.push(cm ? `/staff/clienti/${cm.clientId}` : `/staff/clienti/${here.split("/")[2]}/check`);
+      } else if (active(prev) && active(cm) && inMode && (prev!.clientId !== cm!.clientId || (prev!.checkId ?? null) !== (cm!.checkId ?? null))) {
+        // dall'altro dispositivo hai aperto un altro check
+        if (prev!.clientId !== cm!.clientId) router.push(`/check/${cm!.clientId}`);
+        else router.refresh();
       }
     },
     [router],
   );
-  useEffect(() => {
-    if (role === "staff") followCheckMode(initialCheckMode, window.location.pathname);
-    // solo all'apertura: poi ci pensa il controllo periodico
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   const [counts, setCounts] = useState(initial);
   // quando il server ridisegna il layout (navigazione, azione) ripartiamo dai suoi numeri
   const [seen, setSeen] = useState(initial);
@@ -68,7 +82,16 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
   const lastPoll = useRef(0);
   const last = useRef<{ latestId: string | null; chatAt: string | null; counts: Counts } | null>(null);
   const pathRef = useRef(path);
+  const navAt = useRef(0);
+  const alive = useRef(true);
   useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (pathRef.current !== path) navAt.current = Date.now();
     pathRef.current = path;
   }, [path]);
 
@@ -76,6 +99,7 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
     // dietro altre finestre basta un controllo al minuto (per il titolo della scheda)
     if (document.visibilityState !== "visible" && Date.now() - lastPoll.current < HIDDEN_EVERY_MS - 1000) return;
     lastPoll.current = Date.now();
+    const asked = Date.now();
     let d: Live;
     try {
       const r = await fetch("/api/live", { cache: "no-store" });
@@ -84,6 +108,8 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
     } catch {
       return;
     }
+    // risposta partita prima di un cambio di pagina (o dopo che la pagina è stata chiusa): non vale
+    if (!alive.current || asked < navAt.current) return;
     const prev = last.current;
     last.current = { latestId: d.latest?.id ?? prev?.latestId ?? null, chatAt: d.chat?.at ?? prev?.chatAt ?? null, counts: { notifications: d.notifications, chats: d.chats } };
     setCounts({ notifications: d.notifications, chats: d.chats });
@@ -105,9 +131,11 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
     if (changed && REFRESH.some((re) => re.test(here))) router.refresh();
   }, [role, router, push, followCheckMode]);
 
+  const inCheckMode = path.startsWith("/check/");
   useEffect(() => {
-    const first = setTimeout(check, 1500);
-    const timer = setInterval(check, EVERY_MS);
+    // lo staff controlla subito (modalità check); in modalità check più spesso
+    const first = setTimeout(check, role === "staff" ? 200 : 1500);
+    const timer = setInterval(check, inCheckMode ? CHECK_MODE_EVERY_MS : EVERY_MS);
     const onVisible = () => {
       if (document.visibilityState === "visible") void check();
     };
@@ -124,7 +152,7 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
       window.removeEventListener("focus", onVisible);
       navigator.serviceWorker?.removeEventListener("message", onMessage);
     };
-  }, [check]);
+  }, [check, role, inCheckMode]);
 
   // sul telefono del cliente l'avviso sparisce da solo; allo staff resta finché non lo chiude
   useEffect(() => {

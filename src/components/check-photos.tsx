@@ -10,8 +10,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useKeepAwake } from "./use-keep-awake";
 import { useRouter } from "next/navigation";
-import { MAX_PHOTOS_PER_UPLOAD, MOZ_QUALITY, MOZ_THUMB_QUALITY, PHOTO_LONG_SIDE, PHOTO_QUALITY, THUMB_LONG_SIDE, type CheckPhoto } from "@/lib/check-photos-shared";
-import { deleteCheckPhoto, preparePhotoUploads, saveCheckPhotos } from "@/app/staff/clienti/[id]/check/actions";
+import { MAX_PHOTOS_PER_UPLOAD, MOZ_QUALITY, MOZ_THUMB_QUALITY, PHOTO_LONG_SIDE, PHOTO_QUALITY, THUMB_LONG_SIDE, type CheckPhoto, type PendingPhoto } from "@/lib/check-photos-shared";
+import { deleteCheckPhoto, pendingPhotoLinks, preparePhotoUploads, removePendingPhoto, saveCheckPhotos } from "@/app/staff/clienti/[id]/check/actions";
 import { saveAttachment, uploadWithProgress } from "./chat/media";
 import { IconArrowLeft, IconArrowRight, IconDownload, IconPhoto, IconTrash, IconX } from "./icons";
 import { buttonClass, cx } from "./ui";
@@ -112,15 +112,17 @@ export async function uploadCheckPhotos(
   checkId: string,
   files: File[],
   onProgress: (p: { done: number; total: number; progress: number }) => void,
-): Promise<{ saved: number; error: string }> {
+  opts: { register?: boolean; onEach?: (p: PendingPhoto) => void } = {},
+): Promise<{ saved: number; error: string; uploaded: PendingPhoto[] }> {
+  const { register = true } = opts;
   const list = onlyImages(files);
-  if (!list.length) return { saved: 0, error: "" };
-  if (list.length > MAX_PHOTOS_PER_UPLOAD) return { saved: 0, error: `Al massimo ${MAX_PHOTOS_PER_UPLOAD} foto per volta.` };
+  if (!list.length) return { saved: 0, error: "", uploaded: [] };
+  if (list.length > MAX_PHOTOS_PER_UPLOAD) return { saved: 0, error: `Al massimo ${MAX_PHOTOS_PER_UPLOAD} foto per volta.`, uploaded: [] };
   onProgress({ done: 0, total: list.length, progress: 0 });
   try {
     const res = await preparePhotoUploads(clientId, checkId, list.length);
     if ("error" in res) throw new Error(res.error);
-    const uploaded: Array<{ path: string; thumbPath: string; width: number; height: number; size: number }> = [];
+    const uploaded: PendingPhoto[] = [];
     const skipped: string[] = [];
     for (let i = 0; i < list.length; i++) {
       const t = res.tickets[i];
@@ -135,17 +137,19 @@ export async function uploadCheckPhotos(
         uploadWithProgress(t.url, ready.full, "image/jpeg", (p) => onProgress({ done: i, total: list.length, progress: p })),
         uploadWithProgress(t.thumbUrl, ready.thumb, "image/jpeg", () => undefined),
       ]);
-      uploaded.push({ path: t.path, thumbPath: t.thumbPath, width: ready.width, height: ready.height, size: ready.full.size });
+      const one = { path: t.path, thumbPath: t.thumbPath, width: ready.width, height: ready.height, size: ready.full.size };
+      uploaded.push(one);
+      opts.onEach?.(one);
       onProgress({ done: i + 1, total: list.length, progress: 0 });
     }
-    if (uploaded.length) {
+    if (uploaded.length && register) {
       const ok = await saveCheckPhotos(clientId, checkId, uploaded);
       if ("error" in ok) throw new Error(ok.error);
     }
     const error = skipped.length ? `${skipped.length === 1 ? "Una foto non si riesce a leggere" : `${skipped.length} foto non si riescono a leggere`}: prova a sceglierle di nuovo dalla galleria del telefono.` : "";
-    return { saved: uploaded.length, error };
+    return { saved: uploaded.length, error, uploaded };
   } catch (e) {
-    return { saved: 0, error: e instanceof Error && e.message ? e.message : "Caricamento non riuscito. Riprova." };
+    return { saved: 0, error: e instanceof Error && e.message ? e.message : "Caricamento non riuscito. Riprova.", uploaded: [] };
   }
 }
 
@@ -194,6 +198,91 @@ export function CheckPhotoUploader({ clientId, checkId, label = "Aggiungi le fot
       </button>
       {saved && !busy ? <p className="text-sm text-muted" role="status">{saved === 1 ? "Foto caricata." : `${saved} foto caricate.`}</p> : null}
       {error ? <p className="text-sm text-accent-deep" role="alert">{error}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * Foto della modalità check: si caricano subito (appena scelte, una alla
+ * volta) e compaiono anche sull'altro dispositivo; si registrano nel check con
+ * "Check finito". Qui solo il pulsante, le miniature e "Togli".
+ */
+export function PendingPhotos({ clientId, checkId, photos, onAdd, onRemove }: { clientId: string; checkId: string; photos: PendingPhoto[]; onAdd: (p: PendingPhoto) => void; onRemove: (path: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [state, setState] = useState<{ done: number; total: number; progress: number } | null>(null);
+  const [error, setError] = useState("");
+  const [links, setLinks] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState<number | null>(null);
+  const missing = photos.flatMap((p) => [p.path, p.thumbPath]).filter((x) => !links[x]);
+  const missingKey = missing.join("|");
+  useEffect(() => {
+    if (!missingKey) return;
+    let alive = true;
+    void pendingPhotoLinks(clientId, checkId, missingKey.split("|")).then((l) => alive && setLinks((x) => ({ ...x, ...l })));
+    return () => {
+      alive = false;
+    };
+  }, [clientId, checkId, missingKey]);
+
+  const start = async (files: File[]) => {
+    setError("");
+    try {
+      const r = await uploadCheckPhotos(clientId, checkId, files, setState, { register: false, onEach: onAdd });
+      if (r.error) setError(r.error);
+    } finally {
+      setState(null);
+      if (input.current) input.current.value = "";
+    }
+  };
+  const busy = state !== null;
+  useKeepAwake(busy);
+  const pct = state ? Math.round(((state.done + state.progress) / state.total) * 100) : 0;
+  const shown: CheckPhoto[] = photos.map((p) => ({ id: p.path, checkId, checkDate: null, url: links[p.path] ?? null, thumbUrl: links[p.thumbPath] ?? links[p.path] ?? null, width: p.width, height: p.height, createdAt: "" }));
+  return (
+    <div className="flex flex-col gap-3">
+      {shown.length ? (
+        <ul className="grid grid-cols-3 gap-1.5 sm:grid-cols-6" aria-label="Foto caricate in questo check">
+          {shown.map((p, i) => (
+            <li key={p.id} className="relative">
+              <button type="button" onClick={() => setOpen(i)} className="block aspect-[3/4] w-full overflow-hidden rounded-xl bg-sand-deep" aria-label={`Apri la foto ${i + 1}`}>
+                {p.thumbUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- link temporaneo dello storage
+                  <img src={p.thumbUrl} alt="" className="h-full w-full object-cover" />
+                ) : null}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const ph = photos[i];
+                  onRemove(ph.path);
+                  void removePendingPhoto(clientId, checkId, ph.path, ph.thumbPath);
+                }}
+                className="absolute top-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-ink/70 text-card"
+                aria-label={`Togli la foto ${i + 1}`}
+              >
+                <IconX size={16} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        multiple
+        className="sr-only"
+        tabIndex={-1}
+        aria-label="Scegli le foto del check"
+        data-testid="pending-photo-input"
+        onChange={(e) => void start(Array.from(e.currentTarget.files ?? []))}
+      />
+      <button type="button" disabled={busy} onClick={() => input.current?.click()} className={cx(buttonClass(photos.length ? "secondary" : "primary", "sm"), "self-start")}>
+        <IconPhoto size={16} />
+        {busy ? `Carico ${Math.min(state.done + 1, state.total)} di ${state.total}… ${pct}%` : photos.length ? "Aggiungi altre foto" : "Scatta o scegli le foto"}
+      </button>
+      {error ? <p className="text-sm text-accent-deep" role="alert">{error}</p> : null}
+      {open !== null && shown[open] ? <Lightbox photos={shown} index={open} onIndex={setOpen} onClose={() => setOpen(null)} /> : null}
     </div>
   );
 }

@@ -20,8 +20,8 @@ import { PushPrompt } from "@/components/push";
 
 export const metadata: Metadata = { title: "Oggi" };
 
-export default async function ClientHome({ searchParams }: { searchParams: Promise<{ fatto?: string; fastidio?: string }> }) {
-  const { fatto, fastidio } = await searchParams;
+export default async function ClientHome({ searchParams }: { searchParams: Promise<{ fatto?: string; fastidio?: string; libero?: string }> }) {
+  const { fatto, fastidio, libero } = await searchParams;
   const me = await requireActiveClient();
   const supabase = await createClient();
   const today = todayISO();
@@ -73,6 +73,8 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
 
       {fatto ? <><ClearParams names={["fatto", "fastidio"]} /><Notice tone="success">Allenamento registrato. Ottimo lavoro!{fastidio ? " Il tuo coach è stato avvisato del fastidio che hai segnalato: ti scrive lui come procedere." : ""}</Notice></> : null}
 
+      {libero ? <><ClearParams names={["libero"]} /><Notice tone="success">Segnato! Il tuo coach lo vede insieme agli altri allenamenti.</Notice></> : null}
+
       <PushPrompt text="Ti avviso quando ti arriva un messaggio, un nuovo programma o la risposta al diario." />
 
       {checkinWeek && !thisCheckin ? (
@@ -118,6 +120,15 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
           <p className="text-sm text-muted-dark">{coach ?? "Il tuo coach"} sta preparando il tuo programma: ti arriva una notifica appena è pronto.</p>
         </Card>
       )}
+
+      {/* allenamento fuori dal programma: si segna in pochi secondi */}
+      <Link href="/cliente/allenamento-libero" className="flex items-center gap-3 rounded-[24px] bg-card px-5 py-4">
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">Hai fatto altro?</span>
+          <span className="block text-sm text-muted">Pesi, spinning, corsa, una partita: segnalo in 5 secondi</span>
+        </span>
+        <span aria-hidden="true" className="text-2xl">+</span>
+      </Link>
 
       {/* prima le cose da fare: la risposta del coach e gli avvisi */}
       {lastReply?.coach_reply && diffDays((lastReply.reviewed_at ?? lastReply.week_start).slice(0, 10), today) <= 14 ? (

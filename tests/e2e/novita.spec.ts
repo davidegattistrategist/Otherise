@@ -219,7 +219,7 @@ test("dettatura del browser che non trascrive: si ferma da sola e spiega cosa fa
 });
 
 test("su iPhone senza trascrizione sul server: niente Detta, si usa il microfono della tastiera", async ({ browser }) => {
-  const ctx = await browser.newContext({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", viewport: { width: 390, height: 844 }, storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }] }] } });
+  const ctx = await browser.newContext({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", viewport: { width: 390, height: 844 }, storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }, { name: "otherise:days-open", value: "all" }] }] } });
   const page = await ctx.newPage();
   await noServerTranscription(page);
   await page.addInitScript(fakeSpeech("ok"), "ok");
@@ -259,7 +259,7 @@ test("popup per attivare le notifiche (telefono Android): si può rimandare", as
     viewport: { width: 412, height: 915 },
     isMobile: true,
     hasTouch: true,
-    storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }] }] },
+    storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-prompt", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }, { name: "otherise:days-open", value: "all" }] }] },
   });
   const page = await ctx.newPage();
   await login(page, "giulia@prova.local");

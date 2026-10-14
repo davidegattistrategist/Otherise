@@ -10,7 +10,7 @@ import { Toaster } from "@/components/toaster";
 import { getCheckMode } from "@/lib/check-mode";
 
 export default async function CheckModeLayout({ children, params }: { children: React.ReactNode; params: Promise<{ clientId: string }> }) {
-  const { clientId } = await params;
+  await params;
   const me = await requireStaff();
   const supabase = await createClient();
   const [{ count: unread }, { data: chats }, mode] = await Promise.all([
@@ -22,8 +22,7 @@ export default async function CheckModeLayout({ children, params }: { children: 
     <LiveProvider
       role="staff"
       initial={{ notifications: unread ?? 0, chats: (chats ?? []).length }}
-      // la pagina attiva (o riprende) la modalità su questo cliente: da qui si parte da lì
-      initialCheckMode={{ clientId, clientName: mode?.clientName ?? "", paused: false }}
+      initialCheckMode={mode ? { clientId: mode.clientId, checkId: mode.checkId, clientName: mode.clientName, paused: mode.paused } : null}
     >
       <Toaster />
       <main className="mx-auto box-border min-h-dvh w-full max-w-[1180px] pt-[calc(0.75rem+env(safe-area-inset-top))] pr-[var(--edge-right)] pb-28 pl-[var(--edge-left)] sm:px-8 lg:px-10">

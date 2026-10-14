@@ -3,7 +3,8 @@
 import { FormDraft } from "@/components/draft-note";
 import { useActionState, useEffect, useRef } from "react";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
-import { Input, Label, Textarea } from "@/components/ui";
+import { Input, Label } from "@/components/ui";
+import { NoteArea } from "@/components/note-area";
 import { DictateButton } from "@/components/dictate-button";
 
 export function SessionForm({
@@ -49,7 +50,7 @@ export function SessionForm({
           <Label htmlFor={`n-${uid}`} hint="cosa avete fatto, come stava, cosa ricordare">Note</Label>
           <DictateButton target={notesRef} />
         </div>
-        <Textarea ref={notesRef} id={`n-${uid}`} name="notes" rows={compact ? 3 : 5} defaultValue={values?.notes ?? ""} placeholder="Es. Squat 4x6 a 80 kg, ginocchio sinistro ok. Da rivedere lo stacco: schiena che si arrotonda all'ultima ripetizione." />
+        <NoteArea title="Note della sessione" ref={notesRef} id={`n-${uid}`} name="notes" rows={compact ? 3 : 5} defaultValue={values?.notes ?? ""} placeholder="Es. Squat 4x6 a 80 kg, ginocchio sinistro ok. Da rivedere lo stacco: schiena che si arrotonda all'ultima ripetizione." />
       </div>
       <ActionMessage state={state} />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton size={compact ? "sm" : "md"}>{values ? "Salva modifiche" : "Salva la sessione"}</SubmitButton><FormDraft form={formRef} name={`sessione-${uid}`} /></div>

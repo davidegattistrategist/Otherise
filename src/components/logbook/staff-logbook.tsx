@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { Logbook, type LogbookProps } from "./logbook";
 import { DictateButton } from "@/components/dictate-button";
+import { NoteArea } from "@/components/note-area";
 import { savePtFromWorkout } from "@/app/staff/clienti/[id]/sessioni/actions";
 
 export function StaffLogbook({
@@ -54,13 +55,13 @@ export function StaffLogbook({
                   <label htmlFor="pt-notes" className="text-[15px] font-semibold">Note della lezione <span className="font-normal text-muted">(le vedi solo tu)</span></label>
                   <DictateButton onText={(t) => setNotes((v) => (v ? `${v.trimEnd()} ${t}` : t))} />
                 </div>
-                <textarea
+                <NoteArea
+                  title="Note della lezione"
                   id="pt-notes"
                   rows={3}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Com'è andata, cosa hai cambiato rispetto al programma, cosa ricordare la prossima volta"
-                  className="rounded-xl border border-sand-deep bg-sand px-3 py-2.5 text-base leading-relaxed"
                 />
               </div>
             </>

@@ -10,14 +10,15 @@
  */
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { usePathname } from "next/navigation";
+import { diffDraft, mergeDraft, sameDraft } from "@/lib/draft-merge";
 
 export type DraftState = { state: "idle" | "saving" | "saved" | "local"; at: number | null };
 
 const LOCAL = "otherise:draft:";
 const SERVER_DELAY = 700;
-const POLL_MS = 4000;
-/** dopo l'ultima lettera scritta qui, per un po' le modifiche dall'altro dispositivo aspettano */
-const TYPING_GUARD = 2500;
+/** modalità check: quello che scrivi arriva subito sull'altro dispositivo */
+const LIVE_DELAY = 250;
+const LIVE_POLL_MS = 1500;
 
 type Stored<T> = { data: T; at: number };
 
@@ -46,9 +47,11 @@ function removeLocal(key: string) {
   }
 }
 
-async function readServer<T>(key: string): Promise<Stored<T> | null> {
+/** La bozza sul server; con `since` solo se è più nuova (altrimenti "same"). */
+async function readServer<T>(key: string, since = 0): Promise<Stored<T> | null | "same"> {
   try {
-    const r = await fetch(`/api/bozze?key=${encodeURIComponent(key)}`, { cache: "no-store" });
+    const r = await fetch(`/api/bozze?key=${encodeURIComponent(key)}${since ? `&since=${since}` : ""}`, { cache: "no-store" });
+    if (r.status === 204) return "same";
     if (!r.ok) return null;
     const d = (await r.json()) as { data: T; updated_at: string } | null;
     return d ? { data: d.data, at: new Date(d.updated_at).getTime() } : null;
@@ -60,7 +63,8 @@ async function readServer<T>(key: string): Promise<Stored<T> | null> {
 /** La bozza più recente tra telefono e server (null se non ce n'è). */
 export async function loadDraft<T>(key: string): Promise<Stored<T> | null> {
   const local = readLocal<T>(key);
-  const server = await readServer<T>(key);
+  const s = await readServer<T>(key);
+  const server = s === "same" ? null : s;
   if (!local) return server;
   if (!server) return local;
   return local.at > server.at ? local : server;
@@ -69,13 +73,15 @@ export async function loadDraft<T>(key: string): Promise<Stored<T> | null> {
 /** Cancella la bozza (dopo il salvataggio vero). */
 export function clearDraft(key: string) {
   removeLocal(key);
-  void fetch(`/api/bozze?key=${encodeURIComponent(key)}`, { method: "DELETE", keepalive: true }).catch(() => undefined);
+  void fetch(`/api/bozze?key=${encodeURIComponent(key)}&t=${Date.now()}`, { method: "DELETE", keepalive: true }).catch(() => undefined);
 }
 
 /**
- * Tiene salvata la bozza di `value` sotto `key`. Con `live` controlla ogni
- * pochi secondi se l'altro dispositivo ha scritto qualcosa di nuovo e lo
- * passa a `onRemote` (solo se qui non stai scrivendo in quel momento).
+ * Tiene salvata la bozza di `value` sotto `key`. Con `live` (modalità check,
+ * due dispositivi sullo stesso modulo) manda solo i campi cambiati, controlla
+ * ogni secondo e mezzo se l'altro dispositivo ha scritto qualcosa e lo unisce
+ * a quello che c'è qui (`onRemote` riceve il modulo unito): non si perde
+ * niente nemmeno se si scrive su tutti e due insieme.
  */
 export function useDraft<T>(
   key: string | null,
@@ -85,34 +91,99 @@ export function useDraft<T>(
   const { enabled = true, live = false } = opts;
   const [status, setStatus] = useState<DraftState>({ state: "idle", at: null });
   const lastJson = useRef<string | null>(null);
-  const lastTyped = useRef(0);
+  const valueRef = useRef(value);
+  /** l'ultima versione uguale qui e sul server (base per unire le modifiche) */
+  const synced = useRef<unknown>(null);
   const serverAt = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<string | null>(null);
+  /** quando è stato scritto quello che sta per partire (per non far tornare una bozza cancellata dopo) */
+  const pendingAt = useRef(0);
+  const sending = useRef(false);
+  const again = useRef(false);
   const cleared = useRef(false);
+  /** svuotato mentre una bozza stava partendo: appena arriva, si cancella di nuovo */
+  const wantClear = useRef<string | null>(null);
   const onRemote = useRef(opts.onRemote);
   const isEmpty = useRef(opts.isEmpty);
+  const liveRef = useRef(live);
   useEffect(() => {
     onRemote.current = opts.onRemote;
     isEmpty.current = opts.isEmpty;
+    liveRef.current = live;
+    valueRef.current = value;
   });
 
-  const send = useCallback(async (k: string, body: string) => {
-    try {
-      const r = await fetch("/api/bozze", { method: "POST", body: `{"key":${JSON.stringify(k)},"data":${body}}`, keepalive: body.length < 60_000 });
-      if (!r.ok) throw new Error();
-      const d = (await r.json()) as { updated_at: string };
-      serverAt.current = new Date(d.updated_at).getTime();
-      if (pending.current === body) pending.current = null;
-      setStatus({ state: "saved", at: Date.now() });
-    } catch {
-      setStatus({ state: "local", at: Date.now() });
+  /** quello che è arrivato (dal server o dall'altro dispositivo) diventa il modulo, con le modifiche fatte qui nel frattempo */
+  const takeRemote = useCallback((base: unknown, remote: T): boolean => {
+    const local = valueRef.current;
+    const merged = mergeDraft(base, local, remote);
+    synced.current = remote;
+    if (!sameDraft(merged, local)) {
+      lastJson.current = JSON.stringify(merged);
+      valueRef.current = merged;
+      onRemote.current?.(merged);
     }
+    return !sameDraft(merged, remote);
   }, []);
+
+  const send = useCallback(
+    async (k: string) => {
+      if (sending.current) {
+        again.current = true;
+        return;
+      }
+      if (!pending.current || cleared.current) return;
+      sending.current = true;
+      const body = pending.current;
+      const sent = JSON.parse(body) as T;
+      const isLive = liveRef.current;
+      const t = pendingAt.current || Date.now();
+      try {
+        const payload = isLive
+          ? JSON.stringify({ key: k, data: sent, patch: diffDraft(synced.current ?? {}, sent), t })
+          : `{"key":${JSON.stringify(k)},"t":${t},"data":${body}}`;
+        const r = await fetch("/api/bozze", { method: "POST", body: payload, keepalive: payload.length < 60_000 });
+        if (!r.ok) throw new Error();
+        const d = (await r.json()) as { updated_at: string; data?: T };
+        serverAt.current = Math.max(serverAt.current, new Date(d.updated_at).getTime());
+        if (pending.current === body) pending.current = null;
+        if (isLive && d.data !== undefined && !cleared.current) {
+          // il server ha unito anche le modifiche dell'altro dispositivo
+          if (takeRemote(sent, d.data)) {
+            pending.current = JSON.stringify(valueRef.current);
+            pendingAt.current = Date.now();
+            again.current = true;
+          }
+        } else synced.current = sent;
+        setStatus({ state: "saved", at: Date.now() });
+      } catch {
+        setStatus({ state: "local", at: Date.now() });
+      } finally {
+        sending.current = false;
+        if (wantClear.current) {
+          clearDraft(wantClear.current);
+          wantClear.current = null;
+        }
+        if (again.current) {
+          again.current = false;
+          if (pending.current) void sendAgain.current(k);
+        }
+      }
+    },
+    [takeRemote],
+  );
+  const sendAgain = useRef<(k: string) => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    sendAgain.current = send;
+  }, [send]);
 
   // la prima volta il valore di partenza non è una modifica
   useEffect(() => {
-    if (lastJson.current === null) lastJson.current = JSON.stringify(value);
+    if (lastJson.current === null) {
+      lastJson.current = JSON.stringify(value);
+      synced.current = value;
+    }
   }, [value]);
 
   useEffect(() => {
@@ -121,32 +192,38 @@ export function useDraft<T>(
     if (lastJson.current === null || json === lastJson.current) return;
     lastJson.current = json;
     cleared.current = false;
-    lastTyped.current = Date.now();
+    wantClear.current = null;
     if (isEmpty.current?.(value)) {
       // modulo svuotato (o messaggio inviato): niente bozza
       pending.current = null;
       if (timer.current) clearTimeout(timer.current);
       clearDraft(key);
+      if (sending.current) wantClear.current = key;
       setStatus({ state: "idle", at: null });
       return;
     }
     writeLocal(key, value);
     pending.current = json;
+    pendingAt.current = Date.now();
     setStatus((s) => (s.state === "local" ? s : { state: "saving", at: s.at }));
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void send(key, json), SERVER_DELAY);
-  }, [key, value, enabled, send]);
+    timer.current = setTimeout(() => void send(key), live ? LIVE_DELAY : SERVER_DELAY);
+  }, [key, value, enabled, live, send]);
 
   // uscita dalla pagina o app in secondo piano: la bozza parte subito
   useEffect(() => {
     if (!key) return;
     const flush = () => {
       if (!pending.current || cleared.current) return;
-      const body = `{"key":${JSON.stringify(key)},"data":${pending.current}}`;
+      const data = JSON.parse(pending.current) as T;
+      const t = pendingAt.current || Date.now();
+      const body = liveRef.current
+        ? JSON.stringify({ key, data, patch: diffDraft(synced.current ?? {}, data), t })
+        : `{"key":${JSON.stringify(key)},"t":${t},"data":${pending.current}}`;
       if (navigator.sendBeacon?.("/api/bozze", new Blob([body], { type: "text/plain" }))) pending.current = null;
     };
     const onHidden = () => document.visibilityState === "hidden" && flush();
-    const onOnline = () => pending.current && !cleared.current && void send(key, pending.current);
+    const onOnline = () => pending.current && !cleared.current && void send(key);
     window.addEventListener("pagehide", flush);
     document.addEventListener("visibilitychange", onHidden);
     window.addEventListener("online", onOnline);
@@ -159,22 +236,37 @@ export function useDraft<T>(
     };
   }, [key, send]);
 
-  // dall'altro dispositivo (modalità check): le novità arrivano da sole
+  // dall'altro dispositivo (modalità check): le novità arrivano da sole e si uniscono
   useEffect(() => {
     if (!key || !live) return;
-    const t = setInterval(async () => {
-      if (document.visibilityState !== "visible" || Date.now() - lastTyped.current < TYPING_GUARD || pending.current) return;
-      const s = await readServer<T>(key);
-      if (!s || s.at <= serverAt.current) return;
-      serverAt.current = s.at;
-      const json = JSON.stringify(s.data);
-      if (json === lastJson.current) return;
-      lastJson.current = json;
-      writeLocal(key, s.data);
-      onRemote.current?.(s.data);
-    }, POLL_MS);
-    return () => clearInterval(t);
-  }, [key, live]);
+    let busy = false;
+    const poll = async () => {
+      if (busy || sending.current || cleared.current || document.visibilityState !== "visible") return;
+      busy = true;
+      try {
+        const s = await readServer<T>(key, serverAt.current);
+        if (!s || s === "same" || s.at <= serverAt.current || sending.current || cleared.current) return;
+        serverAt.current = s.at;
+        writeLocal(key, s.data);
+        if (takeRemote(synced.current, s.data)) {
+          // qui c'era qualcosa di non ancora mandato: parte unito
+          pending.current = JSON.stringify(valueRef.current);
+          pendingAt.current = Date.now();
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(() => void send(key), LIVE_DELAY);
+        } else if (pending.current && sameDraft(JSON.parse(pending.current), s.data)) pending.current = null;
+      } finally {
+        busy = false;
+      }
+    };
+    const t = setInterval(poll, LIVE_POLL_MS);
+    const onVisible = () => document.visibilityState === "visible" && void poll();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [key, live, send, takeRemote]);
 
   const clear = useCallback(() => {
     if (!key) return;
@@ -182,12 +274,15 @@ export function useDraft<T>(
     pending.current = null;
     if (timer.current) clearTimeout(timer.current);
     clearDraft(key);
+    if (sending.current) wantClear.current = key;
     setStatus({ state: "idle", at: null });
   }, [key]);
 
   /** dopo aver ripreso una bozza: quel valore è il nuovo punto di partenza */
   const adopt = useCallback((v: T, at?: number) => {
     lastJson.current = JSON.stringify(v);
+    valueRef.current = v;
+    synced.current = v;
     if (at) serverAt.current = Math.max(serverAt.current, at);
   }, []);
 
@@ -286,7 +381,7 @@ export function useFormDraft(form: RefObject<HTMLFormElement | null>, name: stri
     };
   }, [form, key, adopt, clear]);
 
-  /** "Ricomincia da capo": il modulo torna com'era e la bozza sparisce. */
+  /** "Svuota il modulo": il modulo torna com'era e la bozza sparisce. */
   const discard = () => {
     clear();
     const f = form.current;

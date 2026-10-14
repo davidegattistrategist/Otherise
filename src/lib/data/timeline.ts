@@ -3,12 +3,14 @@ import "server-only";
  * Linea del tempo delle note di un cliente, per lo staff.
  * - "I tuoi appunti": sessioni PT, check (note per la prossima fase), posturale.
  * - "Note del cliente": quello che scrive lui nel logbook (nota finale, note
- *   sugli esercizi, dolori) e nel diario settimanale (con la tua risposta).
+ *   sugli esercizi, dolori), nel diario settimanale (con la tua risposta) e
+ *   gli allenamenti liberi (spinning, corsa…).
  */
 import type { ServerSupabase } from "../supabase/server";
 import { parseContent } from "../program/types";
+import { freeKindLabel, freeWorkoutDetail } from "../free-workout";
 
-export type TimelineKind = "pt" | "check" | "posture" | "workout" | "diary";
+export type TimelineKind = "pt" | "check" | "posture" | "workout" | "diary" | "free";
 
 export type TimelineItem = {
   id: string;
@@ -39,6 +41,7 @@ export async function getStaffTimeline(supabase: ServerSupabase, clientId: strin
     supabase.from("posture_assessments").select("id, assessed_on, tight_muscles, what_works, posture_work, notes, visible_to_client").eq("client_id", clientId).order("assessed_on", { ascending: false }).limit(50),
     supabase.from("client_private_notes").select("notes").eq("client_id", clientId).maybeSingle(),
     supabase.from("programs").select("id, content").eq("client_id", clientId),
+    supabase.from("free_workouts").select("id, performed_on, kind, minutes, effort, notes").eq("client_id", clientId).order("performed_on", { ascending: false }).limit(150),
   ]);
   const dayTitle = new Map<string, string>();
   for (const p of programs ?? []) for (const d of parseContent(p.content).days) dayTitle.set(`${p.id}:${d.id}`, d.title);
@@ -82,11 +85,12 @@ export async function getStaffTimeline(supabase: ServerSupabase, clientId: strin
 
 export async function getClientTimeline(supabase: ServerSupabase, clientId: string): Promise<TimelineItem[]> {
   const base = `/staff/clienti/${clientId}`;
-  const [{ data: logs }, { data: exNotes }, { data: diaries }, { data: programs }] = await Promise.all([
+  const [{ data: logs }, { data: exNotes }, { data: diaries }, { data: programs }, { data: free }] = await Promise.all([
     supabase.from("workout_logs").select("id, program_id, week, day_id, performed_on, notes, discomfort, note_flag, note_reason").eq("client_id", clientId).order("performed_on", { ascending: false }).limit(200),
     supabase.from("exercise_logs").select("workout_log_id, exercise_name, result_text").eq("client_id", clientId).neq("result_text", "").order("performed_on", { ascending: false }).limit(400),
     supabase.from("checkins").select("id, week_start, training, sleep, stress, adherence, issues, request, coach_reply, flagged").eq("client_id", clientId).order("week_start", { ascending: false }).limit(60),
     supabase.from("programs").select("id, content").eq("client_id", clientId),
+    supabase.from("free_workouts").select("id, performed_on, kind, minutes, effort, notes").eq("client_id", clientId).order("performed_on", { ascending: false }).limit(150),
   ]);
   const dayTitle = new Map<string, string>();
   for (const p of programs ?? []) for (const d of parseContent(p.content).days) dayTitle.set(`${p.id}:${d.id}`, d.title);
@@ -123,6 +127,17 @@ export async function getClientTimeline(supabase: ServerSupabase, clientId: stri
       lines,
       badge: d.flagged ? "Da guardare" : undefined,
       href: `${base}/diario`,
+    });
+  }
+  for (const w of free ?? []) {
+    const detail = freeWorkoutDetail(w);
+    items.push({
+      id: `free-${w.id}`,
+      date: w.performed_on,
+      kind: "free",
+      title: `${freeKindLabel(w.kind)}${detail ? ` · ${detail}` : ""}`,
+      text: w.notes,
+      lines: [],
     });
   }
   return items.sort(byDate);

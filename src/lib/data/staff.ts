@@ -1,4 +1,5 @@
 import "server-only";
+import { latestDate } from "@/lib/free-workout";
 import { getBillingOverview } from "@/lib/data/shared";
 import { bySurname, listName } from "../names";
 import { checkDue } from "../check-due";
@@ -61,7 +62,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
   const clients = [...rows].sort(bySurname);
   const ids = clients.map((c) => c.id);
 
-  const [programs, checks, logs, coaches, billing, settings, planKinds, anyProgram, unpaidBy] = await Promise.all([
+  const [programs, checks, logs, coaches, billing, settings, planKinds, anyProgram, unpaidBy, free] = await Promise.all([
     supabase.from("programs").select("id, client_id, title, weeks, start_date, status, content").in("client_id", ids).in("status", ["published", "draft"]).order("start_date", { ascending: false }),
     supabase.from("checks").select("client_id, check_date, imported").in("client_id", ids).not("check_date", "is", null).order("check_date", { ascending: false }),
     supabase.from("workout_logs").select("client_id, performed_on, completed").in("client_id", ids).order("performed_on", { ascending: false }).limit(2000),
@@ -71,6 +72,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
     supabase.rpc("client_plan_kinds"),
     supabase.from("programs").select("client_id").in("client_id", ids),
     me.role === "owner" ? getUnpaidRows(supabase) : Promise.resolve(new Map<string, UnpaidRow[]>()),
+    supabase.from("free_workouts").select("client_id, performed_on").in("client_id", ids).order("performed_on", { ascending: false }).limit(2000),
   ]);
   const planKindBy = new Map((planKinds.data ?? []).map((p) => [p.client_id, p.kind as PlanKind]));
   const withPrograms = new Set((anyProgram.data ?? []).map((p) => p.client_id));
@@ -84,7 +86,10 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
   const lastCheck = firstBy(checks.data);
   // con chi i check si fanno nell'app (lo storico importato non conta)
   const appChecks = new Set((checks.data ?? []).filter((k) => !k.imported).map((k) => k.client_id));
-  const lastLog = firstBy(logs.data);
+  // ultima attività: allenamento del programma o allenamento libero (spinning, corsa…)
+  const lastProgramLog = firstBy(logs.data);
+  const lastFree = firstBy(free.data);
+  const lastLog = new Map(ids.map((id) => [id, { performed_on: latestDate(lastProgramLog.get(id)?.performed_on, lastFree.get(id)?.performed_on) }]));
   const billingBy = new Map((billing.data ?? []).map((b) => [b.client_id, b]));
 
   return clients.map((c) => {

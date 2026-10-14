@@ -129,6 +129,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"free_workouts": {
+                  Row: {
+                    "client_id": string,"created_at": string,"created_by": string | null,"effort": number | null,"id": string,"kind": string,"minutes": number | null,"notes": string,"performed_on": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"created_at"?: string,"created_by"?: string | null,"effort"?: number | null,"id"?: string,"kind": string,"minutes"?: number | null,"notes"?: string,"performed_on"?: string
+                  }
+                  Update: {
+                    "client_id"?: string,"created_at"?: string,"created_by"?: string | null,"effort"?: number | null,"id"?: string,"kind"?: string,"minutes"?: number | null,"notes"?: string,"performed_on"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "free_workouts_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"chat_snoozes": {
                   Row: {
                     "client_id": string,"created_at": string,"snoozed_by": string | null,"until": string

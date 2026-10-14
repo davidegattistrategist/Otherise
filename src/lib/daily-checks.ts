@@ -114,9 +114,13 @@ export async function runDailyChecks(today = todayISO()) {
 
   // 4) Clienti con un programma in corso che non registrano allenamenti da 7 giorni: UN avviso
   //    quando succede; poi restano nella card Allenamenti di Oggi finché non riprendono
-  const { data: lastLogs } = await admin.from("workout_logs").select("client_id, performed_on").order("performed_on", { ascending: false }).limit(3000);
+  //    (contano anche gli allenamenti liberi: spinning, corsa, un circuito…)
+  const [{ data: lastLogs }, { data: lastFree }] = await Promise.all([
+    admin.from("workout_logs").select("client_id, performed_on").order("performed_on", { ascending: false }).limit(3000),
+    admin.from("free_workouts").select("client_id, performed_on").gte("performed_on", addDays(today, -60)).order("performed_on", { ascending: false }).limit(3000),
+  ]);
   const lastBy = new Map<string, string>();
-  for (const l of lastLogs ?? []) if (!lastBy.has(l.client_id)) lastBy.set(l.client_id, l.performed_on);
+  for (const l of [...(lastLogs ?? []), ...(lastFree ?? [])]) if (!lastBy.has(l.client_id) || lastBy.get(l.client_id)! < l.performed_on) lastBy.set(l.client_id, l.performed_on);
   for (const p of programs ?? []) {
     if (!p.start_date || !p.client_id || p.start_date > addDays(today, -INACTIVE_DAYS)) continue;
     const c = byId.get(p.client_id);
@@ -217,6 +221,8 @@ export async function runDailyChecks(today = todayISO()) {
   const emailed = await deliverPendingEmails();
   // pulizia: bozze dimenticate da più di 2 mesi
   await admin.from("drafts").delete().lt("updated_at", `${addDays(today, -60)}T00:00:00Z`);
+  // i segni delle bozze cancellate servono solo per poco
+  await admin.from("drafts").delete().not("data->__deleted", "is", null).lt("updated_at", `${addDays(today, -1)}T00:00:00Z`);
   // pulizia: notifiche lette più vecchie di 6 mesi
   await admin.from("notifications").delete().lt("created_at", `${addDays(today, -180)}T00:00:00Z`).not("read_at", "is", null);
   return { ok: true, today, notifications: out.length, emailed, videosRemoved, backup };

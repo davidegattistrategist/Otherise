@@ -15,9 +15,10 @@ const KIND: Record<TimelineKind, { label: string; icon: (p: { size?: number }) =
   posture: { label: "Posturale", icon: IconPosture, dot: "bg-sand-deep text-ink" },
   workout: { label: "Allenamento", icon: IconPlay, dot: "bg-ink text-card" },
   diary: { label: "Diario", icon: IconBook, dot: "bg-accent-soft text-accent-deep" },
+  free: { label: "Allenamento libero", icon: IconPlay, dot: "bg-sand-deep text-ink" },
 };
 
-export const KIND_LABELS: Record<TimelineKind, string> = { pt: "Sessioni PT", check: "Check", posture: "Posturale", workout: "Allenamenti", diary: "Diari" };
+export const KIND_LABELS: Record<TimelineKind, string> = { pt: "Sessioni PT", check: "Check", posture: "Posturale", workout: "Allenamenti", diary: "Diari", free: "Allenamenti liberi" };
 
 const monthOf = (d: string) => new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${d.slice(0, 7)}-15T00:00:00Z`));
 

@@ -81,7 +81,7 @@ export function ChatThread({
   const [text, setText] = useState(prefill ?? "");
   // quello che stai scrivendo resta anche se chiudi l'app (si cancella all'invio)
   const textDraftKey = `chat:${clientId}`;
-  const { adopt: adoptText } = useDraft(textDraftKey, text, { isEmpty: (t) => !t.trim() });
+  const { adopt: adoptText, clear: clearTextDraft } = useDraft(textDraftKey, text, { isEmpty: (t) => !t.trim() });
   useEffect(() => {
     if (prefill) return;
     let alive = true;
@@ -310,6 +310,8 @@ export function ChatThread({
     setSending(true);
     setError(null);
     stick.current = true;
+    // il messaggio parte: la bozza non serve più (se l'invio non riesce il testo resta nella casella)
+    if (body) clearTextDraft();
     try {
       const attachments: ChatAttachment[] = [];
       for (const p of pending) {

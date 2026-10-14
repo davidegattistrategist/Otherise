@@ -27,3 +27,11 @@ export const MOZ_QUALITY = 72;
 export const MOZ_THUMB_QUALITY = 65;
 /** Miniatura per le griglie (si carica in un attimo). */
 export const THUMB_LONG_SIDE = 480;
+
+/**
+ * Foto caricata in modalità check ma non ancora registrata: il file è già
+ * nello spazio file (`<cliente>/<check>/…`), la riga in check_photos si scrive
+ * con "Check finito". Sta nella bozza del check, così la vede anche l'altro
+ * dispositivo.
+ */
+export type PendingPhoto = { path: string; thumbPath: string; width: number; height: number; size: number };

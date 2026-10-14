@@ -306,6 +306,21 @@ describe.skipIf(!run)("permessi", () => {
     expect((await stranger.from("chat_snoozes").select("*")).data ?? []).toEqual([]);
   });
 
+  it("allenamenti liberi: il cliente segna i suoi, lo staff che lo segue li vede", async () => {
+    const { data: w } = await clientA.from("free_workouts").insert({ client_id: clientAId, kind: "spinning", minutes: 45, effort: 3 }).select("id").single().throwOnError();
+    expect((await coach.from("free_workouts").select("kind, minutes").eq("client_id", clientAId)).data).toEqual([{ kind: "spinning", minutes: 45 }]);
+    expect((await owner.from("free_workouts").select("id").eq("client_id", clientAId)).data).toHaveLength(1);
+    expect((await stranger.from("free_workouts").select("*")).data ?? []).toEqual([]);
+    // a nome di un altro no, tipi e date fuori dalle regole no
+    expect((await clientA.from("free_workouts").insert({ client_id: clientBId, kind: "corsa" })).error).not.toBeNull();
+    expect((await clientA.from("free_workouts").insert({ client_id: clientAId, kind: "skydiving" })).error).not.toBeNull();
+    expect((await clientA.from("free_workouts").insert({ client_id: clientAId, kind: "corsa", performed_on: "2020-01-01" })).error).not.toBeNull();
+    expect((await coach.from("free_workouts").insert({ client_id: clientBId, kind: "corsa" })).error).not.toBeNull();
+    // lo toglie lui
+    await clientA.from("free_workouts").delete().eq("id", w!.id).throwOnError();
+    expect((await admin.from("free_workouts").select("id").eq("id", w!.id)).data).toEqual([]);
+  });
+
   it("dolori nel logbook: il cliente li scrive, il diario con fastidi avvisa lo staff", async () => {
     await clientA.from("workout_logs").upsert({ client_id: clientAId, program_id: publishedId, day_id: "d1", week: 1, discomfort: "ginocchio" }, { onConflict: "program_id,week,day_id" }).throwOnError();
     const { data: wl } = await coach.from("workout_logs").select("discomfort").eq("program_id", publishedId).single();
