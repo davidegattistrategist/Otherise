@@ -45,8 +45,8 @@ function Item({ n, dark }: { n: Row; dark?: boolean }) {
 export async function NotificationList({ dark }: { dark?: boolean }) {
   const supabase = await createClient();
   const [{ data: unreadRows }, { data: readRows }] = await Promise.all([
-    supabase.from("notifications").select("id, title, body, link, read_at, created_at").is("read_at", null).order("created_at", { ascending: false }).limit(100),
-    supabase.from("notifications").select("id, title, body, link, read_at, created_at").not("read_at", "is", null).order("created_at", { ascending: false }).limit(60),
+    supabase.from("notifications").select("id, title, body, link, read_at, created_at").neq("kind", "chat").is("read_at", null).order("created_at", { ascending: false }).limit(100),
+    supabase.from("notifications").select("id, title, body, link, read_at, created_at").neq("kind", "chat").not("read_at", "is", null).order("created_at", { ascending: false }).limit(60),
   ]);
   const unread = (unreadRows ?? []) as Row[];
   const read = (readRows ?? []) as Row[];

@@ -15,7 +15,7 @@ export default async function ClientAreaLayout({ children }: { children: React.R
   const me = await requireClient();
   const supabase = await createClient();
   const [{ count: unread }, { data: name }, { data: chats }, { data: consent }] = await Promise.all([
-    supabase.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null),
+    supabase.from("notifications").select("id", { count: "exact", head: true }).neq("kind", "chat").is("read_at", null),
     getBusinessName().then((data) => ({ data })),
     supabase.rpc("my_unread_chats"),
     supabase.from("clients").select("privacy_accepted_at, privacy_version, health_consent_at").eq("id", me.clientId).single(),

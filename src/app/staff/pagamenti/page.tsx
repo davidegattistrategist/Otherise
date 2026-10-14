@@ -17,36 +17,64 @@ export const metadata: Metadata = { title: "Pagamenti" };
 
 const ORDER: Record<BillingStatus["state"], number> = { overdue: 0, due_soon: 1, none: 2, ok: 3 };
 
+type DueItem = { key: string; tag?: { text: string; late: boolean }; text: string; pay: React.ReactNode };
+
 /**
- * Coaching con più periodi da pagare (es. 6 settimane scadute + quelle in corso):
- * una riga per periodo sotto il nome, ognuna con il suo "Pagato", separate:
- * può pagarne uno e non l'altro (quello saltato resta "da saldare").
+ * Una persona da sistemare: nome e stato; sotto, una riga per ogni pagamento da
+ * incassare con "Pagato" sempre in fondo a destra e "Promemoria" accanto al
+ * primo (con più periodi si può pagarne uno e non l'altro: quello saltato resta
+ * "da saldare"). Stessa forma per tutti, su telefono e computer.
  */
-function PeriodLines({ l, withReminder = false }: { l: BillingLine; withReminder?: boolean }) {
+function DueRow({ name, href, status, late, reminder, items }: { name: string; href: string; status: string; late: boolean; reminder: string | null; items: DueItem[] }) {
+  const remind = reminder ? (
+    <Link href={reminder} className={cx(buttonClass("secondary", "sm"), "!min-h-9 shrink-0 !px-3")} aria-label={`Promemoria in chat a ${name}`}>
+      <IconChat size={16} /> <span className="hidden sm:inline">Promemoria</span>
+    </Link>
+  ) : null;
   return (
-    <ul className="flex w-full flex-col gap-1.5" aria-label={`Pagamenti da incassare da ${l.name}`}>
-      {l.periods.map((p, i) => (
-        <li key={p.paymentId ?? p.start} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-2xl bg-sand/70 px-3 py-2">
-          <span className="min-w-0 text-sm">
-            <span className="inline-flex items-center gap-1.5 font-semibold"><Dot tone={p.late ? "accent" : "deep"} />{p.late ? "Scaduto" : "Da saldare"}</span>
-            <span className="text-muted"> · {p.label}</span>
-          </span>
-          <span className="ml-auto flex items-center gap-3">
-            <span className="font-semibold tabular">{formatEuro(p.amount)}</span>
-            <QuickPay
-              clientId={l.clientId}
-              name={l.name}
-              proposal={`${formatEuro(p.amount)} · ${formatShort(p.start)} – ${formatShort(p.end)}${i > 0 ? "\n(solo questo periodo: gli altri restano da saldare)" : ""}`}
-              reminder={withReminder && i === 0 ? l.reminder : null}
-              compact
-              index={p.index}
-              unpaidId={p.paymentId}
-            />
-          </span>
-        </li>
-      ))}
-    </ul>
+    <li className="flex flex-col gap-1 border-t border-sand-deep py-3.5 first:border-t-0" aria-label={`Da sistemare: ${name}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <Link href={href} className="block truncate font-semibold hover:underline">{name}</Link>
+          <span className="flex items-center gap-1.5 text-sm text-muted"><Dot tone={late ? "accent" : "deep"} />{status}</span>
+        </div>
+        {items.length ? null : remind}
+      </div>
+      {items.length ? (
+        <ul className="flex flex-col" aria-label={`Pagamenti da incassare da ${name}`}>
+          {items.map((it, i) => (
+            <li key={it.key} className="flex min-h-11 items-center justify-between gap-3">
+              <span className="min-w-0 text-[15px]">
+                {it.tag ? <span className={cx("font-semibold", it.tag.late ? "text-accent-deep" : "text-ink-soft")}>{it.tag.text} · </span> : null}
+                <span className="tabular">{it.text}</span>
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                {i === 0 ? remind : null}
+                {it.pay}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </li>
   );
+}
+
+/** Le righe "Pagato" di un cliente: il prossimo pagamento atteso, oppure uno per periodo da saldare. */
+function dueItems(l: BillingLine): DueItem[] {
+  if (l.periods.length) {
+    return l.periods.map((p, i) => {
+      const text = `${formatEuro(p.amount)} · ${formatShort(p.start)} – ${formatShort(p.end)}`;
+      return {
+        key: p.paymentId ?? p.start,
+        tag: { text: p.late ? "Scaduto" : "Da saldare", late: p.late },
+        text,
+        pay: <QuickPay clientId={l.clientId} name={l.name} proposal={`${text}${i > 0 ? "\n(solo questo periodo: gli altri restano da saldare)" : ""}`} reminder={null} index={p.index} unpaidId={p.paymentId} />,
+      };
+    });
+  }
+  if (!l.proposal) return [];
+  return [{ key: "next", text: l.proposal, pay: <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} /> }];
 }
 
 /** Valori di un pagamento per la finestra "Modifica". */
@@ -90,6 +118,7 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
   const monthIndex = revenue.buckets.findIndex((b) => b.month === month);
   const rows = [...lines].sort((a, z) => ORDER[a.status.state] - ORDER[z.status.state] || (a.status.daysLeft ?? 999) - (z.status.daysLeft ?? 999));
   const attention = rows.filter((r) => r.status.state === "overdue" || r.status.state === "due_soon");
+  const others = rows.filter((r) => !attention.includes(r));
   const thisMonth = revenue.buckets[revenue.buckets.length - 1]?.total ?? 0;
   const thisYear = revenue.buckets.filter((b) => b.month.startsWith(year)).reduce((t, b) => t + b.total, 0);
 
@@ -123,16 +152,15 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
           <div className="mb-2 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Da sistemare</Eyebrow></div>
           <ul className="flex flex-col">
             {attention.map((l) => (
-              <li key={l.clientId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-sand-deep py-3 first:border-t-0">
-                <div className="min-w-0">
-                  <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="font-semibold hover:underline">{l.name}</Link>
-                  <div className="text-sm text-muted">
-                    {l.status.label}
-                    {l.periods.length ? ` · ${l.periods.length} pagamenti da incassare, ${formatEuro(l.periods.reduce((t, p) => t + p.amount, 0))} in tutto` : l.proposal ? ` · prossimo: ${l.proposal}` : ""}
-                  </div>
-                </div>
-                {l.periods.length ? <PeriodLines l={l} withReminder /> : <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={l.reminder} />}
-              </li>
+              <DueRow
+                key={l.clientId}
+                name={l.name}
+                href={`/staff/clienti/${l.clientId}/pagamenti`}
+                status={l.periods.length > 1 ? `${l.status.label} · ${l.periods.length} pagamenti da incassare, ${formatEuro(l.periods.reduce((t, p) => t + p.amount, 0))} in tutto` : l.status.label}
+                late={l.status.state === "overdue"}
+                reminder={l.reminder}
+                items={dueItems(l)}
+              />
             ))}
           </ul>
         </Card>
@@ -142,22 +170,26 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
         <Card className="flex flex-col gap-1">
           <div className="mb-2 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Sessioni PT da saldare</Eyebrow></div>
           <ul className="flex flex-col">
-            {toSettle.map((t) => (
-              <li key={t.clientId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-sand-deep py-3 first:border-t-0">
-                <div className="min-w-0">
-                  <Link href={`/staff/clienti/${t.clientId}/pagamenti#sessioni-pt`} className="font-semibold hover:underline">{t.name}</Link>
-                  <div className="text-sm text-muted tabular">{t.due === 1 ? "1 sessione" : `${t.due} sessioni`}{t.dueAmount !== null ? ` · ${formatEuro(t.dueAmount)}` : ""}</div>
-                </div>
-                {t.dueAmount !== null ? (
-                  <QuickPay clientId={t.clientId} name={t.name} proposal={`${formatEuro(t.dueAmount)} · ${t.due === 1 ? "1 sessione" : `${t.due} sessioni`}`} reminder={`/staff/messaggi/${t.clientId}?promemoria=sessioni`} settle />
-                ) : (
-                  <span className="flex flex-wrap items-center gap-2">
-                    <Link href={`/staff/messaggi/${t.clientId}?promemoria=sessioni`} className={cx(buttonClass("secondary", "sm"), "!min-h-9 !px-3")}><IconChat size={16} /> Promemoria</Link>
-                    <Link href={`/staff/pagamenti/nuovo?cliente=${t.clientId}&tipo=lezioni&sessioni=${t.due}`} className={cx(buttonClass("primary", "sm"), "!min-h-9 !px-3")}>Pagato</Link>
-                  </span>
-                )}
-              </li>
-            ))}
+            {toSettle.map((t) => {
+              const what = t.due === 1 ? "1 sessione" : `${t.due} sessioni`;
+              return (
+                <DueRow
+                  key={t.clientId}
+                  name={t.name}
+                  href={`/staff/clienti/${t.clientId}/pagamenti#sessioni-pt`}
+                  status={`${what} da saldare`}
+                  late
+                  reminder={`/staff/messaggi/${t.clientId}?promemoria=sessioni`}
+                  items={[{
+                    key: "sessioni",
+                    text: t.dueAmount !== null ? `${formatEuro(t.dueAmount)} · ${what}` : what,
+                    pay: t.dueAmount !== null
+                      ? <QuickPay clientId={t.clientId} name={t.name} proposal={`${formatEuro(t.dueAmount)} · ${what}`} reminder={null} settle />
+                      : <Link href={`/staff/pagamenti/nuovo?cliente=${t.clientId}&tipo=lezioni&sessioni=${t.due}`} className={cx(buttonClass("primary", "sm"), "!min-h-9 !px-3")}>Pagato</Link>,
+                  }]}
+                />
+              );
+            })}
           </ul>
         </Card>
       ) : null}
@@ -242,10 +274,11 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
         </div>
       </details>
 
-      {/* telefono: una scheda per cliente con tutto in vista */}
-      <Card className="flex flex-col p-0 md:hidden">
+      {/* gli altri clienti (chi è da sistemare sta sopra): telefono, una riga per cliente */}
+      {others.length ? <h2 className="-mb-3 px-1 text-[13px] font-bold tracking-wider text-muted uppercase">Gli altri clienti</h2> : null}
+      {others.length ? <Card className="flex flex-col p-0 md:hidden">
         <ul>
-          {rows.map((l) => (
+          {others.map((l) => (
             <li key={l.clientId} className="flex flex-col gap-2 border-t border-sand-deep px-4 py-3.5 first:border-t-0">
               <div className="flex items-baseline justify-between gap-3">
                 <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="min-w-0 truncate font-semibold hover:underline">{l.name}</Link>
@@ -259,15 +292,14 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
                     {l.status.dueDate ? ` · ${formatShort(l.status.dueDate)}` : l.status.sessionsLeft !== null ? ` · ${l.sessionsUsed}/${l.sessionsBought} sessioni` : ""}
                   </span>
                 </span>
-                {l.periods.length ? null : l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" || l.paused ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="shrink-0 text-sm font-semibold underline">Imposta piano</Link>}
+                {l.status.state === "none" ? <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="shrink-0 text-sm font-semibold underline">Imposta piano</Link> : null}
               </div>
-              {l.periods.length ? <PeriodLines l={l} /> : null}
             </li>
           ))}
         </ul>
-      </Card>
+      </Card> : null}
 
-      <Card className="relative hidden overflow-x-auto p-0 md:block">
+      {others.length ? <Card className="relative hidden overflow-x-auto p-0 md:block">
         <table className="w-full min-w-[720px] text-left text-[15px]">
           <thead>
             <tr className="text-xs tracking-wider text-muted uppercase">
@@ -279,7 +311,7 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
             </tr>
           </thead>
           <tbody>
-            {rows.map((l) => (
+            {others.map((l) => (
               <Fragment key={l.clientId}>
               <tr className="border-t border-sand-deep hover:bg-white/60">
                 <td className="px-5 py-3"><Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="font-semibold hover:underline">{l.name}</Link></td>
@@ -291,18 +323,13 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
                   </span>
                 </td>
                 <td className="px-3 py-3 text-right text-muted tabular">{l.status.dueDate ? formatShort(l.status.dueDate) : l.status.sessionsLeft !== null ? `${l.sessionsUsed}/${l.sessionsBought} sessioni` : "—"}</td>
-                <td className="px-5 py-3 text-right">{l.periods.length ? <span className="text-sm text-muted">{l.periods.length} pagamenti ↓</span> : l.proposal ? <QuickPay clientId={l.clientId} name={l.name} proposal={l.proposal} reminder={null} compact label={l.status.state === "ok" || l.paused ? "Registra" : "Pagato"} /> : <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="text-sm font-semibold underline">Imposta piano</Link>}</td>
+                <td className="px-5 py-3 text-right">{l.status.state === "none" ? <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="text-sm font-semibold underline">Imposta piano</Link> : null}</td>
               </tr>
-              {l.periods.length ? (
-                <tr>
-                  <td colSpan={5} className="px-5 pb-3"><PeriodLines l={l} /></td>
-                </tr>
-              ) : null}
               </Fragment>
             ))}
           </tbody>
         </table>
-      </Card>
+      </Card> : null}
     </div>
   );
 }

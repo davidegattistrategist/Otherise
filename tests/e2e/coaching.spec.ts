@@ -50,7 +50,7 @@ test("credito: porta 500 invece di 300, il rinnovo dopo è di 100", async ({ pag
   await expect(page.locator('input[name="amount"]')).toHaveValue("100");
 });
 
-test("Oggi: 'Nessun programma pubblicato' solo per chi è in coaching, non per chi fa lezioni PT", async ({ page }, info) => {
+test("Oggi, Programmi: chi non ha né programma né bozza non compare (coaching o lezioni PT)", async ({ page }, info) => {
   await login(page, "titolare@prova.local");
   const tag = `${info.project.name}${Date.now() % 10000}`;
   const coaching = `Coach${tag}`;
@@ -71,8 +71,11 @@ test("Oggi: 'Nessun programma pubblicato' solo per chi è in coaching, non per c
 
   await page.goto("/staff");
   await page.waitForLoadState("networkidle");
-  await expect(page.locator("a", { hasText: coaching }).filter({ hasText: "Nessun programma pubblicato" }).filter({ visible: true }).first()).toBeVisible();
-  await expect(page.locator("a", { hasText: pt }).filter({ hasText: "Nessun programma pubblicato" })).toHaveCount(0);
+  // in Programmi compaiono solo bozze, programmi finiti e programmi che finiscono entro 7 giorni
+  await expect(page.getByText("Bozza di programma da pubblicare").filter({ visible: true }).first()).toBeVisible();
+  await expect(page.locator("a", { hasText: coaching }).filter({ hasText: /programma/i })).toHaveCount(0);
+  await expect(page.locator("a", { hasText: pt }).filter({ hasText: /programma/i })).toHaveCount(0);
+  await expect(page.getByText("Nessun programma pubblicato")).toHaveCount(0);
 });
 
 test("il cliente vede un avviso gentile per il rinnovo, mai 'devi pagare'", async ({ browser }, info) => {
@@ -117,14 +120,16 @@ test("Pagamenti: dopo 'Pagato' e da 'Tutti i pagamenti' si corregge il pagamento
   await page.getByRole("button", { name: /^Coaching/ }).click();
   await page.getByRole("button", { name: "Mensile", exact: true }).click();
   await page.locator('input[name="amount"]').fill("120");
+  // il mese pagato è già finito: il mese in corso è da saldare e compare in "Da sistemare"
+  await page.locator('input[name="period_start"]').fill(new Date(Date.now() - 40 * 86_400_000).toISOString().slice(0, 10));
   await page.getByRole("button", { name: "Salva il pagamento" }).click();
   await expect(page.getByText("Pagamento registrato")).toBeVisible();
 
   // "Pagato" in Pagamenti, poi "Modifica" subito lì
   await page.goto("/staff/pagamenti");
   await page.waitForLoadState("networkidle");
-  const row = page.locator("li, tr", { hasText: name }).filter({ visible: true }).filter({ has: page.getByRole("button", { name: /^(Pagato|Registra)$/ }) }).first();
-  await row.getByRole("button", { name: /^(Pagato|Registra)$/ }).click();
+  const row = page.getByRole("list", { name: `Pagamenti da incassare da ${name}` });
+  await row.getByRole("button", { name: "Pagato" }).click();
   const edit = page.getByRole("button", { name: `Modifica: pagamento di ${name}` }).filter({ visible: true }).first();
   await expect(edit).toBeVisible();
   await edit.click();

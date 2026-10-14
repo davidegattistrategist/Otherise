@@ -34,6 +34,11 @@ function fromUTC(ms: number): ISODate {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
+/** L'ora (0-23) in Italia in questo momento. */
+export function romeHour(now: Date = new Date()): number {
+  return Number(new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, hour: "2-digit", hourCycle: "h23" }).format(now));
+}
+
 export function isISODate(s: unknown): s is ISODate {
   if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const [y, m, d] = parts(s);
@@ -106,6 +111,13 @@ export function formatLong(d: ISODate | null | undefined): string {
   if (!d) return "";
   const [y, m, day] = parts(d);
   return `${day} ${MONTHS_LONG[m - 1]} ${y}`;
+}
+
+/** "18 ottobre" (senza anno) */
+export function formatDayMonth(d: ISODate | null | undefined): string {
+  if (!d) return "";
+  const [, m, day] = parts(d);
+  return `${day} ${MONTHS_LONG[m - 1]}`;
 }
 
 /** "ven 9 ott" */

@@ -122,7 +122,7 @@ Senza questo passo l'app funziona lo stesso, ma inviti e avvisi via email parton
 4. **Deploy**. Dopo un paio di minuti l'app è online su un indirizzo tipo `otherise-xxx.vercel.app`.
 5. **Il tuo dominio**: nel progetto Vercel **Settings → Domains → Add** → `app.tuodominio.it`. Vercel ti dice quale record DNS aggiungere (di solito un CNAME): aggiungilo dal pannello del dominio. Quando è attivo, controlla che Site URL e Redirect URLs su Supabase (passo 2.5) e `NEXT_PUBLIC_SITE_URL` su Vercel usino proprio questo indirizzo. Se cambi una variabile su Vercel, fai **Deployments → … → Redeploy**.
 
-I controlli automatici giornalieri (scadenze, programmi in chiusura, promemoria del diario) partono da soli ogni mattina alle 8: li attiva il file `vercel.json` insieme a `CRON_SECRET`.
+I controlli automatici giornalieri (scadenze, programmi in chiusura, promemoria del diario) partono da soli ogni mattina alle 8 ora italiana (anche con l'ora solare; sul piano gratuito di Vercel possono arrivare entro l'ora): li attiva il file `vercel.json` insieme a `CRON_SECRET`.
 
 ---
 

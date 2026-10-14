@@ -129,6 +129,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"chat_snoozes": {
+                  Row: {
+                    "client_id": string,"created_at": string,"snoozed_by": string | null,"until": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"created_at"?: string,"snoozed_by"?: string | null,"until": string
+                  }
+                  Update: {
+                    "client_id"?: string,"created_at"?: string,"snoozed_by"?: string | null,"until"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "chat_snoozes_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: true
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"checkins": {
                   Row: {
                     "adherence": number,"client_id": string,"coach_reply": string,"flag_reasons": (string)[],"flagged": boolean,"id": string,"issues": string,"request": string,"reviewed_at": string | null,"sleep": number,"stress": number,"submitted_at": string,"training": number,"week_start": string

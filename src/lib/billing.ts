@@ -129,6 +129,8 @@ export type BillingStatus = {
    * ne è finito almeno uno senza pagamento, "scaduto"). 0 negli altri casi.
    */
   unpaidPeriods: number;
+  /** Scaduto: da quanti giorni è finito il primo periodo non pagato (1 = da ieri). */
+  lateDays?: number;
 };
 
 export const SESSIONS_WARNING = 2;
@@ -180,6 +182,7 @@ export function billingStatus(row: BillingRow | null | undefined, today: ISODate
       daysLeft,
       sessionsLeft: null,
       unpaidPeriods,
+      lateDays: late,
     };
   }
   const state: BillingState = daysLeft <= reminderDays ? "due_soon" : "ok";
@@ -301,7 +304,7 @@ export function withUnpaidRows(st: BillingStatus, rows: UnpaidRow[], today: ISOD
     return { ...st, state: "overdue", label: "Periodo da saldare", clientLabel: "Periodo da saldare", unpaidPeriods: Math.max(1, rows.length + chain) };
   }
   const late = diffDays(oldest.period_end, today);
-  return { ...st, state: "overdue", label: `Scaduto da ${late} ${late === 1 ? "giorno" : "giorni"}`, clientLabel: "Periodo scaduto", unpaidPeriods: Math.max(2, rows.length + chain) };
+  return { ...st, state: "overdue", label: `Scaduto da ${late} ${late === 1 ? "giorno" : "giorni"}`, clientLabel: "Periodo scaduto", unpaidPeriods: Math.max(2, rows.length + chain), lateDays: late };
 }
 
 /** Quanto vale un piano in un mese (per le stime delle entrate ricorrenti) */

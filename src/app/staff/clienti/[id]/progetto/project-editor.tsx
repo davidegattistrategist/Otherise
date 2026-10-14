@@ -4,7 +4,8 @@
  * Editor del progetto annuale: una colonna per mese, la fase prevista, quanto
  * spingere ogni stimolo (tocca la cella per cambiare 0 → 1 → 2 → 3) e le note.
  */
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { MONTHS, PROJECT_PHASES, PHASE_BY_KEY, levelLabel, projectMonths, rowId, type Project } from "@/lib/project";
 import { Button, Card, Eyebrow, Input, Notice, Textarea, cx } from "@/components/ui";
 import { IconPlus, IconX } from "@/components/icons";
@@ -17,6 +18,7 @@ export function ProjectEditor({
   initialVisible,
   isNew,
   clientName,
+  canNotify,
   today,
   save,
 }: {
@@ -24,8 +26,10 @@ export function ProjectEditor({
   initialVisible: boolean;
   isNew: boolean;
   clientName: string;
+  /** il cliente ha l'account: si può avvisare con una notifica */
+  canNotify: boolean;
   today: string;
-  save: (data: Project, visible: boolean) => Promise<SaveProjectResult>;
+  save: (data: Project, visible: boolean, notifyClient: boolean) => Promise<SaveProjectResult>;
 }) {
   const [p, setP] = useState<Project>(initial);
   const [visible, setVisible] = useState(initialVisible);
@@ -45,9 +49,16 @@ export function ProjectEditor({
     setMsg(null);
   };
 
-  const onSave = (nextVisible = visible) =>
+  // progetto visibile: prima di salvare chiediamo se avvisare il cliente
+  const [ask, setAsk] = useState<{ visible: boolean } | null>(null);
+  const onSave = (nextVisible = visible) => {
+    if (nextVisible && canNotify) setAsk({ visible: nextVisible });
+    else doSave(nextVisible, false);
+  };
+  const doSave = (nextVisible: boolean, notifyClient: boolean) =>
     start(async () => {
-      const r = await save(p, nextVisible);
+      setAsk(null);
+      const r = await save(p, nextVisible, notifyClient);
       if (r.ok) {
         setDirty(false);
         setVisible(nextVisible);
@@ -89,7 +100,7 @@ export function ProjectEditor({
             onChange={(e) => onSave(e.target.checked)}
             className="mt-1 h-5 w-5 accent-[#1b1a17]"
           />
-          <span><strong>Visibile al cliente</strong><br /><span className="text-muted">La prima volta riceve una notifica. Puoi cambiare il progetto quando vuoi.</span></span>
+          <span><strong>Visibile al cliente</strong><br /><span className="text-muted">Quando salvi ti chiedo se mandare una notifica. Puoi cambiare il progetto quando vuoi.</span></span>
         </label>
         {msg ? <Notice tone={msg.ok ? "success" : "error"}>{msg.text}</Notice> : null}
       </Card>
@@ -198,6 +209,42 @@ export function ProjectEditor({
           <p className="mt-3 text-sm text-muted">Tocca una cella per cambiare il livello: vuoto = assente, poi mantenimento, medio, alto. Per l&apos;alimentazione: non trattata, deficit, normocalorica, surplus. Nelle note: gare, vacanze, obiettivi del mese.</p>
         </div>
       </Card>
+      {ask ? <NotifyDialog clientName={clientName} pending={pending} onChoose={(n) => doSave(ask.visible, n)} onClose={() => setAsk(null)} /> : null}
     </div>
+  );
+}
+
+/** "Mandi una notifica?": finestra in basso sul telefono, al centro sul computer. */
+function NotifyDialog({ clientName, pending, onChoose, onClose }: { clientName: string; pending: boolean; onChoose: (notify: boolean) => void; onClose: () => void }) {
+  const first = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    first.current?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[95] flex items-end justify-center bg-ink/40 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="notify-title"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-md rounded-t-[28px] bg-card px-5 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:rounded-[28px] sm:px-6 sm:pb-6">
+        <div className="mb-2 flex items-start justify-between gap-3">
+          <h2 id="notify-title" className="text-[20px] leading-tight font-semibold">Mandi una notifica a {clientName}?</h2>
+          <button type="button" onClick={onClose} className="-mt-2 -mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-ink/5" aria-label="Chiudi senza salvare">
+            <IconX size={20} />
+          </button>
+        </div>
+        <p className="text-[15px] leading-relaxed text-muted">Il progetto è visibile nel suo Percorso. Con una notifica sa subito che c'è qualcosa di nuovo da guardare.</p>
+        <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
+          <Button ref={first} onClick={() => onChoose(true)} disabled={pending} className="w-full sm:w-auto">Sì, manda la notifica</Button>
+          <Button variant="secondary" onClick={() => onChoose(false)} disabled={pending} className="w-full sm:w-auto">Salva senza notifica</Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

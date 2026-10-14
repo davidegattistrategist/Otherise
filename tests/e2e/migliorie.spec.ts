@@ -265,7 +265,7 @@ test("lezioni PT a parte: non spostano la scadenza del coaching; contatore, prez
   await expect(card.getByText(/sessioni da saldare · 135\s€/)).toBeVisible();
   // nella pagina Pagamenti, con Pagato e Promemoria
   await page.goto("/staff/pagamenti");
-  const settle = page.locator("li", { hasText: "Esempio Giulia" }).filter({ hasText: /3 sessioni · 135\s€/ });
+  const settle = page.getByRole("listitem", { name: "Da sistemare: Esempio Giulia" }).filter({ hasText: /135\s€ · 3 sessioni/ });
   await expect(settle).toBeVisible();
   await expect(settle.getByRole("link", { name: /Promemoria/ })).toBeVisible();
   await page.goto(`${base}/pagamenti`);
@@ -274,7 +274,7 @@ test("lezioni PT a parte: non spostano la scadenza del coaching; contatore, prez
   await expect(page.locator("textarea").filter({ visible: true }).first()).toHaveValue(/siamo a 3 sessioni da saldare \(3 sessioni × 45\s€ = 135\s€\)/);
   // saldo con Pagato da Pagamenti: torna in pari
   await page.goto("/staff/pagamenti");
-  await page.locator("li", { hasText: "Esempio Giulia" }).filter({ hasText: /3 sessioni · 135\s€/ }).getByRole("button", { name: "Pagato" }).click();
+  await page.getByRole("listitem", { name: "Da sistemare: Esempio Giulia" }).filter({ hasText: /135\s€ · 3 sessioni/ }).getByRole("button", { name: "Pagato" }).click();
   await expect(page.getByText(/Registrato 135/).first()).toBeVisible();
   await page.goto(`${base}/pagamenti`);
   await expect(card.getByText("In pari")).toBeVisible();

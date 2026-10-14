@@ -22,6 +22,7 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
       initialVisible={data?.visible ?? false}
       isNew={!data}
       clientName={client.first_name}
+      canNotify={Boolean(client.user_id)}
       today={todayISO()}
       save={saveProject.bind(null, id)}
     />

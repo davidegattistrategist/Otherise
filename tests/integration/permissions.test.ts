@@ -280,6 +280,15 @@ describe.skipIf(!run)("permessi", () => {
     expect((await coach.from("backup_runs").insert({ ok: false })).error).not.toBeNull();
   });
 
+  it("chat rimandata ('Non senti X'): solo lo staff che segue il cliente, il cliente non la vede", async () => {
+    await coach.from("chat_snoozes").upsert({ client_id: clientAId, until: "2026-11-05" }).throwOnError();
+    expect((await owner.from("chat_snoozes").select("until").eq("client_id", clientAId)).data).toEqual([{ until: "2026-11-05" }]);
+    expect((await clientA.from("chat_snoozes").select("*")).data ?? []).toEqual([]);
+    expect((await clientA.from("chat_snoozes").upsert({ client_id: clientAId, until: "2027-01-01" })).error).not.toBeNull();
+    expect((await coach.from("chat_snoozes").insert({ client_id: clientBId, until: "2026-11-05" })).error).not.toBeNull();
+    expect((await stranger.from("chat_snoozes").select("*")).data ?? []).toEqual([]);
+  });
+
   it("dolori nel logbook: il cliente li scrive, il diario con fastidi avvisa lo staff", async () => {
     await clientA.from("workout_logs").upsert({ client_id: clientAId, program_id: publishedId, day_id: "d1", week: 1, discomfort: "ginocchio" }, { onConflict: "program_id,week,day_id" }).throwOnError();
     const { data: wl } = await coach.from("workout_logs").select("discomfort").eq("program_id", publishedId).single();

@@ -80,7 +80,8 @@ export async function sendMessage(clientId: string, input: { body: string; attac
   if (voice) await startTranscript(row.id, clientId);
   await markChatRead(supabase, me.id, clientId);
 
-  // Avviso a chi deve leggere (al massimo uno all'ora per conversazione)
+  // Traccia per le email a chi non ha le notifiche sul telefono (al massimo una all'ora per conversazione):
+  // non compare nella campanella, i messaggi da leggere li conta il numerino rosso di Messaggi
   const hour = new Date().toISOString().slice(0, 13);
   const preview = previewOf(body, attachments);
   const fromClient = me.role === "client";

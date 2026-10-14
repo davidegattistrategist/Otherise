@@ -33,7 +33,11 @@ test("progetto annuale: il trainer lo modifica, il cliente lo vede", async ({ pa
   await page.getByLabel(/Obiettivo dell'anno/).fill(goal);
   await page.getByRole("button", { name: /Forza massima, .*Tocca per cambiare/ }).first().click();
   await page.getByRole("button", { name: "Salva", exact: true }).click();
-  await expect(page.getByText(/Progetto salvato/)).toBeVisible();
+  // progetto visibile: prima di salvare chiede se avvisare il cliente
+  const ask = page.getByRole("dialog", { name: /Mandi una notifica a Giulia/ });
+  await expect(ask).toBeVisible();
+  await ask.getByRole("button", { name: "Sì, manda la notifica" }).click();
+  await expect(page.getByText(/Progetto salvato e cliente avvisato/)).toBeVisible();
 
   const ctx = await browser.newContext(info.project.use);
   const client = await ctx.newPage();
@@ -42,6 +46,8 @@ test("progetto annuale: il trainer lo modifica, il cliente lo vede", async ({ pa
   await expect(client.getByText("Il tuo progetto")).toBeVisible();
   await expect(client.getByText(goal)).toBeVisible();
   await expect(client.getByText("Volumizzazione").first()).toBeVisible();
+  await client.goto("/cliente/notifiche");
+  await expect(client.getByText(/Il tuo progetto è (pronto|stato aggiornato)/).first()).toBeVisible();
   await ctx.close();
 });
 

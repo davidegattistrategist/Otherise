@@ -17,7 +17,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   const me = await requireStaff();
   const supabase = await createClient();
   const [{ count: unread }, { data: name }, { data: chats }] = await Promise.all([
-    supabase.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null),
+    supabase.from("notifications").select("id", { count: "exact", head: true }).neq("kind", "chat").is("read_at", null),
     getBusinessName().then((data) => ({ data })),
     supabase.rpc("my_unread_chats"),
   ]);

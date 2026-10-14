@@ -31,7 +31,7 @@ export function StaffNav({ items: given }: { items: NavItem[] }) {
             <Icon />
             <span>{it.label}</span>
             {it.badge ? (
-              <span className="ml-auto flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-ink px-1.5 text-xs font-bold text-card">{it.badge}</span>
+              <span className={cx("ml-auto flex h-[22px] min-w-[22px] items-center justify-center rounded-full px-1.5 text-xs font-bold", it.href === "/staff/messaggi" ? "bg-accent text-white" : "bg-ink text-card")}>{it.badge}</span>
             ) : null}
           </Link>
         );

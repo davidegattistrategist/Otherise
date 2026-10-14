@@ -29,6 +29,8 @@ export type ClientOverview = ClientRow & {
   coachName: string | null;
   program: { id: string; title: string; week: number; weeks: number; endDate: ISODate; state: "running" | "not_started" | "finished" } | null;
   draftCount: number;
+  /** C'è già la fase dopo: un programma pubblicato che parte dopo quello in corso */
+  nextProgram: boolean;
   lastCheck: ISODate | null;
   /** Almeno un check registrato nell'app (non importato dallo storico) */
   checksInApp: boolean;
@@ -123,6 +125,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
       coachName: c.coach_id ? coachName.get(c.coach_id) ?? null : null,
       program,
       draftCount: progs.filter((p) => p.status === "draft").length,
+      nextProgram: Boolean(current?.start_date && current.start_date <= today && published.some((p) => p.start_date! > today)),
       lastCheck: lastCheck.get(c.id)?.check_date ?? null,
       checksInApp: appChecks.has(c.id),
       lastLog: lastLog.get(c.id)?.performed_on ?? null,
@@ -155,14 +158,14 @@ export function buildTodayList(clients: ClientOverview[], today: ISODate = today
     if (c.billing && (c.billing.state === "due_soon" || c.billing.state === "overdue")) {
       payments.push({ clientId: c.id, clientName: c.fullName, text: c.billing.label, href: `/staff/clienti/${c.id}/pagamenti`, tone: c.billing.state === "overdue" ? "accent" : "ink" });
     }
-    if (!c.coaching && !c.draftCount) {
-      // lezioni PT: nessun programma da preparare
-    } else if (!c.program) {
-      programs.push({ clientId: c.id, clientName: c.fullName, text: c.draftCount ? "Bozza di programma da pubblicare" : "Nessun programma pubblicato", href: `/staff/clienti/${c.id}/programma`, tone: "accent" });
-    } else {
+    // Programmi: solo chi ha una bozza, un programma finito o che finisce entro 7 giorni (e non ha già la fase dopo)
+    const programHref = `/staff/clienti/${c.id}/programma`;
+    if (c.draftCount) {
+      programs.push({ clientId: c.id, clientName: c.fullName, text: "Bozza di programma da pubblicare", href: programHref, tone: "accent" });
+    } else if (c.coaching && c.program && !c.nextProgram && c.program.state !== "not_started") {
       const left = diffDays(today, c.program.endDate);
-      if (c.program.state === "finished") programs.push({ clientId: c.id, clientName: c.fullName, text: -left === 1 ? "Programma finito ieri" : `Programma finito da ${-left} giorni`, href: `/staff/clienti/${c.id}/programma`, tone: "accent" });
-      else if (left <= 7) programs.push({ clientId: c.id, clientName: c.fullName, text: left === 0 ? "Il programma finisce oggi" : left === 1 ? "Il programma finisce domani" : `Il programma finisce tra ${left} giorni`, href: `/staff/clienti/${c.id}/programma`, tone: "ink" });
+      if (c.program.state === "finished") programs.push({ clientId: c.id, clientName: c.fullName, text: -left === 1 ? "Programma finito ieri" : `Programma finito da ${-left} giorni`, href: programHref, tone: "accent" });
+      else if (left <= 7) programs.push({ clientId: c.id, clientName: c.fullName, text: left === 0 ? "Il programma finisce oggi" : left === 1 ? "Il programma finisce domani" : `Il programma finisce tra ${left} giorni`, href: programHref, tone: "ink" });
     }
     const due = checkDue(c, today);
     if (due) checks.push({ clientId: c.id, clientName: c.fullName, text: due.text, href: `/staff/clienti/${c.id}/check/nuovo`, tone: due.late ? "accent" : "ink" });

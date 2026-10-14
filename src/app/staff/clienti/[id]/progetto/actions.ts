@@ -9,7 +9,11 @@ import type { Json } from "@/lib/supabase/database.types";
 
 export type SaveProjectResult = { ok: true; message: string } | { ok: false; error: string };
 
-export async function saveProject(clientId: string, raw: unknown, visible: boolean): Promise<SaveProjectResult> {
+/**
+ * Salva il progetto. La notifica al cliente parte solo se il trainer lo sceglie
+ * nella finestra che si apre al salvataggio (e solo se il progetto è visibile).
+ */
+export async function saveProject(clientId: string, raw: unknown, visible: boolean, notifyClient = false): Promise<SaveProjectResult> {
   const me = await requireStaff();
   const parsed = projectSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Progetto non valido." };
@@ -19,14 +23,27 @@ export async function saveProject(clientId: string, raw: unknown, visible: boole
     .from("client_projects")
     .upsert({ client_id: clientId, data: parsed.data as unknown as NonNullable<Json>, visible, updated_by: me.id }, { onConflict: "client_id" });
   if (error) return { ok: false, error: "Salvataggio non riuscito. Riprova." };
-  // la prima volta che il progetto diventa visibile, il cliente riceve una notifica
-  if (visible && !before?.visible) {
+  let notified = false;
+  if (visible && notifyClient) {
     const { data: c } = await supabase.from("clients").select("user_id").eq("id", clientId).maybeSingle();
     if (c?.user_id) {
-      await notify([{ recipient_id: c.user_id, client_id: clientId, kind: "project", title: "Il tuo progetto è pronto", body: "Guarda come si susseguiranno le fasi nei prossimi mesi.", link: "/cliente/profilo#progetto", dedupe_key: `project:${clientId}` }]);
+      const first = !before?.visible;
+      await notify([{
+        recipient_id: c.user_id,
+        client_id: clientId,
+        kind: "project",
+        title: first ? "Il tuo progetto è pronto" : "Il tuo progetto è stato aggiornato",
+        body: first ? "Guarda come si susseguiranno le fasi nei prossimi mesi." : "Guarda le novità nel tuo Percorso.",
+        link: "/cliente/profilo#progetto",
+        dedupe_key: `project:${clientId}:${Date.now()}`,
+      }]);
+      notified = true;
     }
   }
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
   revalidatePath("/cliente/profilo");
-  return { ok: true, message: visible ? "Progetto salvato: il cliente lo vede nel suo Percorso." : "Progetto salvato (il cliente non lo vede ancora)." };
+  return {
+    ok: true,
+    message: !visible ? "Progetto salvato (il cliente non lo vede ancora)." : notified ? "Progetto salvato e cliente avvisato con una notifica." : "Progetto salvato: il cliente lo vede nel suo Percorso.",
+  };
 }

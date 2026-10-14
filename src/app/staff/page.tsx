@@ -11,7 +11,8 @@ import { ageOn, formatHeading, formatShort, isBirthday, todayISO } from "@/lib/d
 import { Card, Dot, Eyebrow, LinkButton, Notice, PageTitle } from "@/components/ui";
 import { getBillingLines } from "@/lib/data/billing";
 import { QuickPay } from "@/components/quick-pay";
-import { markDiscomfortSeen, markNoteSeen } from "./today-actions";
+import { markDiscomfortSeen, markNoteSeen, snoozeChatSilence } from "./today-actions";
+import { CHAT_SNOOZE_DAYS, chatSilence, romeDay } from "@/lib/chat-silence";
 import { FirstSteps } from "./first-steps";
 import { ClearParams } from "@/components/clear-param";
 import { PushPrompt } from "@/components/push";
@@ -40,7 +41,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
   const me = await requireStaff();
   const supabase = await createClient();
   const today = todayISO();
-  const [clients, { data: checkins }, { data: pains }, { data: brand }, { data: clientNotes }] = await Promise.all([
+  const [clients, { data: checkins }, { data: pains }, { data: brand }, { data: clientNotes }, { data: lastMessages }, { data: snoozes }] = await Promise.all([
     getClientsOverview(supabase, me),
     supabase
       .from("checkins")
@@ -65,12 +66,23 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
       .is("note_seen_at", null)
       .order("updated_at", { ascending: false })
       .limit(20),
+    // ultimo messaggio di ogni chat (per "Non lo senti da un po'")
+    supabase.from("messages").select("client_id, created_at").is("deleted_at", null).order("created_at", { ascending: false }).limit(5000),
+    supabase.from("chat_snoozes").select("client_id, until"),
   ]);
   const { programs, checks, training } = buildTodayList(clients, today);
   const billing = me.role === "owner" ? (await getBillingLines(supabase)).lines.filter((l) => !l.paused && (l.status.state === "overdue" || l.status.state === "due_soon")) : [];
   const active = clients.filter((c) => c.status === "active").length;
   const birthdays = clients.filter((c) => c.status === "active" && isBirthday(c.birth_date, today));
   const noBirth = clients.filter((c) => c.status === "active" && !c.birth_date);
+  const lastMsgDay = new Map<string, string>();
+  for (const m of lastMessages ?? []) if (!lastMsgDay.has(m.client_id)) lastMsgDay.set(m.client_id, romeDay(m.created_at));
+  const snoozedBy = new Map((snoozes ?? []).map((z) => [z.client_id, z.until]));
+  const silent = clients
+    .filter((c) => c.status === "active" && c.user_id)
+    .map((c) => ({ c, s: chatSilence(lastMsgDay.get(c.id) ?? null, today, snoozedBy.get(c.id) ?? null) }))
+    .filter((x): x is { c: (typeof clients)[number]; s: NonNullable<typeof x.s> } => x.s !== null)
+    .sort((a, b) => b.s.days - a.s.days);
 
   return (
     <div className="flex flex-col gap-6">
@@ -165,9 +177,31 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
           </Card>
         ) : null}
 
+        {silent.length > 0 ? (
+          <Card>
+            <div className="mb-3 flex items-center gap-2"><Dot tone="deep" /><Eyebrow>Da sentire in chat</Eyebrow></div>
+            <ul className="flex flex-col">
+              {silent.map(({ c, s }) => (
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-sand-deep py-2.5 first:border-t-0">
+                  <Link href={`/staff/clienti/${c.id}`} className="min-w-0 hover:opacity-70">
+                    <span className="block font-semibold">{c.fullName}</span>
+                    <span className="block text-sm text-muted">Nessun messaggio da {s.days} giorni</span>
+                  </Link>
+                  <span className="ml-auto flex shrink-0 items-center gap-2">
+                    <form action={snoozeChatSilence.bind(null, c.id)}>
+                      <button type="submit" className="min-h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-sand-deep hover:bg-sand" aria-label={`Rimanda di ${CHAT_SNOOZE_DAYS} giorni: ${c.fullName}`}>Rimanda {CHAT_SNOOZE_DAYS} giorni</button>
+                    </form>
+                    <Link href={`/staff/messaggi/${c.id}?promemoria=saluto`} className="flex min-h-9 items-center rounded-full bg-ink px-3 text-sm font-semibold text-card hover:opacity-90">Scrivi</Link>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
+
         <Card>
           <div className="mb-3"><Eyebrow>Programmi</Eyebrow></div>
-          <List items={programs} empty="Tutti i clienti hanno un programma in corso." />
+          <List items={programs} empty="Nessun programma da preparare: qui compaiono le bozze e i programmi che finiscono entro 7 giorni." />
         </Card>
 
         {me.role === "owner" ? (

@@ -11,6 +11,9 @@ import { billingStatus, clientFacingStatus, unpaidPeriods, withUnpaidRows, usesC
 import { clientNotices, ptLeft } from "./client-notice";
 import { triageFallback, triageWithoutAi } from "./note-triage";
 import { backupNotice, formatBytes, spaceSummary } from "./backup-notice";
+import { clientPaymentText, paymentEvent, staffPaymentText } from "./payment-alerts";
+import { chatSilence, chatSilenceAlert, romeDay, snoozeUntil } from "./chat-silence";
+import { romeHour } from "./dates";
 import { addDays, addMonths, ageOn, diffDays, formatHeading, isBirthday, isISODate, mondayOf, todayISO } from "./dates";
 import { displayWeek, nextDay, nextWorkout, programEndDate, weekPosition } from "./program/schedule";
 import { buildNextPhase, copyWeekToOthers } from "./program/next-phase";
@@ -1157,5 +1160,84 @@ describe("conferma del backup notturno", () => {
     expect(formatBytes(1024 * MB)).toBe("1 GB");
     expect(formatBytes(1.5 * 1024 * MB)).toBe("1,5 GB");
     expect(formatBytes(3.24 * MB)).toBe("3,2 MB");
+  });
+});
+
+describe("avvisi dei pagamenti: pochi e una volta sola", () => {
+  const row = (paid_until: string, kind: PlanKind = "quarterly") => ({ plan_id: "p", kind, amount: 480, paid_until, sessions_bought: 0, sessions_used: 0 });
+  const ev = (paid_until: string, today: string, kind: PlanKind = "quarterly") => paymentEvent(billingStatus(row(paid_until, kind), today, 7), today, 7);
+
+  it("7 giorni prima della scadenza (con 2 giorni di tolleranza), poi più niente", () => {
+    expect(ev("2026-10-21", "2026-10-14")).toMatchObject({ type: "soon", key: "soon:2026-10-21", daysLeft: 7 });
+    expect(ev("2026-10-21", "2026-10-16")?.type).toBe("soon");
+    expect(ev("2026-10-21", "2026-10-17")).toBeNull();
+    expect(ev("2026-10-21", "2026-10-13")).toBeNull();
+  });
+
+  it("il giorno del rinnovo: solo il cliente", () => {
+    const e = ev("2026-10-13", "2026-10-14")!;
+    expect(e).toMatchObject({ type: "renewal", start: "2026-10-14", daysAgo: 0 });
+    expect(staffPaymentText(e, "Giulia Esempio")).toBeNull();
+    expect(clientPaymentText(e, "quarterly")!.title).toBe("Oggi inizia il tuo nuovo trimestre");
+    expect(clientPaymentText(ev("2026-10-12", "2026-10-14")!, "quarterly")!.title).toBe("È iniziato il tuo nuovo trimestre");
+    // dieci giorni dopo: niente (lo vedi in Oggi e in Pagamenti)
+    expect(ev("2026-10-04", "2026-10-14")).toBeNull();
+  });
+
+  it("un periodo intero scoperto: una volta, quando succede", () => {
+    // trimestre 9 ott – 8 gen non pagato: il 9 gennaio è scaduto
+    const e = ev("2026-10-08", "2027-01-09")!;
+    expect(e).toMatchObject({ type: "uncovered", since: "2027-01-09", key: "uncovered:2027-01-09" });
+    expect(ev("2026-10-08", "2027-01-11")!.key).toBe("uncovered:2027-01-09");
+    expect(ev("2026-10-08", "2027-01-12")).toBeNull();
+    expect(staffPaymentText(e, "Giulia Esempio")!.title).toBe("Pagamento scaduto: Giulia Esempio");
+    expect(clientPaymentText(e, "quarterly")!.body).toMatch(/Nessun problema/);
+  });
+
+  it("pacchetto di lezioni: solo quando resta 1 sessione, e mai al cliente", () => {
+    const pkg = (used: number) => billingStatus({ plan_id: "p", kind: "package", amount: 400, paid_until: null, sessions_bought: 10, sessions_used: used }, "2026-10-14");
+    expect(paymentEvent(pkg(8), "2026-10-14", 7, 10)).toBeNull();
+    const last = paymentEvent(pkg(9), "2026-10-14", 7, 10)!;
+    expect(last).toMatchObject({ type: "last_session", key: "last:s10" });
+    expect(paymentEvent(pkg(10), "2026-10-14", 7, 10)).toBeNull();
+    expect(staffPaymentText(last, "Luca Prova")!.body).toBe("Gli resta 1 sola sessione nel pacchetto.");
+    expect(clientPaymentText(last, "package")).toBeNull();
+  });
+
+  it("testi al cliente: morbidi e con la data del rinnovo", () => {
+    const t = clientPaymentText(ev("2026-10-21", "2026-10-14")!, "quarterly")!;
+    expect(t.title).toBe("Il tuo nuovo trimestre inizia il 22 ottobre");
+    expect(t.body).toMatch(/arriva fino al 21 ottobre/);
+    expect(`${t.title} ${t.body}`).not.toMatch(/devi|pagare/i);
+  });
+});
+
+describe("chat silenziosa da 10 giorni", () => {
+  it("compare dopo 10 giorni e avvisa una volta", () => {
+    expect(chatSilence("2026-10-04", "2026-10-14", null)).toBeNull();
+    expect(chatSilence("2026-10-03", "2026-10-14", null)).toEqual({ days: 11, lastDay: "2026-10-03" });
+    expect(chatSilenceAlert("c", "2026-10-03", "2026-10-14", null)!.key).toBe("silence:c:2026-10-03");
+    // un mese dopo resta in Oggi ma senza nuove notifiche
+    expect(chatSilenceAlert("c", "2026-09-01", "2026-10-14", null)).toBeNull();
+    expect(chatSilence("2026-09-01", "2026-10-14", null)).not.toBeNull();
+  });
+
+  it("Rimanda: sparisce per 5 giorni e poi riavvisa se non vi siete scritti", () => {
+    const until = snoozeUntil("2026-10-14");
+    expect(until).toBe("2026-10-19");
+    expect(chatSilence("2026-10-03", "2026-10-15", until)).toBeNull();
+    expect(chatSilenceAlert("c", "2026-10-03", "2026-10-18", until)).toBeNull();
+    expect(chatSilenceAlert("c", "2026-10-03", "2026-10-19", until)!.key).toBe("silence:c:2026-10-03:rimandato:2026-10-19");
+    expect(chatSilenceAlert("c", "2026-10-03", "2026-10-23", until)).toBeNull();
+    // vi siete scritti dopo il rimando: il rimando vecchio non conta più
+    expect(chatSilence("2026-10-20", "2026-10-25", until)).toBeNull();
+    expect(chatSilenceAlert("c", "2026-10-20", "2026-10-31", until)!.key).toBe("silence:c:2026-10-20");
+  });
+
+  it("giorno e ora in Italia", () => {
+    expect(romeDay("2026-10-13T22:30:00Z")).toBe("2026-10-14");
+    expect(romeHour(new Date("2026-10-14T06:10:00Z"))).toBe(8);
+    expect(romeHour(new Date("2026-11-04T06:10:00Z"))).toBe(7);
+    expect(romeHour(new Date("2026-11-04T07:10:00Z"))).toBe(8);
   });
 });

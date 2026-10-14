@@ -5,12 +5,21 @@ import "server-only";
 import { createAdminClient } from "./supabase/admin";
 import { notify, type NewNotification } from "./notify";
 import { deliverPendingEmails } from "./email";
-import { addDays, ageOn, diffDays, formatLong, isBirthday, isoWeekday, mondayOf, todayISO } from "./dates";
+import { addDays, ageOn, diffDays, formatLong, isBirthday, isoWeekday, todayISO } from "./dates";
 import { billingStatus, clientFacingStatus, withUnpaidRows, type PlanKind, type UnpaidRow } from "./billing";
+import { clientPaymentText, paymentEvent, staffPaymentText } from "./payment-alerts";
 import { checkinWeekFor } from "./checkin";
 import { programEndDate } from "./program/schedule";
 import { CHAT_BUCKET, CHAT_MEDIA_KEEP_DAYS, EXPIRING_KINDS, type ChatAttachment } from "./chat-shared";
 import { backupNotice, type BackupRun } from "./backup-notice";
+import { CHAT_SNOOZE_DAYS, chatSilenceAlert, romeDay } from "./chat-silence";
+
+/** Giorni prima della fine del programma in cui arriva l'avviso "Prossima fase da preparare". */
+export const PROGRAM_ENDING_NOTICE_DAYS = 3;
+/** Giorni senza allenamenti registrati dopo cui il cliente è "da sentire" (come in Oggi). */
+export const INACTIVE_DAYS = 7;
+/** Se il controllo del mattino salta un giorno, gli avvisi "quando succede" partono nei giorni subito dopo. */
+const GRACE_DAYS = 2;
 
 export async function runDailyChecks(today = todayISO()) {
   const admin = createAdminClient();
@@ -35,26 +44,27 @@ export async function runDailyChecks(today = todayISO()) {
   for (const b of billing ?? []) {
     const c = byId.get(b.client_id);
     if (!c) continue;
+    const kind = b.kind as PlanKind;
     // un periodo saltato ("da saldare") resta scaduto anche se ha pagato quello dopo
-    const st = withUnpaidRows(billingStatus({ ...b, kind: b.kind as PlanKind }, today, reminderDays), unpaidBy.get(b.client_id) ?? [], today);
-    if (st.state !== "due_soon" && st.state !== "overdue") continue;
-    // "da saldare" e poi "scaduto" sono due avvisi diversi
-    const key = (st.dueDate ? `${st.dueDate}` : `s${b.sessions_bought}`) + (st.unpaidPeriods > 1 ? ":scaduto" : "");
-    for (const o of ownerIds) {
-      out.push({ recipient_id: o, client_id: c.id, kind: "payment_due", title: `Pagamento: ${name(c)}`, body: st.label, link: `/staff/clienti/${c.id}/pagamenti`, dedupe_key: `pay:${c.id}:${key}:${st.state}` });
+    const st = withUnpaidRows(billingStatus({ ...b, kind }, today, reminderDays), unpaidBy.get(b.client_id) ?? [], today);
+    // pochi avvisi, una volta sola (regole in payment-alerts.ts): il resto lo vedi in Oggi e in Pagamenti
+    const ev = paymentEvent(st, today, reminderDays, b.sessions_bought);
+    if (!ev) continue;
+    const staffText = staffPaymentText(ev, name(c));
+    if (staffText) {
+      for (const o of ownerIds) {
+        out.push({ recipient_id: o, client_id: c.id, kind: "payment_due", ...staffText, link: `/staff/clienti/${c.id}/pagamenti`, dedupe_key: `pay:${c.id}:${ev.key}` });
+      }
     }
-    // al cliente scriviamo con calma e solo per il periodo in corso o uno rimasto indietro: oltre lo gestisce il coach di persona
-    if (c.user_id && clientFacingStatus(st)) {
-      const body = st.sessionsLeft !== null
-        ? st.sessionsLeft <= 0 ? "Il tuo pacchetto di sessioni è arrivato in fondo: quando ti è comodo ne prepariamo un altro." : `Ti restano ${st.sessionsLeft} sessioni nel pacchetto.`
-        : st.state !== "overdue" ? `Il periodo in corso arriva fino al ${formatLong(st.dueDate!)}: quando ti è comodo sistemiamo il rinnovo.`
-          : st.unpaidPeriods > 1 ? "C'è un periodo scaduto da sistemare: nessuna fretta, quando ti è comodo ne parliamo."
-            : "Il tuo nuovo periodo è iniziato: quando ti è comodo sistemiamo il rinnovo, nessuna fretta.";
-      out.push({ recipient_id: c.user_id, client_id: c.id, kind: "payment_reminder", title: "Un pensiero sul tuo percorso", body, link: "/cliente", dedupe_key: `payclient:${c.id}:${key}:${st.state}` });
+    // al cliente scriviamo con calma e solo per il periodo in corso o uno rimasto indietro
+    const clientText = c.user_id && clientFacingStatus(st) ? clientPaymentText(ev, kind) : null;
+    if (c.user_id && clientText) {
+      out.push({ recipient_id: c.user_id, client_id: c.id, kind: "payment_reminder", ...clientText, link: "/cliente", dedupe_key: `payclient:${c.id}:${ev.key}` });
     }
   }
 
-  // 2) Programmi in chiusura
+  // 2) Programmi in chiusura: un avviso 3 giorni prima della fine (se la fase dopo non c'è ancora);
+  //    poi il cliente resta nella card Programmi di Oggi, senza altre notifiche
   const { data: programs } = await admin.from("programs").select("id, client_id, title, weeks, start_date").eq("status", "published").not("client_id", "is", null);
   const nextByClient = new Map<string, boolean>();
   for (const p of programs ?? []) if (p.start_date && p.start_date > today && p.client_id) nextByClient.set(p.client_id, true);
@@ -66,7 +76,7 @@ export async function runDailyChecks(today = todayISO()) {
     if (!c) continue;
     const end = programEndDate(p.start_date, p.weeks);
     const left = diffDays(today, end);
-    if (left > 7 || left < -14 || nextByClient.get(c.id)) continue;
+    if (left > PROGRAM_ENDING_NOTICE_DAYS || left < 0 || nextByClient.get(c.id)) continue;
     const recipients = new Set(ownerIds);
     if (c.coach_id) recipients.add(c.coach_id);
     for (const r of recipients) {
@@ -75,9 +85,9 @@ export async function runDailyChecks(today = todayISO()) {
         client_id: c.id,
         kind: "program_ending",
         title: `Prossima fase da preparare: ${name(c)}`,
-        body: left >= 0 ? `“${p.title}” finisce ${left === 0 ? "oggi" : `tra ${left} giorni`}.` : `“${p.title}” è finito da ${-left} giorni.`,
+        body: `“${p.title}” finisce ${left === 0 ? "oggi" : left === 1 ? "domani" : `tra ${left} giorni`}.`,
         link: `/staff/clienti/${c.id}/programma`,
-        dedupe_key: `progend:${p.id}:${left >= 0 ? "soon" : "late"}`,
+        dedupe_key: `progend:${p.id}:soon`,
       });
     }
   }
@@ -102,18 +112,21 @@ export async function runDailyChecks(today = todayISO()) {
     }
   }
 
-  // 4) Clienti che non registrano allenamenti da 7+ giorni con un programma in corso (avviso settimanale)
+  // 4) Clienti con un programma in corso che non registrano allenamenti da 7 giorni: UN avviso
+  //    quando succede; poi restano nella card Allenamenti di Oggi finché non riprendono
   const { data: lastLogs } = await admin.from("workout_logs").select("client_id, performed_on").order("performed_on", { ascending: false }).limit(3000);
   const lastBy = new Map<string, string>();
   for (const l of lastLogs ?? []) if (!lastBy.has(l.client_id)) lastBy.set(l.client_id, l.performed_on);
   for (const p of programs ?? []) {
-    if (!p.start_date || !p.client_id || p.start_date > addDays(today, -7)) continue;
+    if (!p.start_date || !p.client_id || p.start_date > addDays(today, -INACTIVE_DAYS)) continue;
     const c = byId.get(p.client_id);
     if (!c || !c.user_id) continue;
     if (diffDays(today, programEndDate(p.start_date, p.weeks)) < 0) continue;
-    const last = lastBy.get(c.id);
-    const since = last ? diffDays(last, today) : null;
-    if (since !== null && since < 7) continue;
+    // da quanti giorni: dall'ultimo allenamento o, se non ne ha registrati su questo programma, dal suo inizio
+    const logged = lastBy.get(c.id);
+    const last = logged && logged >= p.start_date ? logged : null;
+    const since = diffDays(last ?? p.start_date, today);
+    if (since < INACTIVE_DAYS || since > INACTIVE_DAYS + GRACE_DAYS) continue;
     const recipients = new Set(ownerIds);
     if (c.coach_id) recipients.add(c.coach_id);
     for (const r of recipients) {
@@ -122,9 +135,9 @@ export async function runDailyChecks(today = todayISO()) {
         client_id: c.id,
         kind: "inactive",
         title: `Da sentire: ${name(c)}`,
-        body: since === null ? "Non ha ancora registrato allenamenti sul programma in corso." : `Nessun allenamento registrato da ${since} giorni.`,
+        body: last ? `Nessun allenamento registrato da ${since} giorni.` : "Non ha ancora registrato allenamenti sul programma in corso.",
         link: `/staff/clienti/${c.id}`,
-        dedupe_key: `inactive:${c.id}:${mondayOf(today)}`,
+        dedupe_key: `inactive:${c.id}:${last ?? `inizio:${p.start_date}`}`,
       });
     }
   }
@@ -148,16 +161,20 @@ export async function runDailyChecks(today = todayISO()) {
   }
 
   // 6) Clienti che non senti in chat da più di 10 giorni (solo dopo che la chat è iniziata):
-  //    un promemoria per chiedere come va; si può scrivere o ignorare (segnandola come letta)
-  const { data: msgs } = await admin.from("messages").select("client_id, created_at").is("deleted_at", null).order("created_at", { ascending: false }).limit(5000);
+  //    UNA notifica quando succede; in Oggi si può rimandare di 5 giorni (poi, se non vi siete scritti, un nuovo avviso)
+  const [{ data: msgs }, { data: snoozes }] = await Promise.all([
+    admin.from("messages").select("client_id, created_at").is("deleted_at", null).order("created_at", { ascending: false }).limit(5000),
+    admin.from("chat_snoozes").select("client_id, until"),
+  ]);
+  const snoozedBy = new Map((snoozes ?? []).map((z) => [z.client_id, z.until]));
   const lastMsg = new Map<string, string>();
   for (const m of msgs ?? []) if (!lastMsg.has(m.client_id)) lastMsg.set(m.client_id, m.created_at);
   for (const c of clients ?? []) {
     const at = lastMsg.get(c.id);
     if (!at || !c.user_id) continue;
-    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(at));
-    const since = diffDays(day, today);
-    if (since <= 10) continue;
+    const day = romeDay(at);
+    const alert = chatSilenceAlert(c.id, day, today, snoozedBy.get(c.id) ?? null);
+    if (!alert) continue;
     const recipients = new Set(ownerIds);
     if (c.coach_id) recipients.add(c.coach_id);
     for (const r of recipients) {
@@ -165,11 +182,10 @@ export async function runDailyChecks(today = todayISO()) {
         recipient_id: r,
         client_id: c.id,
         kind: "chat_silence",
-        title: `Non senti ${name(c)} da ${since} giorni`,
-        body: `Ultimo messaggio in chat il ${formatLong(day)}. Scrivigli per chiedere come sta andando, oppure segna la notifica come letta per ignorarla.`,
+        title: `Non senti ${name(c)} da ${alert.days} giorni`,
+        body: `Ultimo messaggio in chat il ${formatLong(day)}. Scrivigli per chiedere come sta andando, oppure rimanda di ${CHAT_SNOOZE_DAYS} giorni da Oggi.`,
         link: `/staff/messaggi/${c.id}?promemoria=saluto`,
-        // una sola volta per ogni silenzio: se vi scrivete, il conteggio riparte
-        dedupe_key: `silence:${c.id}:${day}`,
+        dedupe_key: alert.key,
       });
     }
   }

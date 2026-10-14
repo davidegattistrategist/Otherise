@@ -18,7 +18,7 @@ export async function openNotification(id: string) {
 export async function markAllRead() {
   const me = await requireUser();
   const supabase = await createClient();
-  await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("recipient_id", me.id).is("read_at", null);
+  await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("recipient_id", me.id).neq("kind", "chat").is("read_at", null);
   revalidatePath("/", "layout");
 }
 

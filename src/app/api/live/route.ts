@@ -14,8 +14,8 @@ export async function GET() {
   if (!me) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   const supabase = await createClient();
   const [{ count }, { data: latest }, { data: chats }] = await Promise.all([
-    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("recipient_id", me.id).is("read_at", null),
-    supabase.from("notifications").select("id, kind, title, body, link, client_id").eq("recipient_id", me.id).is("read_at", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("recipient_id", me.id).neq("kind", "chat").is("read_at", null),
+    supabase.from("notifications").select("id, kind, title, body, link, client_id").eq("recipient_id", me.id).neq("kind", "chat").is("read_at", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.rpc("my_unread_chats"),
   ]);
   const list = chats ?? [];
