@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { Input, Label } from "@/components/ui";
+import { PasswordInput } from "@/components/password-input";
 import { ActionMessage, SubmitButton } from "@/components/form-bits";
 import { signIn } from "./actions";
 
@@ -16,7 +17,7 @@ export function LoginForm() {
       </div>
       <div>
         <Label htmlFor="password">Password</Label>
-        <Input id="password" name="password" type="password" autoComplete="current-password" required />
+        <PasswordInput id="password" name="password" autoComplete="current-password" required />
       </div>
       <ActionMessage state={state} />
       <SubmitButton pendingText="Accesso…" className="mt-2 w-full">Entra</SubmitButton>

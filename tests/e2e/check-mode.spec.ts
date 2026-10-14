@@ -32,7 +32,7 @@ test("check: le misure di prima accanto, e quello che scrivi resta anche se esci
   await page.goto("/staff");
   await page.goto(`/staff/clienti/${id}/check/nuovo`);
   await expect(page.locator("#weight_kg")).toHaveValue("64,1");
-  await expect(page.getByText(/Non si è perso niente: sei ripartito/)).toBeVisible();
+  await expect(page.getByText(/Non si è perso niente: c’è quello che avevi scritto/)).toBeVisible();
   await page.getByRole("button", { name: "Svuota il modulo" }).click();
   await expect(page.locator("#weight_kg")).toHaveValue("");
 });

@@ -41,6 +41,11 @@ function Status({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   );
 }
 
+/** Ore passate da un momento (per l'ultimo giro dei controlli del mattino). */
+function hoursSince(iso: string) {
+  return (Date.now() - Date.parse(iso)) / 3600_000;
+}
+
 export default async function SettingsPage() {
   await requireOwner();
   const supabase = await createClient();
@@ -52,7 +57,18 @@ export default async function SettingsPage() {
     supabase.from("app_settings").select("ai_lessons, ai_lessons_updated_at, ai_reply_lessons, ai_reply_lessons_updated_at").maybeSingle(),
     correctionTrend(supabase),
   ]);
-  const { data: backups } = await supabase.from("backup_runs").select("finished_at, ok, tables, db_bytes, files_bytes, message").order("finished_at", { ascending: false }).limit(7);
+  const [{ data: backups }, lastRun, service] = await Promise.all([
+    supabase.from("backup_runs").select("finished_at, ok, tables, db_bytes, files_bytes, message").order("finished_at", { ascending: false }).limit(7),
+    // ultimo giro dei controlli del mattino (lo scrive il controllo stesso)
+    createAdminClient().from("app_secrets").select("value").eq("name", "daily_checks_last_run").maybeSingle().then(({ data }) => {
+      try {
+        return data ? (JSON.parse(data.value) as { at: string; notifications: number }) : null;
+      } catch {
+        return null;
+      }
+    }),
+    serviceKeyStatus(),
+  ]);
   const s = settings ?? { business_name: "Otherise", coaching_method: "", reminder_days: 7, ai_monthly_budget_eur: 20, payment_message: "", legal_name: "", legal_address: "", legal_tax_id: "", privacy_email: "", privacy_pec: "", staff_emails: false, client_emails: true };
   const privacyMissing = !s.legal_name || !s.legal_address || !s.legal_tax_id || !s.privacy_email;
   const spent = (usage ?? []).reduce((t, u) => t + Number(u.cost_eur), 0);
@@ -60,7 +76,16 @@ export default async function SettingsPage() {
   const hasAi = Boolean(process.env.ANTHROPIC_API_KEY);
   const hasEmail = Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
   const hasCron = Boolean(process.env.CRON_SECRET);
-  const service = await serviceKeyStatus();
+  const cronHoursAgo = lastRun ? hoursSince(lastRun.at) : null;
+  const cronOk = hasCron && cronHoursAgo !== null && cronHoursAgo < 30;
+  const cronText = !hasCron
+    ? "Controlli del mattino spenti: manca CRON_SECRET su Vercel (guida di installazione)"
+    : cronOk
+      ? `Controlli del mattino attivi: ultimo giro ${new Date(lastRun!.at).toLocaleString("it-IT", { timeZone: "Europe/Rome", weekday: "long", hour: "2-digit", minute: "2-digit" })}`
+      : lastRun
+        ? `Il controllo del mattino non gira da ${Math.floor(cronHoursAgo! / 24)} giorni: controlla su Vercel la voce Cron Jobs e la variabile CRON_SECRET`
+        : "Controlli del mattino: non hanno ancora girato (partono ogni mattina alle 8). Se domani questa riga è ancora così, controlla CRON_SECRET su Vercel";
+  const hasSiteUrl = /^https:\/\//.test(process.env.NEXT_PUBLIC_SITE_URL ?? "");
 
   return (
     <div className="flex flex-col gap-6">
@@ -146,7 +171,8 @@ export default async function SettingsPage() {
               <Status ok={service.ok}>{service.text}</Status>
               <Status ok={hasAi}>{hasAi ? "Assistente AI attivo" : "Assistente AI spento: serve la chiave di Anthropic su Vercel (ANTHROPIC_API_KEY, guida di installazione passo 3)"}</Status>
               <Status ok={hasEmail}>{hasEmail ? "Email di avviso attive" : "Email di avviso spente: serve collegare Resend (guida di installazione passo 4). Le notifiche nell'app funzionano lo stesso"}</Status>
-              <Status ok={hasCron}>{hasCron ? "Controlli automatici giornalieri attivi" : "Controlli giornalieri spenti: manca CRON_SECRET"}</Status>
+              <Status ok={cronOk}>{cronText}</Status>
+              <Status ok={hasSiteUrl}>{hasSiteUrl ? "Indirizzo dell'app impostato (link nelle email e notifiche su iPhone)" : "Manca NEXT_PUBLIC_SITE_URL su Vercel (l'indirizzo https dell'app): serve per i link nelle email e per le notifiche su iPhone"}</Status>
             </ul>
             <p className="text-sm text-muted">Come si attivano: guida di installazione (file GUIDA-INSTALLAZIONE.md nel progetto su GitHub). Dopo aver cambiato una variabile su Vercel serve un nuovo deploy.</p>
           </Card>

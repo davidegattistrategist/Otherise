@@ -17,6 +17,9 @@ import { ArrowCTA, BigNumber, Card, Eyebrow, LinkButton, Notice, ProgressBar, Ri
 import { IconPlay } from "@/components/icons";
 import { ClearParams } from "@/components/clear-param";
 import { PushPrompt } from "@/components/push";
+import { SubmitButton } from "@/components/form-bits";
+import { freeKindLabel } from "@/lib/free-workout";
+import { repeatFreeWorkout } from "./allenamento-libero/actions";
 
 export const metadata: Metadata = { title: "Oggi" };
 
@@ -25,7 +28,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
   const me = await requireActiveClient();
   const supabase = await createClient();
   const today = todayISO();
-  const [{ current, upcoming }, { data: client }, { data: billing }, { data: checks }, { data: coach }, { data: lastReply }, { data: brand }] = await Promise.all([
+  const [{ current, upcoming }, { data: client }, { data: billing }, { data: checks }, { data: coach }, { data: lastReply }, { data: brand }, { data: lastFree }] = await Promise.all([
     getMyPrograms(me.clientId),
     supabase.from("clients").select("first_name, weekly_checkin").eq("id", me.clientId).single(),
     supabase.rpc("client_billing", { cid: me.clientId }),
@@ -33,6 +36,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
     supabase.rpc("my_coach_name"),
     supabase.from("checkins").select("week_start, coach_reply, reviewed_at").eq("client_id", me.clientId).neq("coach_reply", "").order("week_start", { ascending: false }).limit(1).maybeSingle(),
     getBusinessName().then((data) => ({ data })),
+    supabase.from("free_workouts").select("id, kind, minutes, effort, performed_on").eq("client_id", me.clientId).order("performed_on", { ascending: false }).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   const quote = quoteOfDay(today);
   const row = (billing as BillingRow[] | null)?.[0];
@@ -107,7 +111,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
               <LinkButton href={`/cliente/sessione/${current.id}/${next.week}/${next.day.id}`} variant="light" className="w-full justify-center sm:w-auto">
                 <IconPlay size={18} /> {inProgress ? "Riprendi l'allenamento" : "Inizia l'allenamento"}
               </LinkButton>
-              <Link href={`/cliente/programma?settimana=${next.week}`} className="text-center text-sm font-semibold text-muted-dark underline">Oggi non puoi? Scegli un altro allenamento</Link>
+              <Link href={`/cliente/programma?settimana=${next.week}`} className="flex min-h-12 items-center justify-center rounded-full px-5 text-[15px] font-semibold text-card ring-1 ring-line-dark">Oggi non puoi? Scegline un altro</Link>
             </div>
           ) : (
             <ArrowCTA href="/cliente/programma" dark>Vedi il programma</ArrowCTA>
@@ -121,14 +125,23 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
         </Card>
       )}
 
-      {/* allenamento fuori dal programma: si segna in pochi secondi */}
-      <Link href="/cliente/allenamento-libero" className="flex items-center gap-3 rounded-[24px] bg-card px-5 py-4">
-        <span className="min-w-0 flex-1">
-          <span className="block font-semibold">Hai fatto altro?</span>
-          <span className="block text-sm text-muted">Pesi, spinning, corsa, una partita: segnalo in 5 secondi</span>
-        </span>
-        <span aria-hidden="true" className="text-2xl">+</span>
-      </Link>
+      {/* allenamento fuori dal programma: si segna in pochi secondi; quello di sempre con un tocco */}
+      <div className="flex flex-col gap-3 rounded-[24px] bg-card px-5 py-4">
+        <Link href="/cliente/allenamento-libero" className="flex items-center gap-3">
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Hai fatto altro?</span>
+            <span className="block text-sm text-muted">Pesi, spinning, corsa, una partita: segnalo in 5 secondi</span>
+          </span>
+          <span aria-hidden="true" className="text-2xl">+</span>
+        </Link>
+        {lastFree && lastFree.performed_on !== today ? (
+          <form action={repeatFreeWorkout.bind(null, lastFree.id)}>
+            <SubmitButton variant="secondary" pendingText="Segno…" className="w-full justify-center">
+              Rifai {[freeKindLabel(lastFree.kind).toLowerCase(), lastFree.minutes ? `${lastFree.minutes} min` : ""].filter(Boolean).join(" ")} oggi
+            </SubmitButton>
+          </form>
+        ) : null}
+      </div>
 
       {/* prima le cose da fare: la risposta del coach e gli avvisi */}
       {lastReply?.coach_reply && diffDays((lastReply.reviewed_at ?? lastReply.week_start).slice(0, 10), today) <= 14 ? (

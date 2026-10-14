@@ -14,9 +14,9 @@ import { ClearParams } from "@/components/clear-param";
 
 export const metadata: Metadata = { title: "Scheda cliente" };
 
-export default async function ClientProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ invito?: string; stato?: string }> }) {
+export default async function ClientProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ invito?: string; stato?: string; errore?: string }> }) {
   const { id } = await params;
-  const { invito, stato } = await searchParams;
+  const { invito, stato, errore } = await searchParams;
   const me = await requireStaff();
   const client = await getStaffClient(id);
   const supabase = await createClient();
@@ -31,6 +31,7 @@ export default async function ClientProfilePage({ params, searchParams }: { para
     <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
       <Card className="flex flex-col gap-3 [grid-column:1/-1]">
         <Eyebrow>Percorso</Eyebrow>
+        {errore ? <><ClearParams names={["errore"]} /><Notice tone="error">{errore === "elimina" ? "Non sono riuscito a eliminare il cliente: non è cambiato niente. Riprova tra poco." : "Non sono riuscito a cambiare il percorso: non è cambiato niente. Riprova tra poco."}</Notice></> : null}
         {stato ? <><ClearParams names={["stato"]} /><Notice tone="success">{stato === "paused" ? "Cliente in pausa." : stato === "archived" ? "Percorso terminato: al cliente resta solo la chat." : "Cliente di nuovo attivo."}</Notice></> : null}
         {client.status === "paused" ? (
           <p className="text-[15px] leading-relaxed text-muted">In pausa: usa l&apos;app come sempre, ma non compare tra i pagamenti da incassare, nelle previsioni e nei promemoria. Quando rinnova, riattivalo.</p>

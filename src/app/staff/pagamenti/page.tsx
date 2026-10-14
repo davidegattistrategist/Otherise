@@ -82,7 +82,7 @@ function paymentValues(p: { paid_on: string; amount: number | string; method: st
   return { paid_on: p.paid_on, amount: Number(p.amount), method: p.method, period_start: p.period_start, period_end: p.period_end, sessions: p.sessions, notes: p.notes ?? "", extra: !p.plan_id };
 }
 
-export default async function PaymentsOverviewPage({ searchParams }: { searchParams: Promise<{ incassi?: string }> }) {
+export default async function PaymentsOverviewPage({ searchParams }: { searchParams: Promise<{ incassi?: string; tutti?: string }> }) {
   await requireOwner();
   const sp = await searchParams;
   const supabase = await createClient();
@@ -92,19 +92,28 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
   // mese aperto nel grafico degli incassi (di base quello in corso)
   const month = /^\d{4}-\d{2}$/.test(sp.incassi ?? "") ? sp.incassi! : today.slice(0, 7);
   const nextMonth = addMonths(`${month}-01`, 1);
-  const [revenue, { data: recent }, toSettle, { data: history }] = await Promise.all([
+  // "Tutti i pagamenti" si carica solo quando lo apri, un anno alla volta
+  const showAll = sp.tutti !== undefined;
+  const histYear = /^\d{4}$/.test(sp.tutti ?? "") ? sp.tutti! : year;
+  const [revenue, { data: recent }, toSettle, { data: history }, { data: firstPaid }] = await Promise.all([
     getRevenue(supabase, lines),
     supabase.from("payments").select("id, client_id, paid_on, amount, method, period_start, period_end, sessions, notes, plan_id, clients!inner(first_name, last_name, free)").eq("clients.free", false).eq("unpaid", false).gte("paid_on", `${month}-01`).lt("paid_on", nextMonth).order("paid_on", { ascending: false }).order("created_at", { ascending: false }),
     getSessionsToSettle(supabase),
-    supabase
-      .from("payments")
-      .select("id, client_id, paid_on, amount, method, period_start, period_end, sessions, notes, plan_id, clients!inner(first_name, last_name, free), payment_plans(kind)")
-      .eq("clients.free", false)
-      .eq("unpaid", false)
-      .order("paid_on", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(1000),
+    showAll
+      ? supabase
+          .from("payments")
+          .select("id, client_id, paid_on, amount, method, period_start, period_end, sessions, notes, plan_id, clients!inner(first_name, last_name, free), payment_plans(kind)")
+          .eq("clients.free", false)
+          .eq("unpaid", false)
+          .gte("paid_on", `${histYear}-01-01`)
+          .lte("paid_on", `${histYear}-12-31`)
+          .order("paid_on", { ascending: false })
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: null }),
+    showAll ? supabase.from("payments").select("paid_on").eq("unpaid", false).order("paid_on").limit(1).maybeSingle() : Promise.resolve({ data: null }),
   ]);
+  const historyYears: string[] = [];
+  if (firstPaid) for (let y = Number(year); y >= Number(firstPaid.paid_on.slice(0, 4)); y--) historyYears.push(String(y));
   // tutti i pagamenti, dal più recente, divisi per mese
   const historyMonths: Array<{ month: string; total: number; items: NonNullable<typeof history> }> = [];
   for (const p of history ?? []) {
@@ -229,16 +238,22 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
         </Card>
       </div>
 
-      <details className="group rounded-[var(--radius-card)] bg-card" id="tutti-i-pagamenti">
-        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6">
-          <span>
-            <span className="block font-semibold">Tutti i pagamenti</span>
-            <span className="text-sm text-muted">{(history ?? []).length} registrati, dal più recente</span>
-          </span>
-          <span className="text-sm font-semibold underline group-open:hidden">Mostra</span>
-          <span className="hidden text-sm font-semibold underline group-open:inline">Nascondi</span>
-        </summary>
-        <div className="flex flex-col gap-5 px-5 pb-5 sm:px-6">
+      {showAll ? (
+        <Card className="flex flex-col gap-4 scroll-mt-6" id="tutti-i-pagamenti">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>
+              <span className="block font-semibold">Tutti i pagamenti</span>
+              <span className="text-sm text-muted">{(history ?? []).length} nel {histYear}, dal più recente</span>
+            </span>
+            <Link href="/staff/pagamenti" scroll={false} className="text-sm font-semibold underline">Nascondi</Link>
+          </div>
+          {historyYears.length > 1 ? (
+            <div className="scroll-x flex gap-1.5" role="group" aria-label="Anno">
+              {historyYears.map((y) => (
+                <Link key={y} href={`/staff/pagamenti?tutti=${y}#tutti-i-pagamenti`} scroll={false} aria-current={y === histYear ? "true" : undefined} className={cx("shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold", y === histYear ? "bg-ink text-card" : "bg-sand")}>{y}</Link>
+              ))}
+            </div>
+          ) : null}
           {historyMonths.map((g) => (
             <section key={g.month} className="flex flex-col">
               <div className="flex items-baseline justify-between gap-2 border-b border-sand-deep pb-1.5">
@@ -270,9 +285,17 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
               </ul>
             </section>
           ))}
-          {!historyMonths.length ? <p className="text-[15px] text-muted">Ancora nessun pagamento registrato.</p> : null}
-        </div>
-      </details>
+          {!historyMonths.length ? <p className="text-[15px] text-muted">Nessun pagamento registrato nel {histYear}.</p> : null}
+        </Card>
+      ) : (
+        <Link href={`/staff/pagamenti?tutti=${year}#tutti-i-pagamenti`} scroll={false} id="tutti-i-pagamenti" className="flex min-h-14 items-center justify-between gap-3 rounded-[var(--radius-card)] bg-card px-5 py-4 sm:px-6">
+          <span>
+            <span className="block font-semibold">Tutti i pagamenti</span>
+            <span className="text-sm text-muted">Anno per anno, dal più recente: da qui li correggi senza aprire la scheda</span>
+          </span>
+          <span className="text-sm font-semibold underline">Mostra</span>
+        </Link>
+      )}
 
       {/* gli altri clienti (chi è da sistemare sta sopra): telefono, una riga per cliente */}
       {others.length ? <h2 className="-mb-3 px-1 text-[13px] font-bold tracking-wider text-muted uppercase">Gli altri clienti</h2> : null}

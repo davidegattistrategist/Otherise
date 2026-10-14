@@ -10,7 +10,7 @@ export default async function WaitingPage() {
   return (
     <AuthShell
       title="Account in attesa"
-      subtitle={`Sei entrato come ${me.email}, ma questo account non è ancora collegato. Chiedi al tuo allenatore di invitarti con questa email.`}
+      subtitle={`Hai fatto l’accesso come ${me.email}, ma questo account non è ancora collegato. Chiedi al tuo allenatore di invitarti con questa email.`}
     >
       <form action={signOut}>
         <button className="font-semibold underline" type="submit">Esci</button>

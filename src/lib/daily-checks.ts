@@ -3,6 +3,9 @@ import "server-only";
  * Controlli automatici giornalieri (chiamati da /api/cron/daily).
  */
 import { createAdminClient } from "./supabase/admin";
+import { rpcOr } from "./data/rpc";
+import { latestDate } from "./free-workout";
+import { removeOrphanChatUploads } from "./storage-cleanup";
 import { notify, type NewNotification } from "./notify";
 import { deliverPendingEmails } from "./email";
 import { addDays, ageOn, diffDays, formatLong, isBirthday, isoWeekday, todayISO } from "./dates";
@@ -115,12 +118,18 @@ export async function runDailyChecks(today = todayISO()) {
   // 4) Clienti con un programma in corso che non registrano allenamenti da 7 giorni: UN avviso
   //    quando succede; poi restano nella card Allenamenti di Oggi finché non riprendono
   //    (contano anche gli allenamenti liberi: spinning, corsa, un circuito…)
-  const [{ data: lastLogs }, { data: lastFree }] = await Promise.all([
-    admin.from("workout_logs").select("client_id, performed_on").order("performed_on", { ascending: false }).limit(3000),
-    admin.from("free_workouts").select("client_id, performed_on").gte("performed_on", addDays(today, -60)).order("performed_on", { ascending: false }).limit(3000),
-  ]);
+  const activity = await rpcOr<Array<{ client_id: string; last_workout: string | null; last_free: string | null }>>(admin.rpc("last_activity"), async () => {
+    const [{ data: lastLogs }, { data: lastFree }] = await Promise.all([
+      admin.from("workout_logs").select("client_id, performed_on").order("performed_on", { ascending: false }).limit(1000),
+      admin.from("free_workouts").select("client_id, performed_on").gte("performed_on", addDays(today, -60)).order("performed_on", { ascending: false }).limit(1000),
+    ]);
+    return [...(lastLogs ?? []).map((l) => ({ client_id: l.client_id, last_workout: l.performed_on, last_free: null })), ...(lastFree ?? []).map((l) => ({ client_id: l.client_id, last_workout: null, last_free: l.performed_on }))];
+  });
   const lastBy = new Map<string, string>();
-  for (const l of [...(lastLogs ?? []), ...(lastFree ?? [])]) if (!lastBy.has(l.client_id) || lastBy.get(l.client_id)! < l.performed_on) lastBy.set(l.client_id, l.performed_on);
+  for (const a of activity) {
+    const d = latestDate(a.last_workout, a.last_free, lastBy.get(a.client_id));
+    if (d) lastBy.set(a.client_id, d);
+  }
   for (const p of programs ?? []) {
     if (!p.start_date || !p.client_id || p.start_date > addDays(today, -INACTIVE_DAYS)) continue;
     const c = byId.get(p.client_id);
@@ -166,8 +175,10 @@ export async function runDailyChecks(today = todayISO()) {
 
   // 6) Clienti che non senti in chat da più di 10 giorni (solo dopo che la chat è iniziata):
   //    UNA notifica quando succede; in Oggi si può rimandare di 5 giorni (poi, se non vi siete scritti, un nuovo avviso)
-  const [{ data: msgs }, { data: snoozes }] = await Promise.all([
-    admin.from("messages").select("client_id, created_at").is("deleted_at", null).order("created_at", { ascending: false }).limit(5000),
+  const [msgs, { data: snoozes }] = await Promise.all([
+    rpcOr<Array<{ client_id: string; created_at: string }>>(admin.rpc("last_messages", { include_deleted: false }), async () =>
+      (await admin.from("messages").select("client_id, created_at").is("deleted_at", null).order("created_at", { ascending: false }).limit(1000)).data ?? [],
+    ),
     admin.from("chat_snoozes").select("client_id, until"),
   ]);
   const snoozedBy = new Map((snoozes ?? []).map((z) => [z.client_id, z.until]));
@@ -215,17 +226,33 @@ export async function runDailyChecks(today = todayISO()) {
   }
 
   await notify(out);
-  const backup = await backupCheck(ownerIds);
-  const videosRemoved = await removeOldChatMedia(today);
+  // ogni passo per conto suo: se uno non riesce, gli altri girano lo stesso
+  const step = async <T,>(job: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await job();
+    } catch {
+      return fallback;
+    }
+  };
+  const backup = await step(() => backupCheck(ownerIds), null);
+  const videosRemoved = await step(() => removeOldChatMedia(today), 0);
+  // allegati della chat caricati e mai inviati, dopo 24 ore
+  const orphansRemoved = await step(() => removeOrphanChatUploads(), 0);
   // niente riepilogo per email: il riepilogo è "Oggi" nell'app
-  const emailed = await deliverPendingEmails();
-  // pulizia: bozze dimenticate da più di 2 mesi
-  await admin.from("drafts").delete().lt("updated_at", `${addDays(today, -60)}T00:00:00Z`);
-  // i segni delle bozze cancellate servono solo per poco
-  await admin.from("drafts").delete().not("data->__deleted", "is", null).lt("updated_at", `${addDays(today, -1)}T00:00:00Z`);
-  // pulizia: notifiche lette più vecchie di 6 mesi
-  await admin.from("notifications").delete().lt("created_at", `${addDays(today, -180)}T00:00:00Z`).not("read_at", "is", null);
-  return { ok: true, today, notifications: out.length, emailed, videosRemoved, backup };
+  const emailed = await step(() => deliverPendingEmails(), 0);
+  await step(async () => {
+    // pulizia: bozze dimenticate da più di 2 mesi
+    await admin.from("drafts").delete().lt("updated_at", `${addDays(today, -60)}T00:00:00Z`);
+    // i segni delle bozze cancellate servono solo per poco
+    await admin.from("drafts").delete().not("data->__deleted", "is", null).lt("updated_at", `${addDays(today, -1)}T00:00:00Z`);
+    // pulizia: notifiche lette più vecchie di 6 mesi
+    await admin.from("notifications").delete().lt("created_at", `${addDays(today, -180)}T00:00:00Z`).not("read_at", "is", null);
+  }, undefined);
+  // l'ultimo giro lo mostra Impostazioni → Collegamenti (se non gira, il titolare se ne accorge)
+  await step(async () => {
+    await admin.from("app_secrets").upsert({ name: "daily_checks_last_run", value: JSON.stringify({ at: new Date().toISOString(), notifications: out.length, emailed }) }, { onConflict: "name" });
+  }, undefined);
+  return { ok: true, today, notifications: out.length, emailed, videosRemoved, orphansRemoved, backup };
 }
 
 /**

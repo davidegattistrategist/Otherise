@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { addDays, formatShort, isoWeekday, todayISO } from "@/lib/dates";
 import { CHECKIN_OPENS_ON, CHECKIN_QUESTIONS, checkinWeekFor } from "@/lib/checkin";
 import { Card, EmptyState, Eyebrow, Notice } from "@/components/ui";
+import { IconCheck } from "@/components/icons";
 import { CheckinForm } from "./checkin-form";
 
 export const metadata: Metadata = { title: "Diario" };
@@ -32,10 +33,33 @@ export default async function ClientCheckupPage({ searchParams }: { searchParams
       {inviato ? <Notice tone="success">Grazie! Diario inviato.</Notice> : null}
       {!client?.weekly_checkin ? (
         <EmptyState title="Il diario non è attivo">Se ti va di usarlo, chiedi a {coachName} di attivarlo.</EmptyState>
+      ) : week && current ? (
+        // già inviato: si vede com'è andata (e la risposta del coach, appena arriva); si può ancora cambiare
+        <Card className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <Eyebrow>Settimana dal {formatShort(week)}</Eyebrow>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1 text-xs font-semibold text-card"><IconCheck size={14} /> Inviato</span>
+          </div>
+          <p className="text-[15px] tabular">{CHECKIN_QUESTIONS.map((q) => `${q.short} ${current[q.key]}`).join(" · ")}</p>
+          {current.issues ? <p className="text-sm text-ink-soft">Dolori o imprevisti: {current.issues}</p> : null}
+          {current.request ? <p className="text-sm text-ink-soft">Hai chiesto: {current.request}</p> : null}
+          {current.coach_reply ? (
+            <p className="rounded-2xl bg-sand-deep/50 px-4 py-3 text-[15px] whitespace-pre-line"><span className="font-semibold">{coachName} ti ha risposto:</span> {current.coach_reply}</p>
+          ) : current.request ? (
+            <p className="text-sm text-muted">{coachName} ti risponde qui (e ti arriva un avviso).</p>
+          ) : null}
+          <details className="group border-t border-sand-deep pt-3">
+            <summary className="cursor-pointer list-none text-[15px] font-semibold underline [&::-webkit-details-marker]:hidden">Modifica il diario</summary>
+            <div className="mt-4">
+              <CheckinForm coach={coachName} values={current} />
+            </div>
+          </details>
+          <p className="text-xs text-muted">Si può cambiare fino a domenica {formatShort(addDays(week, 6))}.</p>
+        </Card>
       ) : week ? (
         <Card className="flex flex-col gap-4">
           <Eyebrow>Settimana dal {formatShort(week)} · entro {formatShort(addDays(week, 6))}</Eyebrow>
-          <CheckinForm coach={coachName} values={current ?? undefined} />
+          <CheckinForm coach={coachName} />
         </Card>
       ) : (
         <Card className="flex flex-col gap-1">

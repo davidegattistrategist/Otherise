@@ -542,4 +542,33 @@ describe.skipIf(!run)("permessi", () => {
     expect(own.error).toBeNull();
     expect(((await stranger.rpc("my_pt_balance")).data ?? []).length).toBe(0);
   });
+
+  it("controllo generale: funzioni con i permessi di chi chiama, notifiche, campi dello staff, un solo piano attivo", async () => {
+    // ultimo messaggio per chat: il cliente vede solo la sua conversazione, l'estraneo niente
+    const meId = (await clientA.auth.getUser()).data.user!.id;
+    await clientA.from("messages").insert({ client_id: clientAId, sender_id: meId, body: "ciao dal controllo" }).throwOnError();
+    const mine = (await clientA.rpc("last_messages", {})).data ?? [];
+    expect(mine.every((m: { client_id: string }) => m.client_id === clientAId)).toBe(true);
+    expect(((await stranger.rpc("last_messages", {})).data ?? []).length).toBe(0);
+    expect(((await coach.rpc("last_activity")).data ?? []).every((r: { client_id: string }) => r.client_id === clientAId)).toBe(true);
+    // record: il cliente solo i suoi, un altro cliente o un estraneo niente
+    expect((await clientA.rpc("exercise_bests", { cid: clientAId })).error).toBeNull();
+    expect(((await stranger.rpc("exercise_bests", { cid: clientAId })).data ?? []).length).toBe(0);
+    expect(((await clientA.rpc("programs_overview", { ids: [clientBId] })).data ?? []).length).toBe(0);
+    // notifiche: si possono solo segnare come lette
+    const { data: n } = await admin.from("notifications").insert({ recipient_id: meId, kind: "test", title: "Titolo vero", body: "" }).select("id").single().throwOnError();
+    await clientA.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n!.id).throwOnError();
+    expect((await clientA.from("notifications").update({ title: "Falso" }).eq("id", n!.id)).error).not.toBeNull();
+    expect((await admin.from("notifications").select("title, read_at").eq("id", n!.id).single()).data!.title).toBe("Titolo vero");
+    // logbook: il cliente non segna da solo "visto" il suo dolore
+    await clientA.from("workout_logs").upsert({ client_id: clientAId, program_id: publishedId, day_id: "d9", week: 1, discomfort: "schiena" }, { onConflict: "program_id,week,day_id" }).throwOnError();
+    await clientA.from("workout_logs").update({ discomfort_seen_at: new Date().toISOString(), note_flag: true, note_reason: "inventato" }).eq("program_id", publishedId).eq("day_id", "d9").throwOnError();
+    const { data: wl } = await admin.from("workout_logs").select("discomfort_seen_at, note_flag, note_reason").eq("program_id", publishedId).eq("day_id", "d9").single();
+    expect(wl).toEqual({ discomfort_seen_at: null, note_flag: null, note_reason: "" });
+    // lo staff sì
+    await coach.from("workout_logs").update({ discomfort_seen_at: new Date().toISOString() }).eq("program_id", publishedId).eq("day_id", "d9").throwOnError();
+    expect((await admin.from("workout_logs").select("discomfort_seen_at").eq("program_id", publishedId).eq("day_id", "d9").single()).data!.discomfort_seen_at).not.toBeNull();
+    // un solo piano attivo per cliente
+    expect((await owner.from("payment_plans").insert({ client_id: clientBId, kind: "monthly", amount: 120 })).error).not.toBeNull();
+  });
 });

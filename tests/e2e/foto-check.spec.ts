@@ -106,8 +106,9 @@ test("dopo il salvataggio di un check si propongono subito le foto", async ({ pa
   await page.waitForLoadState("networkidle");
   await page.locator("#weight_kg").fill("61,5");
   await page.getByRole("button", { name: "Salva check" }).click();
+  await page.waitForURL(/\/check\/[0-9a-f-]{36}/);
   await expect(page.getByText("Check salvato. Ora puoi aggiungere le foto")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Aggiungi le foto del check" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Aggiungi le foto" })).toBeVisible();
 });
 
 test("chat vista: esce da Da rispondere anche senza risposta, Segna da leggere la rimette", async ({ browser }, info) => {

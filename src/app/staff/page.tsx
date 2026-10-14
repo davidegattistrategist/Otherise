@@ -7,8 +7,10 @@ import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { buildTodayList, getClientsOverview, type TodayItem } from "@/lib/data/staff";
+import { rpcOr } from "@/lib/data/rpc";
+import { startCheckMode } from "@/app/check/actions";
 import { ageOn, formatHeading, formatShort, isBirthday, todayISO } from "@/lib/dates";
-import { Card, Dot, Eyebrow, LinkButton, Notice, PageTitle } from "@/components/ui";
+import { Card, Dot, Eyebrow, LinkButton, Notice, PageTitle, cx } from "@/components/ui";
 import { getBillingLines } from "@/lib/data/billing";
 import { QuickPay } from "@/components/quick-pay";
 import { markDiscomfortSeen, markNoteSeen, snoozeChatSilence } from "./today-actions";
@@ -19,20 +21,42 @@ import { PushPrompt } from "@/components/push";
 
 export const metadata: Metadata = { title: "Oggi" };
 
+const actionClass = "flex min-h-9 shrink-0 items-center rounded-full px-3 text-sm font-semibold ring-1 ring-sand-deep hover:bg-sand";
+
+/** Righe di Oggi: chi e cosa, e accanto il pulsante per farlo subito. */
 function List({ items, empty }: { items: TodayItem[]; empty: string }) {
   if (items.length === 0) return <p className="text-[15px] text-muted">{empty}</p>;
   return (
     <ul className="flex flex-col">
       {items.map((it, i) => (
-        <li key={it.clientId + i} className="border-t border-sand-deep first:border-t-0">
-          <Link href={it.href} className="flex min-h-12 items-center gap-3 py-2.5 hover:opacity-70">
+        <li key={it.clientId + i} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-sand-deep py-2.5 first:border-t-0">
+          <Link href={it.href} className="flex min-w-0 items-center gap-3 hover:opacity-70">
             <Dot tone={it.tone === "accent" ? "accent" : "ink"} />
-            <span className="font-semibold whitespace-nowrap">{it.clientName}</span>
-            <span className="ml-auto text-right text-sm text-muted">{it.text}</span>
+            <span className="min-w-0">
+              <span className="block font-semibold">{it.clientName}</span>
+              <span className="block text-sm text-muted">{it.text}</span>
+            </span>
           </Link>
+          {it.action === "check" ? (
+            <form action={startCheckMode.bind(null, it.clientId, null)} className="ml-auto">
+              <button type="submit" className={actionClass}>Inizia il check</button>
+            </form>
+          ) : it.action ? (
+            <Link href={it.action.href} className={cx(actionClass, "ml-auto")}>{it.action.label}</Link>
+          ) : null}
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Titolo della card con quante cose ci sono dentro ("Allenamenti · 3"). */
+function CardTitle({ title, count, tone }: { title: string; count?: number; tone?: "accent" | "deep" }) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      {tone ? <Dot tone={tone} /> : null}
+      <Eyebrow>{title}{count ? ` · ${count}` : ""}</Eyebrow>
+    </div>
   );
 }
 
@@ -66,8 +90,10 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
       .is("note_seen_at", null)
       .order("updated_at", { ascending: false })
       .limit(20),
-    // ultimo messaggio di ogni chat (per "Non lo senti da un po'")
-    supabase.from("messages").select("client_id, created_at").is("deleted_at", null).order("created_at", { ascending: false }).limit(5000),
+    // ultimo messaggio di ogni chat (per "Non lo senti da un po'"), calcolato dal database
+    rpcOr<Array<{ client_id: string; created_at: string }>>(supabase.rpc("last_messages", { include_deleted: false }), async () =>
+      (await supabase.from("messages").select("client_id, created_at").is("deleted_at", null).order("created_at", { ascending: false }).limit(1000)).data ?? [],
+    ).then((data) => ({ data })),
     supabase.from("chat_snoozes").select("client_id, until"),
   ]);
   const { programs, checks, training } = buildTodayList(clients, today);
@@ -96,7 +122,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
 
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
         <Card>
-          <div className="mb-3 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Diari da guardare</Eyebrow></div>
+          <CardTitle title="Diari da guardare" count={checkins?.length} tone="accent" />
           {checkins && checkins.length > 0 ? (
             <ul className="flex flex-col">
               {checkins.map((c) => {
@@ -118,7 +144,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
 
         {birthdays.length > 0 ? (
           <Card>
-            <div className="mb-3 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Compleanni di oggi</Eyebrow></div>
+            <CardTitle title="Compleanni di oggi" tone="accent" />
             <ul className="flex flex-col">
               {birthdays.map((c) => (
                 <li key={c.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-sand-deep py-2.5 first:border-t-0">
@@ -135,7 +161,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
 
         {pains && pains.length > 0 ? (
           <Card>
-            <div className="mb-3 flex items-center gap-2"><Dot tone="accent" /><Eyebrow>Dolori e fastidi</Eyebrow></div>
+            <CardTitle title="Dolori e fastidi" count={pains.length} tone="accent" />
             <ul className="flex flex-col">
               {pains.map((p) => {
                 const cl = p.clients as unknown as { first_name: string; last_name: string } | null;
@@ -157,7 +183,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
 
         {clientNotes && clientNotes.length > 0 ? (
           <Card>
-            <div className="mb-3 flex items-center gap-2"><Dot tone="deep" /><Eyebrow>Note dei clienti da leggere</Eyebrow></div>
+            <CardTitle title="Note dei clienti da leggere" count={clientNotes.length} tone="deep" />
             <ul className="flex flex-col">
               {clientNotes.map((n) => {
                 const cl = n.clients as unknown as { first_name: string; last_name: string } | null;
@@ -179,7 +205,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
 
         {silent.length > 0 ? (
           <Card>
-            <div className="mb-3 flex items-center gap-2"><Dot tone="deep" /><Eyebrow>Da sentire in chat</Eyebrow></div>
+            <CardTitle title="Da sentire in chat" count={silent.length} tone="deep" />
             <ul className="flex flex-col">
               {silent.map(({ c, s }) => (
                 <li key={c.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-sand-deep py-2.5 first:border-t-0">
@@ -200,13 +226,13 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
         ) : null}
 
         <Card>
-          <div className="mb-3"><Eyebrow>Programmi</Eyebrow></div>
+          <CardTitle title="Programmi" count={programs.length} />
           <List items={programs} empty="Nessun programma da preparare: qui compaiono le bozze e i programmi che finiscono entro 7 giorni." />
         </Card>
 
         {me.role === "owner" ? (
           <Card>
-            <div className="mb-3"><Eyebrow>Pagamenti</Eyebrow></div>
+            <CardTitle title="Pagamenti" count={billing.length} />
             {billing.length === 0 ? (
               <p className="text-[15px] text-muted">Nessuna scadenza nei prossimi giorni.</p>
             ) : (
@@ -229,12 +255,12 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
         ) : null}
 
         <Card>
-          <div className="mb-3"><Eyebrow>Allenamenti</Eyebrow></div>
+          <CardTitle title="Allenamenti" count={training.length} />
           <List items={training} empty="Tutti i clienti con un programma in corso si stanno allenando." />
         </Card>
 
         <Card>
-          <div className="mb-3"><Eyebrow>Check da fare</Eyebrow></div>
+          <CardTitle title="Check da fare" count={checks.length} />
           <List items={checks} empty="Nessun check in scadenza. Qui compare chi fa i check con l'app, nell'ultima settimana della fase." />
         </Card>
 

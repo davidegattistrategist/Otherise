@@ -22,12 +22,21 @@ export async function notify(items: NewNotification[], opts: { push?: boolean } 
   if (items.length === 0) return;
   const admin = createAdminClient();
   const created: NewNotification[] = [];
-  for (const n of items) {
-    const row = { ...n, body: n.body ?? "" };
-    const { data } = n.dedupe_key
-      ? await admin.from("notifications").upsert(row, { onConflict: "recipient_id,dedupe_key", ignoreDuplicates: true }).select("id")
-      : await admin.from("notifications").insert(row).select("id");
-    if (data?.length) created.push(n);
+  // tutte insieme (a blocchi), non una alla volta: al mattino possono essere decine
+  const full = (n: NewNotification) => ({ recipient_id: n.recipient_id, client_id: n.client_id ?? null, kind: n.kind, title: n.title, body: n.body ?? "", link: n.link ?? null, dedupe_key: n.dedupe_key ?? null });
+  const keyed = items.filter((n) => n.dedupe_key);
+  const plain = items.filter((n) => !n.dedupe_key);
+  for (let i = 0; i < keyed.length; i += 200) {
+    const chunk = keyed.slice(i, i + 200);
+    // le notifiche già mandate (stessa chiave) vengono saltate: tornano solo quelle nuove
+    const { data } = await admin.from("notifications").upsert(chunk.map(full), { onConflict: "recipient_id,dedupe_key", ignoreDuplicates: true }).select("recipient_id, dedupe_key");
+    const fresh = new Set((data ?? []).map((r) => `${r.recipient_id}|${r.dedupe_key}`));
+    created.push(...chunk.filter((n) => fresh.has(`${n.recipient_id}|${n.dedupe_key}`)));
+  }
+  for (let i = 0; i < plain.length; i += 200) {
+    const chunk = plain.slice(i, i + 200);
+    const { error } = await admin.from("notifications").insert(chunk.map(full));
+    if (!error) created.push(...chunk);
   }
   if (opts.push === false || created.length === 0) return;
   await pushLater(() =>

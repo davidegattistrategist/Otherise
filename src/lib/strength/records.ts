@@ -47,3 +47,12 @@ export function loadFromPercent(pct: number, max: number): number | null {
   if (!(pct > 0) || !(max > 0)) return null;
   return mround((max * pct) / 100, 2.5);
 }
+
+/** Record calcolati dal database (funzione exercise_bests) nello stesso formato di computeRecords. */
+export function recordsFromRows(rows: Array<{ name: string; e1rm: number | string | null; kg: number | string; reps: number; performed_on: string; heaviest: number | string }>): Map<string, ExerciseRecord> {
+  const out = new Map<string, ExerciseRecord>();
+  for (const r of rows) {
+    out.set(r.name.trim().toLowerCase(), { name: r.name, e1rm: r.e1rm === null ? null : Number(r.e1rm), kg: Number(r.kg), reps: r.reps, date: r.performed_on, heaviest: Number(r.heaviest) });
+  }
+  return out;
+}

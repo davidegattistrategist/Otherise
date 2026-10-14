@@ -10,7 +10,8 @@ import { clientNotices, ptLeft, type ClientNotice } from "../client-notice";
 import { getClientCredit } from "./billing";
 import { parseContent, type ProgramContent } from "../program/types";
 import { displayWeek, weekPosition, type WeekPosition } from "../program/schedule";
-import { computeRecords } from "../strength/records";
+import { computeRecords, recordsFromRows, type ExerciseRecord } from "../strength/records";
+import { rpcOr } from "./rpc";
 
 export type MyProgram = {
   id: string;
@@ -25,13 +26,18 @@ export type MyProgram = {
   position: WeekPosition;
 };
 
-/** Il programma da mostrare al cliente: quello iniziato più di recente, altrimenti il prossimo in partenza. */
-export const getMyPrograms = cache(async (clientId: string) => {
+/**
+ * Il programma da mostrare al cliente: quello iniziato più di recente, altrimenti
+ * il prossimo in partenza. Il contenuto (giorni ed esercizi) si legge solo per
+ * quello in corso, il prossimo e quello chiesto (`open`, es. una fase
+ * dell'archivio): le fasi passate arrivano senza giorni, bastano titolo e date.
+ */
+export const getMyPrograms = cache(async (clientId: string, open?: string) => {
   const supabase = await createClient();
   const today = todayISO();
   const { data } = await supabase
     .from("programs")
-    .select("id, title, description, weeks, session_minutes, start_date, status, content")
+    .select("id, title, description, weeks, session_minutes, start_date, status")
     .eq("client_id", clientId)
     .in("status", ["published", "archived"])
     .order("start_date", { ascending: false });
@@ -39,16 +45,20 @@ export const getMyPrograms = cache(async (clientId: string) => {
   const published = all.filter((p) => p.status === "published");
   const started = published.filter((p) => p.start_date! <= today);
   const raw = started[0] ?? published[published.length - 1] ?? null;
+  const next = published.filter((p) => p.start_date! > today && p.id !== raw?.id).pop() ?? null;
+  const wanted = [raw?.id, next?.id, open && all.some((p) => p.id === open) ? open : null].filter((x): x is string => Boolean(x));
+  const { data: contents } = wanted.length ? await supabase.from("programs").select("id, content").in("id", wanted) : { data: [] as Array<{ id: string; content: unknown }> };
+  const contentOf = new Map((contents ?? []).map((c) => [c.id, c.content]));
   const toProgram = (p: NonNullable<typeof raw>): MyProgram => ({
     ...p,
     start_date: p.start_date!,
-    content: parseContent(p.content),
+    content: parseContent(contentOf.get(p.id) ?? { days: [] }),
     week: displayWeek(p.start_date, p.weeks, today),
     position: weekPosition(p.start_date!, p.weeks, today),
   });
   const current = raw ? toProgram(raw) : null;
   // un programma pubblicato che parte dopo quello in corso
-  const upcoming = published.filter((p) => p.start_date! > today && p.id !== raw?.id).map(toProgram).pop() ?? null;
+  const upcoming = next ? toProgram(next) : null;
   const past = all.filter((p) => p.id !== raw?.id && p.id !== upcoming?.id).map(toProgram);
   return { current, upcoming, past };
 });
@@ -75,12 +85,15 @@ export const getVideoMap = cache(async () => {
 /** Massimali del cliente collegato (test dei check, altrimenti stima dal logbook), per le prescrizioni in %. */
 export const getMyMaxes = cache(async (clientId: string) => {
   const supabase = await createClient();
-  const [{ data: logs }, { data: checks }] = await Promise.all([
-    supabase.from("exercise_logs").select("exercise_name, performed_on, sets").eq("client_id", clientId).order("performed_on", { ascending: false }).limit(1500),
+  const [records, { data: checks }] = await Promise.all([
+    rpcOr<Map<string, ExerciseRecord>>(
+      supabase.rpc("exercise_bests", { cid: clientId }).then((r) => ({ ...r, data: r.data ? recordsFromRows(r.data) : null })),
+      async () => computeRecords((await supabase.from("exercise_logs").select("exercise_name, performed_on, sets").eq("client_id", clientId).order("performed_on", { ascending: false }).limit(1000)).data ?? []),
+    ),
     supabase.rpc("my_checks"),
   ]);
   const maxes: Record<string, number> = {};
-  for (const [k, r] of computeRecords(logs ?? [])) if (r.e1rm) maxes[k] = r.e1rm;
+  for (const [k, r] of records) if (r.e1rm) maxes[k] = r.e1rm;
   for (const c of checks ?? []) {
     for (const t of (c.strength_tests as Array<{ exercise?: string; e1rm?: number | null }> | null) ?? []) {
       if (t.exercise && t.e1rm) maxes[t.exercise.trim().toLowerCase()] = Number(t.e1rm);

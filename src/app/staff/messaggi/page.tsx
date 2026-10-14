@@ -3,6 +3,7 @@ import { bySurname, listName, nameMatches } from "@/lib/names";
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { rpcOr } from "@/lib/data/rpc";
 import { previewOf } from "@/lib/chat";
 import type { ChatAttachment } from "@/lib/chat-shared";
 import { Dot, EmptyState, PageTitle } from "@/components/ui";
@@ -27,7 +28,9 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
   const supabase = await createClient();
   const [{ data: clients }, { data: recent }, { data: unread }] = await Promise.all([
     supabase.from("clients").select("id, first_name, last_name, user_id, status").order("last_name").order("first_name"),
-    supabase.from("messages").select("client_id, body, attachments, created_at, deleted_at, sender_id").order("created_at", { ascending: false }).limit(500),
+    rpcOr<Array<{ client_id: string; body: string; attachments: unknown; created_at: string; deleted_at: string | null; sender_id: string | null }>>(supabase.rpc("last_messages", {}), async () =>
+      (await supabase.from("messages").select("client_id, body, attachments, created_at, deleted_at, sender_id").order("created_at", { ascending: false }).limit(1000)).data ?? [],
+    ).then((data) => ({ data })),
     supabase.rpc("my_unread_chats"),
   ]);
   const last = new Map<string, { preview: string; at: string; sender: string | null }>();

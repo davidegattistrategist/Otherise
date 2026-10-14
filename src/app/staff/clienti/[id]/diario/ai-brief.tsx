@@ -40,6 +40,7 @@ export function AiCheckinBrief({ clientId, replyTargetId }: { clientId: string; 
     const el = replyTargetId ? (document.getElementById(replyTargetId) as HTMLTextAreaElement | null) : null;
     if (el && brief) {
       el.value = brief.reply;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
       el.focus();
       el.scrollIntoView({ behavior: "smooth", block: "center" });
     }

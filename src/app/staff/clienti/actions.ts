@@ -7,10 +7,9 @@ import { z } from "zod";
 import { requireOwner, requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { removeClientFiles } from "@/lib/storage-cleanup";
 import { siteUrl } from "@/lib/site";
 import { isISODate, todayISO } from "@/lib/dates";
-import { CHAT_BUCKET } from "@/lib/chat-shared";
-import { CHECK_PHOTOS_BUCKET } from "@/lib/check-photos";
 import type { ActionState } from "@/components/form-bits";
 import type { TablesUpdate } from "@/lib/supabase/database.types";
 
@@ -71,6 +70,8 @@ export async function updateClientAction(clientId: string, _: ActionState, fd: F
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await createClient();
   const update: TablesUpdate<"clients"> = { ...parsed.data };
+  // "Inizio percorso" lasciato vuoto in una modifica: resta la data di prima (non diventa oggi)
+  if (!String(fd.get("start_date") ?? "").trim()) delete update.start_date;
   if (me.role === "owner") update.coach_id = String(fd.get("coach_id") ?? "") || null;
   const { error } = await supabase.from("clients").update(update).eq("id", clientId);
   if (error) return { error: dbError(error.message) };
@@ -127,16 +128,11 @@ export async function deleteClientAction(clientId: string) {
   const supabase = await createClient();
   const { data: client } = await supabase.from("clients").select("user_id").eq("id", clientId).maybeSingle();
   if (!client) return;
-  // foto e video della chat e foto dei check: vanno cancellati anche dall'archivio
-  const admin = createAdminClient();
-  const { data: msgs } = await admin.from("messages").select("attachments").eq("client_id", clientId);
-  const paths = (msgs ?? []).flatMap((m) => ((m.attachments ?? []) as Array<{ path?: string }>).map((a) => a.path).filter((p): p is string => Boolean(p)));
-  for (let i = 0; i < paths.length; i += 100) await admin.storage.from(CHAT_BUCKET).remove(paths.slice(i, i + 100));
-  // e le foto dei check
-  const { data: photos } = await admin.from("check_photos").select("path, thumb_path").eq("client_id", clientId);
-  const photoPaths = (photos ?? []).flatMap((p) => [p.path, p.thumb_path]);
-  for (let i = 0; i < photoPaths.length; i += 100) await admin.storage.from(CHECK_PHOTOS_BUCKET).remove(photoPaths.slice(i, i + 100));
-  await supabase.from("clients").delete().eq("id", clientId);
+  // prima il cliente (se non riesce non si tocca niente), poi tutti i suoi file:
+  // foto, video e vocali della chat (anche quelli mai inviati) e foto dei check
+  const { error } = await supabase.from("clients").delete().eq("id", clientId);
+  if (error) redirect(`/staff/clienti/${clientId}/profilo?errore=elimina`);
+  await removeClientFiles(clientId);
   if (client?.user_id) {
     // elimina anche l'account di accesso del cliente
     await createAdminClient().auth.admin.deleteUser(client.user_id);
@@ -152,7 +148,8 @@ export async function deleteClientAction(clientId: string) {
 export async function setClientStatus(clientId: string, status: "active" | "paused" | "archived") {
   await requireStaff();
   const supabase = await createClient();
-  await supabase.from("clients").update({ status }).eq("id", clientId);
+  const { data, error } = await supabase.from("clients").update({ status }).eq("id", clientId).select("id");
+  if (error || !data?.length) redirect(`/staff/clienti/${clientId}/profilo?errore=stato`);
   revalidatePath("/staff", "layout");
   redirect(`/staff/clienti/${clientId}/profilo?stato=${status}`);
 }

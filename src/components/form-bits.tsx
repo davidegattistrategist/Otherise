@@ -42,13 +42,14 @@ export function ActionMessage({ state }: { state: ActionState }) {
 }
 
 /** Chiede conferma prima di inviare (per eliminare) */
-export function ConfirmButton({ children, message, className, variant = "danger", size = "sm" }: { children: ReactNode; message: string; className?: string; variant?: "danger" | "ghost" | "secondary"; size?: "md" | "sm" }) {
+export function ConfirmButton({ children, message, className, variant = "danger", size = "sm", label, plain }: { children: ReactNode; message: string; className?: string; variant?: "danger" | "ghost" | "secondary"; size?: "md" | "sm"; label?: string; plain?: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
       disabled={pending}
-      className={cx(buttonClass(variant, size), className)}
+      aria-label={label}
+      className={plain ? className : cx(buttonClass(variant, size), className)}
       onClick={(e) => {
         if (!window.confirm(message)) e.preventDefault();
       }}

@@ -13,7 +13,7 @@ export function DraftNote({ status, restored, onDiscard, className, dark }: { st
     <div className={cx("flex flex-wrap items-center gap-x-3 gap-y-1 text-sm", dark ? "text-muted-dark" : "text-muted", className)} aria-live="polite">
       {restored ? (
         <span className={cx("rounded-full px-3 py-1", dark ? "bg-line-dark text-card" : "bg-sand-deep text-ink")}>
-          Non si è perso niente: sei ripartito da dove eri rimasto ({time}).
+          Non si è perso niente: c’è quello che avevi scritto ({time}).
           {onDiscard ? (
             <button type="button" onClick={onDiscard} className="ml-2 text-muted underline">Svuota il modulo</button>
           ) : null}

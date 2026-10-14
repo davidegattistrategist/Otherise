@@ -70,8 +70,14 @@ function programA(): ProgramContent {
 }
 
 async function main() {
-  const { count } = await db.from("profiles").select("*", { count: "exact", head: true });
-  if (count) throw new Error("Il database non è vuoto: questo script va usato solo su un database di prova appena creato.");
+  // solo su un database di prova appena creato: nessun utente, nessun cliente
+  // (se la lettura non riesce non si rischia: ci si ferma)
+  const [profiles, existingClients] = await Promise.all([
+    db.from("profiles").select("*", { count: "exact", head: true }),
+    db.from("clients").select("*", { count: "exact", head: true }),
+  ]);
+  if (profiles.error || existingClients.error || profiles.count === null || existingClients.count === null) throw new Error("Non riesco a controllare che il database sia vuoto: mi fermo.");
+  if (profiles.count || existingClients.count) throw new Error("Il database non è vuoto: questo script va usato solo su un database di prova appena creato.");
 
   // Staff
   const owner = await user("titolare@prova.local", "Diego Prova");

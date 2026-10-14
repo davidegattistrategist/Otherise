@@ -36,9 +36,15 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       </form>
 
       {clients.length === 0 ? (
-        <EmptyState title={needle ? "Nessun cliente trovato" : "Ancora nessun cliente"} action={<LinkButton href="/staff/clienti/nuovo">Aggiungi il primo</LinkButton>}>
-          {needle ? "Prova con un'altra parola." : "Crea un cliente, poi invialo con un clic: riceverà un'email per entrare."}
-        </EmptyState>
+        archivio === "1" ? (
+          <EmptyState title={needle ? "Nessun ex cliente trovato" : "Nessun ex cliente"}>
+            {needle ? "Prova con un'altra parola." : "Qui finiscono i clienti con il percorso terminato (dalla loro scheda, Dati → Percorso)."}
+          </EmptyState>
+        ) : (
+          <EmptyState title={needle ? "Nessun cliente trovato" : "Ancora nessun cliente"} action={needle ? undefined : <LinkButton href="/staff/clienti/nuovo">Aggiungi il primo</LinkButton>}>
+            {needle ? "Prova con un'altra parola." : "Crea un cliente, poi invialo con un clic: riceverà un'email per entrare."}
+          </EmptyState>
+        )
       ) : (
         <>
           {active.length ? <ClientList clients={active} me={me} year={year} /> : <p className="text-[15px] text-muted">Nessun cliente attivo{needle ? " con questo nome" : ""}.</p>}

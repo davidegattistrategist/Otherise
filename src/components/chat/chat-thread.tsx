@@ -129,6 +129,33 @@ export function ChatThread({
     setCanVoice(voiceSupported());
   }, []);
 
+  // messaggi più vecchi: la prima pagina ne ha 80, gli altri si caricano a richiesta
+  const [hasOlder, setHasOlder] = useState(initial.length >= 80);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const loadOlder = async () => {
+    const oldest = messages[0]?.createdAt;
+    const el = listRef.current;
+    if (!oldest || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const r = await fetch(`/api/chat/${clientId}?before=${encodeURIComponent(oldest)}`, { cache: "no-store" });
+      if (!r.ok) return;
+      const d = (await r.json()) as { messages: ChatMessage[]; more: boolean };
+      const keep = el ? el.scrollHeight - el.scrollTop : 0;
+      setMessages((cur) => {
+        const known = new Set(cur.map((m) => m.id));
+        return [...d.messages.filter((m) => !known.has(m.id)), ...cur];
+      });
+      setHasOlder(d.more);
+      // resta allo stesso punto della conversazione
+      requestAnimationFrame(() => {
+        if (el) el.scrollTop = el.scrollHeight - keep;
+      });
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
   const merge = useCallback((incoming: ChatMessage[], deleted: string[] = [], transcripts: Record<string, Transcript> = {}) => {
     setMessages((cur) => {
       const byId = new Map(cur.map((m) => [m.id, m]));
@@ -147,9 +174,16 @@ export function ChatThread({
     });
   }, []);
 
-  // aggiornamento automatico
+  // aggiornamento automatico: ogni 4 secondi mentre la conversazione è viva
+  // (un messaggio negli ultimi 2 minuti, o stai scrivendo), altrimenti ogni 10;
+  // subito quando torni sull'app
+  const lastActivity = useRef(0);
+  useEffect(() => {
+    lastActivity.current = Date.now();
+  }, [messages.length, text]);
   useEffect(() => {
     let stop = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     const tick = async () => {
       if (document.hidden) return;
       try {
@@ -163,12 +197,19 @@ export function ChatThread({
         /* rete assente: si riprova al giro dopo */
       }
     };
-    const id = setInterval(tick, 4000);
+    const loop = () => {
+      const lively = Date.now() - lastActivity.current < 120_000;
+      timer = setTimeout(async () => {
+        await tick();
+        if (!stop) loop();
+      }, lively ? 4000 : 10_000);
+    };
+    loop();
     const onVis = () => !document.hidden && void tick();
     document.addEventListener("visibilitychange", onVis);
     return () => {
       stop = true;
-      clearInterval(id);
+      if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [clientId, merge, draftsOn]);
@@ -436,6 +477,11 @@ export function ChatThread({
     <div className={cx("flex min-h-0 flex-col overflow-hidden rounded-[24px] bg-card", className)}>
       <div ref={listRef} onScroll={onScroll} className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-3 py-4 sm:px-5" aria-live="polite">
         {messages.length === 0 ? <p className="m-auto max-w-sm px-4 text-center text-[15px] text-muted">{emptyText}</p> : null}
+        {hasOlder ? (
+          <button type="button" onClick={() => void loadOlder()} disabled={loadingOlder} className="mb-2 self-center rounded-full bg-sand px-4 py-2 text-sm font-semibold text-ink disabled:opacity-60">
+            {loadingOlder ? "Carico…" : "Messaggi precedenti"}
+          </button>
+        ) : null}
         {messages.map((m, i) => {
           const prev = messages[i - 1];
           const showDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);

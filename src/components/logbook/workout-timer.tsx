@@ -107,6 +107,15 @@ export function useWorkoutTimer() {
     setActive(null);
   };
 
+  /** Salta il resto (il recupero): come se fosse finito, senza bip. */
+  const skip = () => {
+    const cb = onDone.current;
+    onDone.current = null;
+    last.current = null;
+    setActive(null);
+    cb?.();
+  };
+
   const adjust = (delta: number) => {
     const t = Date.now();
     setActive((a) => (a ? { ...a, plan: adjustPlan(a.plan, elapsedOf(a, t), delta) } : a));
@@ -122,11 +131,13 @@ export function useWorkoutTimer() {
     } catch {}
   };
 
+  // il controllo dei bip e della fine gira qui senza ridisegnare niente: l'orologio
+  // che si vede ticchetta solo dentro la barra (TimerBar), così il logbook con
+  // tutte le sue caselle non si ridisegna 5 volte al secondo mentre scrivi
   useEffect(() => {
     if (!active?.running) return;
     const id = setInterval(() => {
       const t = Date.now();
-      setNow(t);
       const st = timerAt(active.plan, elapsedOf(active, t));
       if (st.done) {
         beep(1320, 600);
@@ -152,8 +163,8 @@ export function useWorkoutTimer() {
     return () => clearInterval(id);
   }, [active, beep]);
 
-  const state: TimerState | null = active ? timerAt(active.plan, elapsedOf(active, now)) : null;
-  return { active, state, sound, start, pause, resume, restart, stop, adjust, toggleSound };
+  const stateAt = useCallback((t: number): TimerState | null => (active ? timerAt(active.plan, elapsedOf(active, Math.max(t, active.running ? active.startedAt : t))) : null), [active]);
+  return { active, now, stateAt, sound, start, pause, resume, restart, stop, skip, adjust, toggleSound };
 }
 
 export type WorkoutTimer = ReturnType<typeof useWorkoutTimer>;
@@ -161,7 +172,15 @@ export type WorkoutTimer = ReturnType<typeof useWorkoutTimer>;
 const btn = "flex h-10 w-10 shrink-0 items-center justify-center rounded-full";
 
 export function TimerBar({ timer }: { timer: WorkoutTimer }) {
-  const { active, state } = timer;
+  const { active } = timer;
+  const [now, setNow] = useState(timer.now);
+  const running = Boolean(active?.running);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(id);
+  }, [running]);
+  const state = timer.stateAt(Math.max(now, timer.now));
   if (!active || !state) return null;
   const kind = state.phase.kind;
   const tone = kind === "work" ? "bg-accent text-white" : kind === "rest" ? "bg-accent-soft text-ink ring-1 ring-accent/40" : "bg-ink-soft text-white";
@@ -178,10 +197,8 @@ export function TimerBar({ timer }: { timer: WorkoutTimer }) {
           <div className={cx("text-[26px] leading-none font-bold tabular", !active.running && "opacity-60")} data-testid="timer-clock">{kind === "lead" ? Math.ceil(state.remaining) : fmtClock(state.remaining)}</div>
         </div>
         {active.plan.adjustable ? (
-          <>
-            <button type="button" aria-label="15 secondi in meno" onClick={() => timer.adjust(-15)} className={cx("h-10 shrink-0 rounded-full px-2.5 text-xs font-bold", soft)}>−15</button>
-            <button type="button" aria-label="15 secondi in più" onClick={() => timer.adjust(15)} className={cx("h-10 shrink-0 rounded-full px-2.5 text-xs font-bold", soft)}>+15</button>
-          </>
+          // recupero: "+30 s" se serve più fiato, "Salta" (in fondo) se sei già pronto
+          <button type="button" aria-label="30 secondi in più" onClick={() => timer.adjust(30)} className={cx("h-10 shrink-0 rounded-full px-3 text-sm font-bold", soft)}>+30 s</button>
         ) : (
           <button type="button" aria-label="Ricomincia da capo" onClick={timer.restart} className={cx(btn, soft)}><IconRestart size={18} /></button>
         )}
@@ -191,7 +208,11 @@ export function TimerBar({ timer }: { timer: WorkoutTimer }) {
           <button type="button" aria-label="Riprendi" onClick={timer.resume} className={cx(btn, "bg-ink text-card")}><IconPlay size={18} /></button>
         )}
         <button type="button" aria-label={timer.sound ? "Togli il suono" : "Metti il suono"} onClick={timer.toggleSound} className={cx(btn, soft)}>{timer.sound ? <IconSound size={18} /> : <IconSoundOff size={18} />}</button>
-        <button type="button" aria-label="Ferma il timer" onClick={timer.stop} className={cx(btn, soft)}><IconX size={18} /></button>
+        {active.plan.adjustable ? (
+          <button type="button" onClick={timer.skip} className="h-10 shrink-0 rounded-full bg-ink px-3.5 text-sm font-bold text-card">Salta</button>
+        ) : (
+          <button type="button" aria-label="Ferma il timer" onClick={timer.stop} className={cx(btn, soft)}><IconX size={18} /></button>
+        )}
       </div>
       <div className={cx("h-1.5 rounded-full", kind === "rest" ? "bg-ink/15" : "bg-white/30")}>
         <div className={cx("h-1.5 rounded-full", kind === "rest" ? "bg-accent" : "bg-white")} style={{ width: `${Math.max(0, Math.min(100, (1 - state.progress) * 100))}%` }} />

@@ -180,7 +180,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
         )}
       </Card>
 
-      <ExerciseProgress series={exerciseSeries} selected={esercizio} hrefFor={(k) => `/staff/clienti/${id}?esercizio=${encodeURIComponent(k)}`} />
+      <ExerciseProgress series={exerciseSeries} selected={esercizio} />
 
       <Card className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between"><Eyebrow>Allenamenti per settimana</Eyebrow><span className="text-sm text-muted">ultime 8</span></div>

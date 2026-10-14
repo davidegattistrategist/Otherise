@@ -101,7 +101,7 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
         </Card>
       ) : null}
 
-      <ExerciseProgress title="I tuoi esercizi" series={exerciseSeries} selected={esercizio} hrefFor={(k) => `/cliente/progressi?esercizio=${encodeURIComponent(k)}`} />
+      <ExerciseProgress title="I tuoi esercizi" series={exerciseSeries} selected={esercizio} />
 
       {records.length ? (
         <Card className="flex flex-col gap-2">

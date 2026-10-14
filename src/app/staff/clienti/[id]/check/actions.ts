@@ -89,14 +89,14 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
     tests_text: String(fd.get("tests_text") ?? "").trim(),
     notes_next_phase: String(fd.get("notes_next_phase") ?? "").trim(),
     visible_to_client: fd.get("visible_to_client") === "on",
-    created_by: me.id,
   };
   // modalità check: il check nuovo prende l'id già deciso (le foto sono già nella sua cartella)
   const newId = String(fd.get("new_id") ?? "");
   const presetId = !checkId && /^[0-9a-f-]{36}$/i.test(newId) && (await isPendingCheck(supabase, me.id, clientId, newId)) ? newId : null;
   const { data: saved, error } = checkId
     ? await supabase.from("checks").update(row).eq("id", checkId).eq("client_id", clientId).select("id").maybeSingle()
-    : await supabase.from("checks").insert({ ...row, id: presetId ?? undefined }).select("id").single();
+    : // l'autore è chi lo crea (chi lo corregge dopo non ne diventa l'autore)
+      await supabase.from("checks").insert({ ...row, created_by: me.id, id: presetId ?? undefined }).select("id").single();
   if (error || !saved) return { error: "Salvataggio non riuscito." };
   // foto caricate durante la modalità check: ora si registrano nel check
   const pendingRaw = String(fd.get("pending_photos") ?? "");
@@ -133,7 +133,7 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
   }
   // il browser cancella la bozza e poi: carica le foto scelte nel modulo,
   // oppure va alla pagina dei check che propone subito le foto di questo check
-  return { ok: true, message: "Check salvato.", checkId: saved.id, redirectTo: `/staff/clienti/${clientId}/check?salvato=${saved.id}` };
+  return { ok: true, message: "Check salvato.", checkId: saved.id, redirectTo: `/staff/clienti/${clientId}/check/${saved.id}?salvato=1` };
 }
 
 export async function deleteCheck(clientId: string, checkId: string) {

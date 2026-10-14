@@ -56,7 +56,8 @@ export async function endCheckMode(clientId: string, savedId: string | null) {
   const supabase = await createClient();
   await setCheckMode(supabase, me.id, null);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
-  redirect(savedId ? `/staff/clienti/${clientId}/check?salvato=${savedId}` : `/staff/clienti/${clientId}`);
+  // si apre il check appena salvato, con le foto in cima
+  redirect(savedId ? `/staff/clienti/${clientId}/check/${savedId}?salvato=1` : `/staff/clienti/${clientId}`);
 }
 
 /** "Annulla il check": via la modalità e quello che avevi scritto. */

@@ -142,8 +142,7 @@ test("Pagamenti: dopo 'Pagato' e da 'Tutti i pagamenti' si corregge il pagamento
   await expect(dialog).toHaveCount(0);
 
   // da "Tutti i pagamenti": si apre, si vede l'importo corretto, si elimina
-  await page.goto("/staff/pagamenti");
-  await page.locator("#tutti-i-pagamenti summary").click();
+  await page.goto("/staff/pagamenti?tutti");
   const item = page.locator("#tutti-i-pagamenti li").filter({ hasText: name }).filter({ hasText: "100" }).first();
   await expect(item).toBeVisible();
   await item.getByRole("button", { name: /^Modifica/ }).click();
@@ -152,7 +151,6 @@ test("Pagamenti: dopo 'Pagato' e da 'Tutti i pagamenti' si corregge il pagamento
   await d2.getByRole("button", { name: "Sì, elimina" }).click();
   await expect(d2).toHaveCount(0);
   await page.reload();
-  await page.locator("#tutti-i-pagamenti summary").click();
   await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name })).toHaveCount(1);
 });
 

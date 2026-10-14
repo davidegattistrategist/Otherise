@@ -50,6 +50,8 @@ const numOrNull = (v: string): number | null => {
 };
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n).replace(".", ","));
 
+const HINT_KEY = "otherise:logbook-hint";
+
 function storageKey(p: { programId: string; week: number; day: ProgramDay }) {
   return `otherise:log:${p.programId}:${p.week}:${p.day.id}`;
 }
@@ -98,18 +100,26 @@ export function Logbook(props: LogbookProps) {
   const [prs, setPrs] = useState<Record<string, string>>({});
   const checkRecord = (it: { id: string; exerciseId?: string | null; name: string }, sets: SetLog[]) => {
     const rec = pick(records, it);
-    if (!rec || prs[it.id]) return; // la prima volta non è un record: è il punto di partenza
+    if (!rec) return; // la prima volta non è un record: è il punto di partenza
+    // si ricalcola a ogni modifica: se era un errore di battitura (1000 invece di 100) e lo correggi, il record sparisce
+    const drop = () => setPrs((cur) => {
+      if (!(it.id in cur)) return cur;
+      const next = { ...cur };
+      delete next[it.id];
+      return next;
+    });
     let best: { kg: number; reps: number; e: number } | null = null;
     for (const x of sets) {
       if (typeof x.kg !== "number" || typeof x.reps !== "number" || x.kg <= 0 || x.reps <= 0) continue;
       const e = epley(x.kg, x.reps) ?? 0;
       if (!best || e > best.e) best = { kg: x.kg, reps: x.reps, e };
     }
-    if (!best) return;
+    if (!best) return drop();
     const heavier = sets.some((x) => typeof x.kg === "number" && x.kg > rec.heaviest && (x.reps ?? 0) > 0);
     if ((rec.e1rm && best.e > rec.e1rm + 0.01) || heavier) {
-      setPrs((cur) => ({ ...cur, [it.id]: heavier ? `${fmtNum(Math.max(...sets.map((x) => (typeof x.kg === "number" ? x.kg : 0))))} kg: il carico più alto di sempre` : `${fmtNum(best!.kg)} kg × ${best!.reps}: massimale stimato ${fmtNum(best!.e, 0)} kg` }));
-    }
+      const text = heavier ? `${fmtNum(Math.max(...sets.map((x) => (typeof x.kg === "number" ? x.kg : 0))))} kg: il carico più alto di sempre` : `${fmtNum(best.kg)} kg × ${best.reps}: massimale stimato ${fmtNum(best.e, 0)} kg`;
+      setPrs((cur) => (cur[it.id] === text ? cur : { ...cur, [it.id]: text }));
+    } else drop();
   };
 
   const buildInitial = () => {
@@ -144,6 +154,25 @@ export function Logbook(props: LogbookProps) {
   const [typing, setTyping] = useState<Record<string, string>>({});
   const autoKg = useRef(new Set<string>());
   const [unchecked, setUnchecked] = useState<{ name: string; missing: number; total: number }[] | null>(null);
+  /** La prossima serie da fare ("itemId:serie"), evidenziata quando finisce il recupero */
+  const [upNext, setUpNext] = useState<string | null>(null);
+  const upNextTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** La prima volta: cosa sono i numeri grigi nelle caselle */
+  const [hint, setHint] = useState(false);
+  useEffect(() => {
+    if (initial.completed) return;
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- preferenza salvata sul telefono
+      if (!localStorage.getItem(HINT_KEY)) setHint(true);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const closeHint = () => {
+    setHint(false);
+    try {
+      localStorage.setItem(HINT_KEY, "1");
+    } catch {}
+  };
   const latest = useRef({ items, notes, discomfort, performedOn, completed });
   useEffect(() => {
     latest.current = { items, notes, discomfort, performedOn, completed };
@@ -177,7 +206,11 @@ export function Logbook(props: LogbookProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const save = useCallback(
+  // un salvataggio alla volta, in fila: "Ho finito" toccato mentre ne parte uno
+  // automatico aspetta il suo turno (e legge i dati più recenti), così sul
+  // server non può arrivare per ultimo un salvataggio vecchio "non finito"
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const saveNow = useCallback(
     async (opts: { completed?: boolean } = {}) => {
       const s = latest.current;
       const done = opts.completed ?? s.completed;
@@ -210,6 +243,14 @@ export function Logbook(props: LogbookProps) {
       }
     },
     [programId, week, day],
+  );
+  const save = useCallback(
+    (opts: { completed?: boolean } = {}): Promise<boolean> => {
+      const run = queue.current.then(() => saveNow(opts));
+      queue.current = run.catch(() => undefined);
+      return run;
+    },
+    [saveNow],
   );
 
   // quando torna la rete (o ogni 20 secondi finché manca) riprova da solo;
@@ -244,6 +285,8 @@ export function Logbook(props: LogbookProps) {
   }, [status.kind]);
   useEffect(() => () => {
     if (retryTimer.current) clearTimeout(retryTimer.current);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    if (upNextTimer.current) clearTimeout(upNextTimer.current);
   }, []);
 
   const touch = useCallback(() => {
@@ -278,12 +321,39 @@ export function Logbook(props: LogbookProps) {
     if (it) checkRecord(it, next[itemId].sets.filter((x) => x.done || (x.kg !== null && x.reps !== null)));
   };
 
+  /** La prima serie ancora da fare dopo quella appena spuntata (stesso esercizio, poi i successivi). */
+  const nextSetAfter = (itemId: string): string | null => {
+    const order = day.blocks.flatMap((b) => b.items).filter((it) => plans[it.id].mode !== "text");
+    const from = order.findIndex((it) => it.id === itemId);
+    for (const it of [...order.slice(from), ...order.slice(0, from)]) {
+      const si = (latest.current.items[it.id]?.sets ?? []).findIndex((x) => !x.done);
+      if (si >= 0) return `${it.id}:${si}`;
+    }
+    return null;
+  };
+
+  /** Finito (o saltato) il recupero: la prossima serie si illumina e, se è fuori schermo, viene in vista. */
+  const showNext = (itemId: string) => {
+    const key = nextSetAfter(itemId);
+    if (!key) return;
+    setUpNext(key);
+    if (upNextTimer.current) clearTimeout(upNextTimer.current);
+    upNextTimer.current = setTimeout(() => setUpNext(null), 10_000);
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`[data-set="${CSS.escape(key)}"]`);
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.top < 80 || r.bottom > window.innerHeight - 180) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
+
   /** Recupero dopo una serie spuntata: non interrompe un AMRAP, EMOM o intervalli in corso. */
-  const startRest = (rest: string) => {
+  const startRest = (rest: string, itemId?: string) => {
+    setUpNext(null);
     const p = restTimerFor(rest);
     if (!p) return;
     if (clock.active && clock.active.id !== "rest" && !clock.active.id.startsWith("set:")) return;
-    clock.start("rest", p);
+    clock.start("rest", p, itemId ? () => showNext(itemId) : undefined);
   };
 
   /** Serie a tempo (es. plank 30"): parte il tempo, alla fine la serie si spunta e parte il recupero. */
@@ -294,7 +364,7 @@ export function Logbook(props: LogbookProps) {
     clock.start(`set:${it.id}`, timedSetTimer(seconds, si + 1, sets.length, it.name), () => {
       update(it.id, (cur) => ({ ...cur, sets: cur.sets.map((x, i) => (i === si ? { ...x, done: true } : x)) }));
       const rest = restTimerFor(it.rest);
-      if (rest) clock.start("rest", rest);
+      if (rest) clock.start("rest", rest, () => showNext(it.id));
     });
   };
 
@@ -350,22 +420,43 @@ export function Logbook(props: LogbookProps) {
     void finish();
   };
 
+  const finishBusy = useRef(false);
   const finish = async () => {
+    // un secondo tocco mentre sta già chiudendo non fa niente
+    if (finishBusy.current) return;
+    finishBusy.current = true;
+    // il salvataggio automatico in attesa non serve più: parte quello finale
+    if (saveTimer.current) clearTimeout(saveTimer.current);
     setCompleted(true);
     latest.current = { ...latest.current, completed: true };
     finishing.current = true;
-    const ok = await save({ completed: true });
-    if (ok) {
-      const err = (await props.beforeFinish?.()) ?? null;
-      if (err) {
-        setStatus({ kind: "error", text: err });
-        return;
+    try {
+      const ok = await save({ completed: true });
+      if (ok) {
+        const err = (await props.beforeFinish?.()) ?? null;
+        if (err) {
+          setStatus({ kind: "error", text: err });
+          return;
+        }
+        finishing.current = false;
+        router.push(`${props.backHref}?fatto=1${latest.current.discomfort.trim() ? "&fastidio=1" : ""}`);
+        router.refresh();
       }
-      finishing.current = false;
-      router.push(`${props.backHref}?fatto=1${latest.current.discomfort.trim() ? "&fastidio=1" : ""}`);
-      router.refresh();
+    } finally {
+      finishBusy.current = false;
     }
   };
+
+  // per la spiegazione: il primo esercizio a serie con un valore proposto
+  const hintItem = hint ? day.blocks.flatMap((b) => b.items).find((it) => plans[it.id]?.mode === "sets") ?? null : null;
+  const hintSug = hintItem ? suggestion(hintItem, 0) : null;
+
+  // esercizi finiti (tutte le serie spuntate) sul totale, per la barra in basso
+  const countable = day.blocks.flatMap((b) => b.items).filter((it) => plans[it.id].mode !== "text");
+  const doneCount = countable.filter((it) => {
+    const sets = items[it.id]?.sets ?? [];
+    return sets.length > 0 && sets.every((x) => x.done);
+  }).length;
 
   const lastFor = (it: { exerciseId?: string | null; name: string }) => (it.exerciseId && last[it.exerciseId]) || last[it.name.trim().toLowerCase()] || null;
   const videoFor = (it: { exerciseId?: string | null; name: string }) => (it.exerciseId && videos[it.exerciseId]) || videos[it.name.trim().toLowerCase()] || null;
@@ -443,12 +534,24 @@ export function Logbook(props: LogbookProps) {
                   ) : null}
                   {plan.mode === "sets" ? (
                     <div className="flex flex-col gap-1.5">
+                      {hintItem?.id === it.id ? (
+                        <div className="flex flex-col gap-2 rounded-2xl bg-accent-soft px-3.5 py-3 text-[15px] leading-snug" role="note">
+                          <p>
+                            <span className="font-semibold">Come si usa:</span>{" "}
+                            {hintSug && (hintSug.kg !== null || hintSug.repsText)
+                              ? <>in grigio c&apos;è il proposto ({[hintSug.kg !== null ? `${fmtNum(hintSug.kg)} kg` : "", hintSug.repsText ? `× ${hintSug.repsText}` : ""].filter(Boolean).join(" ")}). </>
+                              : <>in grigio c&apos;è il proposto, quando c&apos;è. </>}
+                            Se l&apos;hai fatta così tocca <span className="inline-flex translate-y-0.5"><IconCheck size={16} /></span>; se è andata diversamente scrivi chili e ripetizioni veri.
+                          </p>
+                          <button type="button" onClick={closeHint} className="min-h-10 self-start rounded-full bg-ink px-4 text-sm font-semibold text-card">Ho capito</button>
+                        </div>
+                      ) : null}
                       <div className="grid grid-cols-[2.5rem_1fr_1fr_2.75rem] gap-2 px-0.5 text-[11px] font-semibold tracking-wider text-muted uppercase">
                         <span>Serie</span><span>Kg</span><span>Rip.</span><span className="sr-only">Fatto</span>
                       </div>
                       {st.sets.map((s, si) => (
-                        <div key={si} className="grid grid-cols-[2.5rem_1fr_1fr_2.75rem] items-center gap-2">
-                          <span className="text-center text-sm font-semibold text-muted tabular">{si + 1}</span>
+                        <div key={si} data-set={`${it.id}:${si}`} className={cx("grid grid-cols-[2.5rem_1fr_1fr_2.75rem] items-center gap-2 rounded-xl transition-shadow", upNext === `${it.id}:${si}` && "bg-accent-soft ring-2 ring-accent")}>
+                          <span className={cx("text-center text-sm font-semibold tabular", upNext === `${it.id}:${si}` ? "text-accent-deep" : "text-muted")}>{upNext === `${it.id}:${si}` ? <><span className="sr-only">Prossima: serie </span>{si + 1}</> : si + 1}</span>
                           <input
                             aria-label={`${it.name}, serie ${si + 1}, chili`}
                             inputMode="decimal"
@@ -506,7 +609,11 @@ export function Logbook(props: LogbookProps) {
                                   return { kg, reps, done: true };
                                 }),
                               }));
-                              if (willBeDone && it.rest) startRest(it.rest);
+                              if (willBeDone) {
+                                if (hint) closeHint();
+                                if (it.rest) startRest(it.rest, it.id);
+                                else setUpNext(null);
+                              }
                             }}
                           >
                             <IconCheck size={20} />
@@ -536,11 +643,13 @@ export function Logbook(props: LogbookProps) {
                           <button
                             key={si}
                             type="button"
+                            data-set={`${it.id}:${si}`}
                             aria-pressed={Boolean(s.done)}
-                            className={cx("flex h-11 min-w-16 items-center justify-center gap-1 rounded-xl px-3 text-sm font-semibold tabular", s.done ? "bg-ink text-card" : "bg-sand-deep/70")}
+                            className={cx("flex h-11 min-w-16 items-center justify-center gap-1 rounded-xl px-3 text-sm font-semibold tabular", s.done ? "bg-ink text-card" : upNext === `${it.id}:${si}` ? "bg-accent-soft ring-2 ring-accent" : "bg-sand-deep/70")}
                             onClick={() => {
                               update(it.id, (cur) => ({ ...cur, sets: cur.sets.map((x, i) => (i === si ? { ...x, done: !x.done } : x)) }));
-                              if (!s.done && it.rest) startRest(it.rest);
+                              if (!s.done && it.rest) startRest(it.rest, it.id);
+                              else setUpNext(null);
                             }}
                           >
                             {s.done ? <IconCheck size={16} /> : null}{plan.label}
@@ -656,13 +765,16 @@ export function Logbook(props: LogbookProps) {
       <div className={cx("sticky z-20 flex flex-col gap-2", props.barClass ?? "bottom-[calc(var(--nav-space)+0.5rem)] md:bottom-4")}>
         <TimerBar timer={clock} />
         <div className="flex items-center gap-3 rounded-full bg-ink p-1.5 pl-5 text-card shadow-lg">
-          <span className={cx("min-w-0 flex-1 truncate text-sm", status.kind === "error" ? "text-accent" : "text-muted-dark")} aria-live="polite">
-            {status.kind === "saving" ? "Salvataggio…" : status.text ?? (completed ? "Sessione completata" : "Si salva da solo")}
+          <span className="flex min-w-0 flex-1 flex-col leading-tight">
+            {countable.length ? <span className="truncate text-[15px] font-semibold tabular">{doneCount} di {countable.length} esercizi</span> : null}
+            <span className={cx("truncate text-sm", status.kind === "error" ? "text-accent" : "text-muted-dark")} aria-live="polite">
+              {status.kind === "saving" ? "Salvataggio…" : status.text ?? (completed ? "Sessione completata" : "Si salva da solo")}
+            </span>
           </span>
           {status.kind === "error" ? (
             <button type="button" onClick={() => void saveRef.current?.()} className="h-11 shrink-0 rounded-full px-4 text-sm font-semibold text-card ring-1 ring-line-dark">Riprova</button>
           ) : null}
-          <button type="button" onClick={askFinish} disabled={status.kind === "saving"} className="h-11 rounded-full bg-accent px-5 text-[15px] font-bold text-white disabled:opacity-60">
+          <button type="button" onClick={askFinish} className="h-11 rounded-full bg-accent px-5 text-[15px] font-bold text-white disabled:opacity-60">
             {initial.completed ? "Salva" : props.finishLabel ?? "Ho finito"}
           </button>
         </div>
@@ -680,7 +792,7 @@ export function Logbook(props: LogbookProps) {
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-[16px] leading-relaxed">Le hai fatte e ti sei dimenticato di spuntarle, o le hai saltate?</p>
+            <p className="mt-3 text-[16px] leading-relaxed">Le hai fatte ma non le hai spuntate, o le hai saltate?</p>
             <div className="mt-4 flex flex-col gap-2">
               <button type="button" onClick={() => resolveUnchecked(true)} className="min-h-12 w-full rounded-full bg-ink text-[16px] font-semibold text-card">Le ho fatte: segnale come fatte</button>
               <button type="button" onClick={() => resolveUnchecked(false)} className="min-h-12 w-full rounded-full bg-card text-[16px] font-semibold ring-1 ring-sand-deep">Sì, le ho saltate</button>

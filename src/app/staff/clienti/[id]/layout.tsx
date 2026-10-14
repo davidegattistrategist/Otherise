@@ -20,17 +20,20 @@ export default async function ClientLayout({ children, params }: { children: Rea
     .is("reviewed_at", null);
   const base = `/staff/clienti/${id}`;
   const age = ageOn(client.birth_date, todayISO());
+  // le schede usate tutti i giorni sempre in vista, le altre nel menu "Altro"
   const tabs = [
     { href: base, label: "Panoramica", exact: true },
     { href: `${base}/programma`, label: "Programma" },
-    { href: `${base}/progetto`, label: "Progetto" },
-    { href: `${base}/sessioni`, label: "Sessioni PT" },
     { href: `${base}/check`, label: "Check" },
-    { href: `${base}/posturale`, label: "Posturale" },
-    ...(me.role === "owner" ? [{ href: `${base}/pagamenti`, label: "Pagamenti" }] : []),
     { href: `${base}/diario`, label: "Diario", dot: (flagged ?? 0) > 0 },
+    ...(me.role === "owner" ? [{ href: `${base}/pagamenti`, label: "Pagamenti" }] : []),
+  ];
+  const more = [
+    { href: `${base}/sessioni`, label: "Sessioni PT" },
     { href: `${base}/note`, label: "Note" },
     { href: `${base}/profilo`, label: "Dati" },
+    { href: `${base}/progetto`, label: "Progetto" },
+    { href: `${base}/posturale`, label: "Posturale" },
   ];
   return (
     <div className="flex flex-col gap-6">
@@ -55,7 +58,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
           <form action={startCheckMode.bind(null, id, null)}><button type="submit" className={buttonClass("primary")}>Inizia il check</button></form>
         </div>
       </div>
-      <Tabs items={tabs} />
+      <Tabs items={tabs} more={more} />
       {children}
     </div>
   );

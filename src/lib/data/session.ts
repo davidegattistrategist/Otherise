@@ -8,7 +8,8 @@ import type { ServerSupabase } from "../supabase/server";
 import { addDays, formatShort, todayISO } from "../dates";
 import { parseContent, type ProgramDay } from "../program/types";
 import { summarizeSets, type SetLog } from "../program/prescription";
-import { computeRecords } from "../strength/records";
+import { computeRecords, recordsFromRows, type ExerciseRecord } from "../strength/records";
+import { rpcOr } from "./rpc";
 import { getVideoMap } from "./me";
 
 export type SessionData = {
@@ -42,7 +43,14 @@ export async function loadSession(supabase: ServerSupabase, programId: string, w
   const [{ data: exLogs }, { data: lastLogs }, { data: history }, checksRes, videos] = await Promise.all([
     log ? supabase.from("exercise_logs").select("item_id, sets, result_text").eq("workout_log_id", log.id) : Promise.resolve({ data: [] as Array<{ item_id: string; sets: unknown; result_text: string }> }),
     supabase.rpc("last_exercise_logs", { cid, before_date: before }),
-    supabase.from("exercise_logs").select("exercise_name, exercise_id, performed_on, sets, workout_log_id").eq("client_id", cid).lt("performed_on", before).order("performed_on", { ascending: false }).limit(1500),
+    // record e massimali calcolati dal database (prima si scaricava tutto lo storico del logbook)
+    rpcOr<Map<string, ExerciseRecord>>(
+      supabase.rpc("exercise_bests", { cid, before_date: before }).then((r) => ({ ...r, data: r.data ? recordsFromRows(r.data) : null })),
+      async () => {
+        const { data } = await supabase.from("exercise_logs").select("exercise_name, exercise_id, performed_on, sets, workout_log_id").eq("client_id", cid).lt("performed_on", before).order("performed_on", { ascending: false }).limit(1000);
+        return computeRecords((data ?? []).filter((h) => !log || h.workout_log_id !== log.id));
+      },
+    ).then((data) => ({ data })),
     viewer === "staff"
       ? supabase.from("checks").select("check_date, strength_tests").eq("client_id", cid).not("check_date", "is", null).order("check_date", { ascending: true })
       : supabase.rpc("my_checks"),
@@ -66,7 +74,7 @@ export async function loadSession(supabase: ServerSupabase, programId: string, w
     }
   }
 
-  const rec = computeRecords((history ?? []).filter((h) => !log || h.workout_log_id !== log.id));
+  const rec = history;
   const records: SessionData["records"] = {};
   for (const [k, r] of rec) records[k] = { e1rm: r.e1rm, heaviest: r.heaviest };
 

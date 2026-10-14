@@ -97,8 +97,8 @@ test("modalità check: le foto si caricano subito e entrano nel check con 'Check
   await page.getByTestId("pending-photo-input").setInputFiles([path.join(FIX, "foto-check.jpg")]);
   await expect(page.getByRole("list", { name: "Foto caricate in questo check" }).locator("li")).toHaveCount(1, { timeout: 20_000 });
   await page.getByRole("button", { name: "Check finito" }).first().click();
-  await page.waitForURL(/\/check\?salvato=/, { timeout: 20_000 });
-  const saved = /salvato=([0-9a-f-]{36})/.exec(page.url())![1];
+  await page.waitForURL(/\/check\/[0-9a-f-]{36}\?salvato=1/, { timeout: 20_000 });
+  const saved = /\/check\/([0-9a-f-]{36})/.exec(page.url())![1];
   await page.goto(`/staff/clienti/${id}/check/${saved}`);
   await expect(page.getByRole("list", { name: "Foto del check" }).locator("li")).toHaveCount(1);
 });

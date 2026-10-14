@@ -84,9 +84,10 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
         </Card>
       ) : null}
       <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
-        <Link href={`/staff/clienti/${id}/check/nuovo`} className="text-sm font-semibold underline">Solo il modulo</Link>
+        <Link href={`/staff/clienti/${id}/check/nuovo`} className="text-sm font-semibold underline">Compila senza modalità check</Link>
         <form action={startCheckMode.bind(null, id, null)}><Button type="submit">Inizia il check</Button></form>
       </div>
+      <p className="-mt-3 text-right text-xs text-muted">Modalità check: a tutto schermo, con confronti, programma e pagamenti a portata di mano, e insieme sul telefono e sul computer.</p>
       {list.length === 0 ? (
         <EmptyState title="Ancora nessun check">Registra pliche, circonferenze e test: i grafici si costruiscono da soli.</EmptyState>
       ) : (

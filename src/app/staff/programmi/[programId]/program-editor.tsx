@@ -81,6 +81,12 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   const [aiNotes, setAiNotes] = useState<Record<string, string>>(program.ai_notes ?? {});
   const [updatedAt, setUpdatedAt] = useState(program.updated_at);
   const [dirty, setDirty] = useState(false);
+  // ogni modifica conta: se arriva mentre un salvataggio è in corso, resta "da salvare"
+  const edits = useRef(0);
+  const markDirty = useCallback(() => {
+    edits.current += 1;
+    setDirty(true);
+  }, []);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: "error" | "success" | "info"; text: string } | null>(null);
   const [unknown, setUnknown] = useState<string[]>([]);
@@ -100,10 +106,11 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
       fn(d);
       return d;
     });
-    setDirty(true);
-  }, []);
+    markDirty();
+  }, [markDirty]);
 
   const doSave = useCallback(() => {
+    const version = edits.current;
     startTransition(async () => {
       const res = await saveProgram(program.id, {
         title,
@@ -117,7 +124,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
       });
       if (res.ok) {
         setUpdatedAt(res.updated_at);
-        setDirty(false);
+        if (edits.current === version) setDirty(false);
         setSavedAt(new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }));
         setUnknown(res.unknownExercises);
         setMessage(null);
@@ -154,13 +161,13 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
       setStartDate(d.data.startDate);
       setMinutes(d.data.minutes);
       setContent(normalizeWeeks(d.data.content, d.data.weeks));
-      setDirty(true);
+      markDirty();
       setRestored(d.at);
     });
     return () => {
       alive = false;
     };
-  }, [draftKey, program.updated_at, adoptBackup]);
+  }, [draftKey, program.updated_at, adoptBackup, markDirty]);
   const autoSave = status !== "published" || program.is_template;
   useEffect(() => {
     if (!dirty || !autoSave || pending) return;
@@ -215,14 +222,16 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
     if (losing && !window.confirm(`Le settimane dalla ${n + 1} in poi contengono prescrizioni che verranno cancellate. Continuare?`)) return;
     setWeeks(n);
     setContent((c) => normalizeWeeks(c, n));
-    setDirty(true);
+    markDirty();
   };
 
-  const runAction = (fn: () => Promise<{ ok?: boolean; error?: string; message?: string } | null>, after?: () => void) => {
+  const runAction = (fn: () => Promise<{ ok?: boolean; error?: string; message?: string; updated_at?: string } | null>, after?: () => void) => {
     startTransition(async () => {
       const r = await fn();
       if (r?.error) setMessage({ tone: "error", text: r.error });
       else {
+        // il programma è cambiato sul server: il prossimo Salva parte da qui
+        if (r?.updated_at) setUpdatedAt(r.updated_at);
         if (r?.message) setMessage({ tone: "success", text: r.message });
         after?.();
       }
@@ -257,7 +266,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               value={title}
               onChange={(e) => {
                 setTitle(e.target.value);
-                setDirty(true);
+                markDirty();
               }}
               className="w-full rounded-xl bg-transparent px-1 py-1 text-[32px] leading-tight font-normal tracking-tight hover:bg-card focus:bg-card focus:outline-none"
               placeholder="Nome della fase (es. Intensificazione 2)"
@@ -345,7 +354,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                 value={startDate}
                 onChange={(e) => {
                   setStartDate(e.target.value);
-                  setDirty(true);
+                  markDirty();
                 }}
               />
             </div>
@@ -361,7 +370,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               value={minutes}
               onChange={(e) => {
                 setMinutes(e.target.value.replace(/[^0-9]/g, "").slice(0, 3));
-                setDirty(true);
+                markDirty();
               }}
             />
           </div>
@@ -375,7 +384,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               value={description}
               onChange={(e) => {
                 setDescription(e.target.value);
-                setDirty(true);
+                markDirty();
               }}
               placeholder="Obiettivo della fase, indicazioni generali, riscaldamento…"
             />
@@ -400,7 +409,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             setContent(normalizeWeeks(next, nextWeeks ?? weeks));
             days.setAll(next.days.map((d) => d.id), true);
             setAiNotes(notes);
-            setDirty(true);
+            markDirty();
             setMessage({ tone: "info", text: "Bozza dell'AI applicata: le modifiche sono evidenziate. Rivedi le caselle e salva quando sei soddisfatto." });
           }}
           currentContent={content}
@@ -458,7 +467,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                   const known = new Set(content.days.map((d) => d.id));
                   for (const d of next.days) if (!known.has(d.id)) days.setOpen(d.id);
                   setContent(next);
-                  setDirty(true);
+                  markDirty();
                 }}
               >
                 <IconCopy size={18} />
@@ -548,7 +557,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                                   })),
                                 };
                               });
-                              setDirty(true);
+                              markDirty();
                             }}
                           >
                             <IconCopy size={13} />
@@ -724,7 +733,7 @@ function BlockRows({
     <div className="flex items-center gap-1">
       <IconBtn label="Sposta blocco su" disabled={blockIdx === 0} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx - 1))}><IconUp size={16} /></IconBtn>
       <IconBtn label="Sposta blocco giù" disabled={blockIdx === blockCount - 1} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx + 1))}><IconDown size={16} /></IconBtn>
-      <IconBtn label="Elimina blocco" onClick={() => onBlock((_, s) => void s.splice(blockIdx, 1))}><IconTrash size={16} /></IconBtn>
+      <IconBtn label="Elimina blocco" onClick={() => { if (window.confirm("Eliminare questo blocco?")) onBlock((_, s) => void s.splice(blockIdx, 1)); }}><IconTrash size={16} /></IconBtn>
     </div>
   );
 

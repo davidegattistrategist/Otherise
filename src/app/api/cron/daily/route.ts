@@ -12,7 +12,8 @@ import { runDailyChecks } from "@/lib/daily-checks";
 import { romeHour } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// con decine di clienti le notifiche, le email e le pulizie possono superare il minuto
+export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;

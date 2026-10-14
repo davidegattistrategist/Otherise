@@ -1,5 +1,6 @@
 import "server-only";
 import { latestDate } from "@/lib/free-workout";
+import { rpcOr } from "./rpc";
 import { getBillingOverview } from "@/lib/data/shared";
 import { bySurname, listName } from "../names";
 import { checkDue } from "../check-due";
@@ -7,7 +8,7 @@ import type { ServerSupabase } from "../supabase/server";
 import type { Me } from "../auth";
 import { billingStatus, isCoaching, withUnpaidRows, type BillingRow, type BillingStatus, type PlanKind, type UnpaidRow } from "../billing";
 import { getUnpaidRows } from "./billing";
-import { diffDays, todayISO, type ISODate } from "../dates";
+import { addDays, diffDays, todayISO, type ISODate } from "../dates";
 import { displayWeek, programEndDate, weekPosition } from "../program/schedule";
 import { compliance, type Compliance } from "../compliance";
 
@@ -62,34 +63,51 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
   const clients = [...rows].sort(bySurname);
   const ids = clients.map((c) => c.id);
 
-  const [programs, checks, logs, coaches, billing, settings, planKinds, anyProgram, unpaidBy, free] = await Promise.all([
-    supabase.from("programs").select("id, client_id, title, weeks, start_date, status, content").in("client_id", ids).in("status", ["published", "draft"]).order("start_date", { ascending: false }),
-    supabase.from("checks").select("client_id, check_date, imported").in("client_id", ids).not("check_date", "is", null).order("check_date", { ascending: false }),
-    supabase.from("workout_logs").select("client_id, performed_on, completed").in("client_id", ids).order("performed_on", { ascending: false }).limit(2000),
+  type ProgramRow = { id: string; client_id: string; title: string; weeks: number; start_date: string | null; status: string; days_count: number };
+  // dal database: solo quanti giorni ha ogni programma (non tutto il contenuto),
+  // l'ultimo check e l'ultima attività di ogni cliente (non migliaia di righe)
+  const [programList, checkList, logs, coaches, billing, settings, planKinds, anyProgram, unpaidBy, activity] = await Promise.all([
+    rpcOr<ProgramRow[]>(supabase.rpc("programs_overview", { ids }), async () => {
+      const { data } = await supabase.from("programs").select("id, client_id, title, weeks, start_date, status, content").in("client_id", ids).in("status", ["published", "draft"]).order("start_date", { ascending: false });
+      return (data ?? []).map(({ content, ...p }) => ({ ...p, client_id: p.client_id!, days_count: ((content as { days?: unknown[] } | null)?.days ?? []).length }));
+    }),
+    rpcOr<Array<{ client_id: string; last_check: string | null; in_app: boolean | null }>>(supabase.rpc("last_checks"), async () => {
+      const { data } = await supabase.from("checks").select("client_id, check_date, imported").in("client_id", ids).not("check_date", "is", null).order("check_date", { ascending: false });
+      const by = new Map<string, { client_id: string; last_check: string | null; in_app: boolean }>();
+      for (const k of data ?? []) {
+        const cur = by.get(k.client_id) ?? { client_id: k.client_id, last_check: k.check_date, in_app: false };
+        if (!k.imported) cur.in_app = true;
+        by.set(k.client_id, cur);
+      }
+      return [...by.values()];
+    }),
+    // per la costanza bastano le ultime settimane
+    supabase.from("workout_logs").select("client_id, performed_on, completed").in("client_id", ids).gte("performed_on", addDays(today, -30)).order("performed_on", { ascending: false }).limit(1000),
     supabase.from("profiles").select("id, full_name").in("role", ["owner", "coach"]),
     me.role === "owner" ? getBillingOverview().then((data) => ({ data })) : Promise.resolve({ data: null }),
     supabase.from("app_settings").select("reminder_days").maybeSingle(),
     supabase.rpc("client_plan_kinds"),
     supabase.from("programs").select("client_id").in("client_id", ids),
     me.role === "owner" ? getUnpaidRows(supabase) : Promise.resolve(new Map<string, UnpaidRow[]>()),
-    supabase.from("free_workouts").select("client_id, performed_on").in("client_id", ids).order("performed_on", { ascending: false }).limit(2000),
+    rpcOr<Array<{ client_id: string; last_workout: string | null; last_free: string | null }>>(supabase.rpc("last_activity"), async () => {
+      const [{ data: w }, { data: f }] = await Promise.all([
+        supabase.from("workout_logs").select("client_id, performed_on").in("client_id", ids).order("performed_on", { ascending: false }).limit(1000),
+        supabase.from("free_workouts").select("client_id, performed_on").in("client_id", ids).order("performed_on", { ascending: false }).limit(1000),
+      ]);
+      return [...(w ?? []).map((l) => ({ client_id: l.client_id, last_workout: l.performed_on, last_free: null })), ...(f ?? []).map((l) => ({ client_id: l.client_id, last_workout: null, last_free: l.performed_on }))];
+    }),
   ]);
+  const programs = { data: programList };
   const planKindBy = new Map((planKinds.data ?? []).map((p) => [p.client_id, p.kind as PlanKind]));
   const withPrograms = new Set((anyProgram.data ?? []).map((p) => p.client_id));
   const reminderDays = settings.data?.reminder_days ?? 7;
   const coachName = new Map((coaches.data ?? []).map((p) => [p.id, p.full_name]));
-  const firstBy = <T extends { client_id: string | null }>(rows: T[] | null | undefined) => {
-    const m = new Map<string, T>();
-    for (const r of rows ?? []) if (r.client_id && !m.has(r.client_id)) m.set(r.client_id, r);
-    return m;
-  };
-  const lastCheck = firstBy(checks.data);
+  const lastCheck = new Map(checkList.map((k) => [k.client_id, { check_date: k.last_check }]));
   // con chi i check si fanno nell'app (lo storico importato non conta)
-  const appChecks = new Set((checks.data ?? []).filter((k) => !k.imported).map((k) => k.client_id));
+  const appChecks = new Set(checkList.filter((k) => k.in_app).map((k) => k.client_id));
   // ultima attività: allenamento del programma o allenamento libero (spinning, corsa…)
-  const lastProgramLog = firstBy(logs.data);
-  const lastFree = firstBy(free.data);
-  const lastLog = new Map(ids.map((id) => [id, { performed_on: latestDate(lastProgramLog.get(id)?.performed_on, lastFree.get(id)?.performed_on) }]));
+  const lastLog = new Map<string, { performed_on: string | null }>();
+  for (const a of activity) lastLog.set(a.client_id, { performed_on: latestDate(a.last_workout, a.last_free, lastLog.get(a.client_id)?.performed_on) });
   const billingBy = new Map((billing.data ?? []).map((b) => [b.client_id, b]));
 
   return clients.map((c) => {
@@ -113,7 +131,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
     const b = billingBy.get(c.id);
     let comp: Compliance | null = null;
     if (current?.start_date && program?.state === "running") {
-      const days = ((current.content as { days?: unknown[] } | null)?.days ?? []).length;
+      const days = current.days_count;
       comp = compliance({
         today,
         windowDays: 14,
@@ -141,7 +159,8 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
   });
 }
 
-export type TodayItem = { clientId: string; clientName: string; text: string; href: string; tone: "accent" | "ink" };
+/** Una riga di Oggi; `action` = il pulsante per farlo subito ("check" = avvia la modalità check). */
+export type TodayItem = { clientId: string; clientName: string; text: string; href: string; tone: "accent" | "ink"; action?: { label: string; href: string } | "check" };
 
 /** Le cose da fare oggi per lo staff, in ordine di urgenza. */
 export function buildTodayList(clients: ClientOverview[], today: ISODate = todayISO()) {
@@ -155,7 +174,7 @@ export function buildTodayList(clients: ClientOverview[], today: ISODate = today
     if (comp) {
       const since = comp.daysSinceLast;
       if (c.user_id && (since === null || since >= 7) && (comp.expected ?? 0) > 0) {
-        training.push({ clientId: c.id, clientName: c.fullName, text: since === null ? "Non ha ancora registrato allenamenti" : since === 1 ? "Nessun allenamento registrato da ieri" : `Nessun allenamento registrato da ${since} giorni`, href: `/staff/clienti/${c.id}`, tone: "accent" });
+        training.push({ clientId: c.id, clientName: c.fullName, text: since === null ? "Non ha ancora registrato allenamenti" : since === 1 ? "Nessun allenamento registrato da ieri" : `Nessun allenamento registrato da ${since} giorni`, href: `/staff/clienti/${c.id}`, tone: "accent", action: { label: "Scrivi", href: `/staff/messaggi/${c.id}?promemoria=saluto` } });
       } else if (comp.pct !== null && comp.pct < 50) {
         training.push({ clientId: c.id, clientName: c.fullName, text: `Costanza ${comp.pct}% nelle ultime 2 settimane`, href: `/staff/clienti/${c.id}`, tone: "ink" });
       }
@@ -166,14 +185,14 @@ export function buildTodayList(clients: ClientOverview[], today: ISODate = today
     // Programmi: solo chi ha una bozza, un programma finito o che finisce entro 7 giorni (e non ha già la fase dopo)
     const programHref = `/staff/clienti/${c.id}/programma`;
     if (c.draftCount) {
-      programs.push({ clientId: c.id, clientName: c.fullName, text: "Bozza di programma da pubblicare", href: programHref, tone: "accent" });
+      programs.push({ clientId: c.id, clientName: c.fullName, text: "Bozza di programma da pubblicare", href: programHref, tone: "accent", action: { label: "Apri la bozza", href: programHref } });
     } else if (c.coaching && c.program && !c.nextProgram && c.program.state !== "not_started") {
       const left = diffDays(today, c.program.endDate);
-      if (c.program.state === "finished") programs.push({ clientId: c.id, clientName: c.fullName, text: -left === 1 ? "Programma finito ieri" : `Programma finito da ${-left} giorni`, href: programHref, tone: "accent" });
-      else if (left <= 7) programs.push({ clientId: c.id, clientName: c.fullName, text: left === 0 ? "Il programma finisce oggi" : left === 1 ? "Il programma finisce domani" : `Il programma finisce tra ${left} giorni`, href: programHref, tone: "ink" });
+      if (c.program.state === "finished") programs.push({ clientId: c.id, clientName: c.fullName, text: -left === 1 ? "Programma finito ieri" : `Programma finito da ${-left} giorni`, href: programHref, tone: "accent", action: { label: "Prepara la fase", href: programHref } });
+      else if (left <= 7) programs.push({ clientId: c.id, clientName: c.fullName, text: left === 0 ? "Il programma finisce oggi" : left === 1 ? "Il programma finisce domani" : `Il programma finisce tra ${left} giorni`, href: programHref, tone: "ink", action: { label: "Prepara la fase", href: programHref } });
     }
     const due = checkDue(c, today);
-    if (due) checks.push({ clientId: c.id, clientName: c.fullName, text: due.text, href: `/staff/clienti/${c.id}/check/nuovo`, tone: due.late ? "accent" : "ink" });
+    if (due) checks.push({ clientId: c.id, clientName: c.fullName, text: due.text, href: `/staff/clienti/${c.id}/check`, tone: due.late ? "accent" : "ink", action: "check" });
   }
   return { payments, programs, checks, training };
 }

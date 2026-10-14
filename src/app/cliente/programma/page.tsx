@@ -8,13 +8,14 @@ import { nextWorkout, programEndDate } from "@/lib/program/schedule";
 import { Card, EmptyState, Eyebrow, cx } from "@/components/ui";
 import { ProgramDayView } from "@/components/program-day";
 import { IconCheck, IconDown } from "@/components/icons";
+import { ScrollNav } from "@/components/scroll-nav";
 
 export const metadata: Metadata = { title: "Programma" };
 
 export default async function ClientProgramPage({ searchParams }: { searchParams: Promise<{ settimana?: string; programma?: string }> }) {
   const sp = await searchParams;
   const me = await requireActiveClient();
-  const { current, upcoming, past } = await getMyPrograms(me.clientId);
+  const { current, upcoming, past } = await getMyPrograms(me.clientId, sp.programma);
   const all = [current, upcoming, ...past].filter((p): p is MyProgram => Boolean(p));
   const program = all.find((p) => p.id === sp.programma) ?? current ?? upcoming;
   if (!program) {
@@ -43,7 +44,7 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
         {program.description ? <p className="mt-2 text-[15px] leading-relaxed whitespace-pre-line text-ink-soft">{program.description}</p> : null}
       </div>
 
-      <nav aria-label="Settimane" className="scroll-x -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+      <ScrollNav label="Settimane" className="scroll-x -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
         {Array.from({ length: program.weeks }, (_, i) => i + 1).map((w) => (
           <Link
             key={w}
@@ -54,29 +55,48 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
             Settimana {w}{isCurrent && w === nowWeek ? " · ora" : ""}
           </Link>
         ))}
-      </nav>
-      <p className="-mt-1 text-sm leading-relaxed text-muted">
-        Dal {formatShort(weekStart)} al {formatShort(addDays(weekStart, 6))}{program.session_minutes ? ` · circa ${program.session_minutes} minuti a seduta` : ""}. Fai gli allenamenti in ordine: se ne salti uno, la volta dopo riparti da quello. Se un giorno non puoi (per esempio niente palestra), fanne un altro e recupera dopo.
-      </p>
+      </ScrollNav>
+      <div className="-mt-1 flex flex-wrap items-baseline gap-x-3 text-sm text-muted">
+        <span>Dal {formatShort(weekStart)} al {formatShort(addDays(weekStart, 6))}{program.session_minutes ? ` · circa ${program.session_minutes} minuti a seduta` : ""}</span>
+        <details className="group w-full">
+          <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1 font-semibold text-ink underline [&::-webkit-details-marker]:hidden">Come funziona?</summary>
+          <p className="leading-relaxed">Fai gli allenamenti in ordine: se ne salti uno, la volta dopo riparti da quello. Se un giorno non puoi (per esempio niente palestra), fanne un altro e recupera dopo. Tocca un allenamento per vedere gli esercizi.</p>
+        </details>
+      </div>
 
       {program.content.days.map((day) => {
         const st = status(day.id);
+        // aperto solo il prossimo da fare: gli altri si aprono al tocco
+        const isNext = Boolean(next && next.week === week && next.day.id === day.id);
+        const names = day.blocks.flatMap((b) => b.items.map((it) => it.name)).filter(Boolean);
         return (
           <Card key={day.id} className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="min-w-0 text-xl font-semibold break-words">{day.title}{next && next.week === week && next.day.id === day.id ? <span className="ml-2 align-middle rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">Prossimo</span> : null}</h2>
+              <h2 className="min-w-0 text-xl font-semibold break-words">{day.title}{isNext ? <span className="ml-2 align-middle rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">Prossimo</span> : null}</h2>
               {st?.completed ? (
                 <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-ink px-3 py-1 text-xs font-semibold whitespace-nowrap text-card"><IconCheck size={14} /> Fatto il {formatShort(st.performed_on)}</span>
               ) : st ? (
                 <span className="shrink-0 rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold whitespace-nowrap">Iniziato</span>
               ) : null}
             </div>
-            <ProgramDayView day={day} week={week} videos={videos} maxes={maxes} />
             {canLog ? (
-              <Link href={`/cliente/sessione/${program.id}/${week}/${day.id}`} className={cx("mt-1 flex min-h-12 items-center justify-center rounded-full text-[15px] font-semibold", st?.completed ? "bg-sand-deep/60 text-ink" : "bg-ink text-card")}>
+              <Link href={`/cliente/sessione/${program.id}/${week}/${day.id}`} className={cx("flex min-h-12 items-center justify-center rounded-full text-[15px] font-semibold", st?.completed ? "bg-sand-deep/60 text-ink" : "bg-ink text-card")}>
                 {st?.completed ? "Rivedi o correggi il logbook" : st ? "Riprendi l'allenamento" : "Inizia questo allenamento"}
               </Link>
             ) : null}
+            <details className="group" open={isNext}>
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+                <span className="min-w-0 text-sm">
+                  <span className="font-semibold group-open:hidden">{names.length === 1 ? "1 esercizio" : `${names.length} esercizi`}</span>
+                  <span className="hidden font-semibold group-open:inline">Gli esercizi</span>
+                  <span className="line-clamp-1 text-muted group-open:hidden">{names.join(" · ")}</span>
+                </span>
+                <IconDown size={18} className="shrink-0 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="pt-2">
+                <ProgramDayView day={day} week={week} videos={videos} maxes={maxes} />
+              </div>
+            </details>
           </Card>
         );
       })}

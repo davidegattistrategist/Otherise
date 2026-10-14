@@ -32,6 +32,8 @@ export function CheckinReplyDraft({
     const el = target();
     if (!el || !draft) return;
     el.value = draft.body;
+    // come se l'avessi scritto: il modulo lo salva subito nella bozza automatica
+    el.dispatchEvent(new Event("input", { bubbles: true }));
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 320)}px`;
     el.focus();

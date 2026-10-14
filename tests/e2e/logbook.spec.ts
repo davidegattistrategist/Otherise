@@ -142,10 +142,10 @@ test("recupero tra le serie: parte spuntando la serie e si può mettere in pausa
   await timer.getByRole("button", { name: "Metti in pausa" }).click();
   await page.clock.runFor(20_000);
   await expect(timer.getByTestId("timer-clock")).toHaveText("1:20");
-  await timer.getByRole("button", { name: "15 secondi in più" }).click();
-  await expect(timer.getByTestId("timer-clock")).toHaveText("1:35");
+  await timer.getByRole("button", { name: "30 secondi in più" }).click();
+  await expect(timer.getByTestId("timer-clock")).toHaveText("1:50");
   await timer.getByRole("button", { name: "Riprendi" }).click();
-  await page.clock.runFor(95_000);
+  await page.clock.runFor(110_000);
   await expect(timer).toHaveCount(0);
 
   // pulisco: tolgo la spunta e i valori

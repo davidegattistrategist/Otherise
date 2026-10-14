@@ -52,11 +52,37 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
   const balance = baseContent ? programBalance(parseContent(baseContent.content)) : null;
   const hasBalance = balance && Object.values(balance.sets).some((n) => n > 0);
 
+  const otherCards = (
+    <>
+      <Card className="flex flex-col gap-4">
+        <Eyebrow>Da un modello</Eyebrow>
+        {templates?.length ? (
+          <form action={createFromTemplate.bind(null, id)} className="flex flex-col gap-3">
+            <label htmlFor="template_id" className="sr-only">Modello</label>
+            <Select id="template_id" name="template_id" required>
+              {templates.map((t) => <option key={t.id} value={t.id}>{t.title} · {t.weeks} sett.</option>)}
+            </Select>
+            <div><SubmitButton variant="secondary" pendingText="Preparo…">Usa il modello</SubmitButton></div>
+          </form>
+        ) : (
+          <p className="text-[15px] text-muted">Nessun modello ancora. <Link className="font-semibold underline" href="/staff/modelli">Creane uno</Link> oppure salva un programma come modello.</p>
+        )}
+      </Card>
+      <Card className="flex flex-col gap-4">
+        <Eyebrow>Da zero</Eyebrow>
+        <p className="text-[15px] text-muted">Una griglia vuota con il primo giorno pronto.</p>
+        <form action={createEmptyProgram.bind(null, id)} className="mt-auto">
+          <SubmitButton variant="secondary" pendingText="Preparo…">Programma vuoto</SubmitButton>
+        </form>
+      </Card>
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-6">
-      {/* azioni rapide */}
-      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr))]">
-        {latestBase ? (
+      {/* azioni rapide: con un programma già fatto la strada è quasi sempre la nuova fase; le altre a richiesta */}
+      {latestBase ? (
+        <div className="flex flex-col gap-3">
           <Card dark className="flex flex-col gap-4">
             <Eyebrow dark>Nuova fase</Eyebrow>
             <p className="text-[15px] leading-relaxed text-muted-dark">
@@ -75,29 +101,19 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
               <p className="flex items-center gap-2 text-sm text-muted-dark"><IconSparkle size={16} /> Nella bozza trovi l&apos;assistente AI per completarla.</p>
             ) : null}
           </Card>
-        ) : null}
-        <Card className="flex flex-col gap-4">
-          <Eyebrow>Da un modello</Eyebrow>
-          {templates?.length ? (
-            <form action={createFromTemplate.bind(null, id)} className="flex flex-col gap-3">
-              <label htmlFor="template_id" className="sr-only">Modello</label>
-              <Select id="template_id" name="template_id" required>
-                {templates.map((t) => <option key={t.id} value={t.id}>{t.title} · {t.weeks} sett.</option>)}
-              </Select>
-              <div><SubmitButton variant="secondary" pendingText="Preparo…">Usa il modello</SubmitButton></div>
-            </form>
-          ) : (
-            <p className="text-[15px] text-muted">Nessun modello ancora. <Link className="font-semibold underline" href="/staff/modelli">Creane uno</Link> oppure salva un programma come modello.</p>
-          )}
-        </Card>
-        <Card className="flex flex-col gap-4">
-          <Eyebrow>Da zero</Eyebrow>
-          <p className="text-[15px] text-muted">Una griglia vuota con il primo giorno pronto.</p>
-          <form action={createEmptyProgram.bind(null, id)} className="mt-auto">
-            <SubmitButton variant="secondary" pendingText="Preparo…">Programma vuoto</SubmitButton>
-          </form>
-        </Card>
-      </div>
+          <details className="group rounded-[24px] bg-card">
+            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+              <span className="text-[15px]"><span className="font-semibold">Oppure</span> <span className="text-muted">da un modello o da zero</span></span>
+              <IconDown size={18} className="shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="grid gap-4 px-2 pb-2 [grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))]">
+              {otherCards}
+            </div>
+          </details>
+        </div>
+      ) : (
+        <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr))]">{otherCards}</div>
+      )}
 
       {/* elenco programmi: bozze, fase in corso e prossime; le fasi passate nell'archivio */}
       {all.length === 0 ? (
@@ -150,10 +166,15 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
         </Card>
       ) : null}
 
-      <Card>
-        <Eyebrow className="mb-4">Importa dal foglio Google</Eyebrow>
-        <ImportForm action={importFromSheet.bind(null, id)} />
-      </Card>
+      <details className="group rounded-[24px] bg-card">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+          <span className="text-[15px] font-semibold">Importa dal foglio Google</span>
+          <IconDown size={18} className="shrink-0 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="px-5 pb-5">
+          <ImportForm action={importFromSheet.bind(null, id)} />
+        </div>
+      </details>
     </div>
   );
 }

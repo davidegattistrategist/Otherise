@@ -29,10 +29,12 @@ export async function getCheckMode(supabase: ServerSupabase, userId: string): Pr
   return d && typeof d.clientId === "string" ? d : null;
 }
 
-export async function setCheckMode(supabase: ServerSupabase, userId: string, mode: CheckMode | null) {
+/** Salva (o toglie) la modalità check; se il database non risponde lo dice, invece di far finta di niente. */
+export async function setCheckMode(supabase: ServerSupabase, userId: string, mode: CheckMode | null): Promise<boolean> {
   if (!mode) {
-    await supabase.from("drafts").delete().eq("user_id", userId).eq("key", CHECK_MODE_KEY);
-    return;
+    const { error } = await supabase.from("drafts").delete().eq("user_id", userId).eq("key", CHECK_MODE_KEY);
+    return !error;
   }
-  await supabase.from("drafts").upsert({ user_id: userId, key: CHECK_MODE_KEY, data: mode as unknown as Json, updated_at: new Date().toISOString() });
+  const { error } = await supabase.from("drafts").upsert({ user_id: userId, key: CHECK_MODE_KEY, data: mode as unknown as Json, updated_at: new Date().toISOString() });
+  return !error;
 }

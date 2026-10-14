@@ -5,7 +5,8 @@ import { getStaffClient } from "@/lib/data/client";
 import { foldContext, previousCheck } from "@/lib/data/checks";
 import { createClient } from "@/lib/supabase/server";
 import type { Sex } from "@/lib/body/skinfolds";
-import { Card, Eyebrow, buttonClass } from "@/components/ui";
+import { Card, Eyebrow, Notice, buttonClass } from "@/components/ui";
+import { ClearParams } from "@/components/clear-param";
 import { startCheckMode } from "@/app/check/actions";
 import { ConfirmButton } from "@/components/form-bits";
 import { CheckForm, type CheckValues } from "../check-form";
@@ -17,8 +18,9 @@ import { checkLabel, sortChecks } from "@/lib/check-order";
 
 export const metadata: Metadata = { title: "Check" };
 
-export default async function EditCheckPage({ params }: { params: Promise<{ id: string; checkId: string }> }) {
+export default async function EditCheckPage({ params, searchParams }: { params: Promise<{ id: string; checkId: string }>; searchParams: Promise<{ salvato?: string }> }) {
   const { id, checkId } = await params;
+  const { salvato } = await searchParams;
   await requireStaff();
   const client = await getStaffClient(id);
   if (!/^[0-9a-f-]{36}$/i.test(checkId)) notFound();
@@ -41,6 +43,7 @@ export default async function EditCheckPage({ params }: { params: Promise<{ id: 
   if (!c.sex && !client.sex) return <SexPrompt clientId={id} />;
   return (
     <div className="flex flex-col gap-5">
+      {salvato ? <><ClearParams names={["salvato"]} /><Notice tone="success">{photos.length ? "Check salvato." : "Check salvato. Ora puoi aggiungere le foto qui sotto: sceglile tutte insieme dalla galleria."}</Notice></> : null}
       <form action={startCheckMode.bind(null, id, checkId)} className="flex justify-end">
         <button type="submit" className={buttonClass("secondary", "sm")}>Apri in modalità check</button>
       </form>

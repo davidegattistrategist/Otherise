@@ -5,6 +5,7 @@ import { formatShort, todayISO } from "@/lib/dates";
 import { freeKindLabel, freeWorkoutDetail, isFreeKind } from "@/lib/free-workout";
 import { Card, Eyebrow } from "@/components/ui";
 import { IconTrash } from "@/components/icons";
+import { ConfirmButton } from "@/components/form-bits";
 import { FreeWorkoutForm } from "./free-form";
 import { deleteFreeWorkout, repeatFreeWorkout } from "./actions";
 
@@ -47,9 +48,9 @@ export default async function FreeWorkoutPage() {
                   <button type="submit" className="min-h-10 shrink-0 rounded-full bg-sand px-3.5 text-sm font-semibold">Rifallo oggi</button>
                 </form>
                 <form action={deleteFreeWorkout.bind(null, w.id)}>
-                  <button type="submit" aria-label={`Togli ${freeKindLabel(w.kind)} del ${formatShort(w.performed_on)}`} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted hover:bg-sand">
+                  <ConfirmButton plain message={`Togliere ${freeKindLabel(w.kind).toLowerCase()} del ${formatShort(w.performed_on)}?`} label={`Togli ${freeKindLabel(w.kind)} del ${formatShort(w.performed_on)}`} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted hover:bg-sand">
                     <IconTrash size={18} />
-                  </button>
+                  </ConfirmButton>
                 </form>
               </div>
             ))}

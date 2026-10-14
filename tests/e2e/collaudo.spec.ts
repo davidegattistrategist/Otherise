@@ -59,8 +59,9 @@ test.describe("titolare", () => {
     await expect(page.getByText(/%/).first()).toBeVisible();
     await page.getByRole("button", { name: "Salva check" }).click();
     await expect(page.getByText("Check salvato.")).toBeVisible();
-    // l'avviso resta, ma l'indirizzo viene ripulito: ricaricando non ricompare
-    await expect(page).toHaveURL(/\/check$/);
+    // si apre il check appena salvato; l'avviso resta, ma l'indirizzo viene ripulito: ricaricando non ricompare
+    await expect(page).toHaveURL(/\/check\/[0-9a-f-]{36}$/);
+    await page.goto(`${base}/check`);
     await expect(page.getByText(/Grasso \d/)).toBeVisible();
 
     // check senza coscia e ascellare: si usa la formula a 3 pliche e lo dice
@@ -73,6 +74,7 @@ test.describe("titolare", () => {
     await expect(page.getByText(/Manca ascellare, coscia: al salvataggio tutti i check/)).toBeVisible();
     await page.getByRole("button", { name: "Salva check" }).click();
     await expect(page.getByText("Check salvato.")).toBeVisible();
+    await page.goto(`${base}/check`);
     await expect(page.getByText(/Ora: 3 pliche \(petto, tricipite, sottoscapolare\), scelta in automatico/)).toBeVisible();
     await expect(page.getByText("Pliche non prese: ascellare, coscia")).toBeVisible();
     await page.goto(`${base}/check/nuovo`);
@@ -131,6 +133,7 @@ test.describe("titolare", () => {
 
     // importa un foglio Google come storico
     await page.goto(`${base}/programma`);
+    await page.getByText("Importa dal foglio Google").click();
     await page.setInputFiles("input[type=file][name=file]", path.join(FIX, "scheda.csv"));
     await page.fill("form input[name=title]", "Fase importata");
     await page.getByRole("button", { name: "Importa", exact: true }).click();
@@ -242,7 +245,7 @@ test.describe("collaboratore", () => {
     await expect(page.getByRole("link", { name: /Prova Luca/ }).filter({ visible: true }).first()).toBeVisible();
     await expect(page.getByRole("link", { name: "Esempio Giulia" })).toHaveCount(0);
     await page.goto("/staff/pagamenti");
-    await expect(page.getByText("Quella pagina la vede solo il titolare")).toBeVisible();
+    await expect(page.getByText("Quella pagina la vede solo il titolare").first()).toBeVisible();
     await expect(page).toHaveURL(/\/staff$/);
     const base = await openClient(page, "Prova Luca");
     await expect(page.getByRole("link", { name: "Pagamenti" })).toHaveCount(0);

@@ -21,11 +21,15 @@ export async function canUseChat(supabase: ServerSupabase, clientId: string) {
 }
 
 /** Messaggi della conversazione (i più recenti, oppure solo quelli dopo `after`), con link agli allegati. */
-export async function loadMessages(clientId: string, me: { id: string }, opts: { after?: string | null; limit?: number } = {}) {
+export const CHAT_PAGE = 80;
+
+export async function loadMessages(clientId: string, me: { id: string }, opts: { after?: string | null; before?: string | null; limit?: number } = {}) {
   const supabase = await createClient();
   let q = supabase.from("messages").select("id, client_id, sender_id, body, attachments, created_at, deleted_at").eq("client_id", clientId);
   if (opts.after) q = q.gt("created_at", opts.after).order("created_at", { ascending: true }).limit(200);
-  else q = q.order("created_at", { ascending: false }).limit(opts.limit ?? 80);
+  // "Messaggi precedenti": quelli prima del più vecchio che si vede
+  else if (opts.before) q = q.lt("created_at", opts.before).order("created_at", { ascending: false }).limit(opts.limit ?? CHAT_PAGE);
+  else q = q.order("created_at", { ascending: false }).limit(opts.limit ?? CHAT_PAGE);
   const { data } = await q;
   const rows = ((data ?? []) as Row[]).sort((a, b) => (a.created_at < b.created_at ? -1 : 1));
   return toMessages(rows, me.id);

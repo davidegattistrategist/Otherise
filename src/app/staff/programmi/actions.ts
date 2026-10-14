@@ -179,14 +179,17 @@ export async function saveProgram(id: string, input: unknown): Promise<SaveResul
   return { ok: true, updated_at: data.updated_at, unknownExercises: [...unknown] };
 }
 
-export async function publishProgram(id: string): Promise<ActionState> {
+/** Esito delle azioni sullo stato del programma: `updated_at` nuovo, così il Salva dopo non segnala un conflitto finto. */
+type StatusResult = ActionState & { updated_at?: string };
+
+export async function publishProgram(id: string): Promise<StatusResult> {
   const me = await requireStaff();
   const supabase = await createClient();
   const { data: p } = await supabase.from("programs").select("id, client_id, title, start_date, is_template, content, session_minutes, clients(user_id)").eq("id", id).maybeSingle();
   if (!p || p.is_template || !p.client_id) return { error: "Solo i programmi dei clienti si pubblicano." };
   if (!p.start_date) return { error: "Scegli la data di inizio prima di pubblicare." };
-  const { error } = await supabase.from("programs").update({ status: "published", published_at: new Date().toISOString(), ai_notes: null }).eq("id", id);
-  if (error) return { error: "Pubblicazione non riuscita." };
+  const { data: upd, error } = await supabase.from("programs").update({ status: "published", published_at: new Date().toISOString(), ai_notes: null }).eq("id", id).select("updated_at").single();
+  if (error || !upd) return { error: "Pubblicazione non riuscita." };
   // le indicazioni per l'AI che questo programma smentisce si riallineano da sole
   const profile = await getAiProfile(supabase, p.client_id);
   const patch = autoUpdate(profile, programBalance(parseContent(p.content)), p.session_minutes, p.title);
@@ -201,27 +204,27 @@ export async function publishProgram(id: string): Promise<ActionState> {
   }
   revalidatePath(`/staff/clienti/${p.client_id}`, "layout");
   revalidatePath(editorPath(id));
-  return { ok: true, message: userId ? "Pubblicato: il cliente lo vede già e riceve un avviso." : "Pubblicato. Il cliente lo vedrà quando entra nell'app (non è ancora stato invitato)." };
+  return { ok: true, updated_at: upd.updated_at, message: userId ? "Pubblicato: il cliente lo vede già e riceve un avviso." : "Pubblicato. Il cliente lo vedrà quando entra nell'app (non è ancora stato invitato)." };
 }
 
-export async function unpublishProgram(id: string): Promise<ActionState> {
+export async function unpublishProgram(id: string): Promise<StatusResult> {
   await requireStaff();
   const supabase = await createClient();
-  const { data, error } = await supabase.from("programs").update({ status: "draft" }).eq("id", id).select("client_id").single();
+  const { data, error } = await supabase.from("programs").update({ status: "draft" }).eq("id", id).select("client_id, updated_at").single();
   if (error) return { error: "Operazione non riuscita." };
   revalidatePath(`/staff/clienti/${data.client_id}`, "layout");
   revalidatePath(editorPath(id));
-  return { ok: true, message: "Tornato in bozza: il cliente non lo vede più." };
+  return { ok: true, updated_at: data.updated_at, message: "Tornato in bozza: il cliente non lo vede più." };
 }
 
-export async function archiveProgram(id: string): Promise<ActionState> {
+export async function archiveProgram(id: string): Promise<StatusResult> {
   await requireStaff();
   const supabase = await createClient();
-  const { data, error } = await supabase.from("programs").update({ status: "archived" }).eq("id", id).select("client_id").single();
+  const { data, error } = await supabase.from("programs").update({ status: "archived" }).eq("id", id).select("client_id, updated_at").single();
   if (error) return { error: "Operazione non riuscita." };
   revalidatePath(`/staff/clienti/${data.client_id}`, "layout");
   revalidatePath(editorPath(id));
-  return { ok: true, message: "Archiviato: resta nello storico del cliente." };
+  return { ok: true, updated_at: data.updated_at, message: "Archiviato: resta nello storico del cliente." };
 }
 
 export async function deleteProgram(id: string) {
@@ -256,13 +259,13 @@ export async function saveAsTemplate(id: string, title: string): Promise<ActionS
   return { ok: true, message: "Salvato tra i modelli." };
 }
 
-export async function setAiExample(id: string, value: boolean): Promise<ActionState> {
+export async function setAiExample(id: string, value: boolean): Promise<StatusResult> {
   await requireStaff();
   const supabase = await createClient();
-  const { error } = await supabase.from("programs").update({ is_ai_example: value }).eq("id", id);
-  if (error) return { error: "Operazione non riuscita." };
+  const { data, error } = await supabase.from("programs").update({ is_ai_example: value }).eq("id", id).select("updated_at").single();
+  if (error || !data) return { error: "Operazione non riuscita." };
   revalidatePath(editorPath(id));
-  return { ok: true, message: value ? "L'assistente AI userà questo programma come esempio del tuo stile." : "Non è più un esempio per l'assistente AI." };
+  return { ok: true, updated_at: data.updated_at, message: value ? "L'assistente AI userà questo programma come esempio del tuo stile." : "Non è più un esempio per l'assistente AI." };
 }
 
 /** Aggiunge all'eserciziario gli esercizi scritti a mano nel programma e li collega. */

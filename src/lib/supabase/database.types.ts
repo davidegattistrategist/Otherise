@@ -730,6 +730,36 @@ isOneToOne: false
 "is_staff":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"last_messages":
+{ Args: { "include_deleted"?: boolean }; Returns: {
+              "client_id": string,"created_at": string,"body": string,"attachments": Json,"deleted_at": string | null,"sender_id": string | null
+            }[]
+                           },
+"last_activity":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "client_id": string,"last_workout": string | null,"last_free": string | null
+            }[]
+                           },
+"last_checks":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "client_id": string,"last_check": string | null,"in_app": boolean | null
+            }[]
+                           },
+"exercise_bests":
+{ Args: { "cid": string; "before_date"?: string | null }; Returns: {
+              "name": string,"e1rm": number | null,"kg": number,"reps": number,"performed_on": string,"heaviest": number
+            }[]
+                           },
+"exercise_daily_best":
+{ Args: { "cid": string; "since": string }; Returns: {
+              "name": string,"performed_on": string,"e1rm": number,"logs": number
+            }[]
+                           },
+"programs_overview":
+{ Args: { "ids": string[] }; Returns: {
+              "id": string,"client_id": string,"title": string,"weeks": number,"start_date": string | null,"status": string,"days_count": number
+            }[]
+                           },
 "last_exercise_logs":
 { Args: { "before_date"?: string,"cid": string }; Returns: {
               "exercise_id": string,"exercise_name": string,"performed_on": string,"result_text": string,"sets": Json,"week": number

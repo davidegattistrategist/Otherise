@@ -7,6 +7,8 @@ import { getMe } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const TABLES = [
+  "client_projects",
+  "message_transcripts",
   "programs",
   "workout_logs",
   "free_workouts",

@@ -2,7 +2,7 @@
 
 /**
  * Campanella, numeri della chat e avvisi a comparsa che si aggiornano da soli,
- * senza notifiche del browser: ogni 12 secondi con la pagina in vista (ogni
+ * senza notifiche del browser: ogni 30 secondi con la pagina in vista (ogni
  * minuto quando è dietro altre finestre, e subito quando si torna sull'app o
  * arriva una push) la pagina chiede /api/live. Se è arrivato qualcosa di nuovo
  * mostra un avviso che allo staff resta finché non lo chiude (così lo vede
@@ -29,7 +29,8 @@ export function useLiveCounts(fallback: Counts): Counts {
   return useContext(LiveContext) ?? fallback;
 }
 
-const EVERY_MS = 12_000;
+// campanella e numeri: ogni 30 secondi (e subito quando si torna sull'app o arriva una push)
+const EVERY_MS = 30_000;
 const CHECK_MODE_EVERY_MS = 4_000;
 const HIDDEN_EVERY_MS = 60_000;
 const MAX_BANNERS = 3;

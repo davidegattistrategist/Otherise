@@ -48,7 +48,7 @@ Da quel momento il codice è tuo. Le modifiche le fa Claude su tua richiesta (ve
    - Database password: generane una e salvala nelle note
    - Region: **Central EU (Frankfurt)** — i dati restano in Europa
    - **Create new project** e aspetta un paio di minuti.
-3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Nella cartella `supabase/migrations/` del tuo GitHub ci sono 27 file `.sql` (oggi; con gli aggiornamenti ne arriveranno altri): vanno eseguiti **tutti, uno alla volta, in ordine di nome** (il primo è `20261009120000_schema.sql`). Per ognuno: apri il file, premi il pulsante "Copy raw file", incolla tutto in una **New query** di Supabase e premi **Run** (se chiede conferma per una "destructive operation", conferma). Deve comparire "Success. No rows returned". Gli script preparano anche gli spazi privati per le foto: in **Storage** devono comparire due contenitori, `chat` (foto, video e vocali della chat) e `checks` (foto dei check).
+3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Nella cartella `supabase/migrations/` del tuo GitHub ci sono 28 file `.sql` (oggi; con gli aggiornamenti ne arriveranno altri): vanno eseguiti **tutti, uno alla volta, in ordine di nome** (il primo è `20261009120000_schema.sql`). Per ognuno: apri il file, premi il pulsante "Copy raw file", incolla tutto in una **New query** di Supabase e premi **Run** (se chiede conferma per una "destructive operation", conferma). Deve comparire "Success. No rows returned". Gli script preparano anche gli spazi privati per le foto: in **Storage** devono comparire due contenitori, `chat` (foto, video e vocali della chat) e `checks` (foto dei check).
 4. **Chiudi le iscrizioni libere** (nell'app si entra solo su invito): **Authentication → Sign In / Providers** → disattiva **Allow new users to sign up** → Save.
 5. **Indirizzi dell'app**: **Authentication → URL Configuration**
    - Site URL: `https://app.tuodominio.it` (l'indirizzo che userai; se non hai ancora il dominio metti per ora quello che ti darà Vercel al passo 5 e cambialo dopo)
@@ -103,7 +103,7 @@ Senza questo passo l'app funziona lo stesso, ma inviti e avvisi via email parton
 | `NEXT_PUBLIC_SUPABASE_URL` | Project URL di Supabase |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | chiave publishable (o anon) di Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | chiave secret (o service_role) di Supabase |
-| `NEXT_PUBLIC_SITE_URL` | `https://app.tuodominio.it` (senza `/` finale) |
+| `NEXT_PUBLIC_SITE_URL` | `https://app.tuodominio.it` (senza `/` finale). Serve anche alle notifiche su iPhone: senza, Apple le rifiuta. In Impostazioni la card "Collegamenti" dice se manca |
 | `ANTHROPIC_API_KEY` | chiave di Anthropic |
 | `RESEND_API_KEY` | chiave di Resend |
 | `GROQ_API_KEY` | chiave di Groq, per la dettatura ("Detta") e la trascrizione dei vocali (vedi sotto) |

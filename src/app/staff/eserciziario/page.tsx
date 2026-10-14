@@ -18,7 +18,7 @@ export default async function ExercisesPage({ searchParams }: { searchParams: Pr
   const needle = q.trim().toLowerCase();
   const list = (all ?? [])
     .filter((e) => !needle || e.name.toLowerCase().includes(needle) || e.category.toLowerCase().includes(needle))
-    .filter((e) => (filtro === "senza-video" ? !e.video_url : filtro === "nascosti" ? e.archived : !e.archived));
+    .filter((e) => (filtro === "senza-video" ? !e.video_url && !e.archived : filtro === "nascosti" ? e.archived : !e.archived));
   const noVideo = (all ?? []).filter((e) => !e.video_url && !e.archived).length;
 
   return (

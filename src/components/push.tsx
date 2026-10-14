@@ -157,7 +157,7 @@ export function PushSettings() {
           <Eyebrow>Notifiche su questo dispositivo</Eyebrow>
           <p className="mt-1 text-[15px] leading-snug" data-testid="push-state">
             {state === "on" && "Attive: gli avvisi arrivano anche ad app chiusa."}
-            {state === "off" && "Spente: gli avvisi li vedi solo quando apri l'app."}
+            {state === "off" && "Spente: messaggi, programma nuovo e risposte al diario li vedi solo quando apri l'app."}
             {state === "denied" && (ios ? "Bloccate. Per riattivarle: Impostazioni del telefono → Notifiche → l'app → Consenti notifiche." : "Bloccate. Per riattivarle tocca il lucchetto o i tre puntini accanto all'indirizzo → Notifiche → Consenti.")}
             {state === "needs-install" && "Su iPhone le notifiche arrivano solo se metti l'app sulla schermata Home e la apri da lì."}
             {state === "unsupported" && "Questo browser non riceve notifiche. Sul telefono apri l'app dalla schermata Home."}
@@ -190,16 +190,35 @@ export function PushPrompt({ text }: { text: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
   useEffect(() => {
-    // rimandato di una settimana con "Più tardi"
+    // rimandato di una settimana con "Più tardi"; dall'app sulla Home (e su
+    // Android) c'è già la finestra a comparsa: niente doppione qui
     const until = Number(readLocal(PROMPT_KEY) ?? 0);
-    const t = setTimeout(() => setHidden(Date.now() < until), 0);
+    const popupThere = isInstalled() || platform() === "android";
+    const t = setTimeout(() => setHidden(Date.now() < until || popupThere), 0);
     return () => clearTimeout(t);
   }, []);
-  if (hidden || state !== "off") return null;
   const later = () => {
     writeLocal(PROMPT_KEY, String(Date.now() + 7 * 24 * 3600 * 1000));
     setHidden(true);
   };
+  if (hidden) return null;
+  if (state === "needs-install") {
+    // iPhone dal browser: le notifiche arrivano solo con l'app sulla Home
+    return (
+      <Card className="flex flex-col gap-3" data-testid="push-prompt">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white"><IconBell size={18} /></span>
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">Vuoi le notifiche?</div>
+            <p className="text-sm text-muted">Sull&apos;iPhone arrivano solo con l&apos;app sulla schermata Home: ci vuole un minuto.</p>
+          </div>
+          <button type="button" aria-label="Più tardi" onClick={later} className="-mt-1 -mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted hover:text-ink"><IconX size={18} /></button>
+        </div>
+        <div><Button onClick={() => openInstallGuide()}>Metti l&apos;app sulla Home</Button></div>
+      </Card>
+    );
+  }
+  if (state !== "off") return null;
   const turnOn = async () => {
     setBusy(true);
     const r = await enablePush();

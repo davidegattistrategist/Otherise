@@ -1,14 +1,21 @@
-/** Andamento di un esercizio (massimale stimato per sessione) con scelta tra i più allenati. */
-import Link from "next/link";
-import type { ExerciseSeries } from "@/lib/data/progress";
+"use client";
+
+/**
+ * Andamento di un esercizio (massimale stimato per sessione) con scelta tra i
+ * più allenati: il cambio è immediato (i dati di tutti sono già qui), senza
+ * ricaricare la pagina.
+ */
+import { useState } from "react";
+import type { ExerciseSeries } from "@/lib/data/progress-types";
 import { formatShort } from "@/lib/dates";
 import { LineChart } from "./line-chart";
 import { Card, Eyebrow, cx, fmtNum } from "./ui";
 
-export function ExerciseProgress({ series, selected, hrefFor, title = "Andamento esercizi" }: { series: ExerciseSeries[]; selected?: string; hrefFor: (key: string) => string; title?: string }) {
+export function ExerciseProgress({ series, selected, title = "Andamento esercizi" }: { series: ExerciseSeries[]; selected?: string; title?: string }) {
+  const [chosen, setChosen] = useState(selected);
   if (!series.length) return null;
   const top = series.slice(0, 8);
-  const cur = top.find((s) => s.key === selected) ?? top[0];
+  const cur = top.find((s) => s.key === chosen) ?? top[0];
   const first = cur.points[0].value;
   const lastV = cur.points[cur.points.length - 1].value;
   const delta = Math.round((lastV - first) * 10) / 10;
@@ -20,7 +27,7 @@ export function ExerciseProgress({ series, selected, hrefFor, title = "Andamento
       </div>
       <div className="scroll-x -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
         {top.map((s) => (
-          <Link key={s.key} href={hrefFor(s.key)} scroll={false} className={cx("shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold", s.key === cur.key ? "bg-ink text-card" : "bg-sand-deep/60")}>{s.name}</Link>
+          <button key={s.key} type="button" aria-pressed={s.key === cur.key} onClick={() => setChosen(s.key)} className={cx("shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold", s.key === cur.key ? "bg-ink text-card" : "bg-sand-deep/60")}>{s.name}</button>
         ))}
       </div>
       <LineChart label={cur.name} unit="kg" points={cur.points} />

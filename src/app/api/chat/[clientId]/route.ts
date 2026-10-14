@@ -5,7 +5,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { canUseChat, loadMessages, markChatRead, recentTranscripts } from "@/lib/chat";
+import { CHAT_PAGE, canUseChat, loadMessages, markChatRead, recentTranscripts } from "@/lib/chat";
 import { readyChatDraft } from "@/lib/ai/reply";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ clie
   const me = await getMe();
   if (!me) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   const supabase = await createClient();
+  const before = req.nextUrl.searchParams.get("before");
+  if (before && !Number.isNaN(Date.parse(before))) {
+    // messaggi più vecchi (pulsante "Messaggi precedenti")
+    const allowed = await canUseChat(supabase, clientId);
+    if (!allowed) return NextResponse.json({ error: "Non trovato" }, { status: 404 });
+    const older = await loadMessages(clientId, me, { before });
+    return NextResponse.json({ messages: older, more: older.length >= CHAT_PAGE }, { headers: { "cache-control": "no-store" } });
+  }
   const after = req.nextUrl.searchParams.get("after");
   const staff = me.role === "owner" || me.role === "coach";
   // tutto insieme (i permessi li controlla comunque il database): una sola attesa

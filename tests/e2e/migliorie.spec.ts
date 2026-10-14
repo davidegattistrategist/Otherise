@@ -375,8 +375,7 @@ test("nuovo pagamento da Pagamenti: cliente nuovo con abbonamento, poi rinnovo e
   await expect(page.getByText("Pagamento registrato")).toBeVisible();
 
   // tutti i pagamenti, in ordine
-  await page.goto("/staff/pagamenti");
-  await page.locator("#tutti-i-pagamenti summary").click();
+  await page.goto("/staff/pagamenti?tutti");
   await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name }).filter({ hasText: "Valutazione posturale" })).toHaveCount(1);
   await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name }).filter({ hasText: "Coaching trimestrale" })).toHaveCount(2);
 });

@@ -10,7 +10,9 @@ import { METHOD_LABELS, PLAN_LABELS, type PaymentMethod, type PlanKind } from "@
 export const dynamic = "force-dynamic";
 
 const cell = (v: string | number | null | undefined) => {
-  const s = v === null || v === undefined ? "" : String(v);
+  let s = v === null || v === undefined ? "" : String(v);
+  // un testo che inizia con = + @ (o - seguito da lettere) Excel lo leggerebbe come formula
+  if (/^[=+@\t\r]/.test(s) || /^-[^\d]/.test(s)) s = `'${s}`;
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 const it = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : "");

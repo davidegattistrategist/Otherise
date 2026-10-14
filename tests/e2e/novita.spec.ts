@@ -57,7 +57,7 @@ test("dolore nel logbook: arriva al trainer in Oggi", async ({ page, browser }, 
   await page.goto("/cliente");
   await page.waitForLoadState("networkidle");
   await expect(page.getByText(/(Prossimo allenamento|Da finire) · settimana \d/)).toBeVisible();
-  await expect(page.getByRole("link", { name: /Scegli un altro allenamento/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Oggi non puoi\? Scegline un altro/ })).toBeVisible();
   await page.getByText(/Inizia l'allenamento|Riprendi l'allenamento/).first().click();
   await page.waitForURL(/\/cliente\/sessione\//);
   await page.waitForLoadState("networkidle");
