@@ -75,7 +75,7 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: "Salva check" }).click();
     await expect(page.getByText("Check salvato.")).toBeVisible();
     await page.goto(`${base}/check`);
-    await expect(page.getByText(/Ora: 3 pliche \(petto, tricipite, sottoscapolare\), scelta in automatico/)).toBeVisible();
+    await expect(page.getByText(/Ora: 3 pliche \(petto, tricipite, sottoscapolare\), scelta in automatico/).filter({ visible: true }).first()).toBeVisible();
     await expect(page.getByText("Pliche non prese: ascellare, coscia")).toBeVisible();
     await page.goto(`${base}/check/nuovo`);
     await expect(page.getByText("l'ultima volta non presa").filter({ visible: true })).toHaveCount(2);

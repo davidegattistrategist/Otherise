@@ -71,7 +71,11 @@ export function uploadWithProgress(signedUrl: string, blob: Blob, type: string, 
 export async function saveAttachment(url: string, name: string): Promise<void> {
   const res = await fetch(url);
   if (!res.ok) throw new Error("download");
-  const blob = await res.blob();
+  await saveBlob(await res.blob(), name);
+}
+
+/** Salva un file: sul telefono con "Condividi" (così va in Foto), altrimenti lo scarica. */
+export async function saveBlob(blob: Blob, name: string): Promise<void> {
   const file = new File([blob], name || "allegato", { type: blob.type });
   const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
   const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);

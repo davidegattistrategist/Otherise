@@ -1364,3 +1364,31 @@ describe("robustezza (15/10)", () => {
     expect(out[2]).not.toBe("");
   });
 });
+
+describe("photo-view: inquadratura del confronto foto", async () => {
+  const { photoRect, clampView, zoomAt, frameSize, START_VIEW } = await import("./photo-view");
+  it("di partenza la foto è intera e centrata nel riquadro", () => {
+    const r = photoRect(900, 1600, 300, 400, START_VIEW);
+    expect(r.h).toBeCloseTo(400);
+    expect(r.w).toBeCloseTo(225);
+    expect(r.left).toBeCloseTo(37.5);
+    expect(r.top).toBeCloseTo(0);
+  });
+  it("lo zoom tiene fermo il punto toccato", () => {
+    const v = zoomAt(START_VIEW, 2, 50, -40);
+    // il punto (50,-40) dal centro resta lì: (50 - x) / s == 50 prima dello zoom
+    expect((50 - v.x) / v.s).toBeCloseTo(50);
+    expect((-40 - v.y) / v.s).toBeCloseTo(-40);
+  });
+  it("zoom tra 0,5 e 4 e spostamento solo leggero", () => {
+    expect(clampView({ s: 10, x: 0, y: 0 }, 900, 1600, 300, 400).s).toBe(4);
+    expect(clampView({ s: 0.1, x: 0, y: 0 }, 900, 1600, 300, 400).s).toBe(0.5);
+    const far = clampView({ s: 1, x: 5000, y: -5000 }, 900, 1600, 300, 400);
+    expect(far.x).toBeCloseTo(75);
+    expect(far.y).toBeCloseTo(-100);
+  });
+  it("due riquadri affiancati stanno nello spazio libero", () => {
+    expect(frameSize(390, 600, 9 / 16)).toEqual({ fw: 194, fh: 344 });
+    expect(frameSize(1200, 700, 3 / 4)).toEqual({ fw: 525, fh: 700 });
+  });
+});

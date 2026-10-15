@@ -38,6 +38,7 @@ import {
 import { AiPanel, RowAiButtons } from "./ai-tools";
 import { estimateDayMinutes } from "@/lib/program/balance";
 import { useOpenDays } from "@/components/use-open-days";
+import { keepInView } from "@/components/one-day-open";
 import { clearDraft, loadDraft, useDraft } from "@/components/use-draft";
 
 export type EditorProgram = {
@@ -449,14 +450,14 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         const open = days.isOpen(day.id);
         const names = day.blocks.flatMap((b) => b.items.map((it) => it.name.trim())).filter(Boolean);
         return (
-        <Card key={day.id} className="!p-0">
+        <Card key={day.id} className="!p-0" data-day-card>
           <div className={cx("flex flex-wrap items-center gap-3 px-5 pt-5 sm:px-6", !open && "pb-1")}>
             <button
               type="button"
               aria-expanded={open}
               aria-controls={`daybody-${day.id}`}
               aria-label={`${open ? "Chiudi" : "Apri"} ${day.title || "il giorno"}`}
-              onClick={() => days.toggle(day.id)}
+              onClick={(e) => { const opening = !open; days.toggle(day.id, content.days.map((d) => d.id)); if (opening) keepInView(e.currentTarget.closest("[data-day-card]")); }}
               className="-ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full hover:bg-sand"
             >
               <IconDown size={20} className={cx("transition-transform", open && "rotate-180")} />
@@ -504,7 +505,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             </div>
           </div>
           {!open ? (
-            <button type="button" onClick={() => days.toggle(day.id)} className="block w-full px-5 pt-1 pb-5 text-left text-sm text-muted sm:px-6">
+            <button type="button" onClick={(e) => { const opening = !open; days.toggle(day.id, content.days.map((d) => d.id)); if (opening) keepInView(e.currentTarget.closest("[data-day-card]")); }} className="block w-full px-5 pt-1 pb-5 text-left text-sm text-muted sm:px-6">
               <span className="line-clamp-2">{names.length ? names.join(" · ") : "Nessun esercizio"}</span>
             </button>
           ) : (

@@ -161,3 +161,70 @@ test("la ricerca dei clienti filtra mentre scrivi, senza premere Invio (Messaggi
   await expect(page.locator('a[href^="/staff/clienti/"]', { hasText: "Esempio Giulia" }).filter({ visible: true })).toHaveCount(0);
   await expect(page.locator('a[href^="/staff/clienti/"]', { hasText: "Prova Luca" }).filter({ visible: true }).first()).toBeVisible();
 });
+
+test("confronto foto: affiancate, frecce sotto ognuna, zoom e spostamento, si scarica come lo vedi", async ({ browser }, info) => {
+  test.skip(info.project.name !== "pc", "stessi dati: basta un progetto");
+  const staff = await (await browser.newContext({ ...info.project.use, acceptDownloads: true })).newPage();
+  await login(staff, "titolare@prova.local");
+  const id = await giuliaId(staff);
+  // due check con le foto
+  await staff.goto(`/staff/clienti/${id}/check`);
+  await staff.waitForLoadState("networkidle");
+  const links = staff.locator("a[href*='/check/']").filter({ hasText: /\d/ });
+  const hrefs = (await links.evaluateAll((as) => as.map((a) => a.getAttribute("href")))).filter((h): h is string => Boolean(h && /check\/[0-9a-f-]{36}$/.test(h)));
+  for (const h of hrefs.slice(0, 2)) {
+    await staff.goto(h);
+    await staff.waitForLoadState("networkidle");
+    const main = staff.locator("main");
+    if ((await main.getByRole("list", { name: "Foto del check" }).locator("li").count().catch(() => 0)) >= 2) continue;
+    await main.locator('input[type=file][aria-label="Scegli le foto del check"]').setInputFiles([path.join(FIX, "foto-check.jpg"), path.join(FIX, "foto.jpg")]);
+    await expect(main.getByText("2 foto caricate.")).toBeVisible({ timeout: 30_000 });
+  }
+  await staff.goto(`/staff/clienti/${id}/check`);
+  await staff.getByRole("button", { name: "Confronta le foto" }).click();
+  const dialog = staff.getByRole("dialog", { name: "Confronto delle foto" });
+  const frames = dialog.locator("[data-compare-frame]");
+  await expect(frames).toHaveCount(2);
+  // attaccate: tra le due solo la riga bianca di 2 px, stessa misura
+  const [a, b] = [await frames.nth(0).boundingBox(), await frames.nth(1).boundingBox()];
+  expect(Math.round(b!.x - (a!.x + a!.width))).toBe(2);
+  expect(Math.round(a!.height)).toBe(Math.round(b!.height));
+  // frecce sotto ogni foto
+  await expect(dialog.getByRole("button", { name: "Foto dopo a sinistra" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Foto dopo a destra" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Foto dopo a destra" }).click();
+  await expect(dialog.getByText("2 di 2")).toBeVisible();
+  // zoom con la rotellina e spostamento: il riquadro non cambia, compare Ripristina
+  const img = frames.nth(0).locator("img");
+  await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
+  const w0 = (await img.boundingBox())!.width;
+  await frames.nth(0).hover();
+  await staff.mouse.wheel(0, -400);
+  await expect.poll(async () => (await img.boundingBox())!.width).toBeGreaterThan(w0 * 1.3);
+  const box = (await frames.nth(0).boundingBox())!;
+  await staff.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await staff.mouse.down();
+  await staff.mouse.move(box.x + box.width / 2 + 30, box.y + box.height / 2 + 20, { steps: 5 });
+  await staff.mouse.up();
+  expect((await frames.nth(0).boundingBox())!.width).toBeCloseTo(box.width, 0);
+  await expect(dialog.getByRole("button", { name: "Ripristina" })).toHaveCount(1);
+  // si scarica: un'unica immagine con le due foto affiancate
+  const [download] = await Promise.all([staff.waitForEvent("download"), dialog.getByRole("button", { name: "Scarica il confronto" }).click()]);
+  expect(download.suggestedFilename()).toMatch(/^confronto-.+\.jpg$/);
+  const file = await download.path();
+  const { readFileSync } = await import("node:fs");
+  const buf = readFileSync(file);
+  // JPEG: larghezza circa il doppio dell'altezza delle proporzioni del riquadro, altezza 1600
+  let i = 2;
+  let size: [number, number] | null = null;
+  while (i < buf.length) {
+    const marker = buf[i + 1];
+    const len = buf.readUInt16BE(i + 2);
+    if (marker >= 0xc0 && marker <= 0xc2) { size = [buf.readUInt16BE(i + 7), buf.readUInt16BE(i + 5)]; break; }
+    i += 2 + len;
+  }
+  expect(size![1]).toBe(1600);
+  expect(size![0]).toBeCloseTo(Math.round((box.width / box.height) * 1600) * 2 + 2 * Math.round(1600 / box.height), -1);
+  await dialog.getByRole("button", { name: "Ripristina" }).click();
+  await expect(dialog.getByRole("button", { name: "Ripristina" })).toHaveCount(0);
+});

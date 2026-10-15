@@ -20,6 +20,7 @@ import type { CheckValues } from "@/app/staff/clienti/[id]/check/check-form";
 import { saveCheck } from "@/app/staff/clienti/[id]/check/actions";
 import { pauseCheckMode, startCheckMode } from "../actions";
 import { CheckModeView } from "./check-mode-view";
+import { OneDayOpen } from "@/components/one-day-open";
 
 export const metadata: Metadata = { title: "Modalità check" };
 
@@ -158,9 +159,10 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
               </div>
               {leave(`/staff/programmi/${current.id}`, "Apri nell'editor")}
             </Card>
-            {/* giorni chiusi: si aprono con un tocco */}
+            {/* giorni chiusi: si aprono con un tocco (sul telefono uno alla volta) */}
+            <OneDayOpen group="giorni-check" />
             {content.days.map((d) => (
-              <details key={d.id} className="group rounded-[24px] bg-card">
+              <details key={d.id} className="group rounded-[24px] bg-card" data-day-group="giorni-check">
                 <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
                   <span className="min-w-0">
                     <span className="block font-semibold">{d.title}</span>

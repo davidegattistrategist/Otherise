@@ -9,6 +9,7 @@ import { Card, EmptyState, Eyebrow, cx } from "@/components/ui";
 import { ProgramDayView } from "@/components/program-day";
 import { IconCheck, IconDown } from "@/components/icons";
 import { ScrollNav } from "@/components/scroll-nav";
+import { OneDayOpen } from "@/components/one-day-open";
 
 export const metadata: Metadata = { title: "Programma" };
 
@@ -64,13 +65,14 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
         </details>
       </div>
 
+      <OneDayOpen group="giorni" />
       {program.content.days.map((day) => {
         const st = status(day.id);
         // aperto solo il prossimo da fare: gli altri si aprono al tocco
         const isNext = Boolean(next && next.week === week && next.day.id === day.id);
         const names = day.blocks.flatMap((b) => b.items.map((it) => it.name)).filter(Boolean);
         return (
-          <Card key={day.id} className="flex flex-col gap-3">
+          <Card key={day.id} className="flex flex-col gap-3" data-day-card>
             <div className="flex items-center justify-between gap-3">
               <h2 className="min-w-0 text-xl font-semibold break-words">{day.title}{isNext ? <span className="ml-2 align-middle rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">Prossimo</span> : null}</h2>
               {st?.completed ? (
@@ -84,7 +86,7 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
                 {st?.completed ? "Rivedi o correggi il logbook" : st ? "Riprendi l'allenamento" : "Inizia questo allenamento"}
               </Link>
             ) : null}
-            <details className="group" open={isNext}>
+            <details className="group" open={isNext} data-day-group="giorni">
               <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
                 <span className="min-w-0 text-sm">
                   <span className="font-semibold group-open:hidden">{names.length === 1 ? "1 esercizio" : `${names.length} esercizi`}</span>

@@ -148,3 +148,33 @@ test("telefono: le pagine non scorrono di lato", async ({ page }, info) => {
     expect(await wide(), p).toBeLessThanOrEqual(0);
   }
 });
+
+test("telefono: aprendo un giorno del programma gli altri si chiudono (cliente ed editor)", async ({ page }, info) => {
+  test.skip(info.project.name !== "telefono", "solo sul telefono");
+  await login(page, "giulia@prova.local");
+  await page.goto("/cliente/programma");
+  const days = page.locator('details[data-day-group="giorni"]');
+  const n = await days.count();
+  expect(n).toBeGreaterThan(1);
+  await days.nth(0).locator("summary").click();
+  await expect(days.nth(0)).toHaveAttribute("open", "");
+  await days.nth(1).locator("summary").click();
+  await expect(days.nth(1)).toHaveAttribute("open", "");
+  await expect(days.nth(0)).not.toHaveAttribute("open", "");
+  await expect(page.locator('details[data-day-group="giorni"][open]')).toHaveCount(1);
+});
+
+test("telefono: nell'editor un giorno aperto alla volta", async ({ page }, info) => {
+  test.skip(info.project.name !== "telefono", "solo sul telefono");
+  await login(page, "titolare@prova.local");
+  const id = await openClient(page, "Esempio Giulia");
+  await page.goto(`/staff/clienti/${id}/programma`);
+  await page.getByRole("link", { name: /Fase 2 · Volume/ }).filter({ hasText: "In corso" }).first().click();
+  await page.waitForURL(/\/staff\/programmi\//);
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("button", { name: "Chiudi tutti" }).first().click().catch(() => undefined);
+  const openers = page.locator("[data-day-card]").getByRole("button", { name: /^Apri / });
+  await openers.nth(0).click();
+  await openers.first().click();
+  await expect(page.locator("[data-day-card]").getByRole("button", { name: /^Chiudi / })).toHaveCount(1);
+});
