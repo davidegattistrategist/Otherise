@@ -142,8 +142,18 @@ test("Sessione PT finita a metà: l'allenamento resta aperto e il cliente lo rip
 
 test("un allenamento aperto per sbaglio e svuotato non risulta iniziato", async ({ page }) => {
   await login(page, "giulia@prova.local");
-  await page.goto("/cliente/programma");
+  // un giorno mai iniziato: dall'ultima settimana indietro (gli altri test ne fanno qualcuno)
   const card = page.locator("[data-day-card]").filter({ has: page.getByRole("link", { name: "Inizia questo allenamento" }) }).last();
+  let week = 0;
+  for (const w of [4, 3, 2, 1]) {
+    await page.goto(`/cliente/programma?settimana=${w}`);
+    await page.waitForLoadState("networkidle");
+    if (await card.count()) {
+      week = w;
+      break;
+    }
+  }
+  expect(week).toBeGreaterThan(0);
   const title = (await card.locator("h2").innerText()).replace(/\s*Prossimo$/, "");
   await card.getByRole("link", { name: "Inizia questo allenamento" }).click();
   await page.waitForURL(/\/cliente\/sessione\//);
@@ -155,7 +165,7 @@ test("un allenamento aperto per sbaglio e svuotato non risulta iniziato", async 
   await page.waitForTimeout(3_000);
   await expect
     .poll(async () => {
-      await page.goto("/cliente/programma");
+      await page.goto(`/cliente/programma?settimana=${week}`);
       return page.locator("[data-day-card]", { hasText: title }).first().innerText();
     }, { timeout: 20_000 })
     .not.toContain("Iniziato");

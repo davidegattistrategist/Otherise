@@ -132,6 +132,19 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
     if (changed && REFRESH.some((re) => re.test(here))) router.refresh();
   }, [role, router, push, followCheckMode]);
 
+  // a ogni cambio di pagina si richiedono i numeri: il menu può arrivare da una
+  // pagina già vista (con i numeri di prima), es. il pallino su Messaggi dopo
+  // aver letto la chat restava fino al controllo successivo (30 s)
+  const firstPath = useRef(true);
+  useEffect(() => {
+    if (firstPath.current) {
+      firstPath.current = false;
+      return;
+    }
+    const t = setTimeout(() => void check(), 300);
+    return () => clearTimeout(t);
+  }, [path, initial.chats, initial.notifications, check]);
+
   const inCheckMode = path.startsWith("/check/");
   useEffect(() => {
     // lo staff controlla subito (modalità check); in modalità check più spesso

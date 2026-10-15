@@ -76,3 +76,24 @@ test("il collaboratore non vede le chat dei clienti non suoi", async ({ page }) 
   await expect(page.getByRole("link", { name: /Prova Luca/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Esempio Giulia/ })).toHaveCount(0);
 });
+
+test("letta la chat, il pallino su Messaggi sparisce subito (anche senza rispondere)", async ({ browser }, info) => {
+  const client = await (await browser.newContext(info.project.use)).newPage();
+  await login(client, "giulia@prova.local");
+  await client.goto("/cliente/messaggi");
+  await client.fill("textarea", `pallino ${info.project.name} ${Date.now() % 100000}`);
+  await client.getByRole("button", { name: "Invia" }).click();
+  await client.waitForTimeout(1500);
+  await client.context().close();
+  const owner = await (await browser.newContext(info.project.use)).newPage();
+  await login(owner, "titolare@prova.local");
+  const nav = () => owner.getByRole("link", { name: /^Messaggi/ }).filter({ visible: true }).first();
+  await nav().click();
+  await owner.waitForURL(/\/staff\/messaggi$/);
+  await owner.getByRole("link", { name: /Esempio Giulia/ }).filter({ visible: true }).first().click();
+  await owner.waitForURL(/\/staff\/messaggi\/.+/);
+  await owner.waitForLoadState("networkidle");
+  await owner.getByRole("link", { name: /^Oggi/ }).filter({ visible: true }).first().click();
+  await owner.waitForURL(/\/staff$/);
+  await expect(nav()).toHaveText(/^Messaggi$/, { timeout: 5_000 });
+});

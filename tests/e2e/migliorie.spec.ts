@@ -448,3 +448,28 @@ test("email corretta e salvata dopo un invito mai usato: si può invitare di nuo
   await page.getByRole("button", { name: "Elimina per sempre" }).click();
   await page.waitForURL(/\/staff\/clienti$/);
 });
+
+test("modifica del piano: di partenza dal prossimo rinnovo, il periodo non si sposta; solo il metodo = correzione", async ({ page }) => {
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/clienti?q=Esempio");
+  await page.locator('a[href^="/staff/clienti/"]', { hasText: "Esempio Paolo" }).filter({ visible: true }).first().click();
+  await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
+  const base = new URL(page.url()).pathname;
+  await page.goto(`${base}/pagamenti`);
+  const status = page.locator(".text-\\[26px\\]").first();
+  const before = await status.innerText();
+  // solo il metodo
+  await page.goto(`${base}/pagamenti?piano=modifica`);
+  await expect(page.getByRole("radio", { name: /Dal prossimo rinnovo/ })).toBeChecked();
+  await expect(page.locator('input[name="start_date"][type="date"]')).toHaveCount(0);
+  await page.locator('select[name="method"]').selectOption("cash");
+  await page.getByRole("button", { name: "Salva il piano" }).click();
+  await page.waitForURL(/piano=salvato/);
+  await expect(status).toHaveText(before);
+  // nuovo prezzo dal prossimo rinnovo: il periodo resta com'è
+  await page.goto(`${base}/pagamenti?piano=modifica`);
+  await page.locator('input[name="amount"]').fill("280");
+  await page.getByRole("button", { name: "Salva il piano" }).click();
+  await page.waitForURL(/piano=salvato/);
+  await expect(status).toHaveText(before);
+});

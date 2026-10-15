@@ -47,8 +47,16 @@ export async function savePlan(clientId: string, planId: string | null, _: Actio
     package_sessions: kind === "package" ? pkg : null,
     notes: String(fd.get("notes") ?? "").trim(),
   };
-  // modifica "da una data": nuovo piano, quello di prima resta nello storico
-  if (planId && fd.get("mode") !== "from") {
+  // cambiato solo il metodo o le note: è sempre una correzione (niente piano nuovo né periodi spostati)
+  let mode = String(fd.get("mode") ?? "fix");
+  if (planId && mode !== "fix") {
+    const { data: old } = await supabase.from("payment_plans").select("kind, amount, package_sessions").eq("id", planId).eq("client_id", clientId).maybeSingle();
+    if (old && old.kind === row.kind && Number(old.amount) === row.amount && (old.package_sessions ?? null) === row.package_sessions) mode = "fix";
+  }
+  // modifica "dal prossimo rinnovo" o "da una data": nuovo piano, quello di prima resta nello storico
+  if (planId && mode === "fix") {
+    // "dal prossimo rinnovo" con lo stesso prezzo: è solo una correzione, l'inizio del piano non cambia
+    if (fd.get("mode") === "next") delete (row as Partial<typeof row>).start_date;
     const { error } = await supabase.from("payment_plans").update(row).eq("id", planId).eq("client_id", clientId);
     if (error) return { error: "Salvataggio non riuscito." };
   } else {

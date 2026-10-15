@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatShort, todayISO } from "@/lib/dates";
+import { addDays, formatShort, todayISO } from "@/lib/dates";
 import { billingStatus, withUnpaidRows, dueAmount, formatEuro, isPeriodic, nextPaymentProposal, usesCredit, METHOD_LABELS, PLAN_LABELS, suggestNextPeriod, type BillingRow, type PaymentMethod, type PlanKind } from "@/lib/billing";
 import { getClientCredit, getPtCounter, getUnpaidRows, reminderChatLink } from "@/lib/data/billing";
 import { IconArrowRight, IconChat, IconDown, IconPlus } from "@/components/icons";
@@ -183,10 +183,10 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
             <div>
               <Eyebrow>{editingPlan ? "Modifica il piano" : "Imposta il piano di pagamento"}</Eyebrow>
               <p className="mt-1.5 text-sm text-muted">
-                {editingPlan ? "Cambia quello che serve, poi scegli se vale da una certa data (il piano di prima resta nello storico) o se stai correggendo un errore." : "Il pagamento avviene fuori dall'app: qui tieni traccia di cosa è saldato e l'app ti avvisa quando scade."}
+                {editingPlan ? "Cambia quello che serve, poi scegli da quando vale. Se cambi solo il metodo o le note è una correzione: i periodi restano uguali." : "Il pagamento avviene fuori dall'app: qui tieni traccia di cosa è saldato e l'app ti avvisa quando scade."}
               </p>
             </div>
-            <PlanForm action={savePlan.bind(null, id, editingPlan ? plan.id : null)} values={editingPlan ? plan : undefined} today={today} submitLabel={editingPlan ? "Salva il piano" : "Attiva il piano"} editing={Boolean(editingPlan)} />
+            <PlanForm action={savePlan.bind(null, id, editingPlan ? plan.id : null)} values={editingPlan ? plan : undefined} today={today} submitLabel={editingPlan ? "Salva il piano" : "Attiva il piano"} editing={Boolean(editingPlan)} nextStart={editingPlan && kind && isPeriodic(kind) && row?.paid_until ? addDays(row.paid_until, 1) : null} />
             {plan ? <a href={`/staff/clienti/${id}/pagamenti`} className="text-sm font-semibold underline">Annulla</a> : null}
           </Card>
         ) : null}

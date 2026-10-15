@@ -14,6 +14,7 @@ export function PlanForm({
   today,
   submitLabel,
   editing = false,
+  nextStart = null,
 }: {
   action: Action;
   values?: { kind: string; amount: number | string; method: string; start_date: string; package_sessions: number | null; notes: string };
@@ -21,10 +22,14 @@ export function PlanForm({
   submitLabel: string;
   /** modifica di un piano esistente: si sceglie se vale da una data o se è una correzione */
   editing?: boolean;
+  /** coaching con periodi pagati: il giorno dopo l'ultimo periodo pagato (dal prossimo rinnovo) */
+  nextStart?: string | null;
 }) {
   const [state, formAction] = useActionState(action, null);
   const [kind, setKind] = useState<PlanKind>((values?.kind as PlanKind) ?? "monthly");
-  const [mode, setMode] = useState<"from" | "fix">("from");
+  // di partenza non si sposta il periodo: dal prossimo rinnovo, oppure correzione
+  const [mode, setMode] = useState<"next" | "from" | "fix">(nextStart ? "next" : "fix");
+  const fmtDay = (d: string) => new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${d}T12:00:00Z`));
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -46,20 +51,30 @@ export function PlanForm({
             {METHODS.map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
           </Select>
         </Field>
-        <Field label="In vigore dal" hint={kind === "package" ? "le sessioni PT da questa data scalano il pacchetto" : undefined}>
-          <Input key={mode} name="start_date" type="date" defaultValue={editing && mode === "from" ? today : values?.start_date ?? today} required />
-        </Field>
+        {editing && mode === "next" && nextStart ? (
+          <input type="hidden" name="start_date" value={nextStart} />
+        ) : (
+          <Field label={editing && mode === "fix" ? "Inizio del piano" : "In vigore dal"} hint={editing && mode === "fix" ? "cambiala solo se era sbagliata: sposta i periodi" : kind === "package" ? "le sessioni PT da questa data scalano il pacchetto" : undefined}>
+            <Input key={mode} name="start_date" type="date" defaultValue={editing && mode === "from" ? today : values?.start_date ?? today} required />
+          </Field>
+        )}
       </div>
       {editing ? (
         <fieldset className="flex flex-col gap-2 rounded-2xl bg-sand p-4">
           <legend className="sr-only">Come vale la modifica</legend>
-          <label className="flex items-start gap-3 text-[15px]">
-            <input type="radio" name="mode" value="from" checked={mode === "from"} onChange={() => setMode("from")} className="mt-1 h-5 w-5 accent-[#1b1a17]" />
-            <span><strong>Cambia da una data</strong><span className="block text-sm text-muted">Per esempio un nuovo prezzo o un altro tipo di piano (coaching o lezioni PT). Il piano di prima resta nello storico con i suoi pagamenti.</span></span>
-          </label>
+          {nextStart ? (
+            <label className="flex items-start gap-3 text-[15px]">
+              <input type="radio" name="mode" value="next" checked={mode === "next"} onChange={() => setMode("next")} className="mt-1 h-5 w-5 accent-[#1b1a17]" />
+              <span><strong>Dal prossimo rinnovo ({fmtDay(nextStart)})</strong><span className="block text-sm text-muted">Il periodo resta com&apos;è: il nuovo prezzo o il nuovo piano vale dal prossimo pagamento. Quello di prima resta nello storico.</span></span>
+            </label>
+          ) : null}
           <label className="flex items-start gap-3 text-[15px]">
             <input type="radio" name="mode" value="fix" checked={mode === "fix"} onChange={() => setMode("fix")} className="mt-1 h-5 w-5 accent-[#1b1a17]" />
-            <span><strong>Correggi un errore</strong><span className="block text-sm text-muted">Il piano era stato scritto male: la correzione vale anche per i pagamenti già registrati.</span></span>
+            <span><strong>Correggi un errore</strong><span className="block text-sm text-muted">Il piano era scritto male (importo, metodo, note): si corregge e basta, date e periodi restano uguali.</span></span>
+          </label>
+          <label className="flex items-start gap-3 text-[15px]">
+            <input type="radio" name="mode" value="from" checked={mode === "from"} onChange={() => setMode("from")} className="mt-1 h-5 w-5 accent-[#1b1a17]" />
+            <span><strong>Cambia da una data che scegli</strong><span className="block text-sm text-muted">Il nuovo piano parte da quella data e i periodi ripartono da lì. Il piano di prima resta nello storico con i suoi pagamenti.</span></span>
           </label>
         </fieldset>
       ) : null}
