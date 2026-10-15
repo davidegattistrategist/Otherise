@@ -52,7 +52,7 @@ export default async function EditCheckPage({ params, searchParams }: { params: 
           {!photos.length ? <p className="text-[15px] text-muted">Frontale, laterali e dietro: sceglile tutte insieme dalla galleria. {c.visible_to_client ? "Il cliente le vedrà nei suoi progressi." : "Il cliente le vedrà quando renderai visibile il check."}</p> : null}
           <div className="flex flex-wrap items-start gap-2">
             <CheckPhotoUploader clientId={id} checkId={checkId} label={photos.length ? "Aggiungi altre foto" : "Aggiungi le foto"} variant={photos.length ? "secondary" : "primary"} />
-            {pair ? <PhotoCompare albums={albums} initial={pair} label="Confronta con un altro check" /> : null}
+            {pair ? <PhotoCompare albums={albums} initial={pair} label="Confronta con un altro check" /> : photos.length ? <p className="self-center text-sm text-muted">Per confrontarle serve un altro check con le foto.</p> : null}
           </div>
         </div>
       </Card>

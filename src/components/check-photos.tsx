@@ -454,7 +454,8 @@ export function PhotoCompare({ albums, initial, label = "Confronta le foto" }: {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
-  if (usable.length < 2) return null;
+  if (usable.length < 2)
+    return usable.length === 1 ? <p className="text-sm text-muted">Il confronto delle foto compare quando ci sono le foto in almeno due check.</p> : null;
   const left = usable.find((a) => a.id === leftId) ?? usable[0];
   const right = usable.find((a) => a.id === rightId) ?? usable[usable.length - 1];
   const count = Math.max(left.photos.length, right.photos.length);

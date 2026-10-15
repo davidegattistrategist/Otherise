@@ -136,3 +136,15 @@ test("collaboratore: in Dati vede che il cliente è suo; in Sessioni PT il conte
   await expect(page.getByText(/Sessioni PT: |Il conteggio delle sessioni pagate lo tiene il titolare/).first()).toBeVisible();
   await expect(page.getByText(/€/)).toHaveCount(0);
 });
+
+test("telefono: le pagine non scorrono di lato", async ({ page }, info) => {
+  test.skip(info.project.name !== "telefono", "serve la larghezza del telefono");
+  await login(page, "titolare@prova.local");
+  const id = await openClient(page, "Esempio Giulia");
+  const wide = async () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  for (const p of [`/staff/clienti/${id}/check`, `/staff/clienti/${id}/pagamenti`, "/staff/pagamenti", "/staff/impostazioni"]) {
+    await page.goto(p);
+    await page.waitForLoadState("networkidle");
+    expect(await wide(), p).toBeLessThanOrEqual(0);
+  }
+});

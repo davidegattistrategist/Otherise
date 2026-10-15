@@ -133,7 +133,7 @@ export function CheckCompare({ points, sumSites, title = "Confronta due check" }
   const select = (value: string, set: (v: string) => void, label: string) => (
     <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-muted">
       {label}
-      <select value={value} onChange={(e) => set(e.target.value)} className="min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-[15px] font-normal text-ink">
+      <select value={value} onChange={(e) => set(e.target.value)} className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-[15px] font-normal text-ink">
         {points.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
       </select>
     </label>
@@ -146,7 +146,7 @@ export function CheckCompare({ points, sumSites, title = "Confronta due check" }
         {select(bId, setB, "Dopo")}
       </div>
       <table className="w-full border-collapse text-[15px]">
-        <thead className="sr-only">
+        <thead className="table-head-hidden">
           <tr><th>Misura</th><th>Prima</th><th>Dopo</th><th>Differenza</th></tr>
         </thead>
         {groups.map((g) => {
