@@ -7,8 +7,9 @@
 import { useActionState, useState } from "react";
 import { SubmitButton } from "@/components/form-bits";
 import type { InviteLinkState } from "../../actions";
+import { TypedEmail } from "./typed-email";
 
-export function InviteLink({ action, name }: { action: (s: InviteLinkState) => Promise<InviteLinkState>; name: string }) {
+export function InviteLink({ action, name }: { action: (s: InviteLinkState, fd: FormData) => Promise<InviteLinkState>; name: string }) {
   const [state, formAction] = useActionState(action, null);
   const [copied, setCopied] = useState(false);
   const text = state?.link ? `Ciao ${name}! Ecco il link per entrare nell'app e scegliere la tua password: ${state.link}` : "";
@@ -16,6 +17,7 @@ export function InviteLink({ action, name }: { action: (s: InviteLinkState) => P
     <div className="flex flex-col gap-2 border-t border-sand-deep pt-3">
       <p className="text-sm leading-relaxed text-muted">L&apos;email non arriva? Prepara un link da mandargli tu, per esempio su WhatsApp. Vale per un solo accesso.</p>
       <form action={formAction}>
+        <TypedEmail />
         <SubmitButton variant="secondary" size="sm" pendingText="Preparo…">Prepara il link per entrare</SubmitButton>
       </form>
       {state?.error ? <p role="alert" className="text-sm text-accent-deep">{state.error}</p> : null}

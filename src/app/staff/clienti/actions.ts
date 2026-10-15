@@ -70,6 +70,7 @@ export async function updateClientAction(clientId: string, _: ActionState, fd: F
   const parsed = readClientForm(fd);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await createClient();
+  const { data: before } = await supabase.from("clients").select("email, user_id").eq("id", clientId).maybeSingle();
   const update: TablesUpdate<"clients"> = { ...parsed.data };
   // "Inizio percorso" lasciato vuoto in una modifica: resta la data di prima (non diventa oggi)
   if (!String(fd.get("start_date") ?? "").trim()) delete update.start_date;
@@ -80,8 +81,49 @@ export async function updateClientAction(clientId: string, _: ActionState, fd: F
   if (notes !== null) {
     await supabase.from("client_private_notes").upsert({ client_id: clientId, notes: String(notes), updated_at: new Date().toISOString() });
   }
+  // email corretta dopo un invito mai usato: l'account con l'email sbagliata non serve più
+  let note = "";
+  if (before?.user_id && (before.email ?? "") !== (parsed.data.email ?? "")) {
+    const dropped = await dropUnusedAccount(before.user_id, parsed.data.email);
+    if (dropped) note = parsed.data.email ? " L'invito mandato alla vecchia email non vale più: premi “Invia invito” per mandarlo a quella nuova." : "";
+  }
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
-  return { ok: true, message: "Scheda salvata." };
+  return { ok: true, message: `Scheda salvata.${note}` };
+}
+
+/**
+ * L'account creato da un invito con un'email sbagliata: se il cliente non è
+ * mai entrato e l'email non è più quella della scheda, lo si toglie (il
+ * collegamento al cliente si libera da solo), così il prossimo invito parte
+ * con l'email giusta. Mai per chi è già entrato o per lo staff.
+ */
+async function dropUnusedAccount(userId: string, email: string | null): Promise<boolean> {
+  const admin = createAdminClient();
+  const [{ data: u }, { data: prof }] = await Promise.all([admin.auth.admin.getUserById(userId), admin.from("profiles").select("role").eq("id", userId).maybeSingle()]);
+  const user = u.user;
+  if (!user || user.last_sign_in_at) return false;
+  if (prof && prof.role !== "client" && prof.role !== "none") return false;
+  if (email && user.email?.toLowerCase() === email.toLowerCase()) return false;
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  return !error;
+}
+
+/**
+ * L'email scritta nella scheda ma non ancora salvata (si corregge e si preme
+ * subito "Rimanda l'invito"): si salva prima di mandare l'invito.
+ */
+async function saveTypedEmail(clientId: string, fd: FormData | undefined): Promise<{ error?: string; saved?: boolean }> {
+  const raw = String(fd?.get("email") ?? "").trim().toLowerCase();
+  if (!raw) return {};
+  const parsed = z.string().email().safeParse(raw);
+  if (!parsed.success) return { error: "L'email scritta nella scheda non è valida: correggila e riprova." };
+  const supabase = await createClient();
+  const { data: client } = await supabase.from("clients").select("email, user_id").eq("id", clientId).maybeSingle();
+  if (!client || client.email === raw) return {};
+  const { error } = await supabase.from("clients").update({ email: raw }).eq("id", clientId);
+  if (error) return { error: dbError(error.message) };
+  if (client.user_id) await dropUnusedAccount(client.user_id, raw);
+  return { saved: true };
 }
 
 /** Manda l'email di invito al cliente (crea il suo account). */
@@ -95,7 +137,8 @@ async function sendInvite(clientId: string): Promise<ActionState> {
   if (client.user_id) {
     const { data: u } = await admin.auth.admin.getUserById(client.user_id);
     if (u.user?.last_sign_in_at) return { error: "Il cliente ha già un account. Se ha perso la password può usare “Password dimenticata”." };
-    // invitato ma mai entrato: rimandiamo l'invito
+    // invitato ma mai entrato: se l'invito era partito per un'altra email, quell'account si toglie
+    await dropUnusedAccount(client.user_id, client.email);
   }
   const { error } = await admin.auth.admin.inviteUserByEmail(client.email, {
     redirectTo: `${await siteUrl()}/auth/confirm?next=/imposta-password`,
@@ -117,9 +160,12 @@ async function sendInvite(clientId: string): Promise<ActionState> {
   return { ok: true, message: `Invito inviato a ${client.email}.` };
 }
 
-export async function inviteClientAction(clientId: string, _: ActionState): Promise<ActionState> {
+export async function inviteClientAction(clientId: string, _: ActionState, fd?: FormData): Promise<ActionState> {
   await requireStaff();
+  const typed = await saveTypedEmail(clientId, fd);
+  if (typed.error) return { error: typed.error };
   const res = await sendInvite(clientId);
+  if (typed.saved && res?.ok) res.message = `${res.message} Ho salvato anche la nuova email nella scheda.`;
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
   return res;
 }
@@ -163,18 +209,22 @@ export type InviteLinkState = { link?: string; error?: string } | null;
  * password. Il link apre una pagina con un pulsante, così le anteprime dei
  * messaggi non lo consumano.
  */
-export async function inviteLinkAction(clientId: string, _: InviteLinkState): Promise<InviteLinkState> {
+export async function inviteLinkAction(clientId: string, _: InviteLinkState, fd?: FormData): Promise<InviteLinkState> {
   await requireStaff();
+  const typed = await saveTypedEmail(clientId, fd);
+  if (typed.error) return { error: typed.error };
   const supabase = await createClient();
-  const { data: client } = await supabase.from("clients").select("id, email, user_id").eq("id", clientId).maybeSingle();
-  if (!client) return { error: "Cliente non trovato." };
-  if (!client.email) return { error: "Aggiungi prima l'email del cliente." };
+  const { data: first } = await supabase.from("clients").select("id, email, user_id").eq("id", clientId).maybeSingle();
+  if (!first) return { error: "Cliente non trovato." };
+  if (!first.email) return { error: "Aggiungi prima l'email del cliente." };
+  // invito partito per un'altra email e mai usato: quell'account si toglie e si riparte
+  const client = first.user_id && (await dropUnusedAccount(first.user_id, first.email)) ? { ...first, user_id: null } : first;
   const admin = createAdminClient();
   // Il link di recupero apre l'account dell'email a cui è intestato: si usa
   // solo per l'account collegato al cliente (mai un'email scritta a mano nella
   // scheda, che potrebbe essere quella del titolare) e solo se è un cliente.
   let type: "invite" | "recovery" = client.user_id ? "recovery" : "invite";
-  let email = client.email;
+  let email: string = first.email;
   if (client.user_id) {
     const [{ data: u }, { data: prof }] = await Promise.all([admin.auth.admin.getUserById(client.user_id), admin.from("profiles").select("role").eq("id", client.user_id).maybeSingle()]);
     if (!u.user?.email || !linkAllowedForRole(prof?.role)) return { error: "Questo account non è di un cliente: il link non si può preparare." };

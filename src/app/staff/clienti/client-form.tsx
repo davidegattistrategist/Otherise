@@ -41,7 +41,7 @@ export function ClientForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Nome"><Input name="first_name" defaultValue={values.first_name} required autoComplete="off" /></Field>
         <Field label="Cognome"><Input name="last_name" defaultValue={values.last_name} autoComplete="off" /></Field>
-        <Field label="Email" hint="serve per l'invito"><Input name="email" type="email" defaultValue={values.email ?? ""} autoComplete="off" /></Field>
+        <Field label="Email" hint="serve per l'invito"><Input name="email" type="email" defaultValue={values.email ?? ""} autoComplete="off" data-client-email /></Field>
         <Field label="Telefono"><Input name="phone" type="tel" defaultValue={values.phone ?? ""} autoComplete="off" /></Field>
         <Field label="Sesso" hint="serve per le pliche">
           <Select name="sex" defaultValue={values.sex ?? ""}>

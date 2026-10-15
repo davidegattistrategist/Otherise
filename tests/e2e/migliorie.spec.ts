@@ -382,3 +382,69 @@ test("nuovo pagamento da Pagamenti: cliente nuovo con abbonamento, poi rinnovo e
   await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name }).filter({ hasText: "Valutazione posturale" })).toHaveCount(1);
   await expect(page.locator("#tutti-i-pagamenti li").filter({ hasText: name }).filter({ hasText: "Coaching trimestrale" })).toHaveCount(2);
 });
+
+test("email sbagliata nell'invito: la si corregge e 'Rimanda l'invito' usa quella nuova (anche senza salvare)", async ({ page, browser }, info) => {
+  test.skip(info.project.name !== "pc", "basta una volta");
+  const stamp = Date.now();
+  const wrong = `sbagliata${stamp}@prova.local`;
+  const right = `giusta${stamp}@prova.local`;
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/clienti/nuovo");
+  await page.fill("input[name=first_name]", "Invito");
+  await page.fill("input[name=last_name]", `Corretto${stamp}`);
+  await page.fill("input[name=email]", wrong);
+  await page.check("input[name=invite_now]");
+  await page.getByRole("button", { name: "Crea cliente" }).click();
+  await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
+  await page.goto(`${page.url()}/profilo`);
+  await expect(page.getByText(`Invito inviato a ${wrong}`)).toBeVisible();
+  // correggo l'email e premo subito "Rimanda l'invito", senza salvare la scheda
+  await page.fill("input[name=email]", right);
+  await page.getByRole("button", { name: "Rimanda l'invito" }).click();
+  await expect(page.getByText(`Invito inviato a ${right}. Ho salvato anche la nuova email nella scheda.`)).toBeVisible();
+  await page.reload();
+  await expect(page.getByText(`Invito inviato a ${right}`)).toBeVisible();
+  // il link per entrare apre l'account con l'email giusta: si sceglie la password e si entra con quella
+  await page.getByRole("button", { name: "Prepara il link per entrare" }).click();
+  const box = page.getByText(/Ecco il link per entrare nell'app/);
+  await expect(box).toBeVisible();
+  const link = /(https?:\/\/\S+)/.exec((await box.textContent()) ?? "")![1];
+  const client = await (await browser.newContext(info.project.use)).newPage();
+  await client.goto(link);
+  await client.getByRole("link", { name: /Entra e scegli la password|Scegli la nuova password/ }).click();
+  await client.waitForURL(/\/imposta-password/);
+  await client.fill("#password", PASS);
+  await client.fill("#confirm", PASS);
+  await client.getByRole("button", { name: "Salva e entra" }).click();
+  await client.waitForURL((u) => !u.pathname.startsWith("/imposta-password"));
+  const fresh = await (await browser.newContext(info.project.use)).newPage();
+  await login(fresh, right);
+  await expect(fresh).toHaveURL(/\/(cliente|consenso)/);
+  // pulizia
+  await page.reload();
+  await page.getByRole("button", { name: "Elimina per sempre" }).click();
+  await page.waitForURL(/\/staff\/clienti$/);
+});
+
+test("email corretta e salvata dopo un invito mai usato: si può invitare di nuovo", async ({ page }, info) => {
+  test.skip(info.project.name !== "pc", "basta una volta");
+  const stamp = Date.now();
+  await login(page, "titolare@prova.local");
+  await page.goto("/staff/clienti/nuovo");
+  await page.fill("input[name=first_name]", "Invito");
+  await page.fill("input[name=last_name]", `Salvato${stamp}`);
+  await page.fill("input[name=email]", `errata${stamp}@prova.local`);
+  await page.check("input[name=invite_now]");
+  await page.getByRole("button", { name: "Crea cliente" }).click();
+  await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
+  await page.goto(`${page.url()}/profilo`);
+  await page.fill("input[name=email]", `esatta${stamp}@prova.local`);
+  await page.getByRole("button", { name: /^Salva/ }).first().click();
+  await expect(page.getByText(/L'invito mandato alla vecchia email non vale più/)).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Invia invito" }).click();
+  await expect(page.getByText(`Invito inviato a esatta${stamp}@prova.local.`)).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Elimina per sempre" }).click();
+  await page.waitForURL(/\/staff\/clienti$/);
+});
