@@ -3,6 +3,8 @@
 # che sia completa, la cifra e la conserva qui su GitHub per 30 giorni.
 # Se qualcosa va storto GitHub manda un'email a chi gestisce il repository.
 # Senza i segreti BACKUP_DATABASE_URL e BACKUP_PASSPHRASE non fa nulla.
+# La domenica (o lanciandolo a mano) copia anche le foto dei check, se ci sono
+# i segreti BACKUP_SUPABASE_URL e BACKUP_SERVICE_KEY.
 name: Backup notturno
 
 on:
@@ -31,6 +33,8 @@ jobs:
     env:
       SOURCE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
       BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      STORAGE_URL: ${{ secrets.BACKUP_SUPABASE_URL }}
+      STORAGE_KEY: ${{ secrets.BACKUP_SERVICE_KEY }}
     steps:
       - name: Backup configurato?
         id: check
@@ -68,9 +72,29 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: backup-${{ github.run_number }}
-          path: backup-out/*.gpg
+          path: backup-out/otherise-2*.gpg
           retention-days: 30
           if-no-files-found: error
+
+      # foto dei check: una volta a settimana (cambiano poco e pesano di più)
+      - name: Foto dei check (la domenica)
+        id: photos
+        if: steps.check.outputs.skip != '1' && env.STORAGE_URL != '' && env.STORAGE_KEY != ''
+        env:
+          OUT_DIR: backup-out
+        run: |
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$(date -u +%u)" != "7" ]; then
+            echo "Le foto si copiano la domenica."; exit 0
+          fi
+          ./scripts/backup/photos.sh
+
+      - name: Conserva le foto cifrate (35 giorni)
+        if: steps.check.outputs.skip != '1' && hashFiles('backup-out/otherise-foto-*.gpg') != ''
+        uses: actions/upload-artifact@v5
+        with:
+          name: foto-${{ github.run_number }}
+          path: backup-out/otherise-foto-*.gpg
+          retention-days: 35
 
       - name: Segna nell'app che il backup non è riuscito
         if: failure() && steps.check.outputs.skip != '1' && env.SOURCE_URL != ''

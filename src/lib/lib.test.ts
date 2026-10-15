@@ -1324,3 +1324,43 @@ describe("importi scritti a mano", () => {
     expect(parseEuro("")).toBeNaN();
   });
 });
+
+import { parseCheckMode } from "./check-mode-key";
+import { linkAllowedForRole } from "./invite-link";
+import { currentProgram } from "./program/schedule";
+import { progressPrescriptions } from "./program/progression";
+
+describe("robustezza (15/10)", () => {
+  const id = "11111111-2222-3333-4444-555555555555";
+  it("modalità check: un dato strano vale 'nessuna modalità'", () => {
+    expect(parseCheckMode(null)).toBeNull();
+    expect(parseCheckMode([1, 2])).toBeNull();
+    expect(parseCheckMode("ciao")).toBeNull();
+    expect(parseCheckMode({ clientId: "non-un-id" })).toBeNull();
+    expect(parseCheckMode({ clientId: id, checkId: 5 })).toBeNull();
+    expect(parseCheckMode({ clientId: id, clientName: { x: 1 }, paused: "sì" })).toEqual({ clientId: id, checkId: null, clientName: "", startedAt: "", paused: false });
+    expect(parseCheckMode({ clientId: id, checkId: null, newId: id, clientName: "Anna", startedAt: "2026-10-15T08:00:00Z", paused: true })).toEqual({ clientId: id, checkId: null, newId: id, clientName: "Anna", startedAt: "2026-10-15T08:00:00Z", paused: true });
+  });
+  it("link per entrare: solo per account di clienti o non assegnati", () => {
+    expect(linkAllowedForRole("client")).toBe(true);
+    expect(linkAllowedForRole("none")).toBe(true);
+    expect(linkAllowedForRole(null)).toBe(true);
+    expect(linkAllowedForRole("owner")).toBe(false);
+    expect(linkAllowedForRole("coach")).toBe(false);
+  });
+  it("programma in corso: l'ultimo iniziato, altrimenti il prossimo che parte", () => {
+    const p = (id: string, start: string | null, status = "published") => ({ id, start_date: start, status });
+    const list = [p("futuro-lontano", "2026-12-01"), p("bozza", null, "draft"), p("futuro", "2026-11-01"), p("vecchio", "2026-08-01"), p("in-corso", "2026-10-01")];
+    expect(currentProgram(list, "2026-10-15")?.id).toBe("in-corso");
+    expect(currentProgram(list, "2026-07-01")?.id).toBe("vecchio");
+    expect(currentProgram(list.filter((x) => x.id.startsWith("futuro")), "2026-10-15")?.id).toBe("futuro");
+    expect(currentProgram(list.filter((x) => x.id.startsWith("futuro")), "2026-10-15", { upcoming: false })).toBeNull();
+  });
+  it("progressione: parte dalla prima settimana scritta, vuoto resta vuoto", () => {
+    expect(progressPrescriptions(["", "", ""], "kg25")).toEqual(["", "", ""]);
+    const out = progressPrescriptions(["", "4x8 60kg", "", ""], "kg25");
+    expect(out[0]).toBe("");
+    expect(out[1]).toBe("4x8 60kg");
+    expect(out[2]).not.toBe("");
+  });
+});

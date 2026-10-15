@@ -21,14 +21,15 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
   const { esercizio } = await searchParams;
   const me = await requireActiveClient();
   const supabase = await createClient();
-  const [{ data: checks }, { data: posture }, { data: checkins }, { data: sessions }] = await Promise.all([
+  const [{ data: checks }, { data: posture }, { data: checkins }, { data: sessions }, exerciseSeries, photos] = await Promise.all([
     supabase.rpc("my_checks"),
     supabase.from("posture_assessments").select("id, assessed_on, tight_muscles, what_works, posture_work, notes").eq("client_id", me.clientId).order("assessed_on", { ascending: false }).limit(3),
     supabase.from("checkins").select("week_start, training, sleep, stress, adherence").eq("client_id", me.clientId).order("week_start", { ascending: true }).limit(26),
     supabase.rpc("my_pt_session_dates"),
+    getExerciseProgress(supabase, me.clientId),
+    myCheckPhotos(supabase),
   ]);
   const list = checks ?? [];
-  const [exerciseSeries, photos] = await Promise.all([getExerciseProgress(supabase, me.clientId), myCheckPhotos(supabase)]);
   // foto dei check, dal più recente
   const photoChecks = [...photos.values()].filter((g) => g.length).sort((a, b) => (b[0].checkDate ?? "").localeCompare(a[0].checkDate ?? ""));
   const records = exerciseSeries.filter((x) => x.record).slice(0, 6);

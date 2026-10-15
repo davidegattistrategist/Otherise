@@ -90,9 +90,15 @@ export default async function SettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageTitle eyebrow="Solo titolare" title="Impostazioni e metodo" />
+      {/* pagina lunga: un indice per saltare dove serve */}
+      <nav aria-label="Sezioni delle impostazioni" className="scroll-x -mx-1 -mt-2 flex gap-2 px-1 pb-1">
+        {[["metodo", "Metodo"], ["lezioni", "Cosa ha imparato"], ["attivita", "Attività"], ["email", "Email"], ["privacy", "Privacy"], ["collegamenti", "Collegamenti"], ["backup", "Backup"]].map(([id, label]) => (
+          <a key={id} href={`#${id}`} className="flex min-h-10 shrink-0 items-center rounded-full bg-card px-4 text-sm font-semibold hover:bg-white">{label}</a>
+        ))}
+      </nav>
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <div className="flex flex-col gap-4">
-        <Card className="flex flex-col gap-4">
+        <Card className="flex scroll-mt-6 flex-col gap-4" id="metodo">
           <div>
             <Eyebrow>Metodo di lavoro per l&apos;assistente AI</Eyebrow>
             <p className="mt-2 text-[15px] leading-relaxed text-muted">
@@ -103,7 +109,7 @@ export default async function SettingsPage() {
           <MethodForm action={saveMethod} value={s.coaching_method} />
         </Card>
 
-        <Card className="flex flex-col gap-4" id="lezioni">
+        <Card className="flex scroll-mt-6 flex-col gap-4" id="lezioni">
           <div>
             <Eyebrow>Cosa ha imparato dalle tue correzioni</Eyebrow>
             <p className="mt-2 text-[15px] leading-relaxed text-muted">
@@ -135,7 +141,7 @@ export default async function SettingsPage() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <Card className="flex flex-col gap-4">
+          <Card className="flex scroll-mt-6 flex-col gap-4" id="attivita">
             <Eyebrow>Attività</Eyebrow>
             <SettingsForm action={saveSettings} values={s} defaultMessage={DEFAULT_PAYMENT_MESSAGE} />
           </Card>
@@ -165,7 +171,7 @@ export default async function SettingsPage() {
 
           <BackupCard runs={backups ?? []} />
 
-          <Card className="flex flex-col gap-3">
+          <Card className="flex scroll-mt-6 flex-col gap-3" id="collegamenti">
             <Eyebrow>Collegamenti</Eyebrow>
             <ul className="flex flex-col gap-2">
               <Status ok={service.ok}>{service.text}</Status>

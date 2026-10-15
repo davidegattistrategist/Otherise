@@ -1,4 +1,5 @@
 import "server-only";
+import { getExerciseLibrary } from "./cached";
 import { cache } from "react";
 import { createClient } from "../supabase/server";
 import { formatLong, todayISO } from "../dates";
@@ -9,7 +10,7 @@ import { billingStatus, clientFacingStatus, withUnpaidRows, type BillingRow, typ
 import { clientNotices, ptLeft, type ClientNotice } from "../client-notice";
 import { getClientCredit } from "./billing";
 import { parseContent, type ProgramContent } from "../program/types";
-import { displayWeek, weekPosition, type WeekPosition } from "../program/schedule";
+import { currentProgram, displayWeek, weekPosition, type WeekPosition } from "../program/schedule";
 import { computeRecords, recordsFromRows, type ExerciseRecord } from "../strength/records";
 import { rpcOr } from "./rpc";
 
@@ -43,8 +44,7 @@ export const getMyPrograms = cache(async (clientId: string, open?: string) => {
     .order("start_date", { ascending: false });
   const all = (data ?? []).filter((p) => p.start_date);
   const published = all.filter((p) => p.status === "published");
-  const started = published.filter((p) => p.start_date! <= today);
-  const raw = started[0] ?? published[published.length - 1] ?? null;
+  const raw = currentProgram(published, today);
   const next = published.filter((p) => p.start_date! > today && p.id !== raw?.id).pop() ?? null;
   const wanted = [raw?.id, next?.id, open && all.some((p) => p.id === open) ? open : null].filter((x): x is string => Boolean(x));
   const { data: contents } = wanted.length ? await supabase.from("programs").select("id, content").in("id", wanted) : { data: [] as Array<{ id: string; content: unknown }> };
@@ -71,10 +71,8 @@ export async function getMyLogs(programId: string) {
 
 /** Video degli esercizi, per id e per nome (minuscolo). */
 export const getVideoMap = cache(async () => {
-  const supabase = await createClient();
-  const { data } = await supabase.from("exercises").select("id, name, video_url").not("video_url", "is", null);
   const map: Record<string, string> = {};
-  for (const e of data ?? []) {
+  for (const e of await getExerciseLibrary()) {
     if (!e.video_url) continue;
     map[e.id] = e.video_url;
     map[e.name.trim().toLowerCase()] = e.video_url;

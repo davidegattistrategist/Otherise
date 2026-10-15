@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { rpcOr } from "@/lib/data/rpc";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatWithWeekday, todayISO } from "@/lib/dates";
@@ -27,8 +28,10 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
   // "Conta nel pacchetto" serve solo ai clienti con un pacchetto di sessioni
   // (il collaboratore non vede i piani: per lui resta visibile)
   const { data: plan } = await supabase.from("payment_plans").select("kind").eq("client_id", id).eq("active", true).maybeSingle();
-  // contatore delle sessioni PT (solo il titolare lo vede: per il collaboratore è vuoto)
+  // contatore delle sessioni PT: il titolare con gli importi, il collaboratore solo quante (pt_balance_for)
   const extra = me.role === "owner" ? (await getPtCounter(supabase, id)).counter : null;
+  const coachBalance = me.role !== "owner" ? await rpcOr<Array<{ bought: number; used: number }>>(supabase.rpc("pt_balance_for", { cid: id }), async () => []) : [];
+  const coachLeft = coachBalance[0] ? coachBalance[0].bought - coachBalance[0].used : null;
   const showPackage = !plan || plan.kind === "package" || Boolean(extra);
   const packageLabel = "Si scala dalle sessioni PT pagate";
   const thisMonth = list.filter((s) => s.session_date.slice(0, 7) === today.slice(0, 7)).length;
@@ -52,6 +55,13 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
             </span>{" "}
             <a href={`/staff/clienti/${id}/pagamenti#sessioni-pt`} className="text-sm font-semibold underline">Dettagli</a>
           </div>
+        ) : null}
+        {coachLeft !== null ? (
+          <div className="rounded-2xl bg-sand px-4 py-3 text-[15px] font-semibold">
+            Sessioni PT: {coachLeft < 0 ? `${-coachLeft} da saldare (lo gestisce il titolare)` : coachLeft === 0 ? "in pari" : coachLeft === 1 ? "ne resta 1 pagata" : `ne restano ${coachLeft} pagate`}
+          </div>
+        ) : me.role !== "owner" ? (
+          <p className="text-sm text-muted">Il conteggio delle sessioni pagate lo tiene il titolare: tu segna solo se la sessione si scala.</p>
         ) : null}
         <SessionForm action={savePtSession.bind(null, id, null)} today={today} showPackage={showPackage} packageLabel={packageLabel} />
       </Card>

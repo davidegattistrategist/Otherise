@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { notify } from "@/lib/notify";
-import { deliverPendingEmails } from "@/lib/email";
+import { emailsLater } from "@/lib/email";
 import { closeDrafts, generateCheckinDraft, type ReplyDraft } from "@/lib/ai/reply";
 
 export async function reviewCheckin(clientId: string, checkinId: string, fd: FormData) {
@@ -25,7 +25,7 @@ export async function reviewCheckin(clientId: string, checkinId: string, fd: For
     const { data: client } = await supabase.from("clients").select("user_id").eq("id", clientId).maybeSingle();
     if (client?.user_id) {
       await notify([{ recipient_id: client.user_id, client_id: clientId, kind: "checkin_reply", title: `${me.fullName.split(" ")[0] || "Il tuo coach"} ha risposto al tuo diario`, body: reply.slice(0, 280), link: "/cliente/diario", dedupe_key: `reply:${checkinId}:${reply.length}` }]);
-      await deliverPendingEmails();
+      await emailsLater();
     }
   }
   revalidatePath(`/staff/clienti/${clientId}`, "layout");

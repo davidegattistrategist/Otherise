@@ -25,16 +25,14 @@ export default async function EditCheckPage({ params, searchParams }: { params: 
   const client = await getStaffClient(id);
   if (!/^[0-9a-f-]{36}$/i.test(checkId)) notFound();
   const supabase = await createClient();
-  const [{ data: c }, folds, previous] = await Promise.all([
+  const [{ data: c }, folds, previous, allPhotos, { data: order }] = await Promise.all([
     supabase.from("checks").select("*").eq("id", checkId).eq("client_id", id).maybeSingle(),
     client.sex ? foldContext(supabase, { ...client, sex: client.sex }, checkId) : Promise.resolve({ ref: null, lastMissing: [] }),
     previousCheck(supabase, id, checkId),
-  ]);
-  if (!c) notFound();
-  const [allPhotos, { data: order }] = await Promise.all([
     staffCheckPhotos(supabase, id),
     supabase.from("checks").select("id, check_date, sequence, created_at, order_hint").eq("client_id", id),
   ]);
+  if (!c) notFound();
   const photos = allPhotos.get(checkId) ?? [];
   // per il confronto: i check con le foto, dal più vecchio; di partenza il precedente con questo
   const albums = sortChecks(order ?? []).filter((k) => allPhotos.get(k.id)?.length).map((k) => ({ id: k.id, title: checkLabel(k, 0), photos: allPhotos.get(k.id)! }));

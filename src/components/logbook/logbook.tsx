@@ -8,7 +8,8 @@ import { logPlan, restLabel, restSeconds, type LogPlan } from "@/lib/program/log
 import { blockTimer, emomItemTimer, fmtClock, restTimerFor, timedSetTimer } from "@/lib/program/timer";
 import { TimerBar, useWorkoutTimer } from "./workout-timer";
 import { DictateButton } from "@/components/dictate-button";
-import type { SetLog } from "@/lib/program/prescription";
+import { VideoLink } from "@/components/video-link";
+import { summarizeSets, type SetLog } from "@/lib/program/prescription";
 import { saveWorkout } from "./actions";
 import { cx, fmtNum } from "@/components/ui";
 import { IconCheck, IconPlay, IconPlus, IconTrophy } from "@/components/icons";
@@ -157,6 +158,27 @@ export function Logbook(props: LogbookProps) {
   /** La prossima serie da fare ("itemId:serie"), evidenziata quando finisce il recupero */
   const [upNext, setUpNext] = useState<string | null>(null);
   const upNextTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Esercizi appena finiti (tutte le serie spuntate qui): una riga sola, si riaprono con un tocco */
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const toggleCollapsed = (id: string, on: boolean) =>
+    setCollapsed((cur) => {
+      if (cur.has(id) === on) return cur;
+      const next = new Set(cur);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  /** Porta in vista l'esercizio dopo (se è sotto la barra o fuori schermo) */
+  const scrollToNextItem = (itemId: string) => {
+    const key = nextSetAfter(itemId);
+    if (!key || key.startsWith(`${itemId}:`)) return;
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`[data-set="${CSS.escape(key)}"]`)?.closest<HTMLElement>("[data-item]");
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.top < 80 || r.top > window.innerHeight - 240) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
   /** La prima volta: cosa sono i numeri grigi nelle caselle */
   const [hint, setHint] = useState(false);
   useEffect(() => {
@@ -498,7 +520,7 @@ export function Logbook(props: LogbookProps) {
               const prev = lastFor(it);
               const video = videoFor(it);
               return (
-                <div key={it.id} className={cx("flex flex-col gap-2.5", ii > 0 && "border-t border-sand-deep pt-3")}>
+                <div key={it.id} data-item={it.id} className={cx("flex flex-col gap-2.5", ii > 0 && "border-t border-sand-deep pt-3")}>
                   <div className="flex items-start gap-3">
                     <span className="mt-0.5 flex h-7 min-w-7 items-center justify-center rounded-full bg-ink px-1.5 text-xs font-bold text-card">{itemLabel(b, bi, ii)}</span>
                     <div className="min-w-0 flex-1">
@@ -519,7 +541,7 @@ export function Logbook(props: LogbookProps) {
                       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                         {prev ? <span className="text-muted">Ultima volta: <span className="font-semibold text-ink">{prev.summary}</span></span> : null}
                         {video ? (
-                          <a href={video} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-accent-deep"><IconPlay size={14} /> Video</a>
+                          <VideoLink url={video} title={it.name} className="inline-flex items-center gap-1 font-semibold text-accent-deep" />
                         ) : null}
                       </div>
                     </div>
@@ -532,7 +554,20 @@ export function Logbook(props: LogbookProps) {
                       onClick={() => clock.start(`emom:${it.id}`, emomItemTimer(it.rest, st.sets.length)!)}
                     />
                   ) : null}
-                  {plan.mode === "sets" ? (
+                  {plan.mode === "sets" && collapsed.has(it.id) && st.sets.every((x) => x.done) ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleCollapsed(it.id, false)}
+                      className="flex min-h-12 items-center justify-between gap-3 rounded-xl bg-sand px-3 text-left"
+                      aria-label={`${it.name}: fatto, ${summarizeSets(st.sets) ?? ""}. Tocca per modificare`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2 font-semibold">
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-ink text-card"><IconCheck size={16} /></span>
+                        <span className="truncate tabular">{summarizeSets(st.sets) ?? "Fatto"}</span>
+                      </span>
+                      <span className="shrink-0 text-sm font-semibold text-muted underline">Modifica</span>
+                    </button>
+                  ) : plan.mode === "sets" ? (
                     <div className="flex flex-col gap-1.5">
                       {hintItem?.id === it.id ? (
                         <div className="flex flex-col gap-2 rounded-2xl bg-accent-soft px-3.5 py-3 text-[15px] leading-snug" role="note">
@@ -611,8 +646,14 @@ export function Logbook(props: LogbookProps) {
                               }));
                               if (willBeDone) {
                                 if (hint) closeHint();
+                                // ultima serie dell'esercizio: si compatta in una riga e si passa al prossimo
+                                const last = st.sets.every((x, i) => i === si || x.done);
+                                if (last) toggleCollapsed(it.id, true);
                                 if (it.rest) startRest(it.rest, it.id);
-                                else setUpNext(null);
+                                else {
+                                  setUpNext(null);
+                                  if (last) scrollToNextItem(it.id);
+                                }
                               }
                             }}
                           >
@@ -628,13 +669,16 @@ export function Logbook(props: LogbookProps) {
                           <button type="button" className="min-h-11 px-2 text-muted" onClick={() => update(it.id, (cur) => ({ ...cur, sets: cur.sets.slice(0, -1) }))}>− serie</button>
                         ) : null}
                       </div>
-                      <input
-                        aria-label={`Note su ${it.name}`}
-                        className="h-10 rounded-xl border border-transparent bg-transparent px-1 text-sm placeholder:text-muted focus:border-sand-deep focus:bg-sand"
-                        placeholder="Una nota? (es. ultima serie pesante, fastidio al ginocchio)"
-                        value={st.resultText}
-                        onChange={(e) => update(it.id, (cur) => ({ ...cur, resultText: e.target.value }))}
-                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          aria-label={`Note su ${it.name}`}
+                          className="h-10 min-w-0 flex-1 rounded-xl border border-transparent bg-transparent px-1 text-sm placeholder:text-muted focus:border-sand-deep focus:bg-sand"
+                          placeholder="Nota (facoltativa)"
+                          value={st.resultText}
+                          onChange={(e) => update(it.id, (cur) => ({ ...cur, resultText: e.target.value }))}
+                        />
+                        <DictateButton onText={(t) => update(it.id, (cur) => ({ ...cur, resultText: cur.resultText ? `${cur.resultText.trimEnd()} ${t}` : t }))} />
+                      </div>
                     </div>
                   ) : plan.mode === "check" ? (
                     <div className="flex flex-col gap-2">
@@ -663,13 +707,16 @@ export function Logbook(props: LogbookProps) {
                           onClick={() => startTimedSet(it, timedSeconds(plan.label)!)}
                         />
                       ) : null}
-                      <input
-                        aria-label={`Note su ${it.name}`}
-                        className="h-11 rounded-xl border border-sand-deep bg-sand px-3 text-[15px]"
-                        placeholder="Carico, tempo o note (facoltativo)"
-                        value={st.resultText}
-                        onChange={(e) => update(it.id, (cur) => ({ ...cur, resultText: e.target.value }))}
-                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          aria-label={`Note su ${it.name}`}
+                          className="h-11 min-w-0 flex-1 rounded-xl border border-sand-deep bg-sand px-3 text-[15px]"
+                          placeholder="Carico, tempo o note (facoltativo)"
+                          value={st.resultText}
+                          onChange={(e) => update(it.id, (cur) => ({ ...cur, resultText: e.target.value }))}
+                        />
+                        <DictateButton onText={(t) => update(it.id, (cur) => ({ ...cur, resultText: cur.resultText ? `${cur.resultText.trimEnd()} ${t}` : t }))} />
+                      </div>
                     </div>
                   ) : (
                     <input

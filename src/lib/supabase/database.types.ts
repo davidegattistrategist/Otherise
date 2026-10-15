@@ -755,6 +755,10 @@ isOneToOne: false
               "name": string,"performed_on": string,"e1rm": number,"logs": number
             }[]
                            },
+"pt_balance_for":
+{ Args: { "cid": string }; Returns: { "bought": number; "used": number }[] };
+"use_transcription":
+{ Args: { "uid": string; "max_per_day": number }; Returns: boolean };
 "programs_overview":
 { Args: { "ids": string[] }; Returns: {
               "id": string,"client_id": string,"title": string,"weeks": number,"start_date": string | null,"status": string,"days_count": number

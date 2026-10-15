@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { invalidateSettings } from "@/lib/data/cached";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { ActionState } from "@/components/form-bits";
@@ -20,6 +21,7 @@ export async function saveSettings(_: ActionState, fd: FormData): Promise<Action
     .update({ business_name: business, reminder_days: reminder, ai_monthly_budget_eur: budget, payment_message: paymentMessage, updated_at: new Date().toISOString() })
     .eq("id", 1);
   if (error) return { error: "Salvataggio non riuscito." };
+  invalidateSettings();
   revalidatePath("/", "layout");
   return { ok: true, message: "Impostazioni salvate." };
 }

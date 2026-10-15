@@ -62,7 +62,7 @@ test.describe("titolare", () => {
     // si apre il check appena salvato; l'avviso resta, ma l'indirizzo viene ripulito: ricaricando non ricompare
     await expect(page).toHaveURL(/\/check\/[0-9a-f-]{36}$/);
     await page.goto(`${base}/check`);
-    await expect(page.getByText(/Grasso \d/)).toBeVisible();
+    await expect(page.getByText(/Grasso \d/).filter({ visible: true }).first()).toBeVisible();
 
     // check senza coscia e ascellare: si usa la formula a 3 pliche e lo dice
     await page.goto(`${base}/check/nuovo`);
@@ -187,7 +187,7 @@ test.describe("titolare", () => {
 
     // indicazioni per l'AI: il tempo detto all'AI è diventato il riferimento del cliente
     await page.goto(`${base}/programma`);
-    await expect(page.getByText("Indicazioni per l'AI", { exact: true })).toBeVisible();
+    await expect(page.getByText("Indicazioni per l'AI", { exact: true }).filter({ visible: true }).first()).toBeVisible();
     await expect(page.locator("#ai-minutes")).toHaveValue("60");
     await expect(page.getByTestId("program-balance")).toBeVisible();
     await page.selectOption("#ai-strength", "intermedio");
@@ -198,7 +198,7 @@ test.describe("titolare", () => {
 
     // impostazioni: le correzioni sono contate e diventate lezioni
     await page.goto("/staff/impostazioni");
-    await expect(page.getByTestId("ai-trend")).toBeVisible();
+    await expect(page.getByTestId("ai-trend").filter({ visible: true }).first()).toBeVisible();
     await expect
       .poll(async () => {
         await page.reload();
@@ -213,7 +213,7 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: "Salva" }).click();
     await page.waitForURL(/eserciziario\/[0-9a-f-]{36}/);
     await page.goto(`/staff/eserciziario?q=${encodeURIComponent(`Esercizio ${info.project.name}`)}`);
-    await expect(page.getByText(`Esercizio ${info.project.name}`)).toBeVisible();
+    await expect(page.getByText(`Esercizio ${info.project.name}`).filter({ visible: true }).first()).toBeVisible();
     await page.goto("/staff/eserciziario");
     await page.setInputFiles("input[type=file][name=file]", path.join(FIX, "eserciziario.csv"));
     await page.getByRole("button", { name: "Importa file" }).click();

@@ -1,4 +1,5 @@
 import "server-only";
+import { pushLater } from "./notify";
 import { createAdminClient } from "./supabase/admin";
 import { siteUrl } from "./site";
 import { bundleEmail } from "./email-bundle";
@@ -57,6 +58,14 @@ export const PUSH_REMINDER_DAYS = 3;
  * Le notifiche che non serviranno mai per email si segnano come gestite;
  * quelle che potrebbero servire più avanti restano in attesa.
  */
+/**
+ * Le email partono dopo la risposta (chi ha premuto il pulsante non aspetta
+ * Resend). Fuori da una richiesta (script, test) partono subito.
+ */
+export async function emailsLater() {
+  await pushLater(() => deliverPendingEmails());
+}
+
 export async function deliverPendingEmails(): Promise<number> {
   if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) return 0;
   const admin = createAdminClient();

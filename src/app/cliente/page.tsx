@@ -41,14 +41,12 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
   const quote = quoteOfDay(today);
   const row = (billing as BillingRow[] | null)?.[0];
   const coachFirst = coach?.split(" ")[0] || "il tuo coach";
-  const [logs, { notices, pay }] = await Promise.all([
+  const checkinWeek = client?.weekly_checkin ? checkinWeekFor(today) : null;
+  const [logs, { notices, pay }, { data: thisCheckin }] = await Promise.all([
     current ? getMyLogs(current.id) : Promise.resolve([]),
     getMyPaymentNotices({ clientId: me.clientId, clientStatus: me.clientStatus, row, coach: coachFirst }),
+    checkinWeek ? supabase.from("checkins").select("id").eq("client_id", me.clientId).eq("week_start", checkinWeek).maybeSingle() : Promise.resolve({ data: null }),
   ]);
-  const checkinWeek = client?.weekly_checkin ? checkinWeekFor(today) : null;
-  const { data: thisCheckin } = checkinWeek
-    ? await supabase.from("checkins").select("id").eq("client_id", me.clientId).eq("week_start", checkinWeek).maybeSingle()
-    : { data: null };
 
   const bf = (checks ?? []).filter((c) => c.body_fat_pct !== null).map((c) => ({ date: c.check_date, value: Number(c.body_fat_pct) }));
   const weight = (checks ?? []).filter((c) => c.weight_kg !== null).map((c) => ({ date: c.check_date, value: Number(c.weight_kg) }));

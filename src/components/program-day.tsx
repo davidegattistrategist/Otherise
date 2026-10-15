@@ -3,11 +3,11 @@
  * AMRAP, EMOM…), esercizi e prescrizione della settimana scelta.
  */
 import { restLabel } from "@/lib/program/logbook";
+import { VideoLink } from "./video-link";
 import { blockHeading, itemLabel, type ProgramDay } from "@/lib/program/types";
 import { parsePrescription } from "@/lib/program/prescription";
 import { loadFromPercent } from "@/lib/strength/records";
 import { cx } from "./ui";
-import { IconPlay } from "./icons";
 
 export type VideoMap = Record<string, string>;
 
@@ -66,9 +66,7 @@ export function ProgramDayView({ day, week, videos, compact, maxes }: { day: Pro
                         <span className="block text-sm text-muted">{[restLabel(it.rest), it.notes].filter(Boolean).join(" · ")}</span>
                       ) : null}
                       {!compact && video ? (
-                        <a href={video} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-sm font-semibold text-accent-deep">
-                          <IconPlay size={14} /> Video
-                        </a>
+                        <VideoLink url={video} title={it.name} className="mt-0.5 inline-flex min-h-8 items-center gap-1 text-sm font-semibold text-accent-deep" />
                       ) : null}
                     </span>
                   </li>

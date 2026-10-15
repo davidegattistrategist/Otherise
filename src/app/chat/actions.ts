@@ -12,7 +12,7 @@ import { MAX_ATTACHMENTS, MAX_VOICE_SECONDS, attachmentKind, baseType, sizeError
 import { startTranscript, transcribeMessage } from "@/lib/transcribe";
 import { notify, pushLater, staffRecipients } from "@/lib/notify";
 import { sendPush } from "@/lib/push";
-import { deliverPendingEmails } from "@/lib/email";
+import { emailsLater } from "@/lib/email";
 import { closeDrafts, generateChatDraft, type ReplyDraft } from "@/lib/ai/reply";
 
 const fileId = customAlphabet("abcdefghijkmnpqrstuvwxyz23456789", 16);
@@ -106,7 +106,7 @@ export async function sendMessage(clientId: string, input: { body: string; attac
   if (pushTo.length) {
     await pushLater(() => sendPush(pushTo, { title: fromClient ? senderName : `Messaggio da ${senderName}`, body: preview, url: fromClient ? `/staff/messaggi/${clientId}` : "/cliente/messaggi", tag: `chat:${clientId}` }));
   }
-  void deliverPendingEmails().catch(() => undefined);
+  await emailsLater();
   if (fromClient) {
     // a risposta già inviata al cliente: prima la trascrizione del vocale, poi la bozza per lo staff
     after(async () => {

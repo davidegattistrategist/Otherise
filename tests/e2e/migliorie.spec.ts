@@ -29,17 +29,20 @@ test("cliente gratis: sparisce da pagamenti e previsioni, si può togliere", asy
   await page.locator('a[href^="/staff/clienti/"]', { hasText: "Demo Marta" }).filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
   const base = page.url();
-  await page.goto(`${base}/pagamenti`);
-  await page.locator("#sistema summary", { hasText: "Cliente gratis" }).click();
+  // si decide da Dati → Percorso
+  await page.goto(`${base}/profilo`);
   await page.getByRole("button", { name: "Metti gratis" }).click();
-  await expect(page.getByText("Non compare in pagamenti, scadenze, incassi, previsioni ed export")).toBeVisible();
+  await expect(page.getByText("Cliente gratis: fuori da pagamenti, incassi e previsioni.")).toBeVisible();
+  await page.goto(`${base}/pagamenti`);
+  await expect(page.getByText("Non compare in pagamenti, scadenze, incassi, previsioni ed export").filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText("Gratis", { exact: true }).first()).toBeVisible();
   await page.goto("/staff/pagamenti");
   await expect(page.getByText("Incassi per mese")).toBeVisible();
   await expect(page.getByText("Demo Marta")).toHaveCount(0);
   await page.goto(`${base}/pagamenti`);
   await page.getByRole("button", { name: "Non è più gratis" }).click();
-  await page.locator("#sistema summary", { hasText: "Cliente gratis" }).click();
+  await expect(page.locator("#sistema")).toBeVisible();
+  await page.goto(`${base}/profilo`);
   await expect(page.getByRole("button", { name: "Metti gratis" })).toBeVisible();
   await page.goto("/staff/pagamenti");
   await expect(page.getByText("Demo Marta").first()).toBeVisible();
@@ -244,12 +247,12 @@ test("lezioni PT a parte: non spostano la scadenza del coaching; contatore, prez
   await expect(page.getByText(/Fatto: 5 sessioni pagate ancora da fare/)).toBeVisible();
   await expect(card.getByText("sessioni rimaste (pagate, da fare)")).toBeVisible();
   await page.goto(`${base}/sessioni`);
-  await expect(page.getByText("Sessioni PT: ne restano 5 pagate")).toBeVisible();
+  await expect(page.getByText("Sessioni PT: ne restano 5 pagate").filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText("Si scala dalle sessioni PT pagate").first()).toBeVisible();
   await page.getByRole("button", { name: "Salva la sessione" }).click();
   await expect(page.getByText("Sessione salvata.")).toBeVisible();
   await page.goto(`${base}/sessioni`);
-  await expect(page.getByText("Sessioni PT: ne restano 4 pagate")).toBeVisible();
+  await expect(page.getByText("Sessioni PT: ne restano 4 pagate").filter({ visible: true }).first()).toBeVisible();
   // da saldare: 3 sessioni a 45 €
   await page.goto(`${base}/pagamenti`);
   await counter.locator("summary").click();

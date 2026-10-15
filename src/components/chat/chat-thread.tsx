@@ -98,7 +98,10 @@ export function ChatThread({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [viewer, setViewer] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<{ url: string; name: string; path: string } | null>(null);
+  /** Arrivato un messaggio mentre eri più in alto: compare "Nuovo messaggio ↓" */
+  const [newBelow, setNewBelow] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
   const download = async (url: string, name: string, path: string) => {
     setDownloading(path);
@@ -214,16 +217,62 @@ export function ChatThread({
     };
   }, [clientId, merge, draftsOn]);
 
-  // resta in fondo quando arrivano messaggi (se si era già in fondo)
+  // resta in fondo quando arrivano messaggi (se si era già in fondo); se eri
+  // più in alto a leggere, compare "Nuovo messaggio ↓" invece di farti saltare
+  const lastSeenId = useRef(messages[messages.length - 1]?.id);
   useLayoutEffect(() => {
     const el = listRef.current;
+    const lastId = messages[messages.length - 1]?.id;
+    const arrived = lastId !== lastSeenId.current;
+    lastSeenId.current = lastId;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
+    else if (arrived && !messages[messages.length - 1]?.mine) setNewBelow(true);
   }, [messages, pending.length]);
 
   const onScroll = () => {
     const el = listRef.current;
-    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (!el) return;
+    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (stick.current && newBelow) setNewBelow(false);
   };
+  const toBottom = () => {
+    const el = listRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    stick.current = true;
+    setNewBelow(false);
+  };
+
+  // iPhone con la tastiera aperta: la chat si stringe nella parte visibile
+  // dello schermo (come la nota a tutto schermo), così gli ultimi messaggi e
+  // la casella restano sopra la tastiera invece di finirci sotto
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const box = boxRef.current;
+    if (!vv || !box) return;
+    const fit = () => {
+      const keyboard = window.innerHeight - vv.height > 120 && box.contains(document.activeElement);
+      if (!keyboard) {
+        box.style.height = "";
+        return;
+      }
+      const top = box.getBoundingClientRect().top - vv.offsetTop;
+      const h = Math.max(220, Math.round(vv.height - Math.max(0, top) - 8));
+      box.style.height = `${h}px`;
+      const el = listRef.current;
+      if (el && stick.current) el.scrollTop = el.scrollHeight;
+    };
+    vv.addEventListener("resize", fit);
+    vv.addEventListener("scroll", fit);
+    document.addEventListener("focusin", fit);
+    document.addEventListener("focusout", fit);
+    return () => {
+      vv.removeEventListener("resize", fit);
+      vv.removeEventListener("scroll", fit);
+      document.removeEventListener("focusin", fit);
+      document.removeEventListener("focusout", fit);
+      box.style.height = "";
+    };
+  }, []);
 
   // video in compressione: si possono annullare togliendo l'allegato
   const compressing = useRef(new Map<string, AbortController>());
@@ -474,7 +523,7 @@ export function ChatThread({
   };
 
   return (
-    <div className={cx("flex min-h-0 flex-col overflow-hidden rounded-[24px] bg-card", className)}>
+    <div ref={boxRef} className={cx("relative flex min-h-0 flex-col overflow-hidden rounded-[24px] bg-card", className)}>
       <div ref={listRef} onScroll={onScroll} className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-3 py-4 sm:px-5" aria-live="polite">
         {messages.length === 0 ? <p className="m-auto max-w-sm px-4 text-center text-[15px] text-muted">{emptyText}</p> : null}
         {hasOlder ? (
@@ -504,21 +553,24 @@ export function ChatThread({
                       ) : (
                         <div key={a.path} className={cx("flex flex-col gap-0.5", m.mine ? "items-end" : "items-start")}>
                           {a.kind === "image" ? (
-                            <button type="button" onClick={() => setViewer(a.url)} className="overflow-hidden rounded-2xl bg-sand">
+                            <button type="button" onClick={() => setViewer({ url: a.url!, name: a.name, path: a.path })} aria-label="Apri la foto (da lì la scarichi)" className="overflow-hidden rounded-2xl bg-sand">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={a.url!} alt="Foto allegata" loading="lazy" className="max-h-72 w-full max-w-[280px] object-cover" style={a.width && a.height ? { aspectRatio: `${a.width} / ${a.height}` } : undefined} />
                             </button>
                           ) : (
                             <video src={a.url!} controls playsInline preload="metadata" className="max-h-80 w-full max-w-[300px] rounded-2xl bg-ink" />
                           )}
-                          <button
-                            type="button"
-                            onClick={() => void download(a.url!, a.name, a.path)}
-                            disabled={downloading === a.path}
-                            className="inline-flex min-h-9 items-center gap-1 px-1 text-xs font-semibold text-muted hover:text-ink disabled:opacity-60"
-                          >
-                            <IconDownload size={14} /> {downloading === a.path ? "Scarico…" : a.kind === "video" ? "Scarica il video" : "Scarica la foto"}
-                          </button>
+                          {/* la foto si scarica dal visore a tutto schermo; il video da qui */}
+                          {a.kind === "video" ? (
+                            <button
+                              type="button"
+                              onClick={() => void download(a.url!, a.name, a.path)}
+                              disabled={downloading === a.path}
+                              className="inline-flex min-h-9 items-center gap-1 px-1 text-xs font-semibold text-muted hover:text-ink disabled:opacity-60"
+                            >
+                              <IconDownload size={14} /> {downloading === a.path ? "Scarico…" : "Scarica il video"}
+                            </button>
+                          ) : null}
                         </div>
                       ),
                     )}
@@ -543,14 +595,21 @@ export function ChatThread({
                 ) : null}
                 <div className="flex items-center gap-3 px-1 text-[11px] text-muted">
                   <span>{timeOf(m.createdAt)}</span>
-                  {m.mine && !m.deleted && (selected === m.id || !m.body) ? (
+                  {m.mine && !m.deleted && selected === m.id ? (
                     <button type="button" onClick={() => void remove(m)} className="font-semibold text-accent-deep">Elimina</button>
+                  ) : m.mine && !m.deleted && !m.body ? (
+                    <button type="button" onClick={() => setSelected(m.id)} aria-label="Altre azioni sul messaggio" className="-my-2 min-h-9 px-2 text-base leading-none font-bold">⋯</button>
                   ) : null}
                 </div>
               </div>
             </div>
           );
         })}
+        {newBelow ? (
+          <div className="sticky bottom-1 z-10 flex justify-center pt-2">
+            <button type="button" onClick={toBottom} className="rounded-full bg-ink px-4 py-2 text-sm font-semibold text-card shadow-lg">Nuovo messaggio ↓</button>
+          </div>
+        ) : null}
       </div>
 
       {/* composizione */}
@@ -672,8 +731,19 @@ export function ChatThread({
       {viewer ? (
         <div role="dialog" aria-label="Foto" className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/90 p-4" onClick={() => setViewer(null)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={viewer} alt="Foto allegata" className="max-h-full max-w-full rounded-xl object-contain" />
+          <img src={viewer.url} alt="Foto allegata" className="max-h-full max-w-full rounded-xl object-contain" />
           <button type="button" aria-label="Chiudi" className="absolute top-4 right-4 flex h-11 w-11 items-center justify-center rounded-full bg-card text-ink"><IconX /></button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              void download(viewer.url, viewer.name, viewer.path);
+            }}
+            disabled={downloading === viewer.path}
+            className="absolute bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 inline-flex min-h-12 -translate-x-1/2 items-center gap-2 rounded-full bg-card px-5 text-[15px] font-semibold text-ink disabled:opacity-60"
+          >
+            <IconDownload size={18} /> {downloading === viewer.path ? "Scarico…" : "Scarica la foto"}
+          </button>
         </div>
       ) : null}
     </div>

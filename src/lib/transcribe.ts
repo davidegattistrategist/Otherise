@@ -24,6 +24,19 @@ const typeFromPath = (path: string) => {
   return Object.entries(FILE_EXT).find(([, e]) => e === ext)?.[0] ?? "audio/mp4";
 };
 
+/** Trascrizioni al giorno per persona (dettatura e vocali insieme): un tetto alla spesa, non al lavoro normale. */
+export const TRANSCRIPTIONS_PER_DAY = { client: 40, staff: 200 } as const;
+
+/**
+ * Conta una trascrizione per la persona; false = per oggi ha raggiunto il
+ * tetto. Se il conteggio non è disponibile (database non aggiornato) non blocca.
+ */
+export async function takeTranscriptionQuota(userId: string, staff: boolean): Promise<boolean> {
+  const { data, error } = await createAdminClient().rpc("use_transcription", { uid: userId, max_per_day: staff ? TRANSCRIPTIONS_PER_DAY.staff : TRANSCRIPTIONS_PER_DAY.client });
+  if (error) return true;
+  return data !== false;
+}
+
 /** Manda l'audio al servizio di trascrizione e restituisce il testo. */
 export async function transcribeAudio(audio: Blob, type: string): Promise<string> {
   const form = new FormData();
@@ -55,9 +68,17 @@ export async function transcribeMessage(messageId: string): Promise<string | nul
   const admin = createAdminClient();
   if (!transcriptionEnabled()) return null;
   try {
-    const { data: msg } = await admin.from("messages").select("id, client_id, attachments").eq("id", messageId).maybeSingle();
+    const { data: msg } = await admin.from("messages").select("id, client_id, sender_id, attachments").eq("id", messageId).maybeSingle();
     const audios = ((msg?.attachments as ChatAttachment[] | null) ?? []).filter((a) => a.kind === "audio");
     if (!msg || !audios.length) return null;
+    // tetto giornaliero di chi ha mandato il vocale: oltre, il vocale resta senza testo
+    if (msg.sender_id) {
+      const { data: sender } = await admin.from("profiles").select("role").eq("id", msg.sender_id).maybeSingle();
+      if (!(await takeTranscriptionQuota(msg.sender_id, sender?.role === "owner" || sender?.role === "coach"))) {
+        await admin.from("message_transcripts").update({ status: "off", updated_at: new Date().toISOString() }).eq("message_id", msg.id);
+        return null;
+      }
+    }
     const texts: string[] = [];
     for (const a of audios) {
       const { data: file, error } = await admin.storage.from(CHAT_BUCKET).download(a.path);

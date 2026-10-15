@@ -1,3 +1,4 @@
+import { getExerciseLibrary } from "@/lib/data/cached";
 import "server-only";
 /**
  * Tutto quello che l'assistente AI deve sapere su un cliente per preparare
@@ -164,10 +165,10 @@ export async function buildClientContext(
 }
 
 export async function buildMethodContext(supabase: ServerSupabase) {
-  const [{ data: settings }, { data: examples }, { data: exercises }] = await Promise.all([
+  const [{ data: settings }, { data: examples }, exercises] = await Promise.all([
     supabase.from("app_settings").select("coaching_method").maybeSingle(),
     supabase.from("programs").select("title, weeks, content").eq("is_ai_example", true).order("updated_at", { ascending: false }).limit(3),
-    supabase.from("exercises").select("id, name").eq("archived", false).order("name"),
+    getExerciseLibrary().then((all) => all.filter((e) => !e.archived).map(({ id, name }) => ({ id, name }))),
   ]);
   return {
     method: settings?.coaching_method?.trim() || "",

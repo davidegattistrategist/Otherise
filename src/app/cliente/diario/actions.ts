@@ -7,7 +7,7 @@ import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/dates";
 import { CHECKIN_QUESTIONS, checkinWeekFor } from "@/lib/checkin";
-import { deliverPendingEmails } from "@/lib/email";
+import { emailsLater } from "@/lib/email";
 import { generateCheckinDraft } from "@/lib/ai/reply";
 import type { ActionState } from "@/components/form-bits";
 
@@ -38,7 +38,7 @@ export async function submitCheckin(_: ActionState, fd: FormData): Promise<Actio
   // C'è una richiesta per il coach: l'assistente gli prepara una bozza di risposta
   if (row.request) after(() => generateCheckinDraft(saved.id).catch(() => undefined));
   // Se qualcosa non va il database ha già creato l'avviso per lo staff: lo mandiamo anche per email
-  await deliverPendingEmails();
+  await emailsLater();
   revalidatePath("/cliente", "layout");
   redirect("/cliente/diario?inviato=1");
 }

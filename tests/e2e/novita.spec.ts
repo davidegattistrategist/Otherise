@@ -72,7 +72,7 @@ test("dolore nel logbook: arriva al trainer in Oggi", async ({ page, browser }, 
   const owner = await ctx.newPage();
   await login(owner, "titolare@prova.local");
   await owner.goto("/staff");
-  await expect(owner.getByText("Dolori e fastidi")).toBeVisible();
+  await expect(owner.getByText("Dolori e fastidi").filter({ visible: true }).first()).toBeVisible();
   const row = owner.locator("li", { hasText: tag });
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Visto" }).click();

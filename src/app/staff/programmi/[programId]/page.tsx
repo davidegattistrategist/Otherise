@@ -1,5 +1,6 @@
 import { checkLabel, sortChecks } from "@/lib/check-order";
 import type { Metadata } from "next";
+import { getExerciseLibrary } from "@/lib/data/cached";
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -23,12 +24,13 @@ export default async function ProgramEditorPage({ params }: { params: Promise<{ 
     .maybeSingle();
   if (!program) notFound();
 
-  const [{ data: exercises }, lastLogsRes, checkRes] = await Promise.all([
-    supabase.from("exercises").select("id, name, video_url").eq("archived", false).order("name"),
+  const [exercises, lastLogsRes, checkRes, { count: loggedWorkouts }] = await Promise.all([
+    getExerciseLibrary().then((all) => all.filter((e) => !e.archived).map(({ id, name, video_url }) => ({ id, name, video_url }))),
     program.client_id ? supabase.rpc("last_exercise_logs", { cid: program.client_id }) : Promise.resolve({ data: [] as Array<{ exercise_id: string | null; exercise_name: string; performed_on: string; sets: unknown; result_text: string }> }),
     program.client_id
       ? supabase.from("checks").select("check_date, sequence, created_at, order_hint, notes_next_phase").eq("client_id", program.client_id).neq("notes_next_phase", "").limit(200)
       : Promise.resolve({ data: [] as Array<{ check_date: string | null; sequence: number | null; created_at: string; order_hint: string | null; notes_next_phase: string }> }),
+    supabase.from("workout_logs").select("id", { count: "exact", head: true }).eq("program_id", programId),
   ]);
   const lastNotes = sortChecks(checkRes.data ?? []).pop() ?? null;
 
@@ -53,6 +55,7 @@ export default async function ProgramEditorPage({ params }: { params: Promise<{ 
       clientName={clientName}
       aiEnabled={aiEnabled()}
       backHref={program.client_id ? `/staff/clienti/${program.client_id}/programma` : "/staff/modelli"}
+      loggedWorkouts={loggedWorkouts ?? 0}
     />
   );
 }

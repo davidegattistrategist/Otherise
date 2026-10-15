@@ -67,3 +67,15 @@ export function timeProgress(startDate: ISODate, weeks: number, today: ISODate):
   const d = Math.min(Math.max(diffDays(startDate, today) + 1, 0), total);
   return Math.round((d / total) * 100);
 }
+
+/**
+ * Il programma "in corso" di un cliente: il pubblicato iniziato più di
+ * recente; se nessuno è ancora iniziato, il prossimo che parte (con
+ * `upcoming: false` in quel caso nessuno). Unica regola per tutte le pagine.
+ */
+export function currentProgram<T extends { status: string; start_date: string | null }>(programs: readonly T[], today: ISODate, opts: { upcoming?: boolean } = {}): T | null {
+  const published = programs.filter((p) => p.status === "published" && p.start_date).sort((a, b) => b.start_date!.localeCompare(a.start_date!));
+  const started = published.find((p) => p.start_date! <= today);
+  if (started) return started;
+  return opts.upcoming === false ? null : published[published.length - 1] ?? null;
+}

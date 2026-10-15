@@ -8,7 +8,7 @@ import { isISODate, todayISO } from "@/lib/dates";
 import { flattenItems, parseContent } from "@/lib/program/types";
 import type { Json } from "@/lib/supabase/database.types";
 import { notify, staffRecipients } from "@/lib/notify";
-import { deliverPendingEmails } from "@/lib/email";
+import { emailsLater } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { after } from "next/server";
 import { triageNote } from "@/lib/ai/note-triage";
@@ -36,7 +36,7 @@ async function alertDiscomfort(clientId: string, logId: string, text: string, wh
   const link = `/staff/clienti/${clientId}`;
   await notify(ids.map((id) => ({ recipient_id: id, client_id: clientId, kind: "discomfort", title, body, link, dedupe_key: `discomfort:${logId}` })));
   // l'email (se serve) parte con le regole di sempre: solo a chi non ha le notifiche sul telefono
-  await deliverPendingEmails();
+  await emailsLater();
 }
 
 const setSchema = z.object({

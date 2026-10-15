@@ -112,7 +112,8 @@ test("il cliente detta nel logbook e nel diario (iPhone)", async ({ browser }) =
   await page.waitForURL(/\/cliente\/sessione\//);
   const notes = page.locator("#session-notes");
   await expect(async () => {
-    await page.getByRole("button", { name: "Detta" }).first().click({ timeout: 2000 });
+    // "Detta" della nota finale (ogni esercizio ha il suo)
+    await page.locator("section", { has: page.locator("#session-notes") }).getByRole("button", { name: "Detta" }).first().click({ timeout: 2000 });
     await expect(page.getByRole("button", { name: /tocca per finire/ })).toBeVisible({ timeout: 2000 });
   }).toPass({ timeout: 30_000 });
   await page.waitForTimeout(1200);

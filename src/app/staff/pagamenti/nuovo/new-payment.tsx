@@ -33,7 +33,12 @@ export type PayClient = {
   credit: number;
   /** Credito sulle lezioni PT (separato da quello del coaching) */
   lessonsCredit: number;
+  /** Da incassare: scaduto o in scadenza (in cima all'elenco) */
+  due?: string | null;
 };
+
+/** Data e metodo dell'ultimo pagamento registrato: a fine mese se ne registrano tanti di fila. */
+type Carry = { paidOn: string; method: string } | null;
 
 export type Type = "renew" | "plan" | "lessons" | "other";
 const SUBSCRIPTIONS: PlanKind[] = ["monthly", "six_weeks", "quarterly", "semiannual", "annual"];
@@ -47,7 +52,8 @@ const num = (n: number | null | undefined) => (n === null || n === undefined ? "
 
 export function NewPayment({ clients, today, initialClient, initialType = null, initialSessions = null }: { clients: PayClient[]; today: string; initialClient: string | null; initialType?: Type | null; initialSessions?: number | null }) {
   const [round, setRound] = useState(0);
-  return <Wizard key={round} clients={clients} today={today} initialClient={round === 0 ? initialClient : null} initialType={round === 0 ? initialType : null} initialSessions={round === 0 ? initialSessions : null} onAgain={() => setRound((r) => r + 1)} />;
+  const [carry, setCarry] = useState<Carry>(null);
+  return <Wizard key={round} clients={clients} today={today} carry={carry} initialClient={round === 0 ? initialClient : null} initialType={round === 0 ? initialType : null} initialSessions={round === 0 ? initialSessions : null} onAgain={(c) => { setCarry(c); setRound((r) => r + 1); }} />;
 }
 
 /**
@@ -85,7 +91,7 @@ function defaultsFor(c: PayClient | null, type: Type | null, today: string, sess
   return { amount: "", method, start: today, end: "", sessions: "" };
 }
 
-function Wizard({ clients, today, initialClient, initialType, initialSessions, onAgain }: { clients: PayClient[]; today: string; initialClient: string | null; initialType: Type | null; initialSessions: number | null; onAgain: () => void }) {
+function Wizard({ clients, today, carry, initialClient, initialType, initialSessions, onAgain }: { clients: PayClient[]; today: string; carry: Carry; initialClient: string | null; initialType: Type | null; initialSessions: number | null; onAgain: (carry: Carry) => void }) {
   const [state, action] = useActionState<NewPaymentState, FormData>(registerPayment, null);
   const [clientId, setClientId] = useState<string | null>(initialClient);
   const [isNew, setIsNew] = useState(false);
@@ -97,8 +103,8 @@ function Wizard({ clients, today, initialClient, initialType, initialSessions, o
   const d0 = defaultsFor(client, type, today, initialSessions);
   const [amount, setAmount] = useState(d0.amount);
   const [amountTouched, setAmountTouched] = useState(false);
-  const [method, setMethod] = useState(d0.method);
-  const [paidOn, setPaidOn] = useState(today);
+  const [method, setMethod] = useState(carry?.method ?? d0.method);
+  const [paidOn, setPaidOn] = useState(carry?.paidOn ?? today);
   const [kind, setKind] = useState<PlanKind>("quarterly");
   const [start, setStart] = useState(d0.start);
   const [end, setEnd] = useState(d0.end);
@@ -113,7 +119,8 @@ function Wizard({ clients, today, initialClient, initialType, initialSessions, o
     const d = defaultsFor(c, t, today);
     setAmount(d.amount);
     setAmountTouched(false);
-    setMethod(d.method);
+    // il metodo dell'ultimo pagamento registrato resta (tanti pagamenti di fila)
+    setMethod(carry?.method ?? d.method);
     setStart(d.start);
     setEnd(d.end);
     setSessions(d.sessions);
@@ -135,7 +142,8 @@ function Wizard({ clients, today, initialClient, initialType, initialSessions, o
 
   const matches = useMemo(() => {
     const n = query.trim().toLowerCase();
-    const list = n ? clients.filter((c) => c.name.toLowerCase().includes(n) || c.fullName.toLowerCase().includes(n)) : clients;
+    // senza ricerca: in cima chi ha la scadenza vicina o passata
+    const list = n ? clients.filter((c) => c.name.toLowerCase().includes(n) || c.fullName.toLowerCase().includes(n)) : [...clients.filter((c) => c.due), ...clients.filter((c) => !c.due)];
     return list.slice(0, 40);
   }, [clients, query]);
 
@@ -208,7 +216,7 @@ function Wizard({ clients, today, initialClient, initialType, initialSessions, o
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={onAgain} className={buttonClass("primary")}>Registra un altro pagamento</button>
+          <button type="button" onClick={() => onAgain({ paidOn, method })} className={buttonClass("primary")}>Registra un altro pagamento</button>
           {state.clientId ? <Link href={`/staff/clienti/${state.clientId}/pagamenti`} className={buttonClass("secondary")}>Apri la scheda pagamenti</Link> : null}
           <Link href="/staff/pagamenti" className={buttonClass("ghost")}>Torna a Pagamenti</Link>
         </div>
@@ -259,7 +267,7 @@ function Wizard({ clients, today, initialClient, initialType, initialSessions, o
                 <li key={c.id} className="border-t border-sand-deep first:border-t-0">
                   <button type="button" onClick={() => pickClient(c)} className="flex min-h-12 w-full items-center justify-between gap-3 px-3.5 py-2 text-left hover:bg-white/70">
                     <span className="font-semibold">{c.name}</span>
-                    <span className="shrink-0 text-xs text-muted">{c.plan ? PLAN_LABELS[c.plan.kind] : "nessun piano"}{c.paused ? " · in pausa" : ""}</span>
+                    <span className={cx("shrink-0 text-xs", c.due ? "font-semibold text-accent-deep" : "text-muted")}>{c.due ?? (c.plan ? PLAN_LABELS[c.plan.kind] : "nessun piano")}{c.paused ? " · in pausa" : ""}</span>
                   </button>
                 </li>
               ))}

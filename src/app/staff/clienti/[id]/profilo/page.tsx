@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { setClientFree } from "../pagamenti/actions";
 import { requireStaff } from "@/lib/auth";
 import { getStaffClient } from "@/lib/data/client";
 import { createClient } from "@/lib/supabase/server";
@@ -20,19 +21,19 @@ export default async function ClientProfilePage({ params, searchParams }: { para
   const me = await requireStaff();
   const client = await getStaffClient(id);
   const supabase = await createClient();
-  const [{ data: coaches }, { data: notes }, { data: consent }] = await Promise.all([
+  const [{ data: coaches }, { data: notes }, { data: consent }, account] = await Promise.all([
     supabase.from("profiles").select("id, full_name").eq("role", "coach").order("full_name"),
     supabase.from("client_private_notes").select("notes").eq("client_id", id).maybeSingle(),
     supabase.from("clients").select("health_consent_at, consent_source, instagram_consent_at").eq("id", id).single(),
+    client.user_id ? createAdminClient().auth.admin.getUserById(client.user_id).then((r) => r.data.user) : Promise.resolve(null),
   ]);
-  const account = client.user_id ? (await createAdminClient().auth.admin.getUserById(client.user_id)).data.user : null;
   const hasEntered = Boolean(account?.last_sign_in_at);
   return (
     <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
       <Card className="flex flex-col gap-3 [grid-column:1/-1]">
         <Eyebrow>Percorso</Eyebrow>
         {errore ? <><ClearParams names={["errore"]} /><Notice tone="error">{errore === "elimina" ? "Non sono riuscito a eliminare il cliente: non è cambiato niente. Riprova tra poco." : "Non sono riuscito a cambiare il percorso: non è cambiato niente. Riprova tra poco."}</Notice></> : null}
-        {stato ? <><ClearParams names={["stato"]} /><Notice tone="success">{stato === "paused" ? "Cliente in pausa." : stato === "archived" ? "Percorso terminato: al cliente resta solo la chat." : "Cliente di nuovo attivo."}</Notice></> : null}
+        {stato ? <><ClearParams names={["stato"]} /><Notice tone="success">{stato === "paused" ? "Cliente in pausa." : stato === "archived" ? "Percorso terminato: al cliente resta solo la chat." : stato === "gratis" ? "Cliente gratis: fuori da pagamenti, incassi e previsioni." : stato === "pagante" ? "Il cliente torna nei pagamenti." : "Cliente di nuovo attivo."}</Notice></> : null}
         {client.status === "paused" ? (
           <p className="text-[15px] leading-relaxed text-muted">In pausa: usa l&apos;app come sempre, ma non compare tra i pagamenti da incassare, nelle previsioni e nei promemoria. Quando rinnova, riattivalo.</p>
         ) : client.status === "archived" ? (
@@ -57,9 +58,26 @@ export default async function ClientProfilePage({ params, searchParams }: { para
             </form>
           ) : null}
         </div>
+        {me.role === "owner" ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-sand-deep pt-3">
+            <p className="min-w-0 flex-1 text-sm text-muted">
+              {client.free ? <><strong className="text-ink">Cliente gratis</strong>: non compare in pagamenti, scadenze, incassi, previsioni ed export.</> : "Cliente di prova o te stesso? Mettilo gratis: esce da pagamenti, scadenze, incassi e previsioni."}
+            </p>
+            <form action={setClientFree.bind(null, id, !client.free, "profilo")}>
+              {client.free ? (
+                <ConfirmButton variant="secondary" message="Togliere il cliente dai gratis? Tornerà nei pagamenti e nelle previsioni.">Non è più gratis</ConfirmButton>
+              ) : (
+                <ConfirmButton variant="secondary" message="Mettere questo cliente gratis? Non comparirà più in pagamenti, scadenze, incassi e previsioni.">Metti gratis</ConfirmButton>
+              )}
+            </form>
+          </div>
+        ) : null}
       </Card>
       <Card className="[grid-column:1/-1] lg:[grid-column:auto/span_2]">
         <Eyebrow className="mb-4">Dati del cliente</Eyebrow>
+        {me.role === "coach" ? (
+          <p className="mb-4 rounded-2xl bg-sand px-4 py-3 text-[15px]">{client.coach_id === me.id ? "Lo segui tu: vedi programmi, check, diario e chat. I pagamenti li gestisce il titolare." : "Lo segue il titolare."}</p>
+        ) : null}
         <ClientForm
           action={updateClientAction.bind(null, id)}
           coaches={coaches ?? []}

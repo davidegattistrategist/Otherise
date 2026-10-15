@@ -61,7 +61,7 @@ test("Sessione PT senza programma in corso: lo dice e porta alla lezione libera"
   await login(page, "titolare@prova.local");
   const id = await openClient(page, "Test Sara");
   await page.goto(`/staff/clienti/${id}/sessione-pt`);
-  await expect(page.getByText(/Nessun programma in corso/)).toBeVisible();
+  await expect(page.getByText(/Nessun programma in corso/).filter({ visible: true }).first()).toBeVisible();
   await page.getByRole("link", { name: "Registra la lezione libera" }).click();
   await page.waitForURL(new RegExp(`/staff/clienti/${id}/sessioni`));
 });

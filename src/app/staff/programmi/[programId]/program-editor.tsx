@@ -22,7 +22,7 @@ import {
   type ProgramItem,
 } from "@/lib/program/types";
 import { copyWeekToOthers, duplicateDay } from "@/lib/program/next-phase";
-import { PROGRESSION_RULES, fillWeeks, type ProgressionRule } from "@/lib/program/progression";
+import { PROGRESSION_RULES, progressPrescriptions, type ProgressionRule } from "@/lib/program/progression";
 import { Button, Card, Eyebrow, Input, Notice, Pill, Select, Textarea, buttonClass, cx } from "@/components/ui";
 import { IconArrowLeft, IconCopy, IconDown, IconPlus, IconSparkle, IconTrash, IconUp, IconX } from "@/components/icons";
 import {
@@ -67,11 +67,13 @@ type Props = {
   clientName: string | null;
   aiEnabled: boolean;
   backHref: string;
+  /** Allenamenti già registrati dal cliente su questo programma */
+  loggedWorkouts?: number;
 };
 
 const STATUS_LABEL = { draft: "Bozza", published: "Pubblicato", archived: "Archiviato" } as const;
 
-export function ProgramEditor({ program, initialContent, exercises, lastLogs, nextPhaseNotes, clientName, aiEnabled, backHref }: Props) {
+export function ProgramEditor({ program, initialContent, exercises, lastLogs, nextPhaseNotes, clientName, aiEnabled, backHref, loggedWorkouts = 0 }: Props) {
   const [title, setTitle] = useState(program.title);
   const [description, setDescription] = useState(program.description);
   const [weeks, setWeeks] = useState(program.weeks);
@@ -109,9 +111,10 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
     markDirty();
   }, [markDirty]);
 
-  const doSave = useCallback(() => {
+  /** Salva subito; restituisce l'errore (o null se è andato bene). */
+  const saveNow = useCallback(async (): Promise<string | null> => {
     const version = edits.current;
-    startTransition(async () => {
+    {
       const res = await saveProgram(program.id, {
         title,
         description,
@@ -128,11 +131,17 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         setSavedAt(new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }));
         setUnknown(res.unknownExercises);
         setMessage(null);
-      } else {
-        setMessage({ tone: "error", text: res.error });
+        return null;
       }
-    });
+      setMessage({ tone: "error", text: res.error });
+      return res.error;
+    }
   }, [program.id, program.is_template, title, description, weeks, startDate, minutes, content, updatedAt, aiNotes]);
+  const doSave = useCallback(() => {
+    startTransition(async () => {
+      await saveNow();
+    });
+  }, [saveNow]);
 
   // Salvataggio automatico:
   // - bozze e modelli si salvano da soli 2 secondi dopo l'ultima modifica;
@@ -217,6 +226,12 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
     };
   }, [dirty, autoSave]);
 
+  /** Copia la settimana w sulle successive vuote (da computer e da telefono). */
+  const copyForward = (w: number) => {
+    setContent((c) => copyWeekForward(c, w, weeks));
+    markDirty();
+  };
+
   const changeWeeks = (n: number) => {
     const losing = content.days.some((d) => d.blocks.some((b) => b.items.some((it) => it.prescriptions.slice(n).some((p) => p.trim()))));
     if (losing && !window.confirm(`Le settimane dalla ${n + 1} in poi contengono prescrizioni che verranno cancellate. Continuare?`)) return;
@@ -285,11 +300,17 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             {!program.is_template && status === "draft" ? (
               <Button
                 variant="secondary"
-                disabled={pending || dirty || !hasContent}
-                title={dirty ? "Salva prima di pubblicare" : undefined}
+                disabled={pending || !hasContent}
                 onClick={() => {
                   if (unnamed && !window.confirm(`${unnamed === 1 ? "C'è un esercizio senza nome" : `Ci sono ${unnamed} esercizi senza nome`}: il cliente vedrebbe righe vuote. Pubblicare lo stesso?`)) return;
-                  runAction(() => publishProgram(program.id), () => { setStatus("published"); setAiNotes({}); });
+                  // con modifiche da salvare: prima salva, poi pubblica (un tocco solo)
+                  runAction(async () => {
+                    if (dirty) {
+                      const err = await saveNow();
+                      if (err) return { error: err };
+                    }
+                    return publishProgram(program.id);
+                  }, () => { setStatus("published"); setAiNotes({}); });
                 }}
               >
                 Pubblica
@@ -508,6 +529,11 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                 </button>
               ))}
             </div>
+            {Math.min(mobileWeek, weeks - 1) < weeks - 1 ? (
+              <button type="button" onClick={() => copyForward(Math.min(mobileWeek, weeks - 1))} className="-mt-1 flex min-h-10 items-center gap-1.5 self-start text-sm font-semibold text-ink-soft underline">
+                <IconCopy size={14} /> Copia la settimana {Math.min(mobileWeek, weeks - 1) + 1} sulle successive vuote
+              </button>
+            ) : null}
             {day.blocks.map((block, blockIdx) => (
               <MobileBlock
                 key={block.id}
@@ -518,6 +544,8 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                 weeks={weeks}
                 aiNotes={aiNotes}
                 lastLogFor={lastLogFor}
+                aiEnabled={aiEnabled && !!program.client_id}
+                programId={program.id}
                 onBlock={(fn) => mutate((d) => fn(d.days[dayIdx].blocks[blockIdx], d.days[dayIdx].blocks))}
                 onItemName={(itemIdx, name) => setItemName(dayIdx, blockIdx, itemIdx, name)}
               />
@@ -540,25 +568,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                             title={`Copia la settimana ${w + 1} sulle settimane successive vuote`}
                             aria-label={`Copia la settimana ${w + 1} sulle successive vuote`}
                             className="rounded p-0.5 text-muted hover:bg-sand hover:text-ink"
-                            onClick={() => {
-                              setContent((c) => {
-                                const copied = copyWeekToOthers(c, w, weeks);
-                                // copia solo verso le settimane successive
-                                return {
-                                  days: c.days.map((d, di) => ({
-                                    ...d,
-                                    blocks: d.blocks.map((b, bi) => ({
-                                      ...b,
-                                      items: b.items.map((it, ii) => ({
-                                        ...it,
-                                        prescriptions: it.prescriptions.map((p, pi) => (pi > w ? copied.days[di].blocks[bi].items[ii].prescriptions[pi] : p)),
-                                      })),
-                                    })),
-                                  })),
-                                };
-                              });
-                              markDirty();
-                            }}
+                            onClick={() => copyForward(w)}
                           >
                             <IconCopy size={13} />
                           </button>
@@ -598,10 +608,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               onApply={(rule, deloadLast) =>
                 mutate((d) => {
                   for (const b of d.days[dayIdx].blocks) {
-                    for (const item of b.items) {
-                      const from = item.prescriptions.findIndex((p) => p.trim());
-                      if (from >= 0) item.prescriptions = fillWeeks(item.prescriptions, from, rule, { deloadLast });
-                    }
+                    for (const item of b.items) item.prescriptions = progressPrescriptions(item.prescriptions, rule, { deloadLast });
                   }
                 })
               }
@@ -670,21 +677,77 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               </label>
             </div>
           ) : null}
-          <form action={deleteProgram.bind(null, program.id)}>
-            <button
-              type="submit"
-              className={buttonClass("danger", "sm")}
-              onClick={(e) => {
-                if (!window.confirm("Eliminare questo programma? Si perde anche il logbook del cliente su questo programma.")) e.preventDefault();
-              }}
-            >
-              Elimina {program.is_template ? "modello" : "programma"}
-            </button>
-          </form>
+          <DeleteProgram
+            programId={program.id}
+            template={program.is_template}
+            logged={loggedWorkouts}
+            canArchive={!program.is_template && status !== "archived"}
+            onArchive={() => runAction(() => archiveProgram(program.id), () => setStatus("archived"))}
+          />
         </div>
       </Card>
     </div>
   );
+}
+
+/**
+ * "Elimina programma": se il cliente ci ha già registrato degli allenamenti,
+ * prima propone di archiviarlo (resta nello storico) e l'eliminazione per
+ * sempre è un secondo passaggio.
+ */
+function DeleteProgram({ programId, template, logged, canArchive, onArchive }: { programId: string; template: boolean; logged: number; canArchive: boolean; onArchive: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const what = template ? "modello" : "programma";
+  if (!logged) {
+    return (
+      <form action={deleteProgram.bind(null, programId)}>
+        <button
+          type="submit"
+          className={buttonClass("danger", "sm")}
+          onClick={(e) => {
+            if (!window.confirm(`Eliminare questo ${what}?`)) e.preventDefault();
+          }}
+        >
+          Elimina {what}
+        </button>
+      </form>
+    );
+  }
+  if (!asking) {
+    return <button type="button" className={buttonClass("ghost", "sm")} onClick={() => setAsking(true)}>Elimina {what}…</button>;
+  }
+  return (
+    <div className="flex w-full flex-col gap-3 rounded-2xl bg-accent-soft p-4" role="alert">
+      <p className="text-[15px] leading-relaxed">
+        Il cliente ci ha già registrato {logged === 1 ? "1 allenamento" : `${logged} allenamenti`}: eliminandolo si perde anche quel logbook (record, grafici, note).
+        {canArchive ? " Se non deve più vederlo come fase in corso, archivialo: resta nello storico." : ""}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {canArchive ? <Button size="sm" onClick={() => { setAsking(false); onArchive(); }}>Archivia</Button> : null}
+        <form action={deleteProgram.bind(null, programId)}>
+          <button type="submit" className={buttonClass("danger", "sm")}>Elimina per sempre</button>
+        </form>
+        <Button size="sm" variant="ghost" onClick={() => setAsking(false)}>Annulla</Button>
+      </div>
+    </div>
+  );
+}
+
+/** Copia una settimana solo verso le settimane successive (dove sono vuote). */
+function copyWeekForward(c: ProgramContent, w: number, weeks: number): ProgramContent {
+  const copied = copyWeekToOthers(c, w, weeks);
+  return {
+    days: c.days.map((d, di) => ({
+      ...d,
+      blocks: d.blocks.map((b, bi) => ({
+        ...b,
+        items: b.items.map((it, ii) => ({
+          ...it,
+          prescriptions: it.prescriptions.map((p, pi) => (pi > w ? copied.days[di].blocks[bi].items[ii].prescriptions[pi] : p)),
+        })),
+      })),
+    })),
+  };
 }
 
 function swap<T>(arr: T[], i: number, j: number) {
@@ -770,58 +833,7 @@ function BlockRows({
           <td className="px-2 py-2 font-bold">{blockLetter(blockIdx)}</td>
           <td colSpan={colCount - 2} className="px-2 py-2">
             <div className="flex flex-wrap items-center gap-2">
-              <select
-                aria-label="Tipo di blocco"
-                value={block.kind}
-                onChange={(e) => onBlock((b) => {
-                  const k = e.target.value as BlockKind;
-                  const fresh = emptyBlock(weeks, k);
-                  b.kind = k;
-                  b.rounds = b.rounds ?? fresh.rounds;
-                  b.durationMin = b.durationMin ?? fresh.durationMin;
-                  b.everySec = b.everySec ?? fresh.everySec;
-                  b.workSec = b.workSec ?? fresh.workSec;
-                  b.restSec = b.restSec ?? fresh.restSec;
-                })}
-                className="rounded-lg border border-sand-deep bg-card px-2 py-1.5 text-sm font-semibold"
-              >
-                {BLOCK_KINDS.filter((k) => k !== "text").map((k) => (
-                  <option key={k} value={k}>{BLOCK_KIND_LABELS[k]}</option>
-                ))}
-              </select>
-              {(block.kind === "superset" || block.kind === "circuit" || block.kind === "interval") ? (
-                <NumField label="giri" value={block.rounds} onChange={(v) => onBlock((b) => void (b.rounds = v))} />
-              ) : null}
-              {(block.kind === "amrap" || block.kind === "emom") ? (
-                <NumField label="minuti" value={block.durationMin} onChange={(v) => onBlock((b) => void (b.durationMin = v))} />
-              ) : null}
-              {block.kind === "emom" ? (
-                <label className="flex items-center gap-1.5 text-sm">
-                  ogni
-                  <select
-                    value={block.everySec ?? 60}
-                    onChange={(e) => onBlock((b) => void (b.everySec = Number(e.target.value)))}
-                    className="rounded-lg border border-sand-deep bg-card px-2 py-1.5 text-sm"
-                  >
-                    {[60, 90, 120, 150, 180, 240, 300].map((s) => (
-                      <option key={s} value={s}>{s % 60 === 0 ? `${s / 60}'` : `${Math.floor(s / 60)}'${s % 60}"`}</option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              {block.kind === "interval" ? (
-                <>
-                  <NumField label="sec lavoro" value={block.workSec} onChange={(v) => onBlock((b) => void (b.workSec = v))} />
-                  <NumField label="sec recupero" value={block.restSec} onChange={(v) => onBlock((b) => void (b.restSec = v))} allowZero />
-                </>
-              ) : null}
-              <input
-                aria-label="Nota sul blocco"
-                value={block.notes}
-                onChange={(e) => onBlock((b) => void (b.notes = e.target.value))}
-                placeholder="Nota sul blocco (es. recupero 90&quot; a fine giro)"
-                className={cx(cellInput, "min-w-[220px] flex-1 bg-card")}
-              />
+              <BlockSettings block={block} weeks={weeks} onBlock={onBlock} />
             </div>
           </td>
           <td className="px-1 py-2">{blockActions}</td>
@@ -916,8 +928,7 @@ function BlockRows({
                   onApply={(rule, deloadLast) =>
                     onBlock((b) => {
                       const item = b.items[itemIdx];
-                      const from = item.prescriptions.findIndex((p) => p.trim());
-                      if (from >= 0) item.prescriptions = fillWeeks(item.prescriptions, from, rule, { deloadLast });
+                      item.prescriptions = progressPrescriptions(item.prescriptions, rule, { deloadLast });
                     })
                   }
                 />
@@ -945,6 +956,66 @@ function BlockRows({
           </td>
         </tr>
       ) : null}
+    </>
+  );
+}
+
+/** Tipo di blocco, giri, minuti, secondi di lavoro e recupero, nota: uguale da computer e da telefono. */
+function BlockSettings({ block, weeks, onBlock }: { block: ProgramBlock; weeks: number; onBlock: (fn: (b: ProgramBlock, siblings: ProgramBlock[]) => void) => void }) {
+  return (
+    <>
+              <select
+                aria-label="Tipo di blocco"
+                value={block.kind}
+                onChange={(e) => onBlock((b) => {
+                  const k = e.target.value as BlockKind;
+                  const fresh = emptyBlock(weeks, k);
+                  b.kind = k;
+                  b.rounds = b.rounds ?? fresh.rounds;
+                  b.durationMin = b.durationMin ?? fresh.durationMin;
+                  b.everySec = b.everySec ?? fresh.everySec;
+                  b.workSec = b.workSec ?? fresh.workSec;
+                  b.restSec = b.restSec ?? fresh.restSec;
+                })}
+                className="rounded-lg border border-sand-deep bg-card px-2 py-1.5 text-sm font-semibold"
+              >
+                {BLOCK_KINDS.filter((k) => k !== "text").map((k) => (
+                  <option key={k} value={k}>{BLOCK_KIND_LABELS[k]}</option>
+                ))}
+              </select>
+              {(block.kind === "superset" || block.kind === "circuit" || block.kind === "interval") ? (
+                <NumField label="giri" value={block.rounds} onChange={(v) => onBlock((b) => void (b.rounds = v))} />
+              ) : null}
+              {(block.kind === "amrap" || block.kind === "emom") ? (
+                <NumField label="minuti" value={block.durationMin} onChange={(v) => onBlock((b) => void (b.durationMin = v))} />
+              ) : null}
+              {block.kind === "emom" ? (
+                <label className="flex items-center gap-1.5 text-sm">
+                  ogni
+                  <select
+                    value={block.everySec ?? 60}
+                    onChange={(e) => onBlock((b) => void (b.everySec = Number(e.target.value)))}
+                    className="rounded-lg border border-sand-deep bg-card px-2 py-1.5 text-sm"
+                  >
+                    {[60, 90, 120, 150, 180, 240, 300].map((s) => (
+                      <option key={s} value={s}>{s % 60 === 0 ? `${s / 60}'` : `${Math.floor(s / 60)}'${s % 60}"`}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {block.kind === "interval" ? (
+                <>
+                  <NumField label="sec lavoro" value={block.workSec} onChange={(v) => onBlock((b) => void (b.workSec = v))} />
+                  <NumField label="sec recupero" value={block.restSec} onChange={(v) => onBlock((b) => void (b.restSec = v))} allowZero />
+                </>
+              ) : null}
+              <input
+                aria-label="Nota sul blocco"
+                value={block.notes}
+                onChange={(e) => onBlock((b) => void (b.notes = e.target.value))}
+                placeholder="Nota sul blocco (es. recupero 90&quot; a fine giro)"
+                className={cx(cellInput, "min-w-[200px] flex-1 bg-card")}
+              />
     </>
   );
 }
@@ -1083,12 +1154,16 @@ function MobileBlock({
   weeks,
   aiNotes,
   lastLogFor,
+  aiEnabled,
+  programId,
   onBlock,
   onItemName,
 }: {
   block: ProgramBlock;
   blockIdx: number;
   blockCount: number;
+  aiEnabled: boolean;
+  programId: string;
   week: number;
   weeks: number;
   aiNotes: Record<string, string>;
@@ -1119,6 +1194,14 @@ function MobileBlock({
         <span className="text-sm font-bold">{multi ? `${blockLetter(blockIdx)} · ${BLOCK_KIND_LABELS[block.kind]}${block.rounds ? ` · ${block.rounds} giri` : block.durationMin ? ` · ${block.durationMin} min` : ""}` : <span className="font-semibold text-muted">Esercizio singolo</span>}</span>
         {moves}
       </div>
+      {multi ? (
+        <details className="mb-2">
+          <summary className="flex min-h-10 cursor-pointer items-center text-xs font-semibold text-muted">Tipo, giri, minuti e nota del blocco</summary>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <BlockSettings block={block} weeks={weeks} onBlock={onBlock} />
+          </div>
+        </details>
+      ) : null}
       <div className="flex flex-col gap-3">
         {block.items.map((it, itemIdx) => {
           const last = lastLogFor(it);
@@ -1127,6 +1210,12 @@ function MobileBlock({
               <div className="flex items-center gap-2">
                 <span className="w-7 shrink-0 text-sm font-semibold text-muted">{itemLabel(block, blockIdx, itemIdx)}</span>
                 <input list="exercise-library" aria-label="Esercizio" value={it.name} onChange={(e) => onItemName(itemIdx, e.target.value)} placeholder="Esercizio" className={cx(cellInput, "flex-1 font-semibold")} />
+                {multi && block.items.length > 1 ? (
+                  <>
+                    <IconBtn label="Sposta su nel gruppo" disabled={itemIdx === 0} onClick={() => onBlock((b) => swap(b.items, itemIdx, itemIdx - 1))}><IconUp size={16} /></IconBtn>
+                    <IconBtn label="Sposta giù nel gruppo" disabled={itemIdx === block.items.length - 1} onClick={() => onBlock((b) => swap(b.items, itemIdx, itemIdx + 1))}><IconDown size={16} /></IconBtn>
+                  </>
+                ) : null}
                 <IconBtn label="Togli esercizio" onClick={() => onBlock((b, s) => { b.items.splice(itemIdx, 1); if (b.items.length === 0) s.splice(blockIdx, 1); else if (b.items.length === 1 && b.kind === "superset") b.kind = "single"; })}><IconX size={16} /></IconBtn>
               </div>
               <div className="grid grid-cols-[1fr_6rem] gap-2 pl-9">
@@ -1144,11 +1233,19 @@ function MobileBlock({
                   onApply={(rule, deloadLast) =>
                     onBlock((b) => {
                       const item = b.items[itemIdx];
-                      const from = item.prescriptions.findIndex((p) => p.trim());
-                      if (from >= 0) item.prescriptions = fillWeeks(item.prescriptions, from, rule, { deloadLast });
+                      item.prescriptions = progressPrescriptions(item.prescriptions, rule, { deloadLast });
                     })
                   }
                 />
+                {aiEnabled && it.name.trim() ? (
+                  <RowAiButtons
+                    programId={programId}
+                    item={it}
+                    weeks={weeks}
+                    onPrescriptions={(p) => onBlock((b) => void (b.items[itemIdx].prescriptions = p))}
+                    onReplace={(name) => onItemName(itemIdx, name)}
+                  />
+                ) : null}
               </div>
               <details className="pl-9">
                 <summary className="cursor-pointer text-xs font-semibold text-muted">Indicazioni{it.notes ? ": " + (it.notes.length > 30 ? it.notes.slice(0, 30) + "…" : it.notes) : ""}</summary>

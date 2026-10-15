@@ -7,7 +7,7 @@ import { foldContext, previousCheck, staffBodyData } from "@/lib/data/checks";
 import { getCheckMode } from "@/lib/check-mode";
 import { staffCheckPhotos } from "@/lib/check-photos";
 import { getBillingLines } from "@/lib/data/billing";
-import { displayWeek } from "@/lib/program/schedule";
+import { currentProgram, displayWeek } from "@/lib/program/schedule";
 import { parseContent } from "@/lib/program/types";
 import { formatLong, formatShort, todayISO } from "@/lib/dates";
 import { formatEuro, METHOD_LABELS, type PaymentMethod } from "@/lib/billing";
@@ -62,7 +62,7 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
     checkId ? supabase.from("checks").select("*").eq("id", checkId).eq("client_id", clientId).maybeSingle().then((r) => r.data) : Promise.resolve(null),
     previousCheck(supabase, clientId, checkId),
     client.sex ? foldContext(supabase, { ...client, sex: client.sex }, checkId ?? undefined) : Promise.resolve({ ref: null, lastMissing: [] }),
-    supabase.from("programs").select("id, title, weeks, start_date, content").eq("client_id", clientId).eq("status", "published").order("start_date", { ascending: false }),
+    supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", clientId).eq("status", "published").order("start_date", { ascending: false }),
     me.role === "owner" ? getBillingLines(supabase) : Promise.resolve(null),
     me.role === "owner" ? supabase.from("payments").select("id, paid_on, amount, method, period_start, period_end, sessions").eq("client_id", clientId).eq("unpaid", false).order("paid_on", { ascending: false }).limit(4) : Promise.resolve({ data: null }),
     checkId ? staffCheckPhotos(supabase, clientId, checkId) : Promise.resolve(null),
@@ -85,7 +85,7 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
   const freeTests = (body?.list ?? []).filter((c) => c.tests_text).slice(-3).reverse();
 
   // il programma in corso (o l'ultimo)
-  const current = (programs ?? []).find((p) => p.start_date && p.start_date <= today) ?? (programs ?? [])[0] ?? null;
+  const current = currentProgram(programs ?? [], today);
   const content = current ? parseContent(current.content) : null;
   const week = current ? displayWeek(current.start_date, current.weeks, today) : 1;
 

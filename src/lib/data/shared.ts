@@ -5,12 +5,10 @@ import "server-only";
  */
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { getCachedBusinessName } from "./cached";
 
-export const getBusinessName = cache(async () => {
-  const supabase = await createClient();
-  const { data } = await supabase.rpc("business_name");
-  return data ?? null;
-});
+/** Nome dell'attività: in memoria sul server (cambia solo dalle Impostazioni). */
+export const getBusinessName = getCachedBusinessName;
 
 export const getBillingOverview = cache(async () => {
   const supabase = await createClient();

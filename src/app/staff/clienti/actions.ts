@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { linkAllowedForRole } from "@/lib/invite-link";
 import { friendlyError } from "@/lib/friendly-error";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -176,7 +177,7 @@ export async function inviteLinkAction(clientId: string, _: InviteLinkState): Pr
   let email = client.email;
   if (client.user_id) {
     const [{ data: u }, { data: prof }] = await Promise.all([admin.auth.admin.getUserById(client.user_id), admin.from("profiles").select("role").eq("id", client.user_id).maybeSingle()]);
-    if (!u.user?.email || (prof && prof.role !== "client" && prof.role !== "none")) return { error: "Questo account non è di un cliente: il link non si può preparare." };
+    if (!u.user?.email || !linkAllowedForRole(prof?.role)) return { error: "Questo account non è di un cliente: il link non si può preparare." };
     email = u.user.email;
   }
   let res = await admin.auth.admin.generateLink({ type, email });
@@ -187,7 +188,7 @@ export async function inviteLinkAction(clientId: string, _: InviteLinkState): Pr
     const user = list?.users.find((x) => x.email?.toLowerCase() === email.toLowerCase());
     if (!user) return { error: "Esiste già un account con questa email ma non riesco a trovarlo." };
     const { data: prof } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
-    if (prof && prof.role !== "client" && prof.role !== "none") return { error: "Questa email appartiene a un membro dello staff." };
+    if (!linkAllowedForRole(prof?.role)) return { error: "Questa email appartiene a un membro dello staff." };
     if (user.last_sign_in_at) return { error: "Esiste già un account con questa email che è già entrato: può usare “Password dimenticata”." };
     type = "recovery";
     res = await admin.auth.admin.generateLink({ type, email });

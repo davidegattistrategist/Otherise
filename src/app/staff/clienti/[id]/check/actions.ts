@@ -67,13 +67,14 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
     if (v !== null) circumferences[c.key] = v;
   }
   const tests: Array<{ exercise: string; load: number | null; reps: number | null; rpe: number | null; e1rm: number | null }> = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 10; i++) {
     const exercise = String(fd.get(`test_${i}_exercise`) ?? "").trim();
     if (!exercise) continue;
     const load = num(fd.get(`test_${i}_load`));
     const reps = num(fd.get(`test_${i}_reps`));
     const rpe = num(fd.get(`test_${i}_rpe`));
-    tests.push({ exercise, load, reps, rpe, e1rm: load && reps && rpe ? estimateOneRepMax(load, reps, rpe) : null });
+    // senza RPE vale 10 (serie al limite), come dice il modulo
+    tests.push({ exercise, load, reps, rpe: load && reps ? rpe ?? 10 : rpe, e1rm: load && reps ? estimateOneRepMax(load, reps, rpe ?? 10) : null });
   }
 
   const age = ageOn(client.birth_date, date || todayISO());

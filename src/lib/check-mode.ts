@@ -8,25 +8,12 @@ import "server-only";
  */
 import type { ServerSupabase } from "./supabase/server";
 import type { Json } from "./supabase/database.types";
-
-export const CHECK_MODE_KEY = "modalita-check";
-
-export type CheckMode = {
-  clientId: string;
-  /** check già salvato che si sta correggendo (null = check nuovo) */
-  checkId: string | null;
-  /** check nuovo: l'id che avrà una volta salvato (le foto si caricano prima, in quella cartella) */
-  newId?: string;
-  clientName: string;
-  startedAt: string;
-  /** "Chiudi per ora": la modalità resta, ma nessun dispositivo ci entra da solo */
-  paused: boolean;
-};
+import { CHECK_MODE_KEY, parseCheckMode, type CheckMode } from "./check-mode-key";
+export { CHECK_MODE_KEY, parseCheckMode, type CheckMode };
 
 export async function getCheckMode(supabase: ServerSupabase, userId: string): Promise<CheckMode | null> {
   const { data } = await supabase.from("drafts").select("data").eq("user_id", userId).eq("key", CHECK_MODE_KEY).maybeSingle();
-  const d = data?.data as CheckMode | null | undefined;
-  return d && typeof d.clientId === "string" ? d : null;
+  return parseCheckMode(data?.data);
 }
 
 /** Salva (o toglie) la modalità check; se il database non risponde lo dice, invece di far finta di niente. */

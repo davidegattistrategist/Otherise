@@ -39,13 +39,12 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
   // cliente creato senza indicare il sesso (spot, solo lezioni PT): prima si sceglie quello
   if (!client.sex) return <SexPrompt clientId={id} />;
   const supabase = await createClient();
-  const { data: checks } = await supabase
+  // foto: nell'elenco solo quante sono; si aprono dal check, dall'elenco qui sotto o nel confronto
+  const [{ data: checks }, photos] = await Promise.all([supabase
     .from("checks")
     .select("id, check_date, sequence, created_at, order_hint, age_years, skinfolds, weight_kg, body_fat_pct, fat_mass_kg, lean_mass_kg, body_fat_formula, circumferences, strength_tests, tests_text, notes_next_phase, visible_to_client")
     .eq("client_id", id)
-    .order("check_date", { ascending: true });
-  // foto: nell'elenco solo quante sono; si aprono dal check, dall'elenco qui sotto o nel confronto
-  const photos = await staffCheckPhotos(supabase, id);
+    .order("check_date", { ascending: true }), staffCheckPhotos(supabase, id)]);
   const sex = client.sex as Sex;
   const body = staffBodyData(checks ?? [], sex, client.birth_date, client.skinfold_formula);
   const list = body.list;

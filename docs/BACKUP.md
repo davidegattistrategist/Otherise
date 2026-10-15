@@ -1,6 +1,6 @@
 # Backup dei dati
 
-Ogni notte GitHub fa una copia dei dati dell'app: clienti, programmi, check, logbook, pagamenti, messaggi scritti, impostazioni e accessi. Foto, video e vocali della chat restano fuori.
+Ogni notte GitHub fa una copia dei dati dell'app: clienti, programmi, check, logbook, pagamenti, messaggi scritti, impostazioni e accessi. **Una volta a settimana** (la domenica) copia anche **le foto dei check**, che sono dati sulla salute e stanno solo nello spazio file di Supabase (se attivi i due segreti in più, vedi sotto). Foto, video e vocali della chat restano fuori.
 
 Come funziona (file `.github/workflows/backup.yml` e `scripts/backup/backup.sh`):
 1. conta le righe di ogni tabella del database;
@@ -18,10 +18,16 @@ Se una notte qualcosa va storto (database in pausa o irraggiungibile, copia inco
 3. In GitHub, nel repository dell'app: **Settings → Secrets and variables → Actions → New repository secret**. Creane due:
    - `BACKUP_DATABASE_URL` → l'indirizzo del punto 1
    - `BACKUP_PASSPHRASE` → la frase del punto 2
-4. **Actions → Backup notturno → Run workflow** per provarlo subito. Deve finire con la spunta verde e il riepilogo "OK: tutte le … tabelle hanno le stesse righe".
+4. **Foto dei check (consigliato).** Crea altri due segreti nello stesso posto:
+   - `BACKUP_SUPABASE_URL` → l'indirizzo del progetto Supabase (lo stesso di `NEXT_PUBLIC_SUPABASE_URL` su Vercel, es. `https://xxxx.supabase.co`)
+   - `BACKUP_SERVICE_KEY` → la chiave secret (o service_role) di Supabase, la stessa di `SUPABASE_SERVICE_ROLE_KEY` su Vercel
+
+   La domenica (o quando lanci il backup a mano) le foto vengono scaricate, controllate una per una, cifrate con la stessa frase segreta e conservate 35 giorni (artifact "foto-…").
+5. **Actions → Backup notturno → Run workflow** per provarlo subito. Deve finire con la spunta verde e il riepilogo "OK: tutte le … tabelle hanno le stesse righe".
 
 ## Ripristinare
 Si fa raramente e con calma: chiedi a Claude, che segue questi passi.
 1. Scarica l'artifact della notte giusta e aprilo: `gpg -d otherise-AAAA-MM-GG.dump.gpg > otherise.dump` (chiede la frase segreta).
 2. Ripristino completo su un progetto Supabase nuovo (o svuotato): `pg_restore --no-owner --no-privileges -n public -d "<stringa di connessione>" otherise.dump`, poi gli accessi con `pg_restore --no-owner --no-privileges --data-only -t users -t identities -n auth -d "<stringa>" otherise.dump`.
-3. Per recuperare solo qualche dato (per esempio un cliente eliminato per sbaglio) si ricarica la copia su un database di prova e si copiano a mano solo le righe che servono.
+3. Foto dei check: `gpg -d otherise-foto-AAAA-MM-GG.tgz.gpg | tar xz` → cartella `foto/<cliente>/<check>/…`, da ricaricare nel contenitore `checks` di Supabase Storage con gli stessi percorsi.
+4. Per recuperare solo qualche dato (per esempio un cliente eliminato per sbaglio) si ricarica la copia su un database di prova e si copiano a mano solo le righe che servono.

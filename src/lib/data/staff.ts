@@ -9,7 +9,7 @@ import type { Me } from "../auth";
 import { billingStatus, isCoaching, withUnpaidRows, type BillingRow, type BillingStatus, type PlanKind, type UnpaidRow } from "../billing";
 import { getUnpaidRows } from "./billing";
 import { addDays, diffDays, todayISO, type ISODate } from "../dates";
-import { displayWeek, programEndDate, weekPosition } from "../program/schedule";
+import { currentProgram, displayWeek, programEndDate, weekPosition } from "../program/schedule";
 import { compliance, type Compliance } from "../compliance";
 
 export type ClientRow = {
@@ -114,8 +114,7 @@ export async function getClientsOverview(supabase: ServerSupabase, me: Me, opts:
     const progs = (programs.data ?? []).filter((p) => p.client_id === c.id);
     const published = progs.filter((p) => p.status === "published" && p.start_date);
     // il programma "in corso": quello iniziato più di recente, altrimenti il prossimo
-    const started = published.filter((p) => p.start_date! <= today);
-    const current = started[0] ?? published[published.length - 1] ?? null;
+    const current = currentProgram(published, today);
     let program: ClientOverview["program"] = null;
     if (current?.start_date) {
       const pos = weekPosition(current.start_date, current.weeks, today);

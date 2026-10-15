@@ -3,7 +3,7 @@ import { friendlyError } from "@/lib/friendly-error";
 import { z } from "zod";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { budgetExceeded, logAiRequest } from "@/lib/ai/budget";
 import { aiEnabled, draftProgram, progressRow, suggestAlternatives, TIME_OPTIONS, TIME_QUESTION, type AiUsage } from "@/lib/ai/claude";
 import { learnPending, learningContext, recordDraft } from "@/lib/ai/learn";
 import { after } from "next/server";
@@ -49,11 +49,6 @@ const bodySchema = z.discriminatedUnion("mode", [
   }),
 ]);
 
-function monthStart() {
-  const d = new Date();
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
-}
-
 export async function POST(req: NextRequest) {
   const me = await getMe();
   if (!me || (me.role !== "owner" && me.role !== "coach")) return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
@@ -68,23 +63,11 @@ export async function POST(req: NextRequest) {
   const { data: program } = await supabase.from("programs").select("id, client_id, session_minutes, start_date").eq("id", body.programId).maybeSingle();
   if (!program?.client_id) return NextResponse.json({ error: "Programma non trovato" }, { status: 404 });
 
-  // tetto di spesa mensile
-  const [{ data: settings }, { data: spent }] = await Promise.all([
-    supabase.from("app_settings").select("ai_monthly_budget_eur").maybeSingle(),
-    supabase.from("ai_requests").select("cost_eur").gte("created_at", monthStart()),
-  ]);
-  const budget = Number(settings?.ai_monthly_budget_eur ?? 20);
-  const used = (spent ?? []).reduce((a, r) => a + Number(r.cost_eur), 0);
-  if (used >= budget) {
-    return NextResponse.json({ error: `Raggiunto il tetto di spesa AI del mese (${budget.toFixed(0)} €). Si può alzare in Impostazioni.` }, { status: 429 });
-  }
+  // tetto di spesa mensile (stessa regola per tutte le funzioni AI)
+  const over = await budgetExceeded(supabase);
+  if (over) return NextResponse.json({ error: over }, { status: 429 });
 
-  const log = async (kind: string, usage: AiUsage) => {
-    await createAdminClient().from("ai_requests").insert({
-      created_by: me.id, client_id: program.client_id, kind, model: usage.model,
-      input_tokens: usage.input, output_tokens: usage.output, cost_eur: Number(usage.costEur.toFixed(4)),
-    });
-  };
+  const log = (kind: string, usage: AiUsage) => logAiRequest(me.id, program.client_id, kind, usage);
 
   try {
     if (body.mode === "questions" || body.mode === "revise") {

@@ -7,9 +7,16 @@ import type { ServerSupabase } from "@/lib/supabase/server";
 import type { Me } from "@/lib/auth";
 import { Button, Card, Eyebrow, Input, cx } from "@/components/ui";
 import { renameStaff } from "./team/actions";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+const DONE_KEY = "first_steps_done";
 
 export async function FirstSteps({ supabase, me }: { supabase: ServerSupabase; me: Me }) {
   if (me.role !== "owner") return null;
+  // una volta fatti tutti i passi non si ricontrolla più (3 letture in meno a ogni apertura di Oggi)
+  const admin = createAdminClient();
+  const { data: flag } = await admin.from("app_secrets").select("value").eq("name", DONE_KEY).maybeSingle();
+  if (flag?.value === "1") return null;
   const [{ data: s }, { count: exercises }, { count: clients }] = await Promise.all([
     supabase.from("app_settings").select("legal_name, legal_address, legal_tax_id, privacy_email, coaching_method").maybeSingle(),
     supabase.from("exercises").select("id", { count: "exact", head: true }),
@@ -24,7 +31,10 @@ export async function FirstSteps({ supabase, me }: { supabase: ServerSupabase; m
     { key: "client", done: (clients ?? 0) > 0, title: "Crea il primo cliente", text: "Poi lo inviti con un clic dalla sua scheda.", href: "/staff/clienti/nuovo" },
   ];
   const done = steps.filter((x) => x.done).length;
-  if (done === steps.length) return null;
+  if (done === steps.length) {
+    await admin.from("app_secrets").upsert({ name: DONE_KEY, value: "1" }, { onConflict: "name" });
+    return null;
+  }
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">

@@ -4,7 +4,7 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/dates";
 import { parseContent } from "@/lib/program/types";
-import { displayWeek, nextWorkout } from "@/lib/program/schedule";
+import { currentProgram, displayWeek, nextWorkout } from "@/lib/program/schedule";
 import { Card, Eyebrow, cx } from "@/components/ui";
 import { IconArrowRight, IconNote, IconPlay } from "@/components/icons";
 
@@ -23,8 +23,8 @@ export default async function PtSessionChoice({ params }: { params: Promise<{ id
   const supabase = await createClient();
   const today = todayISO();
   const free = `/staff/clienti/${id}/sessioni#nuova`;
-  const { data: programs } = await supabase.from("programs").select("id, title, weeks, start_date, content").eq("client_id", id).eq("status", "published").not("start_date", "is", null).order("start_date", { ascending: false });
-  const current = (programs ?? []).find((p) => p.start_date! <= today) ?? null;
+  const { data: programs } = await supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", id).eq("status", "published").not("start_date", "is", null).order("start_date", { ascending: false });
+  const current = currentProgram(programs ?? [], today, { upcoming: false });
   const content = current ? parseContent(current.content) : null;
   if (!current || !content?.days.length) {
     return (

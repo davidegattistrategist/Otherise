@@ -264,31 +264,48 @@ export async function runDailyChecks(today = todayISO()) {
 export async function removeOldChatMedia(today: string): Promise<number> {
   const admin = createAdminClient();
   const cutoff = `${addDays(today, -CHAT_MEDIA_KEEP_DAYS)}T00:00:00Z`;
+  // si riparte da dove si era arrivati ieri (prima ripartiva sempre dai più
+  // vecchi e, oltre 1000 messaggi, non arrivava mai ai più nuovi)
+  const { data: mark } = await admin.from("app_secrets").select("value").eq("name", MEDIA_MARK).maybeSingle();
+  const from = mark?.value && !Number.isNaN(Date.parse(mark.value)) ? new Date(mark.value).toISOString() : "1970-01-01T00:00:00.000Z";
+  if (Date.parse(from) >= Date.parse(cutoff)) return 0;
   const paths: string[] = [];
+  let next = cutoff;
   for (const kind of EXPIRING_KINDS) {
     const { data, error } = await admin
       .from("messages")
-      .select("attachments")
+      .select("attachments, created_at")
+      .gte("created_at", from)
       .lt("created_at", cutoff)
       .is("deleted_at", null)
       // stringa JSON: con un array supabase-js scriverebbe la sintassi degli array di Postgres
       .contains("attachments", JSON.stringify([{ kind }]))
-      .limit(2000);
+      .order("created_at")
+      .limit(MEDIA_BATCH);
     if (error) {
       console.error("pulizia video e vocali", error);
-      continue;
+      return 0; // il segno resta dov'era: si riprova domani
     }
     for (const m of data ?? []) paths.push(...((m.attachments as ChatAttachment[] | null) ?? []).filter((a) => a.kind === kind).map((a) => a.path));
+    // troppi per un giro: domani si riparte dall'ultimo visto
+    if ((data?.length ?? 0) >= MEDIA_BATCH) {
+      const lastSeen = new Date(data![data!.length - 1].created_at).toISOString();
+      if (Date.parse(lastSeen) < Date.parse(next)) next = lastSeen;
+    }
   }
-  if (!paths.length) return 0;
   // remove restituisce solo i file che c'erano davvero: quelli già cancellati non contano
   let removed = 0;
   for (let i = 0; i < paths.length; i += 100) {
-    const { data: gone } = await admin.storage.from(CHAT_BUCKET).remove(paths.slice(i, i + 100));
+    const { data: gone, error } = await admin.storage.from(CHAT_BUCKET).remove(paths.slice(i, i + 100));
+    if (error) return removed; // il segno resta: domani si riprova
     removed += gone?.length ?? 0;
   }
+  await admin.from("app_secrets").upsert({ name: MEDIA_MARK, value: next }, { onConflict: "name" });
   return removed;
 }
+
+const MEDIA_MARK = "chat_media_cleaned_until";
+const MEDIA_BATCH = 1000;
 
 /**
  * Conferma del backup notturno al titolare: riuscito (solo nell'app), non

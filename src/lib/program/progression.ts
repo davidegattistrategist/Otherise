@@ -91,3 +91,9 @@ export function deload(rx: string): string {
   if (k) rest = rest.replace(k[0], `${fmt(mround(num(k[1]) * 0.9, 2.5))}kg`);
   return `${sets}x${rest}`;
 }
+
+/** Compila le settimane di un esercizio partendo dalla prima scritta (vuoto = resta com'è). */
+export function progressPrescriptions(prescriptions: string[], rule: ProgressionRule, opts: { deloadLast?: boolean } = {}): string[] {
+  const from = prescriptions.findIndex((p) => p.trim());
+  return from >= 0 ? fillWeeks(prescriptions, from, rule, opts) : prescriptions;
+}

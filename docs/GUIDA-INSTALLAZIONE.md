@@ -48,7 +48,7 @@ Da quel momento il codice è tuo. Le modifiche le fa Claude su tua richiesta (ve
    - Database password: generane una e salvala nelle note
    - Region: **Central EU (Frankfurt)** — i dati restano in Europa
    - **Create new project** e aspetta un paio di minuti.
-3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Nella cartella `supabase/migrations/` del tuo GitHub ci sono 28 file `.sql` (oggi; con gli aggiornamenti ne arriveranno altri): vanno eseguiti **tutti, uno alla volta, in ordine di nome** (il primo è `20261009120000_schema.sql`). Per ognuno: apri il file, premi il pulsante "Copy raw file", incolla tutto in una **New query** di Supabase e premi **Run** (se chiede conferma per una "destructive operation", conferma). Deve comparire "Success. No rows returned". Gli script preparano anche gli spazi privati per le foto: in **Storage** devono comparire due contenitori, `chat` (foto, video e vocali della chat) e `checks` (foto dei check).
+3. **Crea le tabelle.** Nel menu a sinistra apri **SQL Editor** → **New query**. Nella cartella `supabase/migrations/` del tuo GitHub ci sono 29 file `.sql` (oggi; con gli aggiornamenti ne arriveranno altri): vanno eseguiti **tutti, uno alla volta, in ordine di nome** (il primo è `20261009120000_schema.sql`). Per ognuno: apri il file, premi il pulsante "Copy raw file", incolla tutto in una **New query** di Supabase e premi **Run** (se chiede conferma per una "destructive operation", conferma). Deve comparire "Success. No rows returned". Gli script preparano anche gli spazi privati per le foto: in **Storage** devono comparire due contenitori, `chat` (foto, video e vocali della chat) e `checks` (foto dei check).
 4. **Chiudi le iscrizioni libere** (nell'app si entra solo su invito): **Authentication → Sign In / Providers** → disattiva **Allow new users to sign up** → Save.
 5. **Indirizzi dell'app**: **Authentication → URL Configuration**
    - Site URL: `https://app.tuodominio.it` (l'indirizzo che userai; se non hai ancora il dominio metti per ora quello che ti darà Vercel al passo 5 e cambialo dopo)
@@ -128,8 +128,13 @@ I controlli automatici giornalieri (scadenze, programmi in chiusura, promemoria 
 
 ## 6. Il primo accesso
 
-Il **primo account creato diventa il titolare** (vede tutto). Crealo così:
+Diventa **titolare** (vede tutto) l'account con la tua email. Crealo così:
 
+0. **Prima di tutto, blocca il ruolo di titolare sulla tua email** (così nessun altro può prenderlo creando un account prima di te): in Supabase, **SQL Editor → New query**, incolla questa riga mettendo la tua email al posto di quella d'esempio e premi **Run**:
+   ```sql
+   insert into public.app_secrets (name, value) values ('owner_email', 'tua@email.it') on conflict (name) do update set value = excluded.value;
+   ```
+   Senza questa riga diventa titolare il primo account creato in assoluto.
 1. Supabase → **Authentication → Users → Add user → Create new user**: la tua email, una password, spunta **Auto Confirm User** → Create.
 2. Apri `https://app.tuodominio.it`, entra con email e password.
 3. In **Impostazioni e metodo**:

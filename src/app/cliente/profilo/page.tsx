@@ -22,15 +22,15 @@ export default async function ClientProfilePage() {
   const me = await requireClient();
   const supabase = await createClient();
   const today = todayISO();
-  const [{ data: client }, { data: coach }, { data: billing }, { data: payments }, { current, upcoming, past }, { data: sessions }] = await Promise.all([
+  const [{ data: client }, { data: coach }, { data: billing }, { data: payments }, { current, upcoming, past }, { data: sessions }, { data: projectRow }] = await Promise.all([
     supabase.from("clients").select("first_name, last_name, email, start_date, goals, health_consent_at, consent_source, instagram_consent_at, weekly_checkin").eq("id", me.clientId).single(),
     supabase.rpc("my_coach_name"),
     supabase.rpc("client_billing", { cid: me.clientId }),
     supabase.from("payments").select("id, paid_on, amount, method, period_start, period_end, sessions").eq("client_id", me.clientId).eq("unpaid", false).order("paid_on", { ascending: false }).limit(12),
     getMyPrograms(me.clientId),
     supabase.rpc("my_pt_session_dates"),
+    supabase.from("client_projects").select("data").eq("client_id", me.clientId).maybeSingle(),
   ]);
-  const { data: projectRow } = await supabase.from("client_projects").select("data").eq("client_id", me.clientId).maybeSingle();
   const saved = parseProject(projectRow?.data);
   // un progetto lasciato vuoto non si mostra
   const project = saved && !isProjectEmpty(saved) ? saved : null;

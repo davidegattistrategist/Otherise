@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { addDays, formatLong, isISODate, todayISO } from "@/lib/dates";
 import { billingStatus, creditChange, dueAmount, formatEuro, isPeriodic, unpaidPeriods, usesCredit, METHODS, nextPaymentProposal, periodEnd, PLAN_KINDS, situationText, type BillingRow, type PlanKind, parseEuro } from "@/lib/billing";
 import { notify } from "@/lib/notify";
-import { deliverPendingEmails, sendEmail } from "@/lib/email";
+import { emailsLater, sendEmail } from "@/lib/email";
 import type { ActionState } from "@/components/form-bits";
 import { creditScope, getClientCredit } from "@/lib/data/billing";
 
@@ -343,7 +343,7 @@ export async function sendPaymentReminder(clientId: string, _: ActionState, __: 
   }
   if (client.user_id) {
     // email solo se serve (niente notifiche sul telefono, regole in deliverPendingEmails)
-    await deliverPendingEmails();
+    await emailsLater();
     return { ok: true, message: "Promemoria inviato nell'app." };
   }
   // senza app l'email è l'unico modo
@@ -392,10 +392,10 @@ export async function reopenPackage(clientId: string, planId: string) {
  * Cliente gratis (un cliente di prova, o il trainer stesso): esce da pagamenti,
  * scadenze, incassi, previsioni ed export. Lo storico resta salvato.
  */
-export async function setClientFree(clientId: string, free: boolean) {
+export async function setClientFree(clientId: string, free: boolean, back: "pagamenti" | "profilo" = "pagamenti") {
   await requireOwner();
   const supabase = await createClient();
   await supabase.from("clients").update({ free }).eq("id", clientId);
   revalidatePath("/staff", "layout");
-  redirect(`/staff/clienti/${clientId}/pagamenti`);
+  redirect(back === "profilo" ? `/staff/clienti/${clientId}/profilo?stato=${free ? "gratis" : "pagante"}` : `/staff/clienti/${clientId}/pagamenti`);
 }

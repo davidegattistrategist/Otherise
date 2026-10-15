@@ -34,7 +34,7 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
       <Card className="flex max-w-2xl flex-col gap-3">
         <Eyebrow>Cliente gratis</Eyebrow>
         <p className="text-[15px] leading-relaxed">Non compare in pagamenti, scadenze, incassi, previsioni ed export, e non riceve promemoria di rinnovo. {(payments ?? []).length ? "I pagamenti registrati prima restano salvati ma non contano." : ""}</p>
-        <form action={setClientFree.bind(null, id, false)}>
+        <form action={setClientFree.bind(null, id, false, "pagamenti")}>
           <ConfirmButton variant="secondary" message="Togliere il cliente dai gratis? Tornerà nei pagamenti e nelle previsioni.">Non è più gratis</ConfirmButton>
         </form>
       </Card>
@@ -42,6 +42,8 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
   }
   const plan = (plans ?? []).find((p) => p.active) ?? null;
   const [{ counter: pt, price: ptPrice }, coachingCredit, lessonsCredit, unpaidBy] = await Promise.all([getPtCounter(supabase, id), getClientCredit(supabase, id), getClientCredit(supabase, id, "lessons"), getUnpaidRows(supabase, id)]);
+  // lezioni PT a parte: le voci si mostrano solo se le fa (o ci sono già numeri)
+  const ptRelevant = !plan || !isPeriodic(plan.kind as PlanKind) || Boolean(pt) || ptPrice !== null || Math.abs(lessonsCredit) >= 0.005;
   // il credito del piano: lezioni per i pacchetti, coaching per i periodi
   const credit = plan?.kind === "package" ? lessonsCredit : coachingCredit;
   const unpaidRows = unpaidBy.get(id) ?? [];
@@ -138,22 +140,32 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
                   <CreditFixForm action={setCredit.bind(null, id, "coaching")} credit={coachingCredit} />
                 </FixItem>
               ) : null}
-              <FixItem title="Credito sulle lezioni PT" value={Math.abs(lessonsCredit) < 0.005 ? "In pari" : lessonsCredit > 0 ? `Credito di ${formatEuro(lessonsCredit)}` : `${formatEuro(-lessonsCredit)} da recuperare`}>
-                <p className="text-sm text-muted">Se una volta ha pagato le lezioni più (o meno) del dovuto{ptPrice ? ` (${formatEuro(ptPrice)} a lezione)` : ""}, scrivi com&apos;è la situazione oggi: le prossime lezioni si aggiustano da sole. È separato dal credito del coaching.</p>
-                <CreditFixForm action={setCredit.bind(null, id, "lessons")} credit={lessonsCredit} />
-              </FixItem>
-              <FixItem title="Sessioni PT: correggi il conteggio" value={pt ? (pt.due > 0 ? `${pt.due} da saldare` : `${pt.left} rimaste`) : "Nessun conteggio"}>
-                <p className="text-sm text-muted">Se il numero non è giusto (per esempio sessioni fatte prima di usare l&apos;app), scrivi come stanno le cose oggi: da qui in poi si conta da solo.</p>
-                <PtLeftForm action={setPtLeft.bind(null, id)} left={pt ? pt.left : null} price={ptPrice} first={!pt} />
-                {pt?.corrected ? (
-                  <form action={clearPtCorrection.bind(null, id)}>
-                    <ConfirmButton variant="ghost" className="!min-h-0 !p-0 text-sm text-muted underline" message="Togliere la correzione? Il contatore torna a contare tutte le sessioni e tutti i pagamenti dall'inizio.">Togli la correzione</ConfirmButton>
-                  </form>
-                ) : null}
-              </FixItem>
-              <FixItem title="Prezzo a lezione PT" value={ptPrice !== null ? formatEuro(ptPrice) : "Non impostato"}>
-                <PtPriceForm action={setPtPrice.bind(null, id)} price={ptPrice} />
-              </FixItem>
+              {ptRelevant ? (
+                <>
+                  <FixItem title="Credito sulle lezioni PT" value={Math.abs(lessonsCredit) < 0.005 ? "In pari" : lessonsCredit > 0 ? `Credito di ${formatEuro(lessonsCredit)}` : `${formatEuro(-lessonsCredit)} da recuperare`}>
+                    <p className="text-sm text-muted">Se una volta ha pagato le lezioni più (o meno) del dovuto{ptPrice ? ` (${formatEuro(ptPrice)} a lezione)` : ""}, scrivi com&apos;è la situazione oggi: le prossime lezioni si aggiustano da sole. È separato dal credito del coaching.</p>
+                    <CreditFixForm action={setCredit.bind(null, id, "lessons")} credit={lessonsCredit} />
+                  </FixItem>
+                  <FixItem title="Sessioni PT: correggi il conteggio" value={pt ? (pt.due > 0 ? `${pt.due} da saldare` : `${pt.left} rimaste`) : "Nessun conteggio"}>
+                    <p className="text-sm text-muted">Se il numero non è giusto (per esempio sessioni fatte prima di usare l&apos;app), scrivi come stanno le cose oggi: da qui in poi si conta da solo.</p>
+                    <PtLeftForm action={setPtLeft.bind(null, id)} left={pt ? pt.left : null} price={ptPrice} first={!pt} />
+                    {pt?.corrected ? (
+                      <form action={clearPtCorrection.bind(null, id)}>
+                        <ConfirmButton variant="ghost" className="!min-h-0 !p-0 text-sm text-muted underline" message="Togliere la correzione? Il contatore torna a contare tutte le sessioni e tutti i pagamenti dall'inizio.">Togli la correzione</ConfirmButton>
+                      </form>
+                    ) : null}
+                  </FixItem>
+                  <FixItem title="Prezzo a lezione PT" value={ptPrice !== null ? formatEuro(ptPrice) : "Non impostato"}>
+                    <PtPriceForm action={setPtPrice.bind(null, id)} price={ptPrice} />
+                  </FixItem>
+                </>
+              ) : (
+                <FixItem title="Lezioni PT a parte" value="Non ne fa (comprese nel piano)">
+                  <p className="text-sm text-muted">Servono solo se fa anche lezioni PT da pagare a parte: prezzo a lezione e sessioni già fatte senza pagarle.</p>
+                  <PtPriceForm action={setPtPrice.bind(null, id)} price={ptPrice} />
+                  <PtLeftForm action={setPtLeft.bind(null, id)} left={null} price={ptPrice} first />
+                </FixItem>
+              )}
               {kind === "package" && status.sessionsLeft !== null && status.sessionsLeft > 0 ? (
                 <FixItem title="Chiudi il pacchetto" value={`${status.sessionsLeft} ${status.sessionsLeft === 1 ? "sessione rimasta" : "sessioni rimaste"}`}>
                   <p className="text-sm text-muted">Se secondo i vostri accordi il pacchetto è finito anche con sessioni non usate. Si può annullare.</p>
@@ -162,12 +174,6 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
                   </form>
                 </FixItem>
               ) : null}
-              <FixItem title="Cliente gratis" value="Fuori da pagamenti e incassi">
-                <p className="text-sm text-muted">Per un cliente di prova o per te stesso: non comparirà in pagamenti, scadenze, incassi e previsioni.</p>
-                <form action={setClientFree.bind(null, id, true)}>
-                  <ConfirmButton variant="secondary" message="Mettere questo cliente gratis? Non comparirà più in pagamenti, scadenze, incassi e previsioni.">Metti gratis</ConfirmButton>
-                </form>
-              </FixItem>
             </ul>
           </Card>
         ) : null}

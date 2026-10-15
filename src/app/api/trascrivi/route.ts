@@ -6,7 +6,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
-import { transcribeAudio, transcriptionEnabled } from "@/lib/transcribe";
+import { transcribeAudio, transcriptionEnabled, takeTranscriptionQuota } from "@/lib/transcribe";
 
 export const maxDuration = 60;
 
@@ -15,22 +15,26 @@ const MAX_BYTES = 4_000_000;
 
 const allowed = async () => {
   const me = await getMe();
-  if (!me) return false;
-  if (me.role === "owner" || me.role === "coach") return true;
-  return me.role === "client" && Boolean(me.clientId) && me.clientStatus !== "archived";
+  if (!me) return null;
+  if (me.role === "owner" || me.role === "coach") return { id: me.id, staff: true };
+  return me.role === "client" && Boolean(me.clientId) && me.clientStatus !== "archived" ? { id: me.id, staff: false } : null;
 };
 
 export async function GET() {
-  return NextResponse.json({ enabled: (await allowed()) && transcriptionEnabled() });
+  return NextResponse.json({ enabled: Boolean(await allowed()) && transcriptionEnabled() });
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await allowed())) return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
+  const who = await allowed();
+  if (!who) return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
   if (!transcriptionEnabled()) return NextResponse.json({ error: "La trascrizione non è attiva: manca la chiave GROQ_API_KEY su Vercel." }, { status: 400 });
   const form = await req.formData().catch(() => null);
   const audio = form?.get("audio");
   if (!(audio instanceof Blob) || !audio.size) return NextResponse.json({ error: "Non è arrivato nessun audio. Riprova." }, { status: 400 });
   if (audio.size > MAX_BYTES) return NextResponse.json({ error: "Registrazione troppo lunga: dividila in due parti." }, { status: 413 });
+  if (!(await takeTranscriptionQuota(who.id, who.staff))) {
+    return NextResponse.json({ error: "Per oggi hai usato tante volte la dettatura: scrivi a mano, domani torna disponibile." }, { status: 429 });
+  }
   try {
     const text = await transcribeAudio(audio, audio.type || "audio/mp4");
     return NextResponse.json({ text });

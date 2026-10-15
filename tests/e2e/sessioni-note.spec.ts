@@ -52,7 +52,7 @@ test("Sessione PT: scegli un allenamento del programma, note della lezione in fo
   await finish(page, /Salva come fatto|^Salva$/);
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}\?fatto=1/);
   await page.goto(`${base}/sessioni`);
-  await expect(page.getByText(`Lezione ${tag}: squat ok, spalla da tenere d'occhio`)).toBeVisible();
+  await expect(page.getByText(`Lezione ${tag}: squat ok, spalla da tenere d'occhio`).filter({ visible: true }).first()).toBeVisible();
   // nella linea del tempo dei tuoi appunti, legata all'allenamento
   await page.goto(`${base}/note`);
   const item = page.locator("li", { hasText: `Lezione ${tag}` });

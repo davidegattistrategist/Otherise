@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { friendlyError } from "@/lib/friendly-error";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
+import { invalidateExercises } from "@/lib/data/cached";
 import { redirect } from "next/navigation";
 import { requireOwner, requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -34,6 +35,7 @@ async function importRows(rows: ExerciseRow[]): Promise<ActionState> {
     const { error } = await supabase.from("exercises").insert(toInsert);
     if (error) return { error: `Import non riuscito. ${friendlyError(error)}` };
   }
+  invalidateExercises();
   revalidatePath("/staff/eserciziario");
   return { ok: true, message: `${toInsert.length} esercizi aggiunti${updated ? `, ${updated} completati con video o descrizione` : ""}.` };
 }
@@ -75,6 +77,7 @@ export async function saveExercise(id: string | null, _: ActionState, fd: FormDa
     ? await supabase.from("exercises").update(row).eq("id", id).select("id").single()
     : await supabase.from("exercises").insert(row).select("id").single();
   if (error) return { error: error.message.includes("exercises_name_unique") ? "Esiste già un esercizio con questo nome." : "Salvataggio non riuscito." };
+  invalidateExercises();
   revalidatePath("/staff/eserciziario");
   if (!id) redirect(`/staff/eserciziario/${data!.id}?nuovo=1`);
   return { ok: true, message: "Esercizio salvato. Le modifiche valgono anche nei programmi già pubblicati." };
@@ -84,6 +87,7 @@ export async function deleteExercise(id: string) {
   await requireOwner();
   const supabase = await createClient();
   await supabase.from("exercises").delete().eq("id", id);
+  invalidateExercises();
   revalidatePath("/staff/eserciziario");
   redirect("/staff/eserciziario");
 }

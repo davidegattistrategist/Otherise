@@ -6,7 +6,7 @@ import { getStaffClient } from "@/lib/data/client";
 import { createClient } from "@/lib/supabase/server";
 import { diffDays, formatShort, todayISO } from "@/lib/dates";
 import { parseContent } from "@/lib/program/types";
-import { completedCount, displayWeek, nextWorkout, programEndDate, timeProgress, weekPosition } from "@/lib/program/schedule";
+import { currentProgram, completedCount, displayWeek, nextWorkout, programEndDate, timeProgress, weekPosition } from "@/lib/program/schedule";
 import { summarizeSets, type SetLog } from "@/lib/program/prescription";
 import { getPtCounter, getUnpaidRows } from "@/lib/data/billing";
 import { billingStatus, withUnpaidRows, formatEuro, PLAN_LABELS, type BillingRow, type PlanKind } from "@/lib/billing";
@@ -40,7 +40,8 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
   const supabase = await createClient();
   const today = todayISO();
 
-  const [programs, checks, sessions, checkins, recentLogs, notes, billing, settings] = await Promise.all([
+  // tutto insieme: una sola attesa invece di quattro una dopo l'altra
+  const [programs, checks, sessions, checkins, recentLogs, notes, billing, settings, exerciseSeries, weekly, ptCounterRes, unpaidRows] = await Promise.all([
     supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", id).in("status", ["published", "draft"]).order("start_date", { ascending: false, nullsFirst: true }),
     supabase.from("checks").select("check_date, sequence, created_at, order_hint, weight_kg, body_fat_pct, lean_mass_kg, notes_next_phase").eq("client_id", id).order("check_date", { ascending: true }),
     supabase.from("pt_sessions").select("id, session_date, notes").eq("client_id", id).order("session_date", { ascending: false }).limit(3),
@@ -49,11 +50,13 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
     supabase.from("client_private_notes").select("notes").eq("client_id", id).maybeSingle(),
     me.role === "owner" ? supabase.rpc("client_billing", { cid: id }) : Promise.resolve({ data: null }),
     supabase.from("app_settings").select("reminder_days").maybeSingle(),
+    getExerciseProgress(supabase, id),
+    getWeeklySessions(supabase, id),
+    me.role === "owner" ? getPtCounter(supabase, id) : Promise.resolve(null),
+    me.role === "owner" ? getUnpaidRows(supabase, id) : Promise.resolve(null),
   ]);
-
-  const [exerciseSeries, weekly] = await Promise.all([getExerciseProgress(supabase, id), getWeeklySessions(supabase, id)]);
   const published = (programs.data ?? []).filter((p) => p.status === "published" && p.start_date);
-  const current = published.find((p) => p.start_date! <= today) ?? published[published.length - 1] ?? null;
+  const current = currentProgram(published, today);
   const drafts = (programs.data ?? []).filter((p) => p.status === "draft");
   let programCard: React.ReactNode;
   if (current?.start_date) {
@@ -111,8 +114,8 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
   const weight = checkList.filter((c) => c.weight_kg !== null && c.check_date).map((c) => ({ date: c.check_date!, value: Number(c.weight_kg) }));
 
   const b = (billing.data as BillingRow[] | null)?.[0];
-  const ptCounter = me.role === "owner" ? (await getPtCounter(supabase, id)).counter : null;
-  const bStatus = me.role === "owner" ? withUnpaidRows(billingStatus(b ? { ...b, kind: b.kind as PlanKind } : null, today, settings.data?.reminder_days ?? 7), (await getUnpaidRows(supabase, id)).get(id) ?? [], today) : null;
+  const ptCounter = ptCounterRes?.counter ?? null;
+  const bStatus = me.role === "owner" ? withUnpaidRows(billingStatus(b ? { ...b, kind: b.kind as PlanKind } : null, today, settings.data?.reminder_days ?? 7), unpaidRows?.get(id) ?? [], today) : null;
   const lastCheckin = checkins.data?.[0];
 
   return (

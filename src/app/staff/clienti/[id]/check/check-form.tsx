@@ -73,13 +73,17 @@ const toNum = (s: string) => {
 };
 const str = (n: number | null | undefined) => (n === null || n === undefined ? "" : n.toString().replace(".", ","));
 
+/** Righe dei test di forza al massimo (le legge anche il salvataggio). */
+const MAX_TESTS = 10;
+
 export function initialCheckData(values: CheckValues): CheckFormData {
   const sf: Record<string, string[]> = {};
   for (const s of SKINFOLD_SITES) sf[s.key] = [0, 1, 2].map((i) => str(values.skinfolds[s.key]?.[i]));
   const circ: Record<string, string> = {};
   for (const c of CIRCUMFERENCES) circ[c.key] = str(values.circumferences[c.key]);
   const tests = values.strength_tests.map((x) => ({ exercise: x.exercise, load: x.load?.toString() ?? "", reps: x.reps?.toString() ?? "", rpe: x.rpe?.toString() ?? "" }));
-  while (tests.length < 4) tests.push({ exercise: "", load: "", reps: "", rpe: "" });
+  // le righe dei test: quelle già scritte più una vuota ("Altro test" ne aggiunge)
+  tests.push({ exercise: "", load: "", reps: "", rpe: "" });
   return { check_date: values.check_date, weight: str(values.weight_kg), sf, circ, tests, tests_text: values.tests_text, notes_next_phase: values.notes_next_phase, visible: values.visible_to_client };
 }
 
@@ -219,6 +223,17 @@ export function CheckForm({
     });
   }, [state, clientId, photos, router, clear, onSaved]);
 
+  // la plica che l'ultima volta non si è presa: su un check nuovo, dal computer,
+  // il cursore parte già lì (dal telefono no: aprirebbe la tastiera da sola)
+  const missedFocus = useRef(false);
+  useEffect(() => {
+    if (missedFocus.current || checkId || !lastMissing.length || hideMisure) return;
+    missedFocus.current = true;
+    if (!window.matchMedia("(pointer: fine)").matches) return;
+    const el = formRef.current?.querySelector<HTMLInputElement>("input[data-missed]");
+    if (el && !el.value) el.focus({ preventScroll: false });
+  }, [checkId, lastMissing, hideMisure]);
+
   // i test restano chiusi, tranne se ce ne sono già
   const hasTests = f.tests.some((t) => t.exercise || t.load) || Boolean(f.tests_text.trim());
   const sites = protocolSites(sex);
@@ -278,7 +293,7 @@ export function CheckForm({
                 const avg = siteAverage(f.sf[s.key].map(toNum));
                 const prev = previous?.folds[s.key];
                 return (
-                  <tr key={s.key} className="border-t border-sand-deep">
+                  <tr key={s.key} className={cx("border-t border-sand-deep", lastMissing.includes(s.key) && "bg-accent-soft/60")}>
                     <th scope="row" className="w-[28%] py-2 pr-1 text-left text-sm font-semibold break-words sm:w-auto sm:text-[15px]">
                       {s.label}
                       {prev !== undefined ? <span className="block text-xs font-normal text-muted tabular">prima {fmtNum(prev, 1)}</span> : null}
@@ -289,6 +304,7 @@ export function CheckForm({
                         <input
                           aria-label={`${s.label}, rilevazione ${i + 1}`}
                           name={`sf_${s.key}_${i}`}
+                          data-missed={lastMissing.includes(s.key) && i === 0 ? "" : undefined}
                           inputMode="decimal"
                           data-nav
                           data-nav-label={`${s.label} · ${i + 1}ª`}
@@ -296,7 +312,7 @@ export function CheckForm({
                           data-nav-col={i}
                           value={f.sf[s.key][i]}
                           onChange={(e) => set("sf", { ...f.sf, [s.key]: f.sf[s.key].map((x, j) => (j === i ? e.target.value : x)) })}
-                          className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-1 py-2 text-center text-base sm:px-2"
+                          className={cx("w-full min-w-0 rounded-lg border bg-sand px-1 py-2 text-center text-base sm:px-2", lastMissing.includes(s.key) ? "border-accent" : "border-sand-deep")}
                         />
                       </td>
                     ))}
@@ -428,13 +444,17 @@ export function CheckForm({
           <IconDown size={18} className="shrink-0 text-muted transition-transform group-open:rotate-180" />
         </summary>
         <div className="px-5 pb-5 sm:px-6">
-        <p className="mb-4 text-sm text-muted">Massimale stimato con la tabella RPE, arrotondato a 2,5 kg.</p>
+        <p className="mb-4 text-sm text-muted">Massimale stimato con la tabella RPE (se non lo scegli vale RPE 10, cioè serie al limite), arrotondato a 2,5 kg. Fino a 12 ripetizioni.</p>
         <div className="flex flex-col gap-3">
           <div className="hidden gap-2 text-xs font-semibold text-muted sm:grid sm:grid-cols-[minmax(0,1fr)_6rem_5rem_6rem_9rem]">
             <span>Esercizio</span><span>Carico kg</span><span>Ripetizioni</span><span>RPE</span><span className="text-right">Massimale stimato</span>
           </div>
           {f.tests.map((t, i) => {
-            const e = toNum(t.load) && toNum(t.reps) && toNum(t.rpe) ? estimateOneRepMax(toNum(t.load)!, toNum(t.reps)!, toNum(t.rpe)!) : null;
+            const load = toNum(t.load);
+            const reps = toNum(t.reps);
+            const e = load && reps ? estimateOneRepMax(load, reps, toNum(t.rpe) ?? 10) : null;
+            // perché manca il massimale, invece di un "—" muto
+            const why = !t.exercise.trim() && !load && !reps ? "" : !load || !reps ? "servono carico e ripetizioni" : reps > 12 ? "oltre 12 ripetizioni non si stima" : "";
             const setT = (k: keyof typeof t, v: string) => set("tests", f.tests.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
             return (
               <div key={i} className="grid grid-cols-3 items-center gap-2 border-t border-sand-deep pt-3 first:border-t-0 first:pt-0 sm:grid-cols-[minmax(0,1fr)_6rem_5rem_6rem_9rem] sm:border-t-0 sm:pt-0">
@@ -442,15 +462,20 @@ export function CheckForm({
                 <input aria-label={`Test ${i + 1}, carico`} name={`test_${i}_load`} inputMode="decimal" value={t.load} onChange={(ev) => setT("load", ev.target.value)} placeholder="kg" className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-center" />
                 <input aria-label={`Test ${i + 1}, ripetizioni`} name={`test_${i}_reps`} inputMode="numeric" value={t.reps} onChange={(ev) => setT("reps", ev.target.value)} placeholder="rip." className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-center" />
                 <select aria-label={`Test ${i + 1}, RPE`} name={`test_${i}_rpe`} value={t.rpe} onChange={(ev) => setT("rpe", ev.target.value)} className="w-full min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2">
-                  <option value="">RPE</option>
-                  {RPE_VALUES.map((r) => <option key={r} value={r}>{String(r).replace(".", ",")}</option>)}
+                  <option value="">RPE 10</option>
+                  {RPE_VALUES.filter((r) => r !== 10).map((r) => <option key={r} value={r}>{String(r).replace(".", ",")}</option>)}
                 </select>
                 <span className="col-span-3 text-right text-sm font-semibold tabular sm:col-span-1 sm:text-[15px]">
-                  <span className="font-normal text-muted sm:hidden">Massimale stimato </span>{e ? `${fmtNum(e, 1)} kg` : "—"}
+                  <span className="font-normal text-muted sm:hidden">Massimale stimato </span>{e ? `${fmtNum(e, 1)} kg` : why ? <span className="text-xs font-normal text-muted">{why}</span> : "—"}
                 </span>
               </div>
             );
           })}
+          {f.tests.length < MAX_TESTS ? (
+            <button type="button" onClick={() => set("tests", [...f.tests, { exercise: "", load: "", reps: "", rpe: "" }])} className="inline-flex min-h-11 items-center gap-1.5 self-start rounded-full px-1 text-sm font-semibold underline">
+              + Altro test
+            </button>
+          ) : null}
         </div>
         <div className="mt-5">
           <Label htmlFor="tests_text" hint="corsa, cardio, HYROX, qualsiasi altro test">Altri test</Label>

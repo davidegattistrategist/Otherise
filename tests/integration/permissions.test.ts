@@ -571,4 +571,54 @@ describe.skipIf(!run)("permessi", () => {
     // un solo piano attivo per cliente
     expect((await owner.from("payment_plans").insert({ client_id: clientBId, kind: "monthly", amount: 120 })).error).not.toBeNull();
   });
+
+  it("robustezza: note riservate, spazio file, profili, bozze e trascrizioni", async () => {
+    // note riservate: solo lo staff che segue il cliente
+    await owner.from("client_private_notes").upsert({ client_id: clientAId, notes: "solo per noi" }).throwOnError();
+    await owner.from("client_private_notes").upsert({ client_id: clientBId, notes: "nota su Bruno" }).throwOnError();
+    expect((await clientA.from("client_private_notes").select("notes")).data ?? []).toEqual([]);
+    expect(((await coach.from("client_private_notes").select("client_id")).data ?? []).map((r) => r.client_id)).toEqual([clientAId]);
+    expect((await stranger.from("client_private_notes").select("notes")).data ?? []).toEqual([]);
+    expect((await clientA.from("client_private_notes").upsert({ client_id: clientAId, notes: "scrivo io" })).error).not.toBeNull();
+
+    // spazio file: nessuno dall'app elenca o scarica i file (solo il server, con link firmati)
+    const photo = `${clientBId}/00000000-0000-0000-0000-000000000000/1.jpg`;
+    await admin.storage.from("checks").upload(photo, new Blob(["foto"], { type: "image/jpeg" }), { upsert: true });
+    await admin.storage.from("chat").upload(`${clientBId}/2026-10/a.jpg`, new Blob(["foto"], { type: "image/jpeg" }), { upsert: true });
+    for (const c of [clientA, coach, stranger]) {
+      for (const bucket of ["checks", "chat"]) {
+        expect(((await c.storage.from(bucket).list(clientBId)).data ?? []).length).toBe(0);
+      }
+      expect((await c.storage.from("checks").download(photo)).data).toBeNull();
+      expect((await c.storage.from("checks").upload(`${clientBId}/x/2.jpg`, new Blob(["x"]))).error).not.toBeNull();
+    }
+
+    // profili: nessuno cambia il proprio ruolo né quello degli altri
+    const strangerId = (await stranger.auth.getUser()).data.user!.id;
+    await stranger.from("profiles").update({ role: "owner" }).eq("id", strangerId);
+    expect((await admin.from("profiles").select("role").eq("id", strangerId).single()).data!.role).toBe("none");
+    const ownerId = (await owner.auth.getUser()).data.user!.id;
+    await coach.from("profiles").update({ full_name: "Rubato", role: "none" }).eq("id", ownerId);
+    expect((await admin.from("profiles").select("role").eq("id", ownerId).single()).data!.role).toBe("owner");
+
+    // bozze: solo testo o oggetti, al massimo 300 a persona
+    expect((await clientA.from("drafts").upsert({ user_id: (await clientA.auth.getUser()).data.user!.id, key: "strana", data: [1, 2] })).error).not.toBeNull();
+    const meId = (await clientA.auth.getUser()).data.user!.id;
+    const rows = Array.from({ length: 305 }, (_, i) => ({ user_id: meId, key: `prova-${i}`, data: { i }, updated_at: new Date(Date.now() - (305 - i) * 1000).toISOString() }));
+    for (let i = 0; i < rows.length; i += 50) await clientA.from("drafts").insert(rows.slice(i, i + 50)).throwOnError();
+    const { count } = await admin.from("drafts").select("*", { count: "exact", head: true }).eq("user_id", meId);
+    expect(count).toBe(300);
+    expect((await admin.from("drafts").select("key").eq("user_id", meId).eq("key", "prova-0").maybeSingle()).data).toBeNull();
+
+    // sessioni PT per il collaboratore: solo dei clienti che segue, senza importi
+    expect((await coach.rpc("pt_balance_for", { cid: clientAId })).error).toBeNull();
+    expect(((await coach.rpc("pt_balance_for", { cid: clientBId })).data ?? []).length).toBe(0);
+    expect(((await stranger.rpc("pt_balance_for", { cid: clientAId })).data ?? []).length).toBe(0);
+
+    // trascrizioni: il conteggio lo usa solo il server, con un tetto al giorno
+    expect((await clientA.rpc("use_transcription", { uid: meId, max_per_day: 1000 })).error).not.toBeNull();
+    expect((await admin.rpc("use_transcription", { uid: meId, max_per_day: 2 })).data).toBe(true);
+    expect((await admin.rpc("use_transcription", { uid: meId, max_per_day: 2 })).data).toBe(true);
+    expect((await admin.rpc("use_transcription", { uid: meId, max_per_day: 2 })).data).toBe(false);
+  });
 });

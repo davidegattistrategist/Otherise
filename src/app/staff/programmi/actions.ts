@@ -11,7 +11,8 @@ import { buildNextPhase, type ItemLastLog } from "@/lib/program/next-phase";
 import { parseProgramSheet } from "@/lib/import/sheet";
 import { programEndDate } from "@/lib/program/schedule";
 import { notify } from "@/lib/notify";
-import { deliverPendingEmails } from "@/lib/email";
+import { emailsLater } from "@/lib/email";
+import { invalidateExercises } from "@/lib/data/cached";
 import type { ActionState } from "@/components/form-bits";
 import type { Json } from "@/lib/supabase/database.types";
 import { autoUpdate } from "@/lib/ai-profile";
@@ -200,7 +201,7 @@ export async function publishProgram(id: string): Promise<StatusResult> {
   const userId = (p.clients as unknown as { user_id: string | null } | null)?.user_id;
   if (userId) {
     await notify([{ recipient_id: userId, client_id: p.client_id, kind: "program_published", title: "Il tuo nuovo programma è pronto", body: p.title, link: "/cliente/programma", dedupe_key: `published:${id}` }]);
-    await deliverPendingEmails();
+    await emailsLater();
   }
   revalidatePath(`/staff/clienti/${p.client_id}`, "layout");
   revalidatePath(editorPath(id));
@@ -287,6 +288,7 @@ export async function addMissingExercises(id: string): Promise<ActionState & { c
     const { data: inserted, error } = await supabase.from("exercises").insert(toInsert).select("id, name");
     if (error) return { error: "Non è stato possibile aggiungere gli esercizi." };
     (inserted ?? []).forEach((e) => idByName.set(e.name.toLowerCase(), e.id));
+    invalidateExercises();
   }
   const linked: ProgramContent = {
     days: content.days.map((d) => ({ ...d, blocks: d.blocks.map((b) => ({ ...b, items: b.items.map((it) => (it.exerciseId || !it.name.trim() ? it : { ...it, exerciseId: idByName.get(it.name.trim().toLowerCase()) ?? null })) })) })),
@@ -358,6 +360,7 @@ export async function importFromSheet(clientId: string, _: ActionState, fd: Form
     const id = byName.get(v.itemName.trim().toLowerCase());
     if (id) await supabase.from("exercises").update({ video_url: v.url }).eq("id", id).is("video_url", null);
   }
+  if (parsed.videos.length) invalidateExercises();
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
   redirect(editorPath(prog.id));
 }

@@ -28,5 +28,5 @@ export async function markChatUnread(clientId: string) {
   }
   revalidatePath("/staff/messaggi");
   revalidatePath("/staff", "layout");
-  redirect("/staff/messaggi?vista=da-rispondere");
+  redirect("/staff/messaggi?vista=da-rispondere&segnata=1");
 }

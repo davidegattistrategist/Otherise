@@ -50,11 +50,11 @@ test("bozza di risposta in chat: una sola risposta per punti, si usa e si correg
   await box.press("End");
   await box.pressSequentially(` ${tag}`);
   await owner.getByRole("button", { name: "Invia" }).click();
-  await expect(owner.getByText(new RegExp(`insieme ${tag}`))).toBeVisible();
+  await expect(owner.getByText(new RegExp(`insieme ${tag}`)).filter({ visible: true }).first()).toBeVisible();
 
   // dopo l'invio la bozza non torna
   await owner.reload();
-  await expect(owner.getByText(new RegExp(`insieme ${tag}`))).toBeVisible();
+  await expect(owner.getByText(new RegExp(`insieme ${tag}`)).filter({ visible: true }).first()).toBeVisible();
   await expect(owner.getByLabel("Bozza di risposta")).toHaveCount(0);
 
   // il cliente riceve la risposta, ma non vede mai bozze

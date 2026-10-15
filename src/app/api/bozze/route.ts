@@ -13,12 +13,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
+import { CHECK_MODE_KEY } from "@/lib/check-mode-key";
 import { applyPatch, deletedAt, draftTombstone, isDraftPatch } from "@/lib/draft-merge";
 
 export const dynamic = "force-dynamic";
 
 const MAX_BYTES = 200_000;
 const validKey = (k: unknown): k is string => typeof k === "string" && k.length > 0 && k.length <= 200;
+/** La modalità check la scrive solo il server (src/lib/check-mode.ts): dal browser si legge e basta. */
+const writableKey = (k: unknown): k is string => validKey(k) && k !== CHECK_MODE_KEY;
+/** Una bozza è un testo o un oggetto (un dato strano non deve rompere le pagine che la leggono). */
+const validData = (d: unknown) => typeof d === "string" || (typeof d === "object" && d !== null && !Array.isArray(d));
 
 export async function GET(req: NextRequest) {
   const me = await getMe();
@@ -43,7 +48,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Bozza non valida" }, { status: 400 });
   }
-  if (!validKey(body.key) || body.data === undefined) return NextResponse.json({ error: "Bozza non valida" }, { status: 400 });
+  if (!writableKey(body.key) || !validData(body.data)) return NextResponse.json({ error: "Bozza non valida" }, { status: 400 });
   if (body.patch !== undefined && !isDraftPatch(body.patch)) return NextResponse.json({ error: "Bozza non valida" }, { status: 400 });
   const supabase = await createClient();
   let data = body.data as Json;
@@ -65,7 +70,7 @@ export async function DELETE(req: NextRequest) {
   const me = await getMe();
   if (!me) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   const key = req.nextUrl.searchParams.get("key");
-  if (!validKey(key)) return NextResponse.json({ error: "Bozza non valida" }, { status: 400 });
+  if (!writableKey(key)) return NextResponse.json({ error: "Bozza non valida" }, { status: 400 });
   const supabase = await createClient();
   const t = Number(req.nextUrl.searchParams.get("t")) || Date.now();
   await supabase.from("drafts").upsert({ user_id: me.id, key, data: draftTombstone(t), updated_at: new Date().toISOString() });

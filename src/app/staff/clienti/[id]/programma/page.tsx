@@ -4,7 +4,7 @@ import { requireStaff } from "@/lib/auth";
 import { getStaffClient } from "@/lib/data/client";
 import { createClient } from "@/lib/supabase/server";
 import { formatShort, todayISO } from "@/lib/dates";
-import { displayWeek, programEndDate, weekPosition } from "@/lib/program/schedule";
+import { currentProgram, displayWeek, programEndDate, weekPosition } from "@/lib/program/schedule";
 import { Card, Dot, EmptyState, Eyebrow, Pill, ProgressBar, Select, buttonClass } from "@/components/ui";
 import { SubmitButton } from "@/components/form-bits";
 import { IconDown, IconSparkle } from "@/components/icons";
@@ -38,7 +38,7 @@ export default async function ClientProgramsPage({ params }: { params: Promise<{
   const rank = (p: { status: string; start_date: string | null }) => (p.status === "draft" ? 0 : p.start_date ? 1 : 2);
   const all = [...(programs ?? [])].sort((a, b) => rank(a) - rank(b) || (b.start_date ?? "").localeCompare(a.start_date ?? "") || b.created_at.localeCompare(a.created_at));
   const published = all.filter((p) => p.status === "published" && p.start_date);
-  const current = published.find((p) => p.start_date! <= today) ?? published[published.length - 1] ?? null;
+  const current = currentProgram(published, today);
   const latestBase = current ?? all.find((p) => p.status !== "draft") ?? null;
   // in vista: bozze, fase in corso e quelle che devono ancora iniziare
   const isActive = (p: (typeof all)[number]) => p.status === "draft" || p.id === current?.id || (p.status === "published" && Boolean(p.start_date) && p.start_date! > today);
