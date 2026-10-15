@@ -87,7 +87,16 @@ export async function saveWorkout(raw: SaveWorkoutInput): Promise<SaveWorkoutRes
   if (items.size === 0 && !content.days.some((d) => d.id === input.dayId)) return { ok: false, error: "Giornata non trovata." };
 
   const discomfort = input.discomfort.trim();
-  const { data: before } = await supabase.from("workout_logs").select("discomfort, notes, completed").eq("program_id", program.id).eq("week", input.week).eq("day_id", input.dayId).maybeSingle();
+  const { data: before } = await supabase.from("workout_logs").select("id, discomfort, notes, completed").eq("program_id", program.id).eq("week", input.week).eq("day_id", input.dayId).maybeSingle();
+
+  // Allenamento aperto ma ancora vuoto (es. aperto il giorno sbagliato, toccata
+  // una casella e poi cancellata): niente riga, se no nel programma risulta
+  // "Iniziato" oggi e sembra fatto un allenamento in più.
+  const empty = !input.completed && !discomfort && !input.notes.trim() && input.items.every((it) => !it.resultText.trim() && it.sets.every((x) => (x.kg ?? null) === null && (x.reps ?? null) === null && !x.done));
+  if (empty && !before?.completed) {
+    if (before) await supabase.from("workout_logs").delete().eq("id", before.id);
+    return { ok: true, savedAt: new Date().toISOString() };
+  }
   const { data: log, error } = await supabase
     .from("workout_logs")
     .upsert(

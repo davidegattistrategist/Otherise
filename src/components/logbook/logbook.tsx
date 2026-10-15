@@ -41,6 +41,13 @@ export type LogbookProps = {
   beforeFinish?: () => Promise<string | null>;
   /** Contenuto in fondo, prima della barra (es. sessione PT e note della lezione) */
   footer?: React.ReactNode;
+  /**
+   * Sessione PT finita a metà allenamento (staff): nella domanda sulle serie
+   * non spuntate c'è anche "lo finisce da solo". L'allenamento resta aperto
+   * (non "fatto"), così sul suo telefono è ancora il prossimo e lo riprende lì
+   * invece di cominciarne un altro.
+   */
+  leaveOpen?: { label: string; note: string };
 };
 
 const numOrNull = (v: string): number | null => {
@@ -440,6 +447,27 @@ export function Logbook(props: LogbookProps) {
     latest.current = { ...latest.current, items: next };
     setItems(next);
     void finish();
+  };
+
+  /** Chiude la sessione lasciando l'allenamento aperto: il cliente lo finisce dal suo telefono. */
+  const leaveOpenAndClose = async () => {
+    setUnchecked(null);
+    if (finishBusy.current) return;
+    finishBusy.current = true;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    try {
+      const ok = await save({ completed: false });
+      if (!ok) return;
+      const err = (await props.beforeFinish?.()) ?? null;
+      if (err) {
+        setStatus({ kind: "error", text: err });
+        return;
+      }
+      router.push(`${props.backHref}?aperto=1`);
+      router.refresh();
+    } finally {
+      finishBusy.current = false;
+    }
   };
 
   const finishBusy = useRef(false);
@@ -843,6 +871,12 @@ export function Logbook(props: LogbookProps) {
             <div className="mt-4 flex flex-col gap-2">
               <button type="button" onClick={() => resolveUnchecked(true)} className="min-h-12 w-full rounded-full bg-ink text-[16px] font-semibold text-card">Le ho fatte: segnale come fatte</button>
               <button type="button" onClick={() => resolveUnchecked(false)} className="min-h-12 w-full rounded-full bg-card text-[16px] font-semibold ring-1 ring-sand-deep">Sì, le ho saltate</button>
+              {props.leaveOpen ? (
+                <button type="button" onClick={() => void leaveOpenAndClose()} className="flex min-h-12 w-full flex-col items-center justify-center rounded-2xl bg-card px-4 py-2 text-[16px] font-semibold ring-1 ring-sand-deep">
+                  {props.leaveOpen.label}
+                  <span className="text-[13px] font-normal text-muted">{props.leaveOpen.note}</span>
+                </button>
+              ) : null}
               <button type="button" onClick={() => setUnchecked(null)} className="min-h-11 text-sm font-semibold text-muted underline">Torno all&apos;allenamento</button>
             </div>
           </div>

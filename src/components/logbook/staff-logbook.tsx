@@ -33,6 +33,7 @@ export function StaffLogbook({
     <Logbook
       {...props}
       beforeFinish={beforeFinish}
+      leaveOpen={{ label: "Le finisce in autonomia: lascia aperto", note: "Sul suo telefono lo trova come “Riprendi l'allenamento”" }}
       footer={
         <section className="flex flex-col gap-3 rounded-[24px] bg-card p-5" aria-label="Sessione PT">
           <label className="flex items-start gap-3">

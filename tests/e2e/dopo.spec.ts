@@ -153,14 +153,16 @@ test("telefono: aprendo un giorno del programma gli altri si chiudono (cliente e
   test.skip(info.project.name !== "telefono", "solo sul telefono");
   await login(page, "giulia@prova.local");
   await page.goto("/cliente/programma");
-  const days = page.locator('details[data-day-group="giorni"]');
-  const n = await days.count();
-  expect(n).toBeGreaterThan(1);
-  await days.nth(0).locator("summary").click();
-  await expect(days.nth(0)).toHaveAttribute("open", "");
-  await days.nth(1).locator("summary").click();
-  await expect(days.nth(1)).toHaveAttribute("open", "");
-  await expect(days.nth(0)).not.toHaveAttribute("open", "");
+  // due giorni chiusi (il prossimo parte aperto e dipende da cosa hanno fatto gli altri test)
+  const closed = page.locator('details[data-day-group="giorni"]:not([open])');
+  expect(await closed.count()).toBeGreaterThan(1);
+  const a = page.locator('details[data-day-group="giorni"]').nth(await closed.nth(0).evaluate((el) => [...document.querySelectorAll('details[data-day-group="giorni"]')].indexOf(el as HTMLDetailsElement)));
+  const b = page.locator('details[data-day-group="giorni"]').nth(await closed.nth(1).evaluate((el) => [...document.querySelectorAll('details[data-day-group="giorni"]')].indexOf(el as HTMLDetailsElement)));
+  await a.locator("summary").click();
+  await expect(a).toHaveAttribute("open", "");
+  await b.locator("summary").click();
+  await expect(b).toHaveAttribute("open", "");
+  await expect(a).not.toHaveAttribute("open", "");
   await expect(page.locator('details[data-day-group="giorni"][open]')).toHaveCount(1);
 });
 
@@ -177,4 +179,33 @@ test("telefono: nell'editor un giorno aperto alla volta", async ({ page }, info)
   await openers.nth(0).click();
   await openers.first().click();
   await expect(page.locator("[data-day-card]").getByRole("button", { name: /^Chiudi / })).toHaveCount(1);
+});
+
+test("telefono stretto (Android 360 px): niente esce dallo schermo nelle pagine del cliente", async ({ page }, info) => {
+  test.skip(info.project.name !== "telefono", "serve la larghezza del telefono");
+  await page.setViewportSize({ width: 360, height: 780 });
+  await login(page, "giulia@prova.local");
+  for (const p of ["/cliente", "/cliente/programma", "/cliente/programma?settimana=1", "/cliente/progressi", "/cliente/percorso"]) {
+    await page.goto(p);
+    await page.waitForLoadState("networkidle");
+    // elementi che sporgono a destra (escluse le file che scorrono di proposito)
+    const out = await page.evaluate(() => {
+      const W = document.documentElement.clientWidth;
+      const bad: string[] = [];
+      document.querySelectorAll("body *").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height || r.right <= W + 1) return;
+        for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+          const o = getComputedStyle(a).overflowX;
+          if (o === "auto" || o === "scroll" || o === "hidden") return;
+        }
+        bad.push(`${el.tagName} ${(el.textContent ?? "").slice(0, 30)}`);
+      });
+      return bad;
+    });
+    expect(out, p).toEqual([]);
+  }
+  // le settimane del programma vanno a capo: nessuna fila che scorre
+  await page.goto("/cliente/programma");
+  await expect(page.getByRole("navigation", { name: "Settimane" }).getByRole("link", { name: /\(ora\)/ })).toBeVisible();
 });

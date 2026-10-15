@@ -111,3 +111,52 @@ test("il cliente trova il diario in Percorso", async ({ page }) => {
   await page.waitForURL(/\/cliente\/diario$/);
   await expect(page.getByRole("heading", { name: "Diario settimanale" })).toBeVisible();
 });
+
+test("Sessione PT finita a metà: l'allenamento resta aperto e il cliente lo riprende dal suo telefono", async ({ page, browser }) => {
+  await login(page, "titolare@prova.local");
+  await openClient(page, "Prova Luca");
+  await page.getByRole("link", { name: "Sessione PT", exact: true }).first().click();
+  await page.waitForURL(/\/sessione-pt$/);
+  await page.getByRole("link", { name: /Il prossimo/ }).click();
+  await page.waitForURL(/\/allenamento\/.*\?pt=1$/);
+  await page.waitForLoadState("networkidle");
+  const dayTitle = (await page.locator("h2", { hasText: /· settimana \d+$/ }).first().innerText()).replace(/ · settimana \d+$/, "");
+  await page.locator('input[aria-label$="serie 1, chili"]').first().fill("41");
+  await expect(page.getByText(/Salvato alle/)).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: "Salva come fatto" }).last().click();
+  await page.getByRole("dialog", { name: "Serie non spuntate" }).getByRole("button", { name: /Le finisce in autonomia/ }).click();
+  await page.waitForURL(/\?aperto=1/);
+  await expect(page.getByText(/L'allenamento resta aperto/)).toBeVisible();
+
+  // il cliente lo trova aperto, ed è ancora il prossimo
+  const { origins } = await page.context().storageState();
+  const client = await browser.newContext({ storageState: { cookies: [], origins }, viewport: page.viewportSize() ?? undefined });
+  const cp = await client.newPage();
+  await login(cp, "luca@prova.local");
+  await cp.goto("/cliente/programma");
+  const card = cp.locator("[data-day-card]", { hasText: dayTitle }).first();
+  await expect(card).toContainText("Iniziato");
+  await expect(card).toContainText("Prossimo");
+  await expect(card.getByRole("link", { name: "Riprendi l'allenamento" })).toBeVisible();
+});
+
+test("un allenamento aperto per sbaglio e svuotato non risulta iniziato", async ({ page }) => {
+  await login(page, "giulia@prova.local");
+  await page.goto("/cliente/programma");
+  const card = page.locator("[data-day-card]").filter({ has: page.getByRole("link", { name: "Inizia questo allenamento" }) }).last();
+  const title = (await card.locator("h2").innerText()).replace(/\s*Prossimo$/, "");
+  await card.getByRole("link", { name: "Inizia questo allenamento" }).click();
+  await page.waitForURL(/\/cliente\/sessione\//);
+  await page.waitForLoadState("networkidle");
+  const notes = page.locator("#session-notes");
+  await notes.fill("aperto per sbaglio");
+  await expect(page.getByText(/Salvato alle/)).toBeVisible({ timeout: 10_000 });
+  await notes.fill("");
+  await page.waitForTimeout(3_000);
+  await expect
+    .poll(async () => {
+      await page.goto("/cliente/programma");
+      return page.locator("[data-day-card]", { hasText: title }).first().innerText();
+    }, { timeout: 20_000 })
+    .not.toContain("Iniziato");
+});

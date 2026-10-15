@@ -32,9 +32,9 @@ function Delta({ now, before, unit, goodWhen }: { now: number | null; before: nu
   );
 }
 
-export default async function ClientOverviewPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fatto?: string; esercizio?: string }> }) {
+export default async function ClientOverviewPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fatto?: string; aperto?: string; esercizio?: string }> }) {
   const { id } = await params;
-  const { fatto, esercizio } = await searchParams;
+  const { fatto, aperto, esercizio } = await searchParams;
   const me = await requireStaff();
   const client = await getStaffClient(id);
   const supabase = await createClient();
@@ -121,6 +121,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
   return (
     <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr))]">
       {fatto ? <div className="[grid-column:1/-1]"><ClearParams names={["fatto"]} /><Notice tone="success">Allenamento registrato.</Notice></div> : null}
+      {aperto ? <div className="[grid-column:1/-1]"><ClearParams names={["aperto"]} /><Notice tone="success">Sessione salvata. L&apos;allenamento resta aperto: lo finisce dal suo telefono con &quot;Riprendi l&apos;allenamento&quot;.</Notice></div> : null}
       {programCard}
 
       <Card className="flex flex-col gap-3">

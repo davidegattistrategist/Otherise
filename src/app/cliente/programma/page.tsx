@@ -8,7 +8,6 @@ import { nextWorkout, programEndDate } from "@/lib/program/schedule";
 import { Card, EmptyState, Eyebrow, cx } from "@/components/ui";
 import { ProgramDayView } from "@/components/program-day";
 import { IconCheck, IconDown } from "@/components/icons";
-import { ScrollNav } from "@/components/scroll-nav";
 import { OneDayOpen } from "@/components/one-day-open";
 
 export const metadata: Metadata = { title: "Programma" };
@@ -45,18 +44,24 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
         {program.description ? <p className="mt-2 text-[15px] leading-relaxed whitespace-pre-line text-ink-soft">{program.description}</p> : null}
       </div>
 
-      <ScrollNav label="Settimane" className="scroll-x -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-        {Array.from({ length: program.weeks }, (_, i) => i + 1).map((w) => (
-          <Link
-            key={w}
-            href={`${base}${w}`}
-            aria-current={w === week ? "page" : undefined}
-            className={cx("flex min-h-11 shrink-0 items-center rounded-full px-4 text-sm font-semibold", w === week ? "bg-ink text-card" : "bg-card text-ink")}
-          >
-            Settimana {w}{isCurrent && w === nowWeek ? " · ora" : ""}
-          </Link>
-        ))}
-      </ScrollNav>
+      {/* settimane a capo, niente fila che esce dallo schermo (su Android sembrava rotta) */}
+      <nav aria-label="Settimane" className="flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-sm font-semibold text-muted">Settimana</span>
+        {Array.from({ length: program.weeks }, (_, i) => i + 1).map((w) => {
+          const now = isCurrent && w === nowWeek;
+          return (
+            <Link
+              key={w}
+              href={`${base}${w}`}
+              aria-current={w === week ? "page" : undefined}
+              aria-label={`Settimana ${w}${now ? " (ora)" : ""}`}
+              className={cx("flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-full px-3 text-sm font-semibold", w === week ? "bg-ink text-card" : "bg-card text-ink")}
+            >
+              {w}{now ? <span className={cx("text-xs font-normal", w === week ? "text-card/80" : "text-accent")}>· ora</span> : null}
+            </Link>
+          );
+        })}
+      </nav>
       <div className="-mt-1 flex flex-wrap items-baseline gap-x-3 text-sm text-muted">
         <span>Dal {formatShort(weekStart)} al {formatShort(addDays(weekStart, 6))}{program.session_minutes ? ` · circa ${program.session_minutes} minuti a seduta` : ""}</span>
         <details className="group w-full">
@@ -83,7 +88,7 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
             </div>
             {canLog ? (
               <Link href={`/cliente/sessione/${program.id}/${week}/${day.id}`} className={cx("flex min-h-12 items-center justify-center rounded-full text-[15px] font-semibold", st?.completed ? "bg-sand-deep/60 text-ink" : "bg-ink text-card")}>
-                {st?.completed ? "Rivedi o correggi il logbook" : st ? "Riprendi l'allenamento" : "Inizia questo allenamento"}
+                {st?.completed ? (st.performed_on === todayISO() ? "Continua o correggi il logbook" : "Rivedi o correggi il logbook") : st ? "Riprendi l'allenamento" : "Inizia questo allenamento"}
               </Link>
             ) : null}
             <details className="group" open={isNext} data-day-group="giorni">
