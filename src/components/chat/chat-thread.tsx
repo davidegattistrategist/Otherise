@@ -242,35 +242,55 @@ export function ChatThread({
     setNewBelow(false);
   };
 
-  // iPhone con la tastiera aperta: la chat si stringe nella parte visibile
-  // dello schermo (come la nota a tutto schermo), così gli ultimi messaggi e
-  // la casella restano sopra la tastiera invece di finirci sotto
+  // Telefono con la tastiera aperta: la chat (messaggi + casella) occupa
+  // esattamente la parte visibile sopra la tastiera, fissa, come la nota a
+  // tutto schermo. Prima si accorciava ma la pagina scorreva verso l'alto e
+  // bisognava tornare giù col pollice per vedere cosa si scriveva.
   useEffect(() => {
     const vv = window.visualViewport;
     const box = boxRef.current;
     if (!vv || !box) return;
+    const KEYS = ["position", "top", "left", "width", "height", "zIndex", "borderRadius"] as const;
+    let on = false;
+    const reset = () => {
+      if (!on) return;
+      on = false;
+      for (const k of KEYS) box.style[k] = "";
+    };
     const fit = () => {
       const keyboard = window.innerHeight - vv.height > 120 && box.contains(document.activeElement);
-      if (!keyboard) {
-        box.style.height = "";
-        return;
-      }
-      const top = box.getBoundingClientRect().top - vv.offsetTop;
-      const h = Math.max(220, Math.round(vv.height - Math.max(0, top) - 8));
-      box.style.height = `${h}px`;
+      if (!keyboard) return reset();
+      const wasOn = on;
+      on = true;
+      box.style.position = "fixed";
+      box.style.top = `${Math.round(vv.offsetTop)}px`;
+      box.style.left = `${Math.round(vv.offsetLeft)}px`;
+      box.style.width = `${Math.round(vv.width)}px`;
+      box.style.height = `${Math.round(vv.height)}px`;
+      box.style.zIndex = "80";
+      box.style.borderRadius = "0";
       const el = listRef.current;
-      if (el && stick.current) el.scrollTop = el.scrollHeight;
+      if (el && (stick.current || !wasOn)) {
+        stick.current = true;
+        el.scrollTop = el.scrollHeight;
+      }
+    };
+    // dopo il tocco la tastiera si apre in un attimo: si ricontrolla appena ha finito
+    const later = () => {
+      fit();
+      setTimeout(fit, 150);
+      setTimeout(fit, 400);
     };
     vv.addEventListener("resize", fit);
     vv.addEventListener("scroll", fit);
-    document.addEventListener("focusin", fit);
-    document.addEventListener("focusout", fit);
+    document.addEventListener("focusin", later);
+    document.addEventListener("focusout", later);
     return () => {
       vv.removeEventListener("resize", fit);
       vv.removeEventListener("scroll", fit);
-      document.removeEventListener("focusin", fit);
-      document.removeEventListener("focusout", fit);
-      box.style.height = "";
+      document.removeEventListener("focusin", later);
+      document.removeEventListener("focusout", later);
+      reset();
     };
   }, []);
 
