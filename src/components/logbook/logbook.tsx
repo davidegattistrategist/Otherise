@@ -449,6 +449,7 @@ export function Logbook(props: LogbookProps) {
     void finish();
   };
 
+  const finishBusy = useRef(false);
   /** Chiude la sessione lasciando l'allenamento aperto: il cliente lo finisce dal suo telefono. */
   const leaveOpenAndClose = async () => {
     setUnchecked(null);
@@ -470,7 +471,6 @@ export function Logbook(props: LogbookProps) {
     }
   };
 
-  const finishBusy = useRef(false);
   const finish = async () => {
     // un secondo tocco mentre sta già chiudendo non fa niente
     if (finishBusy.current) return;

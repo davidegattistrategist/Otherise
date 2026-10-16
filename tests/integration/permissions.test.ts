@@ -621,4 +621,65 @@ describe.skipIf(!run)("permessi", () => {
     expect((await admin.rpc("use_transcription", { uid: meId, max_per_day: 2 })).data).toBe(true);
     expect((await admin.rpc("use_transcription", { uid: meId, max_per_day: 2 })).data).toBe(false);
   });
+  it("permessi veloci (V2): stesse regole di prima con le policy riscritte; le nuove funzioni helper rispondono per ruolo", async () => {
+    // un secondo cliente seguito dal collaboratore: così "i suoi clienti" sono più di uno
+    const { data: c2 } = await owner.from("clients")
+      .insert({ first_name: "Carla", last_name: "Prova", sex: "F", email: mail("carla"), coach_id: coachId })
+      .select().single().throwOnError();
+    const clientCId = c2!.id as string;
+    const ownerId = (await owner.auth.getUser()).data.user!.id;
+    const clientAUid = (await clientA.auth.getUser()).data.user!.id;
+
+    // le nuove funzioni: chi sono i "miei" clienti e qual è la mia scheda attiva
+    expect((await owner.rpc("my_coached_clients")).data).toEqual([]);
+    expect((await owner.rpc("my_active_client_id")).data).toBeNull();
+    expect([...((await coach.rpc("my_coached_clients")).data ?? [])].sort()).toEqual([clientAId, clientCId].sort());
+    expect((await coach.rpc("my_active_client_id")).data).toBeNull();
+    expect((await clientA.rpc("my_coached_clients")).data).toEqual([]);
+    expect((await clientA.rpc("my_active_client_id")).data).toBe(clientAId);
+    expect((await stranger.rpc("my_coached_clients")).data).toEqual([]);
+    expect((await stranger.rpc("my_active_client_id")).data).toBeNull();
+
+    // dati su tre clienti: A e C del collaboratore, B solo del titolare
+    for (const [cid, who] of [[clientAId, "A"], [clientBId, "B"], [clientCId, "C"]] as const) {
+      await admin.from("messages").insert({ client_id: cid, sender_id: ownerId, body: `V2 messaggio ${who}` }).throwOnError();
+      await admin.from("checks").insert({ client_id: cid, check_date: "2026-10-16", weight_kg: 70, tests_text: `V2 check ${who}` }).throwOnError();
+      await admin.from("pt_sessions").insert({ client_id: cid, session_date: "2026-10-16", notes: `V2 pt ${who}`, created_by: ownerId }).throwOnError();
+    }
+    const seen = async (c: SupabaseClient, table: string, col: string, prefix: string) =>
+      (((await c.from(table).select(col).like(col, `${prefix}%`)).data ?? []) as unknown as Record<string, unknown>[]).map((r) => String(r[col]).slice(-1)).sort();
+
+    // il titolare vede tutto, il collaboratore solo A e C (tabella hash dei suoi clienti), il cliente solo sé, lo sconosciuto niente
+    expect(await seen(owner, "messages", "body", "V2 messaggio")).toEqual(["A", "B", "C"]);
+    expect(await seen(coach, "messages", "body", "V2 messaggio")).toEqual(["A", "C"]);
+    expect(await seen(clientA, "messages", "body", "V2 messaggio")).toEqual(["A"]);
+    expect(await seen(stranger, "messages", "body", "V2 messaggio")).toEqual([]);
+    expect(await seen(owner, "checks", "tests_text", "V2 check")).toEqual(["A", "B", "C"]);
+    expect(await seen(coach, "checks", "tests_text", "V2 check")).toEqual(["A", "C"]);
+    expect(await seen(clientA, "checks", "tests_text", "V2 check")).toEqual([]); // i check il cliente li legge solo da my_checks()
+    expect(await seen(coach, "pt_sessions", "notes", "V2 pt")).toEqual(["A", "C"]);
+    expect(await seen(clientA, "pt_sessions", "notes", "V2 pt")).toEqual([]);
+
+    // scritture: il collaboratore solo sui suoi, il cliente solo nella propria chat
+    expect((await coach.from("pt_sessions").insert({ client_id: clientBId, session_date: "2026-10-16", notes: "no", created_by: coachId })).error).not.toBeNull();
+    expect((await coach.from("pt_sessions").insert({ client_id: clientCId, session_date: "2026-10-16", notes: "sì", created_by: coachId })).error).toBeNull();
+    expect((await clientA.from("messages").insert({ client_id: clientCId, sender_id: clientAUid, body: "intruso" })).error).not.toBeNull();
+    expect((await clientA.from("messages").insert({ client_id: clientAId, sender_id: clientAUid, body: "V2 mio" })).error).toBeNull();
+    // il collaboratore non si prende un cliente non suo né lo sposta
+    await coach.from("clients").update({ coach_id: coachId }).eq("id", clientBId);
+    expect((await admin.from("clients").select("coach_id").eq("id", clientBId).single()).data!.coach_id).toBeNull();
+
+    // ex cliente: la chat resta (my_client_id), il resto no (my_active_client_id)
+    await owner.from("clients").update({ status: "archived" }).eq("id", clientCId).throwOnError();
+    const clientC = await userClient(mail("carla"));
+    expect((await clientC.rpc("my_client_id")).data).toBe(clientCId);
+    expect((await clientC.rpc("my_active_client_id")).data).toBeNull();
+    expect(await seen(clientC, "messages", "body", "V2 messaggio")).toEqual(["C"]);
+    expect((await clientC.from("workout_logs").select("id")).data ?? []).toEqual([]);
+    expect((await clientC.from("payment_plans").select("id")).data ?? []).toEqual([]);
+    expect((await clientC.from("free_workouts").insert({ client_id: clientCId, kind: "camminata", minutes: 30, effort: 1, performed_on: "2026-10-16" })).error).not.toBeNull();
+    await owner.from("clients").update({ status: "active" }).eq("id", clientCId).throwOnError();
+    expect((await clientC.rpc("my_active_client_id")).data).toBe(clientCId);
+    expect((await clientC.from("payment_plans").select("id")).error).toBeNull();
+  });
 });

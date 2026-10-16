@@ -782,8 +782,14 @@ isOneToOne: false
               "check_date": string,"check_id": string,"created_at": string,"height": number,"id": string,"path": string,"sort_order": number,"thumb_path": string,"width": number
             }[]
                            },
+"my_active_client_id":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
 "my_client_id":
 { Args: Record<PropertyKey, never>; Returns: string
+                           },
+"my_coached_clients":
+{ Args: Record<PropertyKey, never>; Returns: string[]
                            },
 "my_coach_name":
 { Args: Record<PropertyKey, never>; Returns: string

@@ -55,8 +55,9 @@ export async function savePlan(clientId: string, planId: string | null, _: Actio
   }
   // modifica "dal prossimo rinnovo" o "da una data": nuovo piano, quello di prima resta nello storico
   if (planId && mode === "fix") {
-    // "dal prossimo rinnovo" con lo stesso prezzo: è solo una correzione, l'inizio del piano non cambia
-    if (fd.get("mode") === "next") delete (row as Partial<typeof row>).start_date;
+    // la data di inizio (che sposta i periodi) cambia solo con "Correggi un errore" scelto apposta:
+    // "dal prossimo rinnovo" o "da una data" con lo stesso prezzo sono solo correzioni di metodo o note
+    if (fd.get("mode") !== "fix") delete (row as Partial<typeof row>).start_date;
     const { error } = await supabase.from("payment_plans").update(row).eq("id", planId).eq("client_id", clientId);
     if (error) return { error: "Salvataggio non riuscito." };
   } else {
