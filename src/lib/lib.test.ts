@@ -1491,3 +1491,53 @@ describe("test di forza dei check (16/10)", async () => {
     expect(testDetail(series[0].points[3])).toBe("110 kg × 3");
   });
 });
+
+describe("fase precedente nell'editor (17/10)", async () => {
+  const { buildCompareView, previousPhases, exerciseKey, findExercise } = await import("./program/compare");
+  it("propone l'ultima fase iniziata prima di questa, senza data in fondo", () => {
+    const all = [
+      { id: "a", title: "Fase 1", start_date: "2026-06-01", weeks: 4, status: "archived" },
+      { id: "b", title: "Fase 2", start_date: "2026-07-01", weeks: 4, status: "archived" },
+      { id: "c", title: "Fase 3", start_date: "2026-08-01", weeks: 4, status: "published" },
+      { id: "x", title: "Vecchia", start_date: null, weeks: 4, status: "archived" },
+    ];
+    const r = previousPhases(all, { id: "c", start_date: "2026-08-01" });
+    expect(r.phases.map((p) => p.id)).toEqual(["b", "a", "x"]);
+    expect(r.defaultId).toBe("b");
+    // bozza senza data: l'ultima fase
+    expect(previousPhases(all, { id: "new", start_date: null }).defaultId).toBe("c");
+    expect(previousPhases([], { id: "c", start_date: null }).defaultId).toBeNull();
+  });
+  it("stessa chiave per lo stesso esercizio: eserciziario o nome scritto", () => {
+    expect(exerciseKey({ exerciseId: "11111111-1111-4111-8111-111111111111", name: "Squat" })).toBe("id:11111111-1111-4111-8111-111111111111");
+    expect(exerciseKey({ exerciseId: null, name: "  Panca  Piana " })).toBe("n:panca piana");
+  });
+  it("prescrizione e cosa ha fatto, settimana per settimana", () => {
+    const content = parseContent({
+      days: [
+        { id: "d1", title: "Giorno 1", blocks: [
+          { id: "b1", kind: "single", items: [{ id: "i1", name: "Squat", prescriptions: ["4x8 60kg", "4x8 62,5kg"] }] },
+          { id: "b2", kind: "superset", rounds: 3, items: [{ id: "i2", name: "Trazioni", prescriptions: ["3x6", "3x7"] }, { id: "i3", name: "", prescriptions: [] }, { id: "i4", name: "Plank", prescriptions: ["30\"", "35\""] }] },
+          { id: "b3", kind: "text", title: "Defaticamento", notes: "Camminata" },
+        ] },
+      ],
+    });
+    const view = buildCompareView({ id: "p", title: "Fase 1", weeks: 2, start_date: "2026-06-01" }, content,
+      [{ id: "l1", week: 1, day_id: "d1", performed_on: "2026-06-02" }, { id: "l0", week: 1, day_id: "d1", performed_on: "2026-06-01" }],
+      [
+        { workout_log_id: "l1", item_id: "i1", sets: [{ reps: 8, kg: 60 }, { reps: 8, kg: 60 }], result_text: "" },
+        { workout_log_id: "l0", item_id: "i1", sets: [{ reps: 5, kg: 40 }], result_text: "" },
+        { workout_log_id: "l1", item_id: "i4", sets: [], result_text: "fatto" },
+      ]);
+    const [single, superset, text] = view.days[0].blocks;
+    expect(single.heading).toBe("");
+    expect(single.items[0].done[0]).toContain("60");
+    expect(single.items[0].done[1]).toBeNull();
+    expect(superset.heading).toBe("B · Superserie · 3 giri");
+    expect(superset.items.map((i) => i.label)).toEqual(["B1", "B3"]);
+    expect(superset.items[1].done[0]).toBe("fatto");
+    expect(text).toMatchObject({ heading: "Defaticamento", text: "Camminata", items: [] });
+    expect(view.loggedWeeks).toEqual([0]);
+    expect(findExercise(view, "n:trazioni").map((f) => f.item.label)).toEqual(["B1"]);
+  });
+});

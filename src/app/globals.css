@@ -32,6 +32,8 @@
   --nav-gap: max(0.75rem, env(safe-area-inset-bottom));
   /* spazio occupato dal menu in basso (barra alta 66px + distanza dal fondo) */
   --nav-space: calc(var(--nav-gap) + 66px);
+  /* pannello laterale (es. "Fase precedente" nell'editor), sul computer */
+  --side-panel: min(440px, 40vw);
 }
 
 html,
@@ -182,4 +184,13 @@ body {
   font-size: 0;
   line-height: 0;
   overflow: hidden;
+}
+
+/* Pannello laterale aperto sul computer: la pagina si stringe e resta tutta
+   visibile accanto (niente sotto il pannello). Fuori dai layer: vince sui
+   margini delle utility. */
+@media (min-width: 1024px) {
+  html[data-side-panel] main {
+    padding-right: calc(var(--side-panel) + 1.5rem);
+  }
 }

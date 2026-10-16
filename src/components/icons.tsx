@@ -56,3 +56,4 @@ export const IconRestart = (p: P) => <Base {...p}><path d="M4 12a8 8 0 1 0 2.4-5
 export const IconSound = (p: P) => <Base {...p}><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z" /><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></Base>;
 export const IconSoundOff = (p: P) => <Base {...p}><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z" /><path d="m16 9.5 5 5M21 9.5l-5 5" /></Base>;
 export const IconLeaf = (p: P) => <Base {...p}><path d="M5 19C5 11 10 5 19 5c0 9-6 14-14 14z" /><path d="M5 19l7.5-7.5" /></Base>;
+export const IconHistory = (p: P) => <Base {...p}><path d="M4 12a8 8 0 1 0 2.4-5.7" /><path d="M4 4v5h5" /><path d="M12 8v4.5l3 2" /></Base>;

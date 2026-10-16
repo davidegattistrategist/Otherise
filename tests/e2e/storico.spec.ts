@@ -71,3 +71,42 @@ test("test di forza: grafico per esercizio nei check dello staff e nei progressi
   await expect(mine).toContainText("Test di forza e performance");
   await expect(mine.getByRole("img")).toBeVisible();
 });
+
+test("editor: fase precedente a portata di mano, poi si torna esattamente dov'eri", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("otherise:days-open", "all"));
+  await login(page, "titolare@prova.local");
+  const id = await openClient(page, "Esempio Giulia");
+  await page.goto(`/staff/clienti/${id}/programma`);
+  await page.getByRole("link", { name: /Fase 2/ }).filter({ visible: true }).first().click();
+  await page.waitForURL(/\/staff\/programmi\/[0-9a-f-]{36}$/);
+  await page.waitForLoadState("networkidle");
+  // tocca un esercizio del giorno 2
+  const field = page.locator("[data-day-index='1'] [data-ex] input[aria-label='Esercizio']").filter({ visible: true }).first();
+  await field.scrollIntoViewIfNeeded();
+  await field.click();
+  const name = (await field.inputValue()).trim();
+  const before = await page.evaluate(() => scrollY);
+
+  await page.locator("[data-open-previous]").click();
+  const panel = page.locator("[data-previous-phase]");
+  await expect(panel.getByRole("combobox", { name: "Scegli la fase" }).or(panel.getByText(/Fase 1/)).first()).toBeVisible();
+  // segue l'esercizio e il giorno che stai scrivendo
+  const focusCard = panel.locator("[data-prev-focus]");
+  await expect(focusCard).toContainText(name);
+  await expect(focusCard).toContainText("S1");
+  await expect(panel.getByRole("tab", { name: "Giorno 2" })).toHaveAttribute("aria-selected", "true");
+  await expect(panel.getByText(/Fatto: /).first()).toBeVisible();
+  // un'altra settimana
+  await panel.getByRole("tab", { name: /^Settimana 1\b/ }).click();
+  await expect(panel.getByText("settimana 1")).toBeVisible();
+
+  await panel.getByRole("button", { name: "Torna al programma" }).click();
+  await expect(panel).toBeHidden();
+  expect(Math.abs((await page.evaluate(() => scrollY)) - before)).toBeLessThan(4);
+  await expect(field).toHaveValue(name);
+  // riaperto: subito pronto, com'era
+  await page.locator("[data-open-previous]").click();
+  await expect(panel.getByText("settimana 1")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+});

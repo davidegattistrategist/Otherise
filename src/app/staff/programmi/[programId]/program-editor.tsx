@@ -6,6 +6,7 @@
  * Il contenuto si salva con "Salva" (o Ctrl/Cmd+S).
  */
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   BLOCK_KIND_LABELS,
@@ -24,7 +25,9 @@ import {
 import { copyWeekToOthers, duplicateDay } from "@/lib/program/next-phase";
 import { PROGRESSION_RULES, progressPrescriptions, type ProgressionRule } from "@/lib/program/progression";
 import { Button, Card, Eyebrow, Input, Notice, Pill, Select, Textarea, buttonClass, cx } from "@/components/ui";
-import { IconArrowLeft, IconCopy, IconDown, IconPlus, IconSparkle, IconTrash, IconUp, IconX } from "@/components/icons";
+import { IconArrowLeft, IconCopy, IconDown, IconHistory, IconPlus, IconSparkle, IconTrash, IconUp, IconX } from "@/components/icons";
+import { exerciseKey } from "@/lib/program/compare";
+import { reportEditorFocus } from "./editor-focus";
 import {
   addMissingExercises,
   archiveProgram,
@@ -74,6 +77,12 @@ type Props = {
 
 const STATUS_LABEL = { draft: "Bozza", published: "Pubblicato", archived: "Archiviato" } as const;
 
+// il pannello si scarica solo la prima volta che lo apri
+const PreviousPhase = dynamic(() => import("./previous-phase"), { ssr: false });
+
+/** data-ex sulle righe degli esercizi: il pannello "Fase precedente" segue quello che scrivi */
+const exAttrs = (it: ProgramItem) => (it.name.trim() ? { "data-ex": exerciseKey(it), "data-ex-name": it.name.trim() } : { "data-ex": "" });
+
 export function ProgramEditor({ program, initialContent, exercises, lastLogs, nextPhaseNotes, clientName, aiEnabled, backHref, loggedWorkouts = 0 }: Props) {
   const [title, setTitle] = useState(program.title);
   const [description, setDescription] = useState(program.description);
@@ -97,6 +106,15 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   const [status, setStatus] = useState(program.status);
   const [isExample, setIsExample] = useState(program.is_ai_example);
   const [mobileWeek, setMobileWeek] = useState(0);
+  // "Fase precedente": montato al primo tocco, poi solo nascosto (riapre all'istante)
+  const [prevOpen, setPrevOpen] = useState(false);
+  const [prevMounted, setPrevMounted] = useState(false);
+  const canCompare = Boolean(program.client_id) && !program.is_template;
+  const closePrev = useCallback(() => setPrevOpen(false), []);
+  const openPrev = () => {
+    setPrevMounted(true);
+    setPrevOpen(true);
+  };
   // giorni chiusi di partenza, tranne quelli ancora vuoti
   const days = useOpenDays(() => normalizeWeeks(initialContent, program.weeks).days.filter((d) => !d.blocks.some((b) => b.items.some((it) => it.name.trim()))).map((d) => d.id));
 
@@ -267,7 +285,22 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   const unnamed = content.days.reduce((n, d) => n + d.blocks.reduce((m, b) => m + (b.kind === "text" ? 0 : b.items.filter((it) => !it.name.trim()).length), 0), 0);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5" onFocusCapture={canCompare ? (e) => reportEditorFocus(e.target) : undefined} onInputCapture={canCompare ? (e) => reportEditorFocus(e.target) : undefined}>
+      {canCompare && prevMounted ? <PreviousPhase programId={program.id} open={prevOpen} onClose={closePrev} /> : null}
+      {canCompare && !prevOpen ? (
+        <button
+          type="button"
+          onClick={openPrev}
+          aria-label="Guarda la fase precedente"
+          className={cx(
+            "fixed right-[var(--edge-right)] z-40 flex min-h-11 items-center gap-2 rounded-full bg-card px-4 text-sm font-semibold text-ink shadow-lg ring-1 ring-sand-deep lg:right-8 lg:bottom-8",
+            dirty ? "bottom-[calc(var(--nav-space)+4.5rem)]" : "bottom-[calc(var(--nav-space)+0.75rem)]",
+          )}
+          data-open-previous
+        >
+          <IconHistory size={18} /> Fase precedente
+        </button>
+      ) : null}
       {/* barra in alto */}
       <div className="flex flex-col gap-4">
         <Link href={backHref} className="flex items-center gap-2 text-sm font-semibold text-muted hover:text-ink">
@@ -450,7 +483,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         const open = days.isOpen(day.id);
         const names = day.blocks.flatMap((b) => b.items.map((it) => it.name.trim())).filter(Boolean);
         return (
-        <Card key={day.id} className="!p-0" data-day-card>
+        <Card key={day.id} className="!p-0" data-day-card data-day-index={dayIdx}>
           <div className={cx("flex flex-wrap items-center gap-3 px-5 pt-5 sm:px-6", !open && "pb-1")}>
             <button
               type="button"
@@ -845,7 +878,7 @@ function BlockRows({
         const last = lastLogFor(it);
         const aiNote = aiNotes[it.id];
         return (
-          <tr key={it.id} className={cx("align-top", !multi && "border-t border-sand-deep", aiNote && "bg-accent-soft/30")}>
+          <tr key={it.id} {...exAttrs(it)} className={cx("align-top", !multi && "border-t border-sand-deep", aiNote && "bg-accent-soft/30")}>
             <td className="px-2 py-2.5 font-semibold text-muted">{itemLabel(block, blockIdx, itemIdx)}</td>
             <td className="px-2 py-2">
               <input
@@ -1207,7 +1240,7 @@ function MobileBlock({
         {block.items.map((it, itemIdx) => {
           const last = lastLogFor(it);
           return (
-            <div key={it.id} className={cx("flex flex-col gap-1.5", itemIdx > 0 && "border-t border-sand-deep pt-3", aiNotes[it.id] && "rounded-xl bg-accent-soft/40 p-2")}>
+            <div key={it.id} {...exAttrs(it)} className={cx("flex flex-col gap-1.5", itemIdx > 0 && "border-t border-sand-deep pt-3", aiNotes[it.id] && "rounded-xl bg-accent-soft/40 p-2")}>
               <div className="flex items-center gap-2">
                 <span className="w-7 shrink-0 text-sm font-semibold text-muted">{itemLabel(block, blockIdx, itemIdx)}</span>
                 <input list="exercise-library" aria-label="Esercizio" value={it.name} onChange={(e) => onItemName(itemIdx, e.target.value)} placeholder="Esercizio" className={cx(cellInput, "flex-1 font-semibold")} />
