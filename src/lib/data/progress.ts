@@ -1,7 +1,7 @@
 import "server-only";
 /** Andamento degli esercizi e degli allenamenti per i grafici di cliente e staff. */
 import type { ServerSupabase } from "../supabase/server";
-import { addDays, mondayOf, todayISO } from "../dates";
+import { addDays, todayISO } from "../dates";
 import { bestSet, computeRecords, recordsFromRows } from "../strength/records";
 import type { SetLog } from "../program/prescription";
 
@@ -51,19 +51,4 @@ async function exerciseProgressFromLogs(supabase: ServerSupabase, clientId: stri
     by.set(key, s);
   }
   return [...by.values()].filter((s) => s.points.length >= 2).sort((a, b) => b.sessions - a.sessions);
-}
-
-/** Allenamenti completati per settimana (lunedì → numero), ultime `weeks` settimane. */
-export async function getWeeklySessions(supabase: ServerSupabase, clientId: string, weeks = 8) {
-  const today = todayISO();
-  const first = addDays(mondayOf(today), -7 * (weeks - 1));
-  const { data } = await supabase.from("workout_logs").select("performed_on").eq("client_id", clientId).eq("completed", true).gte("performed_on", first);
-  const out: Array<{ week: string; count: number }> = [];
-  for (let i = 0; i < weeks; i++) out.push({ week: addDays(first, i * 7), count: 0 });
-  for (const l of data ?? []) {
-    const m = mondayOf(l.performed_on);
-    const b = out.find((x) => x.week === m);
-    if (b) b.count++;
-  }
-  return out;
 }

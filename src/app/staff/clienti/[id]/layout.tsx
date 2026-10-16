@@ -24,6 +24,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
   const tabs = [
     { href: base, label: "Panoramica", exact: true },
     { href: `${base}/programma`, label: "Programma" },
+    { href: `${base}/allenamenti`, label: "Allenamenti" },
     { href: `${base}/check`, label: "Check" },
     { href: `${base}/diario`, label: "Diario", dot: (flagged ?? 0) > 0 },
     ...(me.role === "owner" ? [{ href: `${base}/pagamenti`, label: "Pagamenti" }] : []),

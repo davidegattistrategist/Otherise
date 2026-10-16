@@ -1,20 +1,24 @@
+import { StrengthTests } from "@/components/strength-tests";
+import { strengthTestSeries } from "@/lib/strength/tests";
 import { sortChecks } from "@/lib/check-order";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { getStaffClient } from "@/lib/data/client";
 import { createClient } from "@/lib/supabase/server";
-import { diffDays, formatShort, todayISO } from "@/lib/dates";
+import { addDays, diffDays, formatShort, todayISO } from "@/lib/dates";
 import { parseContent } from "@/lib/program/types";
 import { currentProgram, completedCount, displayWeek, nextWorkout, programEndDate, timeProgress, weekPosition } from "@/lib/program/schedule";
-import { summarizeSets, type SetLog } from "@/lib/program/prescription";
 import { getPtCounter, getUnpaidRows } from "@/lib/data/billing";
 import { billingStatus, withUnpaidRows, formatEuro, PLAN_LABELS, type BillingRow, type PlanKind } from "@/lib/billing";
 import { CHECKIN_QUESTIONS } from "@/lib/checkin";
 import { LineChart } from "@/components/line-chart";
-import { BarChart } from "@/components/bar-chart";
 import { ExerciseProgress } from "@/components/exercise-progress";
-import { getExerciseProgress, getWeeklySessions } from "@/lib/data/progress";
+import { getExerciseProgress } from "@/lib/data/progress";
+import { getTrainingHistory } from "@/lib/data/training";
+import { trainingSummary } from "@/lib/training-history";
+import { TrainingHistoryList } from "@/components/training-history";
+import { TrainingSummaryView } from "@/components/training-summary";
 import { ArrowCTA, BigNumber, Card, Dot, EmptyState, Eyebrow, LinkButton, Notice, ProgressBar, Ring, fmtNum } from "@/components/ui";
 import { ClearParams } from "@/components/clear-param";
 
@@ -41,17 +45,16 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
   const today = todayISO();
 
   // tutto insieme: una sola attesa invece di quattro una dopo l'altra
-  const [programs, checks, sessions, checkins, recentLogs, notes, billing, settings, exerciseSeries, weekly, ptCounterRes, unpaidRows] = await Promise.all([
+  const [programs, checks, sessions, checkins, history, notes, billing, settings, exerciseSeries, ptCounterRes, unpaidRows] = await Promise.all([
     supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", id).in("status", ["published", "draft"]).order("start_date", { ascending: false, nullsFirst: true }),
-    supabase.from("checks").select("check_date, sequence, created_at, order_hint, weight_kg, body_fat_pct, lean_mass_kg, notes_next_phase").eq("client_id", id).order("check_date", { ascending: true }),
+    supabase.from("checks").select("check_date, sequence, created_at, order_hint, weight_kg, body_fat_pct, lean_mass_kg, notes_next_phase, strength_tests").eq("client_id", id).order("check_date", { ascending: true }),
     supabase.from("pt_sessions").select("id, session_date, notes").eq("client_id", id).order("session_date", { ascending: false }).limit(3),
     supabase.from("checkins").select("id, week_start, training, sleep, stress, adherence, flagged, flag_reasons, request, reviewed_at").eq("client_id", id).order("week_start", { ascending: false }).limit(1),
-    supabase.from("exercise_logs").select("exercise_name, performed_on, sets, result_text").eq("client_id", id).order("performed_on", { ascending: false }).limit(8),
+    getTrainingHistory(supabase, id, addDays(today, -7 * 12)),
     supabase.from("client_private_notes").select("notes").eq("client_id", id).maybeSingle(),
     me.role === "owner" ? supabase.rpc("client_billing", { cid: id }) : Promise.resolve({ data: null }),
     supabase.from("app_settings").select("reminder_days").maybeSingle(),
     getExerciseProgress(supabase, id),
-    getWeeklySessions(supabase, id),
     me.role === "owner" ? getPtCounter(supabase, id) : Promise.resolve(null),
     me.role === "owner" ? getUnpaidRows(supabase, id) : Promise.resolve(null),
   ]);
@@ -105,6 +108,9 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
       </Card>
     );
   }
+
+  const curDays = current?.start_date ? parseContent(current.content).days.length : 0;
+  const training = trainingSummary(history, today, current?.start_date && curDays ? { start: current.start_date, end: programEndDate(current.start_date, current.weeks), daysPerWeek: curDays } : null);
 
   const checkList = sortChecks(checks.data ?? []);
   const last = checkList[checkList.length - 1];
@@ -185,26 +191,14 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
       </Card>
 
       <ExerciseProgress series={exerciseSeries} selected={esercizio} />
+      <StrengthTests series={strengthTestSeries(checkList)} title="Test di forza dei check" footer={<Link href={`/staff/clienti/${id}/check`} className="text-sm font-semibold underline">Tutti i check</Link>} />
 
-      <Card className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between"><Eyebrow>Allenamenti per settimana</Eyebrow><span className="text-sm text-muted">ultime 8</span></div>
-        <BarChart label="Allenamenti per settimana" height={90} bars={weekly.map((w) => ({ label: formatShort(w.week).replace(/ \d{4}$/, ""), value: w.count }))} />
-      </Card>
-
-      <Card className="flex flex-col gap-3">
-        <Eyebrow>Logbook recente</Eyebrow>
-        {recentLogs.data?.length ? (
-          <ul className="flex flex-col">
-            {recentLogs.data.map((l, i) => (
-              <li key={i} className="flex items-baseline justify-between gap-3 border-t border-sand-deep py-2 first:border-t-0">
-                <span className="min-w-0 truncate font-semibold">{l.exercise_name}</span>
-                <span className="shrink-0 text-right text-sm text-muted tabular">{summarizeSets(l.sets as unknown as SetLog[]) ?? l.result_text} · {formatShort(l.performed_on, 0)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-[15px] text-muted">Il cliente non ha ancora registrato allenamenti.</p>
-        )}
+      <Card className="flex flex-col gap-3 [grid-column:1/-1]">
+        <div className="flex items-baseline justify-between gap-2"><Eyebrow>Allenamenti</Eyebrow><Link href={`/staff/clienti/${id}/allenamenti`} className="text-sm font-semibold underline">Tutto lo storico</Link></div>
+        <TrainingSummaryView summary={training} />
+        <div className="border-t border-sand-deep pt-1">
+          <TrainingHistoryList sessions={history.slice(0, 5)} clientId={id} emptyText="Il cliente non ha ancora registrato allenamenti." />
+        </div>
       </Card>
 
       {client.weekly_checkin ? (

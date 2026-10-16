@@ -16,6 +16,8 @@ import {
   type SkinfoldSite,
 } from "@/lib/body/skinfolds";
 import { BodyCharts, CheckCompare } from "@/components/body-progress";
+import { StrengthTests } from "@/components/strength-tests";
+import { strengthTestSeries } from "@/lib/strength/tests";
 import { Button, Card, EmptyState, Eyebrow, Notice, fmtNum } from "@/components/ui";
 import { ClearParams } from "@/components/clear-param";
 import { setSkinfoldFormula } from "./actions";
@@ -92,6 +94,7 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
       ) : (
         <>
           <BodyCharts points={body.points} sumSites={body.sumSites} formulas={body.formulas} />
+          <StrengthTests series={strengthTestSeries(checks ?? [])} title="Test di forza e performance" />
           <CheckCompare points={body.points} sumSites={body.sumSites} />
           {photoAlbums.length ? (
             <Card className="flex flex-col gap-2">

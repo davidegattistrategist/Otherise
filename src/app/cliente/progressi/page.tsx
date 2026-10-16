@@ -6,6 +6,8 @@ import { averagesOf, type SkinfoldReadings } from "@/lib/body/skinfolds";
 import { circOf, firstToLast, sitesInAll, toNumber, type BodyPoint } from "@/lib/body/progress";
 import { BodyCharts, CheckCompare } from "@/components/body-progress";
 import { LineChart } from "@/components/line-chart";
+import { StrengthTests } from "@/components/strength-tests";
+import { strengthTestSeries } from "@/lib/strength/tests";
 import { ExerciseProgress } from "@/components/exercise-progress";
 import { getExerciseProgress } from "@/lib/data/progress";
 import { IconTrophy } from "@/components/icons";
@@ -14,8 +16,6 @@ import { myCheckPhotos } from "@/lib/check-photos";
 import { PhotoAlbums, PhotoCompare } from "@/components/check-photos";
 
 export const metadata: Metadata = { title: "Progressi" };
-
-type Test = { exercise?: string; load?: number | null; reps?: number | null; rpe?: number | null; e1rm?: number | null };
 
 export default async function ProgressPage({ searchParams }: { searchParams: Promise<{ esercizio?: string }> }) {
   const { esercizio } = await searchParams;
@@ -53,18 +53,8 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
     { label: "Massa magra", d: firstToLast(points, (p) => p.leanKg), unit: "kg" },
   ];
 
-  // Test di forza: ultimo valore per esercizio e andamento
-  const byExercise = new Map<string, Array<{ date: string; value: number; text: string }>>();
-  for (const c of list) {
-    for (const t of ((c.strength_tests as Test[] | null) ?? [])) {
-      if (!t.exercise) continue;
-      const value = t.e1rm ?? t.load ?? null;
-      if (value === null) continue;
-      const arr = byExercise.get(t.exercise) ?? [];
-      arr.push({ date: c.check_date, value, text: t.e1rm ? `≈ ${fmtNum(t.e1rm)} kg massimale stimato` : `${fmtNum(t.load)} kg × ${t.reps ?? "?"}` });
-      byExercise.set(t.exercise, arr);
-    }
-  }
+  // Test di forza dei check: un grafico per esercizio
+  const strength = strengthTestSeries(list);
   const testsText = list.filter((c) => c.tests_text).slice(-3).reverse();
   const ptThisYear = (sessions ?? []).filter((d) => String(d).slice(0, 4) === new Date().getFullYear().toString()).length;
 
@@ -102,6 +92,25 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
         </Card>
       ) : null}
 
+      {strength.length ? (
+        <StrengthTests series={strength} title="Test di forza e performance" footer={testsText.length ? <div className="flex flex-col">{testsText.map((c) => (
+            <div key={c.id} className="border-t border-sand-deep pt-2.5 text-[15px]">
+              <div className="text-sm text-muted">{formatShort(c.check_date)}</div>
+              <p className="whitespace-pre-line">{c.tests_text}</p>
+            </div>
+          ))}</div> : null} />
+      ) : testsText.length ? (
+        <Card className="flex flex-col gap-3">
+          <Eyebrow>Test di forza e performance</Eyebrow>
+          {testsText.map((c) => (
+            <div key={c.id} className="border-t border-sand-deep pt-2.5 text-[15px]">
+              <div className="text-sm text-muted">{formatShort(c.check_date)}</div>
+              <p className="whitespace-pre-line">{c.tests_text}</p>
+            </div>
+          ))}
+        </Card>
+      ) : null}
+
       <ExerciseProgress title="I tuoi esercizi" series={exerciseSeries} selected={esercizio} />
 
       {records.length ? (
@@ -115,31 +124,6 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
               </li>
             ))}
           </ul>
-        </Card>
-      ) : null}
-
-      {byExercise.size || testsText.length ? (
-        <Card className="flex flex-col gap-3">
-          <Eyebrow>Test di forza e performance</Eyebrow>
-          {[...byExercise.entries()].map(([name, pts]) => {
-            const lastT = pts[pts.length - 1];
-            const firstT = pts[0];
-            return (
-              <div key={name} className="flex items-baseline justify-between gap-3 border-t border-sand-deep pt-2.5 first:border-t-0 first:pt-0">
-                <div className="min-w-0">
-                  <div className="font-semibold">{name}</div>
-                  <div className="text-sm text-muted">{lastT.text} · {formatShort(lastT.date)}</div>
-                </div>
-                {pts.length > 1 ? <span className="shrink-0 text-sm font-semibold tabular">{lastT.value >= firstT.value ? "+" : "−"}{fmtNum(Math.abs(lastT.value - firstT.value))} kg</span> : null}
-              </div>
-            );
-          })}
-          {testsText.map((c) => (
-            <div key={c.id} className="border-t border-sand-deep pt-2.5 text-[15px]">
-              <div className="text-sm text-muted">{formatShort(c.check_date)}</div>
-              <p className="whitespace-pre-line">{c.tests_text}</p>
-            </div>
-          ))}
         </Card>
       ) : null}
 

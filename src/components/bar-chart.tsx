@@ -13,7 +13,10 @@ export function BarChart({
   highlightLast = true,
   showValues = true,
   selected,
+  labelEvery,
 }: {
+  /** con molte barre strette: un'etichetta ogni N (contando dall'ultima), scritta per intero */
+  labelEvery?: number;
   /** con href ogni barra si può toccare (es. per aprire il dettaglio del mese) */
   bars: Array<{ label: string; value: number; href?: string }>;
   /** indice della barra aperta (evidenziata) */
@@ -34,7 +37,11 @@ export function BarChart({
           <>
             {showValues ? <span className={cx("max-w-full truncate text-[10px] leading-none tracking-tighter tabular sm:text-[11px] sm:tracking-normal", b.value ? "text-ink-soft" : "text-transparent")}>{b.value ? format(b.value) : "0"}</span> : null}
             <div className={cx("w-full max-w-9 rounded-t-md", on ? "bg-accent" : b.value ? "bg-ink" : "bg-sand-deep")} style={{ height: Math.max(h, 3) }} />
-            <span className={cx("truncate text-[10px] sm:text-[11px]", on && selected !== undefined ? "font-bold text-ink" : "text-muted")}>{b.label}</span>
+            {labelEvery ? (
+              <span className={cx("text-[10px] whitespace-nowrap text-muted sm:text-[11px]", i === bars.length - 1 ? "self-end" : i === 0 ? "self-start" : "")}>{(bars.length - 1 - i) % labelEvery === 0 ? b.label : "\u00a0"}</span>
+            ) : (
+              <span className={cx("truncate text-[10px] sm:text-[11px]", on && selected !== undefined ? "font-bold text-ink" : "text-muted")}>{b.label}</span>
+            )}
           </>
         );
         const cls = "flex min-w-0 flex-1 flex-col items-center gap-1";

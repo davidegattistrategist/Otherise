@@ -9,7 +9,8 @@ import { useState } from "react";
 import { formatShort, type ISODate } from "@/lib/dates";
 import { fmtNum } from "./ui";
 
-export type Point = { date: ISODate; value: number };
+/** `label` (es. "Check 3") al posto della data: i punti con l'etichetta restano nell'ordine dato. */
+export type Point = { date: ISODate | null; value: number; label?: string };
 
 export function LineChart({
   points,
@@ -29,7 +30,8 @@ export function LineChart({
   yMax?: number;
 }) {
   const [sel, setSel] = useState<number | null>(null);
-  const data = points.filter((p) => Number.isFinite(p.value)).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const finite = points.filter((p) => Number.isFinite(p.value));
+  const data = finite.some((p) => p.label) ? finite : finite.sort((a, b) => ((a.date ?? "") < (b.date ?? "") ? -1 : 1));
   if (data.length === 0) {
     return <div className="flex h-24 items-center text-sm text-muted">Ancora nessun dato</div>;
   }
@@ -55,7 +57,8 @@ export function LineChart({
   const ticks = [lo, (lo + hi) / 2, hi];
   const last = data[data.length - 1];
   const first = data[0];
-  const year = Number(last.date.slice(0, 4));
+  const year = last.date ? Number(last.date.slice(0, 4)) : undefined;
+  const lab = (d: Point) => d.label ?? formatShort(d.date, year);
   const showEvery = Math.ceil(data.length / 4);
   const picked = sel !== null && sel < data.length ? sel : null;
   /** Il punto più vicino al dito (in orizzontale). */
@@ -68,7 +71,7 @@ export function LineChart({
     setSel(best);
   };
   const tip = picked !== null ? data[picked] : null;
-  const tipText = tip ? `${formatShort(tip.date, year)}: ${fmtNum(tip.value, digits)}${unit ? ` ${unit}` : ""}` : "";
+  const tipText = tip ? `${lab(tip)}: ${fmtNum(tip.value, digits)}${unit ? ` ${unit}` : ""}` : "";
   const tipX = picked !== null ? Math.min(Math.max(x(picked), padL + 50), W - padR - 50) : 0;
 
   return (
@@ -104,8 +107,8 @@ export function LineChart({
           vectorEffect="non-scaling-stroke"
         />
         {data.map((d, i) => (
-          <circle key={d.date + i} cx={x(i)} cy={y(d.value)} r={i === data.length - 1 ? 4.5 : 2.5} fill={i === data.length - 1 ? "var(--color-accent)" : "var(--color-ink)"}>
-            <title>{`${formatShort(d.date, year)}: ${fmtNum(d.value, digits)} ${unit}`}</title>
+          <circle key={i} cx={x(i)} cy={y(d.value)} r={i === data.length - 1 ? 4.5 : 2.5} fill={i === data.length - 1 ? "var(--color-accent)" : "var(--color-ink)"}>
+            <title>{`${lab(d)}: ${fmtNum(d.value, digits)} ${unit}`}</title>
           </circle>
         ))}
         {picked === null ? (
@@ -125,7 +128,7 @@ export function LineChart({
         {data.map((d, i) =>
           i % showEvery === 0 || i === data.length - 1 ? (
             <text key={"l" + i} x={x(i)} y={H - 6} textAnchor={i === 0 && data.length > 1 ? "start" : i === data.length - 1 && data.length > 1 ? "end" : "middle"} fontSize="10.5" fill="var(--color-muted)">
-              {formatShort(d.date, year)}
+              {lab(d)}
             </text>
           ) : null,
         )}

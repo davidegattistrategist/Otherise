@@ -1392,3 +1392,102 @@ describe("photo-view: inquadratura del confronto foto", async () => {
     expect(frameSize(1200, 700, 3 / 4)).toEqual({ fw: 525, fh: 700 });
   });
 });
+
+describe("storico degli allenamenti e costanza (16/10)", async () => {
+  const { buildHistory, weeklyCounts, weeklyAverage, trainingSummary } = await import("./training-history");
+  const programs = [{ id: "p1", title: "Fase 2 · Forza", days: [{ id: "d1", title: "Giorno 1 · Spinta", items: 3 }, { id: "d2", title: "Giorno 2 · Tirata", items: 2 }] }];
+  const log = (id: string, date: string, day = "d1", completed = true) => ({ id, program_id: "p1", week: 1, day_id: day, performed_on: date, completed, notes: "", discomfort: "" });
+  const history = buildHistory({
+    logs: [log("l1", "2026-10-12"), log("l2", "2026-10-14", "d2"), log("l3", "2026-10-16", "d1", false)],
+    exercises: [
+      { workout_log_id: "l1", item_id: "b", exercise_name: "Panca", sets: [{ reps: 8, load: 60, done: true }], result_text: "" },
+      { workout_log_id: "l1", item_id: "a", exercise_name: "Squat", sets: [], result_text: "fatto leggero" },
+      { workout_log_id: "l1", item_id: "c", exercise_name: "Dip", sets: [], result_text: "" },
+    ],
+    programs,
+    free: [{ id: "f1", kind: "spinning", minutes: 45, effort: 3, performed_on: "2026-10-16", notes: " bello " }],
+    ptSources: ["p1:1:d2"],
+    itemOrder: new Map([["a", 0], ["b", 1], ["c", 2]]),
+  });
+
+  it("unisce programma e liberi dal più recente, prima il programma a parità di giorno", () => {
+    expect(history.map((s) => s.id)).toEqual(["l3", "f1", "l2", "l1"]);
+    const free = history[1];
+    expect(free.kind).toBe("free");
+    expect(free.title).toBe("Spinning");
+    expect(free.subtitle).toContain("45 min");
+    expect(free.notes).toBe("bello");
+  });
+
+  it("esercizi in ordine del programma, quelli vuoti fuori; sessione PT riconosciuta", () => {
+    const l1 = history.find((s) => s.id === "l1")!;
+    if (l1.kind !== "program") throw new Error("atteso programma");
+    expect(l1.exercises.map((e) => e.name)).toEqual(["Squat", "Panca"]);
+    expect(l1.exercises[0].summary).toBe("fatto leggero");
+    expect(l1.planned).toBe(3);
+    expect(l1.title).toBe("Giorno 1 · Spinta");
+    expect(l1.subtitle).toBe("Fase 2 · Forza · settimana 1");
+    expect(l1.pt).toBe(false);
+    const l2 = history.find((s) => s.id === "l2")!;
+    expect(l2.kind === "program" && l2.pt).toBe(true);
+  });
+
+  it("allenamenti per settimana: solo quelli chiusi, liberi a parte", () => {
+    const counts = weeklyCounts(history, "2026-10-16", 3);
+    expect(counts.map((w) => w.week)).toEqual(["2026-09-28", "2026-10-05", "2026-10-12"]);
+    expect(counts[2]).toEqual({ week: "2026-10-12", program: 2, free: 1 });
+    expect(counts[0]).toEqual({ week: "2026-09-28", program: 0, free: 0 });
+  });
+
+  it("media sulle settimane intere, esclusa quella in corso", () => {
+    const counts = [
+      { week: "2026-09-21", program: 3, free: 0 },
+      { week: "2026-09-28", program: 2, free: 1 },
+      { week: "2026-10-05", program: 2, free: 0 },
+      { week: "2026-10-12", program: 9, free: 9 },
+    ];
+    expect(weeklyAverage(counts, 3)).toBeCloseTo(2.7, 1);
+    expect(weeklyAverage(counts, 3, "program")).toBeCloseTo(2.3, 1);
+    expect(weeklyAverage([{ week: "2026-10-12", program: 1, free: 0 }])).toBe(0);
+  });
+
+  it("riassunto: costanza sul programma, ultimo allenamento anche libero", () => {
+    const s = trainingSummary(history, "2026-10-16", { start: "2026-10-01", end: "2026-10-28", daysPerWeek: 2 });
+    expect(s.thisWeek).toEqual({ program: 2, free: 1 });
+    expect(s.daysSinceLast).toBe(0);
+    expect(s.consistency.expected).toBe(4);
+    expect(s.consistency.done).toBe(2);
+    expect(s.consistency.pct).toBe(50);
+    expect(trainingSummary(history, "2026-10-16", null).consistency.pct).toBeNull();
+    expect(trainingSummary([], "2026-10-16", null).daysSinceLast).toBeNull();
+  });
+});
+
+describe("test di forza dei check (16/10)", async () => {
+  const { strengthTestSeries, testDetail } = await import("./strength/tests");
+  const checks = [
+    { check_date: "2026-06-01", strength_tests: [{ exercise: "Squat", load: 100, reps: 5, rpe: 9, e1rm: 120 }, { exercise: "Trazioni", load: 10, reps: null, e1rm: null }] },
+    { check_date: null, sequence: 2, strength_tests: [{ exercise: "squat ", load: 90, reps: 5, e1rm: 105 }] },
+    { check_date: null, sequence: 1, strength_tests: [{ exercise: "Squat", load: 80, reps: 5, e1rm: 95 }, { exercise: "Squat", load: 85, reps: 5, e1rm: 99 }] },
+    { check_date: "2026-09-01", strength_tests: [{ exercise: "Squat", load: 110, reps: 3, rpe: 10, e1rm: 118 }, { exercise: "", load: 50 }, { exercise: "Panca", load: 0 }] },
+  ];
+  const series = strengthTestSeries(checks, 2026);
+
+  it("una serie per esercizio (stesso nome con maiuscole e spazi diversi), prima quella con più test", () => {
+    expect(series.map((s) => s.name)).toEqual(["Squat", "Trazioni"]);
+    expect(series[0].points.map((p) => p.value)).toEqual([99, 105, 120, 118]);
+  });
+
+  it("i check senza data restano al loro posto con l'etichetta Check N", () => {
+    expect(series[0].points.map((p) => p.label)).toEqual(["Check 1", "Check 2", "1 giu", "1 set"]);
+    expect(series[0].points[0].date).toBeNull();
+  });
+
+  it("senza massimale stimato vale il carico; il dettaglio dice come è stato fatto", () => {
+    const t = series[1].points[0];
+    expect(t).toMatchObject({ value: 10, estimated: false, reps: null });
+    expect(testDetail(t)).toBe("10 kg");
+    expect(testDetail(series[0].points[2])).toBe("100 kg × 5 @ RPE 9");
+    expect(testDetail(series[0].points[3])).toBe("110 kg × 3");
+  });
+});
