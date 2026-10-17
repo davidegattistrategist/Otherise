@@ -79,3 +79,19 @@ export function duplicateDay(content: ProgramContent, dayId: string): ProgramCon
   days.splice(idx + 1, 0, copy);
   return { days };
 }
+
+/**
+ * Nome della nuova fase. Con la numerazione progressiva ("21 Preparazione
+ * beach volley") il numero è quello dopo il più alto del cliente, anche se si
+ * parte da una fase più vecchia (da "20" con la 21 già fatta → "22"), con le
+ * stesse cifre ("06" → "07"). Senza numero: "<nome> · nuova fase".
+ */
+export function nextPhaseTitle(prevTitle: string, clientTitles: string[]): string {
+  const m = /^(\d+)(\s*[-–·.]?\s*)(.*)$/.exec(prevTitle.trim());
+  if (!m) return `${prevTitle.trim()} · nuova fase`;
+  const numbers = [prevTitle, ...clientTitles].map((t) => /^(\d+)/.exec(t.trim())?.[1]).filter((x): x is string => Boolean(x)).map(Number);
+  const next = Math.max(...numbers) + 1;
+  const width = m[1].length;
+  const rest = m[3].replace(/\s*·\s*nuova fase$/i, "").trim();
+  return `${String(next).padStart(width, "0")}${rest ? ` ${rest}` : ""}`;
+}

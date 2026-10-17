@@ -126,7 +126,8 @@ export function LineChart({
           </g>
         )}
         {data.map((d, i) =>
-          i % showEvery === 0 || i === data.length - 1 ? (
+          // l'ultima sempre; le altre a intervalli, ma non troppo vicine all'ultima (si sovrapponevano)
+          (i % showEvery === 0 && data.length - 1 - i >= Math.max(1, Math.ceil(showEvery * 0.75))) || i === data.length - 1 ? (
             <text key={"l" + i} x={x(i)} y={H - 6} textAnchor={i === 0 && data.length > 1 ? "start" : i === data.length - 1 && data.length > 1 ? "end" : "middle"} fontSize="10.5" fill="var(--color-muted)">
               {lab(d)}
             </text>

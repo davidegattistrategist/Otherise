@@ -108,9 +108,10 @@ test("diario con una richiesta: la bozza riempie la risposta", async ({ page }) 
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}/);
   const id = page.url().split("/")[5];
   await page.goto(`/staff/clienti/${id}/diario`);
-  const card = page.getByLabel("Bozza di risposta");
+  // .filter visible: mentre la pagina arriva c'è per un attimo anche una copia nascosta
+  const card = page.getByLabel("Bozza di risposta").filter({ visible: true }).first();
   await expect(card).toBeVisible();
   await expect(card).toContainText("puoi spostarlo a sabato");
   await card.getByRole("button", { name: "Usa e modifica" }).click();
-  await expect(page.locator("textarea[name=coach_reply]").first()).toHaveValue(/puoi spostarlo a sabato/);
+  await expect(page.locator("textarea[name=coach_reply]").filter({ visible: true }).first()).toHaveValue(/puoi spostarlo a sabato/);
 });

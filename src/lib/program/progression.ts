@@ -24,8 +24,21 @@ export function progress(base: string, rule: ProgressionRule, steps: number): st
   if (!text) return null;
   if (rule === "same" || steps === 0) return text;
   // serie x ripetizioni (o secondi) + resto
-  const m = /^(\d{1,2})\s*[x×]\s*(\d{1,3})(?:\s*([/-])\s*(\d{1,3}))?(\s*(?:"|''|”|″|sec\b|s\b))?(.*)$/i.exec(text);
+  const full = /^(\d{1,2})\s*[x×]\s*(\d{1,3})(?:\s*([/-])\s*(\d{1,3}))?(\s*(?:"|''|”|″|sec\b|s\b))?(.*)$/i.exec(text);
+  // nei circuiti spesso le serie non si scrivono (sono i giri): "12 16kg", "30\"", "8-10"
+  const noSets = full ? null : /^()(\d{1,3})(?:\s*([/-])\s*(\d{1,3}))?(\s*(?:"|''|”|″|sec\b|s\b))?(?=$|\s|[,;·])(.*)$/i.exec(text);
+  // solo il carico: "16kg"
+  const loadOnly = full || noSets ? null : /^\d+(?:[.,]\d+)?\s*kg\b/i.test(text);
+  if (loadOnly) {
+    if (rule !== "kg25" && rule !== "kg5" && rule !== "double") return null;
+    const k = /(\d+(?:[.,]\d+)?)\s*kg/i.exec(text)!;
+    const per = rule === "kg5" ? 5 : 2.5;
+    const n = rule === "double" ? Math.floor(steps / 3) : steps;
+    return text.replace(k[0], `${fmt(num(k[1]) + per * n)}kg`);
+  }
+  const m = full ?? noSets;
   if (!m) return null;
+  if (noSets && rule === "sets") return null;
   let sets = Number(m[1]);
   let a = Number(m[2]);
   let b = m[4] ? Number(m[4]) : null;
@@ -69,7 +82,7 @@ export function progress(base: string, rule: ProgressionRule, steps: number): st
     }
   }
   const reps = b !== null ? `${a}${sep}${b}` : `${a}`;
-  return `${sets}x${reps}${m[5] ?? ""}${rest}`;
+  return `${noSets ? "" : `${sets}x`}${reps}${m[5] ?? ""}${rest}`;
 }
 
 /** Compila le settimane dopo `from` partendo dalla prescrizione di `from` (le prescrizioni non riconosciute restano com'erano). */
@@ -84,7 +97,11 @@ export function fillWeeks(prescriptions: string[], from: number, rule: Progressi
 /** Settimana di scarico: un terzo delle serie in meno (minimo 2), carico −10%. */
 export function deload(rx: string): string {
   const m = /^(\d{1,2})\s*[x×]\s*(.*)$/i.exec(rx.trim());
-  if (!m) return rx;
+  if (!m) {
+    // senza serie (circuiti): solo il carico −10%
+    const k = /(\d+(?:[.,]\d+)?)\s*kg/i.exec(rx);
+    return k ? rx.replace(k[0], `${fmt(mround(num(k[1]) * 0.9, 2.5))}kg`) : rx;
+  }
   const sets = Math.max(2, Math.round(Number(m[1]) * (2 / 3)));
   let rest = m[2];
   const k = /(\d+(?:[.,]\d+)?)\s*kg/i.exec(rest);

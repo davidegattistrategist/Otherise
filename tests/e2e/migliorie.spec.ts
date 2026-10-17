@@ -398,13 +398,13 @@ test("email sbagliata nell'invito: la si corregge e 'Rimanda l'invito' usa quell
   await page.getByRole("button", { name: "Crea cliente" }).click();
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
   await page.goto(`${page.url()}/profilo`);
-  await expect(page.getByText(`Invito inviato a ${wrong}`)).toBeVisible();
+  await expect(page.getByText(`Invito inviato a ${wrong}`).filter({ visible: true }).first()).toBeVisible();
   // correggo l'email e premo subito "Rimanda l'invito", senza salvare la scheda
   await page.fill("input[name=email]", right);
   await page.getByRole("button", { name: "Rimanda l'invito" }).click();
   await expect(page.getByText(`Invito inviato a ${right}. Ho salvato anche la nuova email nella scheda.`)).toBeVisible();
   await page.reload();
-  await expect(page.getByText(`Invito inviato a ${right}`)).toBeVisible();
+  await expect(page.getByText(`Invito inviato a ${right}`).filter({ visible: true }).first()).toBeVisible();
   // il link per entrare apre l'account con l'email giusta: si sceglie la password e si entra con quella
   await page.getByRole("button", { name: "Prepara il link per entrare" }).click();
   const box = page.getByText(/Ecco il link per entrare nell'app/);

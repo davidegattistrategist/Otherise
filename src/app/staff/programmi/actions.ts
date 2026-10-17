@@ -7,7 +7,7 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isISODate, todayISO, addDays } from "@/lib/dates";
 import { cloneWithNewIds, newId, normalizeWeeks, parseContent, programContentSchema, type ProgramContent } from "@/lib/program/types";
-import { buildNextPhase, type ItemLastLog } from "@/lib/program/next-phase";
+import { buildNextPhase, nextPhaseTitle, type ItemLastLog } from "@/lib/program/next-phase";
 import { parseProgramSheet } from "@/lib/import/sheet";
 import { programEndDate } from "@/lib/program/schedule";
 import { notify } from "@/lib/notify";
@@ -108,11 +108,13 @@ export async function createNextPhase(previousId: string, fd?: FormData) {
   const { data: logs } = await supabase.from("exercise_logs").select("item_id, week, sets, result_text").eq("program_id", prev.id);
   const content = buildNextPhase(parseContent(prev.content), weeks, (logs ?? []) as unknown as ItemLastLog[]);
   const start = prev.start_date ? addDays(programEndDate(prev.start_date, prev.weeks), 1) : todayISO();
+  // numerazione progressiva sull'ultima fase del cliente, non su quella di partenza
+  const { data: siblings } = await supabase.from("programs").select("title").eq("client_id", prev.client_id).eq("is_template", false);
   const { data, error } = await supabase
     .from("programs")
     .insert({
       client_id: prev.client_id,
-      title: `${prev.title} · nuova fase`,
+      title: nextPhaseTitle(prev.title, (siblings ?? []).map((p) => p.title)),
       weeks,
       start_date: start < todayISO() ? todayISO() : start,
       content: asJson(content),

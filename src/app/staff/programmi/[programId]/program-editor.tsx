@@ -797,6 +797,39 @@ function IconBtn({ label, onClick, disabled, children }: { label: string; onClic
   );
 }
 
+/**
+ * Nome dell'esercizio: a riposo è testo che va a capo (i nomi lunghi, es.
+ * esercizi posturali, si leggono interi); toccandolo diventa la casella con i
+ * suggerimenti dell'eserciziario. Vuoto resta sempre la casella.
+ */
+function NameField({ value, onChange, placeholder, className }: { value: string; onChange: (v: string) => void; placeholder: string; className: string }) {
+  const [editing, setEditing] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (editing && document.activeElement !== input.current) input.current?.focus();
+  }, [editing]);
+  if (editing || !value.trim()) {
+    return (
+      <input
+        ref={input}
+        list="exercise-library"
+        aria-label="Esercizio"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setEditing(true)}
+        onBlur={() => setEditing(false)}
+        placeholder={placeholder}
+        className={className}
+      />
+    );
+  }
+  return (
+    <button type="button" title={value} aria-label={`Esercizio: ${value}. Tocca per cambiarlo`} onClick={() => setEditing(true)} onFocus={() => setEditing(true)} className={cx(className, "block min-h-[34px] text-left leading-snug break-words whitespace-normal")}>
+      {value}
+    </button>
+  );
+}
+
 const cellInput = "w-full rounded-lg border border-transparent bg-sand/70 px-2 py-1.5 text-sm text-ink hover:border-sand-deep focus:border-ink focus:bg-white focus:outline-none";
 
 function BlockRows({
@@ -881,14 +914,7 @@ function BlockRows({
           <tr key={it.id} {...exAttrs(it)} className={cx("align-top", !multi && "border-t border-sand-deep", aiNote && "bg-accent-soft/30")}>
             <td className="px-2 py-2.5 font-semibold text-muted">{itemLabel(block, blockIdx, itemIdx)}</td>
             <td className="px-2 py-2">
-              <input
-                list="exercise-library"
-                aria-label="Esercizio"
-                value={it.name}
-                onChange={(e) => onItemName(itemIdx, e.target.value)}
-                placeholder="Scegli o scrivi un esercizio"
-                className={cx(cellInput, "font-semibold")}
-              />
+              <NameField value={it.name} onChange={(v) => onItemName(itemIdx, v)} placeholder="Scegli o scrivi un esercizio" className={cx(cellInput, "font-semibold")} />
               <div className="mt-1 flex flex-col gap-0.5 px-1 text-xs text-muted">
                 {it.name.trim() && !it.exerciseId ? <span>Non in eserciziario</span> : null}
                 {ex && !ex.video_url ? <span>Senza video</span> : null}
@@ -1243,7 +1269,7 @@ function MobileBlock({
             <div key={it.id} {...exAttrs(it)} className={cx("flex flex-col gap-1.5", itemIdx > 0 && "border-t border-sand-deep pt-3", aiNotes[it.id] && "rounded-xl bg-accent-soft/40 p-2")}>
               <div className="flex items-center gap-2">
                 <span className="w-7 shrink-0 text-sm font-semibold text-muted">{itemLabel(block, blockIdx, itemIdx)}</span>
-                <input list="exercise-library" aria-label="Esercizio" value={it.name} onChange={(e) => onItemName(itemIdx, e.target.value)} placeholder="Esercizio" className={cx(cellInput, "flex-1 font-semibold")} />
+                <NameField value={it.name} onChange={(v) => onItemName(itemIdx, v)} placeholder="Esercizio" className={cx(cellInput, "min-w-0 flex-1 font-semibold")} />
                 {multi && block.items.length > 1 ? (
                   <>
                     <IconBtn label="Sposta su nel gruppo" disabled={itemIdx === 0} onClick={() => onBlock((b) => swap(b.items, itemIdx, itemIdx - 1))}><IconUp size={16} /></IconBtn>

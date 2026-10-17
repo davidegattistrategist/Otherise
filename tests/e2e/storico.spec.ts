@@ -81,10 +81,13 @@ test("editor: fase precedente a portata di mano, poi si torna esattamente dov'er
   await page.waitForURL(/\/staff\/programmi\/[0-9a-f-]{36}$/);
   await page.waitForLoadState("networkidle");
   // tocca un esercizio del giorno 2
-  const field = page.locator("[data-day-index='1'] [data-ex] input[aria-label='Esercizio']").filter({ visible: true }).first();
+  // a riposo il nome è testo intero (va a capo); toccandolo diventa la casella
+  const row = page.locator("[data-day-index='1'] [data-ex]").filter({ visible: true }).first();
+  const name = (await row.getAttribute("data-ex-name"))!;
+  const field = row.getByRole("button", { name: `Esercizio: ${name}. Tocca per cambiarlo` });
   await field.scrollIntoViewIfNeeded();
   await field.click();
-  const name = (await field.inputValue()).trim();
+  await expect(row.getByLabel("Esercizio", { exact: true })).toBeFocused();
   const before = await page.evaluate(() => scrollY);
 
   await page.locator("[data-open-previous]").click();
@@ -103,7 +106,7 @@ test("editor: fase precedente a portata di mano, poi si torna esattamente dov'er
   await panel.getByRole("button", { name: "Torna al programma" }).click();
   await expect(panel).toBeHidden();
   expect(Math.abs((await page.evaluate(() => scrollY)) - before)).toBeLessThan(4);
-  await expect(field).toHaveValue(name);
+  await expect(row).toHaveAttribute("data-ex-name", name);
   // riaperto: subito pronto, com'era
   await page.locator("[data-open-previous]").click();
   await expect(panel.getByText("settimana 1")).toBeVisible();

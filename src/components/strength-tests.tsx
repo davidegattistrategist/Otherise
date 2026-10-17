@@ -33,9 +33,12 @@ export function StrengthTests({ series, title = "Test di forza", footer }: { ser
           ))}
         </div>
       ) : null}
+      {/* sul computer il grafico non si allarga oltre una card normale (scritte giganti): accanto, i numeri */}
+      <div className="grid gap-x-8 gap-y-3 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:items-start">
       {cur.points.length > 1 ? (
-        <LineChart label={cur.name} unit="kg" points={cur.points.map((p) => ({ date: p.date, value: p.value, label: p.label }))} />
+        <div className="min-w-0"><LineChart label={cur.name} unit="kg" points={cur.points.map((p) => ({ date: p.date, value: p.value, label: p.label }))} /></div>
       ) : null}
+      <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <div className="text-[15px]">
           <span className="font-semibold">{cur.name}</span>{" "}
@@ -59,6 +62,8 @@ export function StrengthTests({ series, title = "Test di forza", footer }: { ser
           </ul>
         </details>
       ) : null}
+      </div>
+      </div>
       {footer}
     </Card>
   );

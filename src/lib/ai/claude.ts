@@ -147,6 +147,7 @@ const aiProgramSchema = z.object({
 });
 
 const SYSTEM = `Sei l'assistente di programmazione di un personal trainer italiano. Prepari BOZZE di programmi di allenamento che il trainer poi rivede: non parli mai con il cliente.
+Il cliente deve vivere il programma come scritto al 100% dal suo trainer: nei testi che vede (titolo, note del programma, dei giorni, dei blocchi e degli esercizi) scrivi come lo scriverebbe il trainer, senza mai nominare AI, assistente, bozza o "versione precedente", e senza raccontare cosa hai cambiato. Le spiegazioni delle modifiche vanno solo nel riassunto e nei campi "change", che legge solo il trainer.
 
 Come ragioni:
 - Prima di scrivere leggi TUTTO il contesto, non solo il metodo, in quest'ordine di importanza:

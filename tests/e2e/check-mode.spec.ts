@@ -50,6 +50,11 @@ test("modalità check: si entra, si chiude per ora, si riprende con tutto quello
   await expect(page.getByLabel("Confronta i check precedenti")).toBeVisible();
   await page.getByRole("button", { name: "Programma" }).click();
   await expect(page.getByText("Programma in corso")).toBeVisible();
+  // di partenza il programma in corso; quelli prima si aprono se servono
+  const older = page.locator("[data-older-programs]");
+  await expect(older).toContainText("Fase 1");
+  await older.locator("summary").first().click();
+  await expect(older.locator("details details").first()).toBeVisible();
   await page.getByRole("button", { name: "Appunti" }).click();
   await expect(page.locator("#notes_next_phase")).toBeVisible();
   // chiudi per ora: in basso c'è "Riprendi"

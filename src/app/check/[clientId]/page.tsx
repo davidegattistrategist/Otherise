@@ -63,7 +63,7 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
     checkId ? supabase.from("checks").select("*").eq("id", checkId).eq("client_id", clientId).maybeSingle().then((r) => r.data) : Promise.resolve(null),
     previousCheck(supabase, clientId, checkId),
     client.sex ? foldContext(supabase, { ...client, sex: client.sex }, checkId ?? undefined) : Promise.resolve({ ref: null, lastMissing: [] }),
-    supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", clientId).eq("status", "published").order("start_date", { ascending: false }),
+    supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", clientId).in("status", ["published", "archived"]).eq("is_template", false).order("start_date", { ascending: false, nullsFirst: false }).limit(12),
     me.role === "owner" ? getBillingLines(supabase) : Promise.resolve(null),
     me.role === "owner" ? supabase.from("payments").select("id, paid_on, amount, method, period_start, period_end, sessions").eq("client_id", clientId).eq("unpaid", false).order("paid_on", { ascending: false }).limit(4) : Promise.resolve({ data: null }),
     checkId ? staffCheckPhotos(supabase, clientId, checkId) : Promise.resolve(null),
@@ -86,7 +86,9 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
   const freeTests = (body?.list ?? []).filter((c) => c.tests_text).slice(-3).reverse();
 
   // il programma in corso (o l'ultimo)
-  const current = currentProgram(programs ?? [], today);
+  const current = currentProgram((programs ?? []).filter((p) => p.status === "published" && p.start_date), today);
+  // quelli prima, da aprire se servono (di partenza si vede solo quello in corso)
+  const older = (programs ?? []).filter((p) => p.id !== current?.id && (!current?.start_date || !p.start_date || p.start_date < current.start_date)).slice(0, 8);
   const content = current ? parseContent(current.content) : null;
   const week = current ? displayWeek(current.start_date, current.weeks, today) : 1;
 
@@ -161,20 +163,26 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
             </Card>
             {/* giorni chiusi: si aprono con un tocco (sul telefono uno alla volta) */}
             <OneDayOpen group="giorni-check" />
-            {content.days.map((d) => (
-              <details key={d.id} className="group rounded-[24px] bg-card" data-day-group="giorni-check">
-                <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
-                  <span className="min-w-0">
-                    <span className="block font-semibold">{d.title}</span>
-                    <span className="line-clamp-1 block text-sm text-muted">{d.blocks.flatMap((b) => b.items.map((it) => it.name)).filter(Boolean).join(" · ") || "Nessun esercizio"}</span>
-                  </span>
-                  <IconDown size={18} className="shrink-0 text-muted transition-transform group-open:rotate-180" />
-                </summary>
-                <div className="px-5 pb-5 sm:px-6">
-                  <ProgramDayView day={d} week={week} videos={{}} compact />
-                </div>
-              </details>
-            ))}
+            <CheckProgramDays content={content} week={week} group="giorni-check" />
+            {older.length ? (
+              <section className="flex flex-col gap-2" aria-label="Programmi precedenti" data-older-programs>
+                <Eyebrow className="mt-2 px-1">Programmi precedenti</Eyebrow>
+                {older.map((p) => (
+                  <details key={p.id} className="group/prog rounded-[24px] bg-sand-deep/40">
+                    <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3.5 sm:px-6 [&::-webkit-details-marker]:hidden">
+                      <span className="min-w-0">
+                        <span className="block font-semibold">{p.title || "Programma"}</span>
+                        <span className="block text-sm text-muted">{p.start_date ? `dal ${formatLong(p.start_date)} · ` : ""}{p.weeks} {p.weeks === 1 ? "settimana" : "settimane"} · si vede l&apos;ultima</span>
+                      </span>
+                      <IconDown size={18} className="shrink-0 text-muted transition-transform group-open/prog:rotate-180" />
+                    </summary>
+                    <div className="flex flex-col gap-2 px-2 pb-2">
+                      <CheckProgramDays content={parseContent(p.content)} week={p.weeks} />
+                    </div>
+                  </details>
+                ))}
+              </section>
+            ) : null}
           </div>
         ) : (
           <Card><p className="text-[15px] text-muted">Nessun programma pubblicato.</p></Card>
@@ -230,5 +238,27 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
         ) : null
       }
     />
+  );
+}
+
+/** I giorni di un programma, chiusi: si aprono con un tocco. */
+function CheckProgramDays({ content, week, group }: { content: ReturnType<typeof parseContent>; week: number; group?: string }) {
+  return (
+    <>
+      {content.days.map((d) => (
+        <details key={d.id} className="group rounded-[24px] bg-card" data-day-group={group}>
+          <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0">
+              <span className="block font-semibold">{d.title}</span>
+              <span className="line-clamp-1 block text-sm text-muted">{d.blocks.flatMap((b) => b.items.map((it) => it.name)).filter(Boolean).join(" · ") || "Nessun esercizio"}</span>
+            </span>
+            <IconDown size={18} className="shrink-0 text-muted transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="px-5 pb-5 sm:px-6">
+            <ProgramDayView day={d} week={week} videos={{}} compact />
+          </div>
+        </details>
+      ))}
+    </>
   );
 }

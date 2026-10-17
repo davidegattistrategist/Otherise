@@ -1541,3 +1541,40 @@ describe("fase precedente nell'editor (17/10)", async () => {
     expect(findExercise(view, "n:trazioni").map((f) => f.item.label)).toEqual(["B1"]);
   });
 });
+
+describe("numerazione delle fasi (17/10)", async () => {
+  const { nextPhaseTitle } = await import("./program/next-phase");
+  it("segue il numero più alto del cliente, anche partendo da una fase vecchia", () => {
+    expect(nextPhaseTitle("21 Preparazione beach volley", ["20 Forza", "21 Preparazione beach volley"])).toBe("22 Preparazione beach volley");
+    expect(nextPhaseTitle("20 Forza", ["20 Forza", "21 Preparazione beach volley"])).toBe("22 Forza");
+  });
+  it("tiene le cifre e toglie il vecchio 'nuova fase'", () => {
+    expect(nextPhaseTitle("06 Volumizzazione 2", ["06 Volumizzazione 2", "05 Adattamento"])).toBe("07 Volumizzazione 2");
+    expect(nextPhaseTitle("09 · Forza · nuova fase", ["09 · Forza · nuova fase"])).toBe("10 Forza");
+    expect(nextPhaseTitle("99", [])).toBe("100");
+  });
+  it("senza numero resta come prima", () => {
+    expect(nextPhaseTitle("Fase volume", ["Fase volume"])).toBe("Fase volume · nuova fase");
+  });
+});
+
+describe("progressioni nei circuiti senza serie (17/10)", async () => {
+  const { progress, deload, progressPrescriptions } = await import("./program/progression");
+  it("ripetizioni e carico senza serie (le serie sono i giri)", () => {
+    expect(progress("12 16kg", "reps", 2)).toBe("14 16kg");
+    expect(progress("12 16kg", "kg25", 1)).toBe("12 18,5kg");
+    expect(progress("12 16kg", "double", 3)).toBe("12 18,5kg");
+    expect(progress("8-10 20kg", "reps", 1)).toBe("9-11 20kg");
+    expect(progress('30"', "reps", 1)).toBe('35"');
+    expect(progress("16kg", "kg5", 1)).toBe("21kg");
+  });
+  it("niente serie da aggiungere e niente numeri inventati (distanze)", () => {
+    expect(progress("12 16kg", "sets", 1)).toBeNull();
+    expect(progress("400m", "reps", 1)).toBeNull();
+    expect(progress("4x8 60kg", "reps", 1)).toBe("4x9 60kg");
+  });
+  it("scarico senza serie: solo il carico", () => {
+    expect(deload("12 16kg")).toBe("12 15kg");
+    expect(progressPrescriptions(["12 16kg", "", "", ""], "reps", { deloadLast: true })).toEqual(["12 16kg", "13 16kg", "14 16kg", "14 15kg"]);
+  });
+});
