@@ -12,7 +12,7 @@ Le cose da fare: diario con qualcosa che non va, dolori e fastidi, note dei clie
 
 Non c'è un'email di riepilogo: il riepilogo è questa pagina. Le novità importanti arrivano come notifica sul telefono (vedi "Avvisi per email").
 
-Dal telefono il menu è in basso: Oggi, Clienti, Messaggi, Pagamenti e "Altro" per il resto.
+Dal telefono il menu è in basso: Oggi, Clienti, Messaggi, Pagamenti e "Altro" per il resto. Come su Instagram, scorrendo in giù si rimpicciolisce un po' (appena torni su o ti fermi torna normale) e mentre scrivi, con la tastiera aperta, sparisce: in chat vedi più messaggi. Lo stesso vale per il menu dei clienti.
 
 Ogni riga di Oggi ha il pulsante per farlo subito: **Scrivi** (apre la chat con un saluto già scritto), **Apri la bozza**, **Prepara la fase**, **Inizia il check**.
 

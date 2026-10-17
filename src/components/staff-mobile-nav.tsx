@@ -65,7 +65,7 @@ export function StaffMobileNav({ main: givenMain, more: givenMore, signOut, who 
           </div>
         </div>
       ) : null}
-      <nav aria-label="Menu principale" className="fixed right-[var(--edge-right)] bottom-[var(--nav-gap)] left-[var(--edge-left)] z-50 rounded-[26px] bg-card/95 px-1.5 shadow-[0_10px_30px_-8px_rgba(27,26,23,0.28)] ring-1 ring-sand-deep/80 backdrop-blur lg:hidden">
+      <nav aria-label="Menu principale" data-bottom-nav="staff" className="fixed right-[var(--edge-right)] bottom-[var(--nav-gap)] left-[var(--edge-left)] z-50 rounded-[26px] bg-card/95 px-1.5 shadow-[0_10px_30px_-8px_rgba(27,26,23,0.28)] ring-1 ring-sand-deep/80 backdrop-blur lg:hidden">
         <ul className="flex justify-around py-1.5">
           {main.map((it) => {
             const Icon = ICONS[it.icon];

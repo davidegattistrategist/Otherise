@@ -28,6 +28,7 @@ export function ClientNav({ chatUnread: initialChats = 0, ended = false }: { cha
   return (
     <nav
       aria-label="Menu"
+      data-bottom-nav="client"
       className={cx(
         // telefono: barra staccata dal fondo e dai bordi arrotondati dello schermo
         "fixed right-[var(--edge-right)] bottom-[var(--nav-gap)] left-[var(--edge-left)] z-30 rounded-[26px] bg-card/95 px-1.5 shadow-[0_10px_30px_-8px_rgba(27,26,23,0.28)] ring-1 ring-sand-deep/80 backdrop-blur",

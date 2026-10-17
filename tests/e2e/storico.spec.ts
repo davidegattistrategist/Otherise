@@ -110,3 +110,29 @@ test("editor: fase precedente a portata di mano, poi si torna esattamente dov'er
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
 });
+
+test("telefono: il menu in basso sparisce mentre scrivi e si rimpicciolisce scorrendo in giù", async ({ page }, info) => {
+  test.skip(info.project.name !== "telefono", "solo telefono");
+  await login(page, "titolare@prova.local");
+  const id = await openClient(page, "Esempio Giulia");
+  const nav = page.locator("[data-bottom-nav='staff']");
+  // scorrendo in giù si rimpicciolisce, fermandosi torna normale
+  await page.goto(`/staff/clienti/${id}`);
+  await page.waitForLoadState("networkidle");
+  await expect(nav).toBeVisible();
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.wheel(0, 250);
+    await page.waitForTimeout(60);
+  }
+  await expect(page.locator("html[data-nav-small]")).toHaveCount(1);
+  await expect(page.locator("html[data-nav-small]")).toHaveCount(0, { timeout: 3000 });
+  // in chat: tastiera aperta = menu via, chiusa = menu di nuovo
+  await page.goto(`/staff/messaggi/${id}`);
+  const box = page.locator("textarea").filter({ visible: true }).first();
+  await box.click();
+  await expect(page.locator("html[data-typing]")).toHaveCount(1);
+  await expect(nav).toHaveCSS("opacity", "0");
+  await box.blur();
+  await expect(page.locator("html[data-typing]")).toHaveCount(0);
+  await expect(nav).toHaveCSS("opacity", "1");
+});

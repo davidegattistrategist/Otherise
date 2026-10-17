@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NavBehavior } from "@/components/nav-behavior";
 import { getBusinessName } from "@/lib/data/shared";
 import { redirect } from "next/navigation";
 import { needsConsent } from "@/lib/privacy";
@@ -35,6 +36,7 @@ export default async function ClientAreaLayout({ children }: { children: React.R
           <LiveBell href="/cliente/notifiche" initial={unread ?? 0} />
         </header>
         <main className="flex-1 pt-3 pb-[calc(var(--nav-space)+1.75rem)] md:pb-16">{children}</main>
+        <NavBehavior />
         <div className="md:hidden"><ClientNav chatUnread={chatUnread} ended={ended} /></div>
       </div>
       <InstallGuide appName={homeScreenName(name)} />
