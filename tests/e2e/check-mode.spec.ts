@@ -31,10 +31,12 @@ test("check: le misure di prima accanto, e quello che scrivi resta anche se esci
   // esco senza salvare e torno: il peso c'è ancora
   await page.goto("/staff");
   await page.goto(`/staff/clienti/${id}/check/nuovo`);
-  await expect(page.locator("#weight_kg")).toHaveValue("64,1");
+  // durante il caricamento la pagina può avere per un attimo una copia nascosta del modulo
+  const weight = page.locator("#weight_kg").filter({ visible: true }).first();
+  await expect(weight).toHaveValue("64,1");
   await expect(page.getByText(/Non si è perso niente: c’è quello che avevi scritto/)).toBeVisible();
   await page.getByRole("button", { name: "Svuota il modulo" }).click();
-  await expect(page.locator("#weight_kg")).toHaveValue("");
+  await expect(weight).toHaveValue("");
 });
 
 test("modalità check: si entra, si chiude per ora, si riprende con tutto quello che avevi scritto", async ({ page }) => {

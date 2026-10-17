@@ -144,7 +144,7 @@ test.describe("titolare", () => {
 
     // panoramica
     await page.goto(base);
-    await expect(page.getByText("Programma in corso").or(page.getByText("Nessun programma pubblicato"))).toBeVisible();
+    await expect(page.getByText("Programma in corso").or(page.getByText("Nessun programma pubblicato")).filter({ visible: true }).first()).toBeVisible();
     expect(errors).toEqual([]);
   });
 
@@ -189,7 +189,7 @@ test.describe("titolare", () => {
     // indicazioni per l'AI: il tempo detto all'AI è diventato il riferimento del cliente
     await page.goto(`${base}/programma`);
     await expect(page.getByText("Indicazioni per l'AI", { exact: true }).filter({ visible: true }).first()).toBeVisible();
-    await expect(page.locator("#ai-minutes")).toHaveValue("60");
+    await expect(page.locator("#ai-minutes").filter({ visible: true }).first()).toHaveValue("60");
     await expect(page.getByTestId("program-balance")).toBeVisible();
     await page.selectOption("#ai-strength", "intermedio");
     await page.getByLabel("Segui il programma").uncheck();

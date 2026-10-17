@@ -7,7 +7,7 @@
  */
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   BLOCK_KIND_LABELS,
   BLOCK_KINDS,
@@ -44,6 +44,8 @@ import { estimateDayMinutes } from "@/lib/program/balance";
 import { useOpenDays } from "@/components/use-open-days";
 import { keepInView } from "@/components/one-day-open";
 import { clearDraft, loadDraft, useDraft } from "@/components/use-draft";
+import { appendToDay, blockNames, blocksLabel, collectBlocks, deleteSelected, insertBeforeSelected, replaceSelected, samePlaceIds, type PasteResult } from "@/lib/program/clipboard";
+import { BarButton, SelectBox, useProgramClip } from "./copy-paste";
 
 export type EditorProgram = {
   id: string;
@@ -284,19 +286,138 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
 
   const lastLogFor = (it: ProgramItem) => (it.exerciseId ? lastLogs[it.exerciseId] : undefined) ?? lastLogs[`n:${it.name.trim().toLowerCase()}`];
 
+  // ---- copia e incolla (copy-paste.tsx, calcoli in src/lib/program/clipboard.ts)
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  const [selNote, setSelNote] = useState<string | null>(null);
+  const [undo, setUndo] = useState<{ text: string; before: ProgramContent; after: ProgramContent } | null>(null);
+  const lastPick = useRef<{ day: number; block: number } | null>(null);
+  const { clip, setClip } = useProgramClip();
+  // "Annulla" vale finché non tocchi altro
+  const canUndo = undo !== null && undo.after === content;
+  const pickedIds = content.days.flatMap((d) => d.blocks.filter((b) => picked.has(b.id)).map((b) => b.id));
+  const pickedDays = content.days.filter((d) => d.blocks.some((b) => picked.has(b.id))).length;
+  const samePlaces = clip && selecting && pickedIds.length === 0 ? samePlaceIds(content, clip, program.id) : [];
+  const clearPicked = () => {
+    setPicked(new Set());
+    lastPick.current = null;
+  };
+  const startSelect = (note?: string) => {
+    setSelecting(true);
+    setSelNote(note ?? null);
+  };
+  const exitSelect = () => {
+    setSelecting(false);
+    clearPicked();
+    setSelNote(null);
+    setUndo(null);
+  };
+  const pick = (dayIdx: number, blockIdx: number, shift: boolean) => {
+    const day = content.days[dayIdx];
+    const id = day.blocks[blockIdx]?.id;
+    if (!id) return;
+    const lp = lastPick.current;
+    setSelNote(null);
+    setPicked((s) => {
+      const n = new Set(s);
+      // Maiusc+clic (computer): tutto il tratto dall'ultimo toccato nello stesso giorno
+      if (shift && lp && lp.day === dayIdx && lp.block !== blockIdx) {
+        for (let i = Math.min(lp.block, blockIdx); i <= Math.max(lp.block, blockIdx); i++) n.add(day.blocks[i].id);
+      } else if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+    lastPick.current = { day: dayIdx, block: blockIdx };
+  };
+  const applyBulk = (r: PasteResult, text: string) => {
+    setUndo({ text, before: content, after: r.content });
+    setContent(r.content);
+    markDirty();
+    clearPicked();
+    setSelNote(null);
+  };
+  // togliere esercizi da un programma già usato: il loro storico in questa fase non si vede più
+  const okToRemove = () =>
+    loggedWorkouts === 0 || window.confirm("Il cliente ha già registrato allenamenti su questo programma: gli esercizi che togli non mostreranno più quello che ha fatto in questa fase. Continuare?");
+  const inDays = (n: number) => (n > 1 ? ` in ${n} giorni` : "");
+  const copyPicked = () => {
+    const c = collectBlocks(content, picked);
+    if (!c.blocks.length) return;
+    setClip({ v: 1, at: Date.now(), programId: program.id, programTitle: title.trim() || "questo programma", dayIds: c.dayIds, fromIndex: c.fromIndex, blocks: c.blocks });
+    clearPicked();
+    setUndo(null);
+    setSelNote(`Copiati ${blocksLabel(c.blocks.length)}: ora scegli dove incollarli, anche in un altro programma.`);
+  };
+  const replacePicked = () => {
+    if (!clip || !pickedIds.length || !okToRemove()) return;
+    const r = replaceSelected(content, picked, clip.blocks, weeks);
+    applyBulk(r, `Sostituiti ${blocksLabel(r.removed)}${inDays(r.days)} con i copiati.`);
+  };
+  const insertAbove = () => {
+    if (!clip || !pickedIds.length) return;
+    const r = insertBeforeSelected(content, picked, clip.blocks, weeks);
+    applyBulk(r, `Incollati ${blocksLabel(clip.blocks.length)}${r.days > 1 ? ` in ${r.days} giorni` : ""}.`);
+  };
+  const deletePicked = () => {
+    if (!pickedIds.length || !okToRemove()) return;
+    const r = deleteSelected(content, picked);
+    applyBulk(r, `Tolti ${blocksLabel(r.removed)}${inDays(r.days)}.`);
+  };
+  const pasteAtEnd = (dayId: string, dayTitle: string) => {
+    if (!clip) return;
+    applyBulk(appendToDay(content, dayId, clip.blocks, weeks), `Incollati ${blocksLabel(clip.blocks.length)} in fondo a “${dayTitle || "questo giorno"}”.`);
+  };
+  const doUndo = () => {
+    if (!undo || undo.after !== content) return;
+    setContent(undo.before);
+    markDirty();
+    setUndo(null);
+    setSelNote("Fatto: è tutto come prima.");
+  };
+  // tastiera del computer, solo con la selezione attiva e fuori dalle caselle
+  const keyHandler = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  useEffect(() => {
+    keyHandler.current = (e: KeyboardEvent) => {
+      const typing = (e.target as Element | null)?.closest?.("input, textarea, select, [contenteditable='true']");
+      if (typing) return;
+      if (e.key === "Escape") return exitSelect();
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === "c" && pickedIds.length && !window.getSelection()?.toString()) {
+        e.preventDefault();
+        copyPicked();
+      } else if (k === "v" && pickedIds.length && clip) {
+        e.preventDefault();
+        replacePicked();
+      } else if (k === "z" && canUndo) {
+        e.preventDefault();
+        doUndo();
+      }
+    };
+  });
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: KeyboardEvent) => keyHandler.current(e);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selecting]);
+  const selectFor = (dayIdx: number, blockIdx: number, block: ProgramBlock) =>
+    selecting ? { checked: picked.has(block.id), label: `${blockLetter(blockIdx)}${blockNames([block])[0] ? ` (${blockNames([block])[0]})` : ""}`, onPick: (shift: boolean) => pick(dayIdx, blockIdx, shift) } : undefined;
+
   const hasContent = content.days.some((d) => d.blocks.length > 0);
   const unnamed = content.days.reduce((n, d) => n + d.blocks.reduce((m, b) => m + (b.kind === "text" ? 0 : b.items.filter((it) => !it.name.trim()).length), 0), 0);
 
   return (
-    <div className="flex flex-col gap-5" onFocusCapture={canCompare ? (e) => reportEditorFocus(e.target) : undefined} onInputCapture={canCompare ? (e) => reportEditorFocus(e.target) : undefined}>
+    <div data-program-editor className="flex flex-col gap-5" onFocusCapture={canCompare ? (e) => reportEditorFocus(e.target) : undefined} onInputCapture={canCompare ? (e) => reportEditorFocus(e.target) : undefined}>
       {canCompare && prevMounted ? <PreviousPhase programId={program.id} open={prevOpen} onClose={closePrev} /> : null}
-      {canCompare && !prevOpen ? (
+      {canCompare && !prevOpen && !selecting ? (
         <button
           type="button"
           onClick={openPrev}
           aria-label="Guarda la fase precedente"
           className={cx(
-            "fixed right-[var(--edge-right)] z-40 flex min-h-11 items-center gap-2 rounded-full bg-card px-4 text-sm font-semibold text-ink shadow-lg ring-1 ring-sand-deep lg:right-8 lg:bottom-8",
+            // computer: linguetta verticale sul bordo destro, fuori dalla griglia (non copre niente)
+            "fixed right-[var(--edge-right)] z-40 flex min-h-11 items-center gap-2 rounded-full bg-card px-4 text-sm font-semibold text-ink shadow-lg ring-1 ring-sand-deep lg:top-1/2 lg:right-0 lg:bottom-auto lg:w-9 lg:-translate-y-1/2 lg:rotate-180 lg:rounded-none lg:rounded-r-2xl lg:px-0 lg:py-4 lg:[writing-mode:vertical-rl]",
             dirty ? "bottom-[calc(var(--nav-space)+4.5rem)]" : "bottom-[calc(var(--nav-space)+0.75rem)]",
           )}
           data-open-previous
@@ -358,7 +479,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
       </div>
 
       {/* sul telefono il pulsante Salva in alto sparisce scorrendo: barra fissa quando ci sono modifiche */}
-      {dirty ? (
+      {dirty && !selecting ? (
         <div className="fixed right-[var(--edge-right)] bottom-[calc(var(--nav-space)+0.5rem)] left-[var(--edge-left)] z-40 flex items-center justify-between gap-3 rounded-2xl bg-ink px-4 py-2.5 text-card shadow-xl lg:hidden">
           <span className="text-sm">{pending ? "Salvataggio…" : "Modifiche non salvate"}</span>
           <Button size="sm" variant="secondary" onClick={doSave} disabled={pending}>Salva le modifiche</Button>
@@ -479,17 +600,40 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
       ) : null}
 
       {/* giorni: chiusi di partenza, si aprono e chiudono a piacimento */}
-      {content.days.length > 1 ? (
-        <div className="-mb-2 flex flex-wrap items-center justify-end gap-2">
-          <button type="button" className={buttonClass("ghost", "sm")} onClick={() => days.setAll(content.days.map((d) => d.id), true)}>Apri tutti i giorni</button>
-          <button type="button" className={buttonClass("ghost", "sm")} onClick={() => days.setAll(content.days.map((d) => d.id), false)}>Chiudi tutti</button>
+      <div className="-mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {selecting ? (
+            <span className="px-1 text-sm font-semibold">Tocca le caselle accanto agli esercizi</span>
+          ) : (
+            <>
+              <button type="button" className={buttonClass("secondary", "sm")} onClick={() => startSelect()} data-start-select>
+                <IconCopy size={16} /> Copia e incolla esercizi
+              </button>
+              {clip ? (
+                <button
+                  type="button"
+                  className={buttonClass("primary", "sm")}
+                  onClick={() => startSelect(`Seleziona gli esercizi da sostituire con i copiati, oppure incolla in fondo a un giorno.`)}
+                  data-start-paste
+                >
+                  Incolla {clip.blocks.length === 1 ? "l'esercizio copiato" : `i ${clip.blocks.length} esercizi copiati`}
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
-      ) : null}
+        {content.days.length > 1 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className={buttonClass("ghost", "sm")} onClick={() => days.setAll(content.days.map((d) => d.id), true)}>Apri tutti i giorni</button>
+            <button type="button" className={buttonClass("ghost", "sm")} onClick={() => days.setAll(content.days.map((d) => d.id), false)}>Chiudi tutti</button>
+          </div>
+        ) : null}
+      </div>
       {content.days.map((day, dayIdx) => {
         const open = days.isOpen(day.id);
         const names = day.blocks.flatMap((b) => b.items.map((it) => it.name.trim())).filter(Boolean);
         return (
-        <Card key={day.id} className="!p-0" data-day-card data-day-index={dayIdx}>
+        <Card key={day.id} className="@container !p-0" data-day-card data-day-index={dayIdx}>
           <div className={cx("flex flex-wrap items-center gap-3 px-5 pt-5 sm:px-6", !open && "pb-1")}>
             <button
               type="button"
@@ -509,6 +653,14 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               onChange={(e) => mutate((d) => void (d.days[dayIdx].title = e.target.value))}
               className="min-w-[13rem] flex-[1_1_13rem] rounded-lg bg-transparent px-1 py-1 text-xl font-semibold hover:bg-sand focus:bg-sand focus:outline-none"
             />
+            {selecting && day.blocks.some((b) => picked.has(b.id)) ? (
+              <span className="shrink-0 rounded-full bg-ink px-2.5 py-1 text-xs font-semibold text-card" data-day-picked>
+                {(() => {
+                  const n = day.blocks.filter((b) => picked.has(b.id)).length;
+                  return n === 1 ? "1 selezionato" : `${n} selezionati`;
+                })()}
+              </span>
+            ) : null}
             {(() => {
               const est = estimateDayMinutes(day);
               const limit = Number(minutes) || null;
@@ -561,7 +713,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
           </div>
 
           {/* telefono: una settimana alla volta */}
-          <div className="mt-3 flex flex-col gap-3 px-4 pb-3 md:hidden">
+          <div className="mt-3 flex flex-col gap-3 px-4 pb-3 @min-[52rem]:hidden">
             <div className="scroll-x -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Settimana da modificare">
               {Array.from({ length: weeks }, (_, w) => (
                 <button key={w} type="button" role="tab" aria-selected={w === Math.min(mobileWeek, weeks - 1)} onClick={() => setMobileWeek(w)} className={cx("shrink-0 rounded-full px-3.5 py-2 text-sm font-semibold", w === Math.min(mobileWeek, weeks - 1) ? "bg-ink text-card" : "bg-sand")}>
@@ -586,20 +738,29 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                 lastLogFor={lastLogFor}
                 aiEnabled={aiEnabled && !!program.client_id}
                 programId={program.id}
+                select={selectFor(dayIdx, blockIdx, block)}
                 onBlock={(fn) => mutate((d) => fn(d.days[dayIdx].blocks[blockIdx], d.days[dayIdx].blocks))}
                 onItemName={(itemIdx, name) => setItemName(dayIdx, blockIdx, itemIdx, name)}
               />
             ))}
           </div>
 
-          <div className="scroll-x mt-3 hidden px-3 pb-2 sm:px-4 md:block">
-            <table className="w-full border-collapse text-sm" style={{ minWidth: 560 + weeks * 104 }}>
+          {/* computer: tutta la griglia dentro la card (le settimane si allargano con la pagina); scorre di lato solo con tante settimane in una finestra stretta */}
+          <div className="scroll-x mt-3 hidden px-3 pb-2 sm:px-4 @min-[52rem]:block" data-program-grid>
+            <table className="w-full table-fixed border-collapse text-sm" style={{ minWidth: 400 + weeks * 60 }}>
+              <colgroup>
+                <col style={{ width: 44 }} />
+                <col style={{ width: "27%" }} />
+                {Array.from({ length: weeks }, (_, w) => <col key={w} />)}
+                <col style={{ width: 80 }} />
+                <col style={{ width: 76 }} />
+              </colgroup>
               <thead>
                 <tr className="text-left text-xs text-muted">
-                  <th scope="col" className="w-10 px-2 py-2 font-semibold"><span className="sr-only">Etichetta</span></th>
-                  <th scope="col" className="w-[230px] min-w-[200px] px-2 py-2 font-semibold">Esercizio</th>
+                  <th scope="col" className="px-2 py-2 font-semibold"><span className="sr-only">Etichetta</span></th>
+                  <th scope="col" className="px-2 py-2 font-semibold">Esercizio e indicazioni</th>
                   {Array.from({ length: weeks }, (_, w) => (
-                    <th key={w} scope="col" className="w-[104px] min-w-[104px] px-1 py-2 font-semibold">
+                    <th key={w} scope="col" className="px-1 py-2 font-semibold">
                       <span className="flex items-center gap-1">
                         S{w + 1}
                         {w < weeks - 1 ? (
@@ -616,9 +777,8 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                       </span>
                     </th>
                   ))}
-                  <th scope="col" className="w-[96px] px-1 py-2 font-semibold">Recupero</th>
-                  <th scope="col" className="min-w-[140px] px-1 py-2 font-semibold">Indicazioni</th>
-                  <th scope="col" className="w-[112px] px-1 py-2"><span className="sr-only">Azioni</span></th>
+                  <th scope="col" className="px-1 py-2 font-semibold">Recupero</th>
+                  <th scope="col" className="px-1 py-2"><span className="sr-only">Azioni</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -634,6 +794,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                     exerciseById={exerciseById}
                     aiEnabled={aiEnabled && !!program.client_id}
                     programId={program.id}
+                    select={selectFor(dayIdx, blockIdx, block)}
                     onBlock={(fn) => mutate((d) => fn(d.days[dayIdx].blocks[blockIdx], d.days[dayIdx].blocks))}
                     onItemName={(itemIdx, name) => setItemName(dayIdx, blockIdx, itemIdx, name)}
                   />
@@ -642,6 +803,11 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             </table>
           </div>
           <div className="flex flex-wrap items-center gap-2 border-t border-sand-deep px-5 py-4 sm:px-6">
+            {selecting && clip ? (
+              <button type="button" className={buttonClass("primary", "sm")} onClick={() => pasteAtEnd(day.id, day.title)} data-paste-end>
+                <IconCopy size={16} /> Incolla qui in fondo ({clip.blocks.length})
+              </button>
+            ) : null}
             <ProgressionMenu
               wide
               label="Compila le settimane di tutto il giorno"
@@ -669,6 +835,61 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         </Card>
         );
       })}
+
+      {selecting ? (
+        <>
+          {/* spazio per la barra: l'ultimo giorno resta tutto visibile */}
+          <div className="h-36" aria-hidden />
+          <div
+            data-select-bar
+            role="region"
+            aria-label="Copia e incolla"
+            className="fixed right-[var(--edge-right)] bottom-[calc(var(--nav-space)+0.5rem)] left-[var(--edge-left)] z-40 flex flex-col gap-2.5 rounded-2xl bg-ink p-3 text-card shadow-xl lg:right-10 lg:bottom-6 lg:left-[calc(260px+2.5rem)] lg:p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <p className="min-w-0 text-sm leading-snug" aria-live="polite" data-select-status>
+                {canUndo ? undo.text : selNote ? selNote : pickedIds.length ? `${pickedIds.length === 1 ? "1 selezionato" : `${pickedIds.length} selezionati`}${inDays(pickedDays)}` : clip ? "Seleziona gli esercizi da sostituire con i copiati." : "Seleziona gli esercizi (o i gruppi) da copiare."}
+              </p>
+              <div className="flex shrink-0 items-center gap-2">
+                {canUndo ? <BarButton onClick={doUndo} testId="select-undo">Annulla</BarButton> : null}
+                <BarButton onClick={exitSelect} primary={!pickedIds.length} testId="select-done">Fine</BarButton>
+              </div>
+            </div>
+            {clip ? (
+              <p className="flex min-w-0 items-center gap-2 text-xs text-card/70" data-clip>
+                <span className="min-w-0 truncate">
+                  Copiati: {blockNames(clip.blocks).join(", ")}
+                  {clip.programId !== program.id ? ` · da “${clip.programTitle}”` : ""}
+                </span>
+                <button type="button" className="shrink-0 underline" onClick={() => setClip(null)}>Svuota</button>
+              </p>
+            ) : null}
+            {pickedIds.length ? (
+              <div className="flex flex-wrap gap-2">
+                {clip ? <BarButton primary onClick={replacePicked} testId="paste-replace">Incolla al posto di questi</BarButton> : null}
+                {clip ? <BarButton onClick={insertAbove} testId="paste-above">Incolla sopra</BarButton> : null}
+                <BarButton primary={!clip} onClick={copyPicked} testId="select-copy">{clip ? "Copia questi" : "Copia"}</BarButton>
+                <BarButton onClick={deletePicked} testId="select-delete">Elimina</BarButton>
+              </div>
+            ) : samePlaces.length ? (
+              <div className="flex flex-wrap gap-2">
+                <BarButton
+                  onClick={() => {
+                    setPicked(new Set(samePlaces));
+                    lastPick.current = null;
+                    setSelNote(null);
+                  }}
+                  testId="select-same"
+                >
+                  {clip!.fromIndex === 0
+                    ? clip!.blocks.length === 1 ? "Seleziona il primo di ogni giorno" : `Seleziona i primi ${clip!.blocks.length} di ogni giorno`
+                    : "Seleziona gli stessi posti negli altri giorni"}
+                </BarButton>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
 
       <div>
         <Button
@@ -795,9 +1016,9 @@ function swap<T>(arr: T[], i: number, j: number) {
   [arr[i], arr[j]] = [arr[j], arr[i]];
 }
 
-function IconBtn({ label, onClick, disabled, children }: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
+function IconBtn({ label, onClick, disabled, children, small }: { label: string; onClick: () => void; disabled?: boolean; children: React.ReactNode; small?: boolean }) {
   return (
-    <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick} className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-sand hover:text-ink disabled:opacity-30">
+    <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick} className={cx("flex items-center justify-center rounded-full text-muted hover:bg-sand hover:text-ink disabled:opacity-30", small ? "h-8 w-8" : "h-9 w-9")}>
       {children}
     </button>
   );
@@ -838,6 +1059,51 @@ function NameField({ value, onChange, placeholder, className }: { value: string;
 
 const cellInput = "w-full rounded-lg border border-transparent bg-sand/70 px-2 py-1.5 text-sm text-ink hover:border-sand-deep focus:border-ink focus:bg-white focus:outline-none";
 
+type Selection = { checked: boolean; label: string; onPick: (shift: boolean) => void };
+
+/** Casella di testo che cresce con il contenuto: si legge sempre tutto, senza tagli. */
+function AutoText({ value, onChange, className, singleLine, ...rest }: Omit<React.ComponentProps<"textarea">, "onChange" | "value"> & { value: string; onChange: (v: string) => void; singleLine?: boolean }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const fit = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, []);
+  useLayoutEffect(fit, [value, fit]);
+  useEffect(() => {
+    // la larghezza delle colonne cambia con la finestra: ricalcola l'altezza
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let w = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth !== w) {
+        w = el.clientWidth;
+        fit();
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fit]);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onChange={(e) => onChange(singleLine ? e.target.value.replace(/\n/g, " ") : e.target.value)}
+      onKeyDown={singleLine ? (e) => { if (e.key === "Enter") e.preventDefault(); } : undefined}
+      className={cx(className, "block resize-none overflow-hidden")}
+      {...rest}
+    />
+  );
+}
+
+/**
+ * Righe di un blocco sul computer. Le colonne stanno tutte nella card, senza
+ * scorrere di lato: etichetta, esercizio (con indicazioni, AI e progressione
+ * sotto il nome), una colonna per settimana che si allarga con la pagina,
+ * recupero e quattro pulsanti piccoli.
+ */
 function BlockRows({
   block,
   blockIdx,
@@ -848,12 +1114,14 @@ function BlockRows({
   exerciseById,
   aiEnabled,
   programId,
+  select,
   onBlock,
   onItemName,
 }: {
   block: ProgramBlock;
   blockIdx: number;
   blockCount: number;
+  select?: Selection;
   weeks: number;
   aiNotes: Record<string, string>;
   lastLogFor: (it: ProgramItem) => string | undefined;
@@ -864,19 +1132,27 @@ function BlockRows({
   onItemName: (itemIdx: number, name: string) => void;
 }) {
   const multi = block.kind !== "single" && block.kind !== "text";
-  const colCount = 5 + weeks;
+  const colCount = 4 + weeks;
+  const picked = select?.checked;
+  const rowBg = picked ? "bg-sand-deep/70" : undefined;
+  const labelCell = (text: string, bold?: boolean) => (
+    <td className={cx("px-2 py-2.5", bold ? "font-bold" : "font-semibold text-muted")}>
+      {select ? <SelectBox checked={select.checked} label={select.label} onPick={select.onPick} id={block.id} /> : text}
+    </td>
+  );
   const blockActions = (
-    <div className="flex items-center gap-1">
-      <IconBtn label="Sposta blocco su" disabled={blockIdx === 0} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx - 1))}><IconUp size={16} /></IconBtn>
-      <IconBtn label="Sposta blocco giù" disabled={blockIdx === blockCount - 1} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx + 1))}><IconDown size={16} /></IconBtn>
-      <IconBtn label="Elimina blocco" onClick={() => { if (window.confirm("Eliminare questo blocco?")) onBlock((_, s) => void s.splice(blockIdx, 1)); }}><IconTrash size={16} /></IconBtn>
+    <div className="grid grid-cols-2 justify-items-center gap-0.5">
+      <IconBtn small label="Sposta blocco su" disabled={blockIdx === 0} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx - 1))}><IconUp size={16} /></IconBtn>
+      <IconBtn small label="Sposta blocco giù" disabled={blockIdx === blockCount - 1} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx + 1))}><IconDown size={16} /></IconBtn>
+      <span />
+      <IconBtn small label="Elimina blocco" onClick={() => { if (window.confirm("Eliminare questo blocco?")) onBlock((_, s) => void s.splice(blockIdx, 1)); }}><IconTrash size={16} /></IconBtn>
     </div>
   );
 
   if (block.kind === "text") {
     return (
-      <tr className="border-t border-sand-deep align-top">
-        <td className="px-2 py-3 font-semibold text-muted">{blockLetter(blockIdx)}</td>
+      <tr className={cx("border-t border-sand-deep align-top", rowBg)} data-block={block.id}>
+        {labelCell(blockLetter(blockIdx))}
         <td colSpan={colCount - 2} className="px-2 py-2">
           <input
             aria-label="Titolo del blocco di testo"
@@ -885,11 +1161,10 @@ function BlockRows({
             placeholder="Titolo (es. Riscaldamento)"
             className={cx(cellInput, "mb-1.5 font-semibold")}
           />
-          <textarea
+          <AutoText
             aria-label="Testo del blocco"
             value={block.notes}
-            onChange={(e) => onBlock((b) => void (b.notes = e.target.value))}
-            rows={2}
+            onChange={(v) => onBlock((b) => void (b.notes = v))}
             placeholder="Testo libero per il cliente"
             className={cx(cellInput, "min-h-16")}
           />
@@ -902,8 +1177,8 @@ function BlockRows({
   return (
     <>
       {multi ? (
-        <tr className="border-t border-sand-deep bg-sand/40">
-          <td className="px-2 py-2 font-bold">{blockLetter(blockIdx)}</td>
+        <tr className={cx("border-t border-sand-deep", rowBg ?? "bg-sand/40")} data-block={block.id}>
+          {labelCell(blockLetter(blockIdx), true)}
           <td colSpan={colCount - 2} className="px-2 py-2">
             <div className="flex flex-wrap items-center gap-2">
               <BlockSettings block={block} weeks={weeks} onBlock={onBlock} />
@@ -917,43 +1192,64 @@ function BlockRows({
         const last = lastLogFor(it);
         const aiNote = aiNotes[it.id];
         return (
-          <tr key={it.id} {...exAttrs(it)} className={cx("align-top", !multi && "border-t border-sand-deep", aiNote && "bg-accent-soft/30")}>
-            <td className="px-2 py-2.5 font-semibold text-muted">{itemLabel(block, blockIdx, itemIdx)}</td>
+          <tr key={it.id} {...exAttrs(it)} {...(!multi ? { "data-block": block.id } : {})} className={cx("align-top", !multi && "border-t border-sand-deep", rowBg ?? (aiNote ? "bg-accent-soft/30" : undefined))}>
+            {!multi && itemIdx === 0 ? labelCell(itemLabel(block, blockIdx, itemIdx)) : <td className="px-2 py-2.5 font-semibold text-muted">{itemLabel(block, blockIdx, itemIdx)}</td>}
             <td className="px-2 py-2">
               <NameField value={it.name} onChange={(v) => onItemName(itemIdx, v)} placeholder="Scegli o scrivi un esercizio" className={cx(cellInput, "font-semibold")} />
+              <AutoText
+                aria-label="Indicazioni"
+                value={it.notes}
+                onChange={(v) => onBlock((b) => void (b.items[itemIdx].notes = v))}
+                placeholder="Indicazioni (facoltative)"
+                className={cx(cellInput, "mt-1 text-[13px] leading-snug")}
+              />
               <div className="mt-1 flex flex-col gap-0.5 px-1 text-xs text-muted">
                 {it.name.trim() && !it.exerciseId ? <span>Non in eserciziario</span> : null}
                 {ex && !ex.video_url ? <span>Senza video</span> : null}
                 {last ? <span>Ultimo log: {last}</span> : null}
                 {aiNote ? <span className="text-ink"><IconSparkle size={12} className="mr-1 inline" />{aiNote}</span> : null}
               </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                <ProgressionMenu
+                  label={`Compila le settimane di ${it.name || "questo esercizio"}`}
+                  onApply={(rule, deloadLast) =>
+                    onBlock((b) => {
+                      const item = b.items[itemIdx];
+                      item.prescriptions = progressPrescriptions(item.prescriptions, rule, { deloadLast });
+                    })
+                  }
+                />
+                {aiEnabled && it.name.trim() ? (
+                  <RowAiButtons
+                    inline
+                    programId={programId}
+                    item={it}
+                    weeks={weeks}
+                    onPrescriptions={(p) => onBlock((b) => void (b.items[itemIdx].prescriptions = p))}
+                    onReplace={(name) => onItemName(itemIdx, name)}
+                  />
+                ) : null}
+              </div>
             </td>
             {Array.from({ length: weeks }, (_, w) => (
               <td key={w} className="px-1 py-2">
-                <input
+                <AutoText
+                  singleLine
                   aria-label={`${it.name || "Esercizio"}, settimana ${w + 1}`}
                   value={it.prescriptions[w] ?? ""}
-                  onChange={(e) => onBlock((b) => void (b.items[itemIdx].prescriptions[w] = e.target.value))}
+                  onChange={(v) => onBlock((b) => void (b.items[itemIdx].prescriptions[w] = v))}
                   className={cellInput}
                   placeholder={w === 0 ? "4x8 60kg" : ""}
                 />
               </td>
             ))}
             <td className="px-1 py-2">
-              <input aria-label="Recupero" value={it.rest} onChange={(e) => onBlock((b) => void (b.items[itemIdx].rest = e.target.value))} className={cellInput} placeholder="90&quot;" />
+              <AutoText singleLine aria-label="Recupero" value={it.rest} onChange={(v) => onBlock((b) => void (b.items[itemIdx].rest = v))} className={cellInput} placeholder="90&quot;" />
             </td>
             <td className="px-1 py-2">
-              <textarea
-                aria-label="Indicazioni"
-                rows={1}
-                value={it.notes}
-                onChange={(e) => onBlock((b) => void (b.items[itemIdx].notes = e.target.value))}
-                className={cx(cellInput, "min-h-[34px] resize-y")}
-              />
-            </td>
-            <td className="px-1 py-2">
-              <div className="flex flex-wrap items-center justify-end gap-0.5">
+              <div className="grid grid-cols-2 justify-items-center gap-0.5">
                 <IconBtn
+                  small
                   label="Sposta su"
                   disabled={multi ? itemIdx === 0 : blockIdx === 0}
                   onClick={() => onBlock((b, s) => (multi ? swap(b.items, itemIdx, itemIdx - 1) : swap(s, blockIdx, blockIdx - 1)))}
@@ -961,6 +1257,7 @@ function BlockRows({
                   <IconUp size={16} />
                 </IconBtn>
                 <IconBtn
+                  small
                   label="Sposta giù"
                   disabled={multi ? itemIdx === block.items.length - 1 : blockIdx === blockCount - 1}
                   onClick={() => onBlock((b, s) => (multi ? swap(b.items, itemIdx, itemIdx + 1) : swap(s, blockIdx, blockIdx + 1)))}
@@ -968,6 +1265,7 @@ function BlockRows({
                   <IconDown size={16} />
                 </IconBtn>
                 <IconBtn
+                  small
                   label={multi ? "Aggiungi esercizio al gruppo" : "Crea superserie con un altro esercizio"}
                   onClick={() => onBlock((b) => {
                     b.items.splice(itemIdx + 1, 0, emptyItem(weeks));
@@ -980,6 +1278,7 @@ function BlockRows({
                   <IconPlus size={16} />
                 </IconBtn>
                 <IconBtn
+                  small
                   label="Togli esercizio"
                   onClick={() => onBlock((b, s) => {
                     b.items.splice(itemIdx, 1);
@@ -989,31 +1288,13 @@ function BlockRows({
                 >
                   <IconX size={16} />
                 </IconBtn>
-                <ProgressionMenu
-                  label={`Compila le settimane di ${it.name || "questo esercizio"}`}
-                  onApply={(rule, deloadLast) =>
-                    onBlock((b) => {
-                      const item = b.items[itemIdx];
-                      item.prescriptions = progressPrescriptions(item.prescriptions, rule, { deloadLast });
-                    })
-                  }
-                />
-                {aiEnabled && it.name.trim() ? (
-                  <RowAiButtons
-                    programId={programId}
-                    item={it}
-                    weeks={weeks}
-                    onPrescriptions={(p) => onBlock((b) => void (b.items[itemIdx].prescriptions = p))}
-                    onReplace={(name) => onItemName(itemIdx, name)}
-                  />
-                ) : null}
               </div>
             </td>
           </tr>
         );
       })}
       {multi ? (
-        <tr>
+        <tr className={rowBg}>
           <td />
           <td colSpan={colCount - 1} className="px-2 pb-3">
             <button type="button" className="flex items-center gap-1.5 text-xs font-semibold text-muted hover:text-ink" onClick={() => onBlock((b) => void b.items.push(emptyItem(weeks)))}>
@@ -1222,12 +1503,14 @@ function MobileBlock({
   lastLogFor,
   aiEnabled,
   programId,
+  select,
   onBlock,
   onItemName,
 }: {
   block: ProgramBlock;
   blockIdx: number;
   blockCount: number;
+  select?: Selection;
   aiEnabled: boolean;
   programId: string;
   week: number;
@@ -1245,19 +1528,21 @@ function MobileBlock({
       <IconBtn label="Elimina blocco" onClick={() => { if (window.confirm("Eliminare questo blocco?")) onBlock((_, s) => void s.splice(blockIdx, 1)); }}><IconTrash size={16} /></IconBtn>
     </div>
   );
+  const box = select ? <SelectBox checked={select.checked} label={select.label} onPick={select.onPick} id={block.id} /> : null;
+  const ring = select?.checked ? "ring-2 ring-ink" : undefined;
   if (block.kind === "text") {
     return (
-      <div className="rounded-2xl bg-sand/60 p-3">
-        <div className="mb-2 flex items-center justify-between"><span className="text-sm font-bold">{blockLetter(blockIdx)} · Testo</span>{moves}</div>
+      <div className={cx("rounded-2xl bg-sand/60 p-3", ring)} data-block={block.id}>
+        <div className="mb-2 flex items-center justify-between gap-2"><span className="flex items-center gap-2 text-sm font-bold">{box}{blockLetter(blockIdx)} · Testo</span>{moves}</div>
         <input aria-label="Titolo del blocco di testo" value={block.title} onChange={(e) => onBlock((b) => void (b.title = e.target.value))} placeholder="Titolo (es. Riscaldamento)" className={cx(cellInput, "mb-1.5 font-semibold")} />
         <textarea aria-label="Testo del blocco" value={block.notes} onChange={(e) => onBlock((b) => void (b.notes = e.target.value))} rows={3} className={cx(cellInput, "min-h-16")} />
       </div>
     );
   }
   return (
-    <div className={cx("rounded-2xl p-3", multi ? "bg-sand/60 ring-1 ring-sand-deep" : "bg-sand/30")}>
+    <div className={cx("rounded-2xl p-3", multi ? "bg-sand/60 ring-1 ring-sand-deep" : "bg-sand/30", ring)} data-block={block.id}>
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-sm font-bold">{multi ? `${blockLetter(blockIdx)} · ${BLOCK_KIND_LABELS[block.kind]}${block.rounds ? ` · ${block.rounds} giri` : block.durationMin ? ` · ${block.durationMin} min` : ""}` : <span className="font-semibold text-muted">Esercizio singolo</span>}</span>
+        <span className="flex min-w-0 items-center gap-2 text-sm font-bold">{box}{multi ? `${blockLetter(blockIdx)} · ${BLOCK_KIND_LABELS[block.kind]}${block.rounds ? ` · ${block.rounds} giri` : block.durationMin ? ` · ${block.durationMin} min` : ""}` : <span className="font-semibold text-muted">Esercizio singolo</span>}</span>
         {moves}
       </div>
       {multi ? (

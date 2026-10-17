@@ -470,12 +470,15 @@ export function RowAiButtons({
   weeks,
   onPrescriptions,
   onReplace,
+  inline,
 }: {
   programId: string;
   item: ProgramItem;
   weeks: number;
   onPrescriptions: (p: string[]) => void;
   onReplace: (name: string) => void;
+  /** in fila sotto il nome (computer) invece che in colonna */
+  inline?: boolean;
 }) {
   const [busy, setBusy] = useState<"progress" | "alt" | null>(null);
   const [alts, setAlts] = useState<Array<{ name: string; reason: string }> | null>(null);
@@ -508,7 +511,7 @@ export function RowAiButtons({
   };
 
   return (
-    <span className="relative flex w-full flex-col items-end">
+    <span className={cx("relative flex", inline ? "flex-wrap items-center" : "w-full flex-col items-end")}>
       <button
         type="button"
         title="Fai progredire le settimane con l'AI"
@@ -530,7 +533,7 @@ export function RowAiButtons({
         {busy === "alt" ? "…" : "Alternative"}
       </button>
       {alts || info ? (
-        <div role="dialog" aria-label="Proposte dell'AI" className="absolute top-10 right-0 z-20 w-72 rounded-2xl bg-ink p-3 text-sm text-card shadow-lg">
+        <div role="dialog" aria-label="Proposte dell'AI" className={cx("absolute top-10 z-20 w-72", inline ? "left-0" : "right-0", "rounded-2xl bg-ink p-3 text-sm text-card shadow-lg")}>
           <div className="mb-2 flex justify-between gap-2">
             <span className="font-semibold">{alts ? "Alternative" : "AI"}</span>
             <button type="button" aria-label="Chiudi" onClick={() => { setAlts(null); setInfo(null); }}><IconX size={16} /></button>

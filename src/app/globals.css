@@ -195,6 +195,19 @@ body {
   }
 }
 
+/* Editor del programma: la pagina usa tutta la larghezza (la griglia
+   esercizi × settimane sta tutta nella card, senza scorrere di lato). */
+main > div:has(> [data-program-editor]) {
+  max-width: 1680px;
+}
+
+/* Barra "Copia e incolla" sul computer: accanto al pannello laterale, non sotto */
+@media (min-width: 1024px) {
+  html[data-side-panel] [data-select-bar] {
+    right: calc(var(--side-panel) + 2.5rem);
+  }
+}
+
 /* Menu in basso sul telefono (NavBehavior in src/components/nav-behavior.tsx):
    scorrendo in giù si rimpicciolisce, mentre scrivi sparisce. Solo
    trasformazioni: niente ricalcolo della pagina. */

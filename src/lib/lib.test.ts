@@ -25,6 +25,7 @@ import { parseCsv } from "./import/csv";
 import { parseProgramSheet } from "./import/sheet";
 import { parseExerciseCsv, youtubeId } from "./import/exercises";
 import { checkinWeekFor } from "./checkin";
+import { appendToDay, blockNames, collectBlocks, deleteSelected, fitPrescriptions, insertBeforeSelected, parseClip, replaceSelected, samePlaceIds } from "./program/clipboard";
 
 describe("plicometria", () => {
   it("donna, 5 pliche: stessi numeri del foglio report mensile", () => {
@@ -1605,5 +1606,66 @@ describe("fase del progetto dedotta dalla forza prioritaria (17/10)", async () =
   it("l'AI e il testo di adesso usano la fase dedotta", () => {
     expect(projectForAI(p, "2026-10-05")).toContain("ottobre 2026 (adesso): fase Intensificazione");
     expect(projectNowText(p, "2026-10-05")).toBe("Adesso intensificazione questo mese, poi volumizzazione da novembre.");
+  });
+});
+
+describe("copia e incolla di esercizi", () => {
+  const mk = (id: string, name: string, p: string[] = ["3x10", "3x10"]): ProgramContent["days"][number]["blocks"][number] => ({
+    id, kind: "single", title: "", notes: "", items: [{ id: `i-${id}`, name, rest: "", notes: "", prescriptions: p }],
+  });
+  const content: ProgramContent = {
+    days: [
+      { id: "d1", title: "Giorno 1", notes: "", blocks: [mk("a1", "Cat-cow"), mk("a2", "Bird dog"), mk("a3", "Dead bug"), mk("a4", "Squat", ["4x8 60kg", "4x8 62kg"])] },
+      { id: "d2", title: "Giorno 2", notes: "", blocks: [mk("b1", "Vecchio 1"), mk("b2", "Vecchio 2"), mk("b3", "Vecchio 3"), mk("b4", "Panca")] },
+      { id: "d3", title: "Giorno 3", notes: "", blocks: [mk("c1", "Vecchio 1"), mk("c2", "Stacco")] },
+    ],
+  };
+  const names = (c: ProgramContent, d: number) => c.days[d].blocks.map((b) => b.items[0]?.name);
+
+  it("copia in ordine di programma e ricorda da dove", () => {
+    const c = collectBlocks(content, new Set(["a3", "a1", "a2"]));
+    expect(c.blocks.map((b) => b.items[0].name)).toEqual(["Cat-cow", "Bird dog", "Dead bug"]);
+    expect(c.dayIds).toEqual(["d1"]);
+    expect(c.fromIndex).toBe(0);
+  });
+
+  it("incolla al posto dei selezionati in più giorni, con id nuovi ogni volta", () => {
+    const clip = collectBlocks(content, new Set(["a1", "a2", "a3"])).blocks;
+    const r = replaceSelected(content, new Set(["b1", "b2", "b3", "c1"]), clip, 2);
+    expect(r.days).toBe(2);
+    expect(r.removed).toBe(4);
+    expect(names(r.content, 1)).toEqual(["Cat-cow", "Bird dog", "Dead bug", "Panca"]);
+    expect(names(r.content, 2)).toEqual(["Cat-cow", "Bird dog", "Dead bug", "Stacco"]);
+    expect(names(r.content, 0)).toEqual(names(content, 0));
+    const ids = r.content.days.flatMap((d) => d.blocks.flatMap((b) => [b.id, ...b.items.map((i) => i.id)]));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("incolla sopra, in fondo, elimina", () => {
+    const clip = [content.days[0].blocks[0]];
+    expect(names(insertBeforeSelected(content, new Set(["c2"]), clip, 2).content, 2)).toEqual(["Vecchio 1", "Cat-cow", "Stacco"]);
+    expect(names(appendToDay(content, "d3", clip, 2).content, 2)).toEqual(["Vecchio 1", "Stacco", "Cat-cow"]);
+    const del = deleteSelected(content, new Set(["a4", "b4"]));
+    expect(del.removed).toBe(2);
+    expect(names(del.content, 1)).toEqual(["Vecchio 1", "Vecchio 2", "Vecchio 3"]);
+  });
+
+  it("le settimane si adattano al programma di arrivo", () => {
+    expect(fitPrescriptions(["3x10", "3x10"], 4)).toEqual(["3x10", "3x10", "3x10", "3x10"]);
+    expect(fitPrescriptions(["4x8 60kg", "4x8 62kg"], 4)).toEqual(["4x8 60kg", "4x8 62kg", "", ""]);
+    expect(fitPrescriptions(["a", "b", "c"], 2)).toEqual(["a", "b"]);
+    expect(fitPrescriptions(["", ""], 3)).toEqual(["", "", ""]);
+  });
+
+  it("gli stessi posti negli altri giorni, senza il giorno di partenza", () => {
+    const c = collectBlocks(content, new Set(["a1", "a2", "a3"]));
+    const clip = { v: 1 as const, at: 0, programId: "p1", programTitle: "Fase 21", ...c };
+    expect(samePlaceIds(content, clip, "p1")).toEqual(["b1", "b2", "b3", "c1", "c2"]);
+    // da un altro programma: anche il giorno 1
+    expect(samePlaceIds(content, clip, "p2")).toHaveLength(8);
+    expect(parseClip(JSON.stringify(clip))?.blocks).toHaveLength(3);
+    expect(parseClip("{rotto")).toBeNull();
+    expect(parseClip(JSON.stringify({ ...clip, blocks: [] }))).toBeNull();
+    expect(blockNames(c.blocks)).toEqual(["Cat-cow", "Bird dog", "Dead bug"]);
   });
 });
