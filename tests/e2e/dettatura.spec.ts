@@ -74,8 +74,13 @@ test("assistente AI da iPhone: si può preparare la bozza mentre si registra, il
   await page.locator("a[href^='/staff/programmi/']").filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/programmi\//);
   await expect(async () => {
-    await page.getByRole("button", { name: /Chiedi all'AI/ }).click({ timeout: 2000 });
+    // già aperto se c'è una bozza AI in coda per questo programma
+    if (!(await page.locator("#ai-instruction").isVisible())) await page.getByRole("button", { name: /Chiedi all'AI/ }).click({ timeout: 2000 });
     await expect(page.locator("#ai-instruction")).toBeVisible({ timeout: 2000 });
+    // una bozza rimasta da un giro precedente: si scarta e si riparte
+    const leftover = page.getByRole("button", { name: /^(Scartala|Annulla la richiesta)$/ });
+    if (await leftover.isVisible()) await leftover.click();
+    await page.locator("#ai-instruction").fill("");
   }).toPass({ timeout: 30_000 });
   await expect(page.getByText("Per dettare tocca la casella e usa il microfono della tastiera.")).toHaveCount(0);
   await page.getByRole("button", { name: "Detta" }).click();

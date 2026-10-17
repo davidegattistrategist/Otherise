@@ -391,6 +391,25 @@ describe.skipIf(!run)("permessi", () => {
     expect(data!.ai_lessons).toBe("- lezione del titolare");
     expect((await clientA.from("app_settings").select("ai_lessons")).data ?? []).toEqual([]);
   });
+  it("bozze AI in coda: ognuno vede e scrive solo le sue, solo sui clienti che segue; il cliente niente", async () => {
+    const coachUid = (await coach.auth.getUser()).data.user!.id;
+    const ownerUid = (await owner.auth.getUser()).data.user!.id;
+    const { data: job } = await coach.from("ai_program_jobs").insert({ program_id: publishedId, client_id: clientAId, created_by: coachUid, request: { instruction: "prova" } }).select("id, status").single().throwOnError();
+    expect(job!.status).toBe("working");
+    // una sola in preparazione per programma
+    expect((await coach.from("ai_program_jobs").insert({ program_id: publishedId, client_id: clientAId, created_by: coachUid })).error?.code).toBe("23505");
+    // a nome di un altro o su un cliente non suo: no
+    expect((await coach.from("ai_program_jobs").insert({ program_id: publishedId, client_id: clientAId, created_by: ownerUid })).error).not.toBeNull();
+    expect((await coach.from("ai_program_jobs").insert({ program_id: publishedId, client_id: clientBId, created_by: coachUid })).error).not.toBeNull();
+    // il titolare non vede quelle del collaboratore, il cliente e gli estranei niente
+    expect((await owner.from("ai_program_jobs").select("id")).data ?? []).toEqual([]);
+    expect((await clientA.from("ai_program_jobs").select("id")).data ?? []).toEqual([]);
+    expect((await stranger.from("ai_program_jobs").select("id")).data ?? []).toEqual([]);
+    expect((await clientA.from("ai_program_jobs").insert({ program_id: publishedId, client_id: clientAId, created_by: (await clientA.auth.getUser()).data.user!.id })).error).not.toBeNull();
+    await coach.from("ai_program_jobs").update({ status: "applied" }).eq("id", job!.id).throwOnError();
+    expect((await coach.from("ai_program_jobs").select("status").eq("id", job!.id).single()).data!.status).toBe("applied");
+  });
+
   it("lezioni sulle risposte: generali solo del titolare, sul cliente solo dello staff che lo segue", async () => {
     await coach.from("app_settings").update({ ai_reply_lessons: "- hack" }).eq("id", 1);
     await owner.from("app_settings").update({ ai_reply_lessons: "- festeggia e basta" }).eq("id", 1).throwOnError();

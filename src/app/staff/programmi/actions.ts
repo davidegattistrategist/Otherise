@@ -19,6 +19,7 @@ import { autoUpdate } from "@/lib/ai-profile";
 import { getAiProfile, saveAiProfile } from "@/lib/data/ai-profile";
 import { programBalance } from "@/lib/program/balance";
 import { after } from "next/server";
+import { aiEnabled } from "@/lib/ai/claude";
 import { compareWithDraft, learnPending } from "@/lib/ai/learn";
 
 const asJson = (c: ProgramContent) => c as unknown as NonNullable<Json>;
@@ -127,7 +128,8 @@ export async function createNextPhase(previousId: string, fd?: FormData) {
     .select("id")
     .single();
   if (error || !data) throw new Error("Non è stato possibile creare la nuova fase");
-  redirect(editorPath(data.id));
+  // con l'AI attiva l'assistente si apre già: dai le indicazioni e passi al prossimo cliente
+  redirect(aiEnabled() ? `${editorPath(data.id)}?ai=1` : editorPath(data.id));
 }
 
 const saveSchema = z.object({

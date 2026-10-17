@@ -88,8 +88,12 @@ test("l'AI fa qualche domanda prima della bozza", async ({ page }) => {
   await page.locator("a[href^='/staff/programmi/']").filter({ visible: true }).first().click();
   await page.waitForURL(/\/staff\/programmi\//);
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: /Chiedi all'AI/ }).click();
-  await page.locator("#ai-instruction").fill("Aggiungiamo un giorno di corsa facile e teniamo la forza.");
+  // l'assistente è già aperto se per questo programma c'è una bozza AI rimasta da un giro precedente
+  await expect(page.getByRole("button", { name: /Chiedi all'AI/ }).or(page.locator("#ai-instruction")).filter({ visible: true }).first()).toBeVisible();
+  if (!(await page.locator("#ai-instruction").isVisible())) await page.getByRole("button", { name: /Chiedi all'AI/ }).click();
+  const leftover = page.getByRole("button", { name: /^(Scartala|Annulla la richiesta)$/ });
+  if (await leftover.isVisible()) await leftover.click();
+  await page.locator("#ai-instruction").fill(`Aggiungiamo un giorno di corsa facile e teniamo la forza. (${Date.now()})`);
   await page.getByRole("button", { name: "Prepara la bozza" }).click();
   await expect(page.getByText("Prima di preparare la bozza, qualche domanda")).toBeVisible({ timeout: 20_000 });
   // se manca il tempo per seduta, prima lo chiede l'app; poi le domande dell'AI
@@ -139,8 +143,13 @@ test("previsione incassi: solo il titolare, con orizzonte 3/6/12 mesi", async ({
 /** Apre l'assistente AI (riprova se il tocco arriva prima che la pagina sia pronta). */
 async function openAssistant(page: Page) {
   await expect(async () => {
-    await page.getByRole("button", { name: /Chiedi all'AI/ }).click({ timeout: 2000 });
+    // già aperto se c'è una bozza AI in coda per questo programma
+    if (!(await page.locator("#ai-instruction").isVisible())) await page.getByRole("button", { name: /Chiedi all'AI/ }).click({ timeout: 2000 });
     await expect(page.locator("#ai-instruction")).toBeVisible({ timeout: 2000 });
+    // una bozza rimasta da un giro precedente: si scarta e si riparte
+    const leftover = page.getByRole("button", { name: /^(Scartala|Annulla la richiesta)$/ });
+    if (await leftover.isVisible()) await leftover.click();
+    await page.locator("#ai-instruction").fill("");
   }).toPass({ timeout: 30_000 });
 }
 

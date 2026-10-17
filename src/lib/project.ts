@@ -64,6 +64,33 @@ export function emptyProject(startMonth: string): Project {
   };
 }
 
+const lower = (s: string) => s.trim().toLowerCase();
+const isMaxStrength = (label: string) => /forza/.test(lower(label)) && /(massim|max)/.test(lower(label));
+// il lato "volume": forza resistente, oppure massa magra / ipertrofia negli studi che usano quella riga
+const isVolumeRow = (label: string) => (/forza/.test(lower(label)) && /resist/.test(lower(label))) || /massa magra|ipertrof/.test(lower(label));
+
+/**
+ * Fase dedotta per un mese senza fase scelta: conta quale forza è prioritaria.
+ * Forza massima più alta → intensificazione; forza resistente (o massa magra /
+ * ipertrofia) più alta → volumizzazione; uguali (a metà) → transizione.
+ * Senza nessuna delle due: niente.
+ */
+export function inferPhase(project: Project, i: number): ProjectPhase | "" {
+  const max = project.rows.find((r) => r.kind === "training" && isMaxStrength(r.label))?.values[i] ?? 0;
+  const endurance = Math.max(0, ...project.rows.filter((r) => r.kind === "training" && isVolumeRow(r.label)).map((r) => r.values[i] ?? 0));
+  if (!max && !endurance) return "";
+  if (max > endurance) return "intensity";
+  if (endurance > max) return "volume";
+  return "transition";
+}
+
+/** Le fasi da mostrare e da dare all'AI: quella scelta dal trainer, altrimenti quella dedotta. */
+export function effectivePhases(project: Project): string[] {
+  return project.phases.map((p, i) => p || inferPhase(project, i));
+}
+
+const withInferred = (project: Project): Project => ({ ...project, phases: effectivePhases(project) });
+
 /** Progetto senza niente di scritto (né obiettivo, né fasi, né note, né stimoli): al cliente non si mostra. */
 export function isProjectEmpty(p: Project): boolean {
   return !p.goal.trim() && p.phases.every((x) => !x) && p.notes.every((x) => !x.trim()) && p.rows.every((r) => r.values.every((v) => v === 0));
@@ -100,7 +127,8 @@ export function monthIndex(project: Project, today: ISODate): number {
  * che si sta preparando (da `from` a `to`) e il mese dopo, con il cambio di fase
  * messo in evidenza. Senza `to` usa il mese di `from` e i tre successivi.
  */
-export function projectForAI(project: Project, from: ISODate, to?: ISODate): string {
+export function projectForAI(saved: Project, from: ISODate, to?: ISODate): string {
+  const project = withInferred(saved);
   const months = projectMonths(project.start);
   const keys = months.map((m) => m.key);
   const startIdx = keys.indexOf(from.slice(0, 7));
@@ -137,7 +165,8 @@ export function defaultStart(today: ISODate): string {
 }
 
 /** "Adesso volumizzazione fino a novembre, poi transizione da dicembre" */
-export function projectNowText(project: Project, today: ISODate): string | null {
+export function projectNowText(saved: Project, today: ISODate): string | null {
+  const project = withInferred(saved);
   const months = projectMonths(project.start);
   const i = monthIndex(project, today);
   if (i < 0 || !project.phases[i]) return null;

@@ -2,7 +2,7 @@
  * Il progetto annuale come timeline: fasi a colori, intensità degli stimoli,
  * note dei mesi. La usa il cliente (Percorso) e lo staff (anteprima).
  */
-import { PHASE_BY_KEY, levelLabel, monthIndex, projectMonths, projectNowText, type Project } from "@/lib/project";
+import { PHASE_BY_KEY, effectivePhases, levelLabel, monthIndex, projectMonths, projectNowText, type Project } from "@/lib/project";
 import type { ISODate } from "@/lib/dates";
 import { cx } from "./ui";
 
@@ -23,7 +23,9 @@ export function ProjectTimeline({ project, today }: { project: Project; today: I
   const now = monthIndex(project, today);
   const grid = { display: "grid", gridTemplateColumns: "132px repeat(12, minmax(62px, 1fr))" } as const;
   const rows = project.rows.filter((r) => r.label.trim());
-  const usedPhases = [...new Set(project.phases.filter(Boolean))];
+  // mesi senza fase scelta: dedotta dalla forza prioritaria (massima → intensificazione, resistente → volumizzazione)
+  const phases = effectivePhases(project);
+  const usedPhases = [...new Set(phases.filter(Boolean))];
   const nowText = projectNowText(project, today);
   return (
     <div className="flex flex-col gap-4">
@@ -45,7 +47,7 @@ export function ProjectTimeline({ project, today }: { project: Project; today: I
           </div>
           <div style={grid} className="relative items-center gap-y-1 py-1.5">
             <span className="sticky left-0 z-[1] self-stretch bg-card text-sm font-semibold leading-[2.2rem]">Fase</span>
-            {segments(project.phases).map((s) => {
+            {segments(phases).map((s) => {
               const ph = PHASE_BY_KEY.get(s.key);
               const dark = s.key === "race" || s.key === "volume" || s.key === "intensity";
               return (

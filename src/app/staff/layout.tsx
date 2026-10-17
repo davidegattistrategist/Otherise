@@ -1,4 +1,5 @@
 import { requireStaff } from "@/lib/auth";
+import { AiJobsButton } from "@/components/ai-jobs";
 import { NavBehavior } from "@/components/nav-behavior";
 import { getBusinessName } from "@/lib/data/shared";
 import { createClient } from "@/lib/supabase/server";
@@ -57,7 +58,10 @@ export default async function StaffLayout({ children }: { children: React.ReactN
           <span className="h-3 w-3 shrink-0 rounded-full bg-accent" aria-hidden="true" />
           <BrandName name={name} className="text-[17px] font-bold tracking-tight" />
         </Link>
-        <LiveBell href="/staff/notifiche" initial={unread ?? 0} />
+        <span className="flex items-center gap-2">
+          <AiJobsButton variant="header" />
+          <LiveBell href="/staff/notifiche" initial={unread ?? 0} />
+        </span>
       </header>
       <Toaster />
       <NavBehavior />
@@ -70,6 +74,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
           </div>
         </div>
         <StaffNav items={items} />
+        <AiJobsButton variant="sidebar" />
         <div className="mt-auto hidden flex-col gap-1 px-2 lg:flex">
           <div className="text-sm font-semibold">{me.fullName}</div>
           <div className="text-xs text-muted">{owner ? "Titolare" : "Collaboratore"}</div>

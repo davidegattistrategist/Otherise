@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getCheckMode } from "@/lib/check-mode";
+import { myOpenJobs } from "@/lib/ai/program-jobs";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +16,13 @@ export async function GET() {
   if (!me) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   const supabase = await createClient();
   const staffUser = me.role === "owner" || me.role === "coach";
-  const [{ count }, { data: latest }, { data: chats }, checkMode] = await Promise.all([
+  const [{ count }, { data: latest }, { data: chats }, checkMode, aiJobs] = await Promise.all([
     supabase.from("notifications").select("id", { count: "exact", head: true }).eq("recipient_id", me.id).neq("kind", "chat").is("read_at", null),
     supabase.from("notifications").select("id, kind, title, body, link, client_id").eq("recipient_id", me.id).neq("kind", "chat").is("read_at", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabase.rpc("my_unread_chats"),
     staffUser ? getCheckMode(supabase, me.id) : Promise.resolve(null),
+    // bozze AI in coda (in preparazione, domande, pronte): il riquadro "Bozze AI"
+    staffUser ? myOpenJobs(supabase, me.id).catch(() => []) : Promise.resolve([]),
   ]);
   const list = chats ?? [];
   const staff = me.role === "owner" || me.role === "coach";
@@ -37,6 +40,8 @@ export async function GET() {
       chats: staff ? list.length : list.reduce((n, c) => n + c.unread, 0),
       latest: latest ?? null,
       chat: newest ? { clientId: newest.client_id, at: newest.last_at, from: chatFrom } : null,
+      // bozze AI in coda dello staff
+      aiJobs: aiJobs.map((j) => ({ id: j.id, programId: j.programId, clientName: j.clientName ?? "", status: j.status, createdAt: j.createdAt })),
       // modalità check in corso (staff): gli altri dispositivi entrano ed escono da soli
       checkMode: checkMode ? { clientId: checkMode.clientId, checkId: checkMode.checkId, clientName: checkMode.clientName, paused: checkMode.paused } : null,
     },

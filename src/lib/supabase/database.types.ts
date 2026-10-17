@@ -5,7 +5,39 @@ export type Database = {
   
   "public": {
           Tables: {
-            "ai_reply_drafts": {
+            "ai_program_jobs": {
+                  Row: {
+                    "base_updated_at": string | null,"client_id": string,"closed_at": string | null,"created_at": string,"created_by": string,"error": string | null,"finished_at": string | null,"id": string,"program_id": string,"request": Json,"result": Json | null,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "base_updated_at"?: string | null,"client_id": string,"closed_at"?: string | null,"created_at"?: string,"created_by": string,"error"?: string | null,"finished_at"?: string | null,"id"?: string,"program_id": string,"request"?: Json,"result"?: Json | null,"status"?: string
+                  }
+                  Update: {
+                    "base_updated_at"?: string | null,"client_id"?: string,"closed_at"?: string | null,"created_at"?: string,"created_by"?: string,"error"?: string | null,"finished_at"?: string | null,"id"?: string,"program_id"?: string,"request"?: Json,"result"?: Json | null,"status"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ai_program_jobs_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ai_program_jobs_created_by_fkey"
+      columns: ["created_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "ai_program_jobs_program_id_fkey"
+      columns: ["program_id"]
+isOneToOne: false
+      referencedRelation: "programs"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"ai_reply_drafts": {
                   Row: {
                     "body": string,"checkin_id": string | null,"client_id": string,"closed_at": string | null,"created_at": string,"id": string,"last_message_id": string | null,"learned_at": string | null,"sent_by": string | null,"sent_text": string | null,"source": string,"status": string
                   }

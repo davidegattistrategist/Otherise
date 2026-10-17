@@ -19,10 +19,17 @@ import { IconBell, IconChat, IconX } from "./icons";
 type Counts = { notifications: number; chats: number };
 type Latest = { id: string; kind: string; title: string; body: string; link: string | null; client_id: string | null } | null;
 type CheckModeInfo = { clientId: string; checkId?: string | null; clientName: string; paused: boolean } | null;
-type Live = Counts & { latest: Latest; chat: { clientId: string; at: string; from: string | null } | null; checkMode?: CheckModeInfo };
+export type AiJobBrief = { id: string; programId: string; clientName: string; status: string; createdAt: string };
+type Live = Counts & { latest: Latest; chat: { clientId: string; at: string; from: string | null } | null; checkMode?: CheckModeInfo; aiJobs?: AiJobBrief[] };
 type Banner = { key: string; title: string; body: string; link: string; notificationId?: string; chat?: boolean };
 
 const LiveContext = createContext<Counts | null>(null);
+const AiJobsContext = createContext<AiJobBrief[]>([]);
+
+/** Le bozze AI in coda (staff), aggiornate con i controlli dal vivo. */
+export function useAiJobs(): AiJobBrief[] {
+  return useContext(AiJobsContext);
+}
 
 /** Numeri aggiornati (se la pagina non è dentro LiveProvider usa quelli passati). */
 export function useLiveCounts(fallback: Counts): Counts {
@@ -79,6 +86,7 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
     setCounts(initial);
   }
   const [banners, setBanners] = useState<Banner[]>([]);
+  const [aiJobs, setAiJobs] = useState<AiJobBrief[]>([]);
   const push = useCallback((b: Banner) => setBanners((list) => [b, ...list.filter((x) => x.key !== b.key && x.link !== b.link)].slice(0, MAX_BANNERS)), []);
   const lastPoll = useRef(0);
   const last = useRef<{ latestId: string | null; chatAt: string | null; counts: Counts } | null>(null);
@@ -115,6 +123,7 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
     last.current = { latestId: d.latest?.id ?? prev?.latestId ?? null, chatAt: d.chat?.at ?? prev?.chatAt ?? null, counts: { notifications: d.notifications, chats: d.chats } };
     setCounts({ notifications: d.notifications, chats: d.chats });
     if (role === "staff") {
+      setAiJobs(d.aiJobs ?? []);
       setCheckMode(d.checkMode ?? null);
       followCheckMode(d.checkMode ?? null, pathRef.current);
     }
@@ -125,7 +134,7 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
     const chatLink = role === "client" ? "/cliente/messaggi" : d.chat ? `/staff/messaggi/${d.chat.clientId}` : "/staff/messaggi";
     if (newChat && here !== chatLink) {
       push({ key: `c${d.chat!.at}`, chat: true, title: role === "client" ? "Nuovo messaggio" : `Nuovo messaggio${d.chat!.from ? ` da ${d.chat!.from}` : ""}`, body: "Tocca per leggerlo.", link: chatLink });
-    } else if (newNotif && d.latest!.kind !== "chat" && d.latest!.link !== here) {
+    } else if (newNotif && d.latest!.kind !== "chat" && (d.latest!.link ?? "").split("?")[0] !== here) {
       push({ key: d.latest!.id, title: d.latest!.title, body: d.latest!.body, link: d.latest!.link ?? "", notificationId: d.latest!.id });
     }
     const changed = newChat || newNotif || prev.counts.notifications !== d.notifications || prev.counts.chats !== d.chats;
@@ -194,6 +203,7 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
   const close = (key: string) => setBanners((list) => list.filter((b) => b.key !== key));
   return (
     <LiveContext.Provider value={counts}>
+      <AiJobsContext.Provider value={aiJobs}>
       {children}
       {checkMode?.paused && !path.startsWith("/check/") ? (
         <form
@@ -212,6 +222,7 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
           {banners.map((b) => <LiveBanner key={b.key} banner={b} onClose={() => close(b.key)} />)}
         </div>
       ) : null}
+      </AiJobsContext.Provider>
     </LiveContext.Provider>
   );
 }

@@ -155,7 +155,8 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: "Crea la nuova fase" }).click();
     await page.waitForURL(/\/staff\/programmi\//);
     await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: /Chiedi all.AI/ }).click();
+    // con la nuova fase l'assistente è già aperto
+    await expect(page.locator("#ai-instruction")).toBeVisible();
     await page.fill("#ai-instruction", "Più volume sui fondamentali");
     await page.getByRole("button", { name: "Prepara la bozza" }).click();
     // se il cliente non ha ancora un tempo per seduta, l'app lo chiede prima della bozza
@@ -183,7 +184,7 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: "Salva modello" }).click();
     await expect(page.getByText("Salvato tra i modelli.")).toBeVisible();
     await page.goto("/staff/modelli");
-    await expect(page.getByText(`Modello ${info.project.name}`)).toBeVisible();
+    await expect(page.getByText(`Modello ${info.project.name}`).filter({ visible: true }).first()).toBeVisible();
 
     // indicazioni per l'AI: il tempo detto all'AI è diventato il riferimento del cliente
     await page.goto(`${base}/programma`);

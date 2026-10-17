@@ -1578,3 +1578,32 @@ describe("progressioni nei circuiti senza serie (17/10)", async () => {
     expect(progressPrescriptions(["12 16kg", "", "", ""], "reps", { deloadLast: true })).toEqual(["12 16kg", "13 16kg", "14 16kg", "14 15kg"]);
   });
 });
+
+describe("fase del progetto dedotta dalla forza prioritaria (17/10)", async () => {
+  const { emptyProject, inferPhase, effectivePhases, projectForAI, projectNowText } = await import("./project");
+  const p = emptyProject("2026-10");
+  const fm = p.rows.find((r) => r.label === "Forza massima")!;
+  const fr = p.rows.find((r) => r.label === "Forza resistente")!;
+  fm.values = [3, 1, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0];
+  fr.values = [1, 3, 2, 0, 2, 0, 0, 0, 0, 0, 0, 0];
+  p.phases[4] = "race";
+  it("forza massima → intensificazione, resistente → volumizzazione, pari → transizione", () => {
+    expect([0, 1, 2, 3].map((i) => inferPhase(p, i))).toEqual(["intensity", "volume", "transition", ""]);
+  });
+  it("massa magra vale come lato volume (studi senza forza resistente)", () => {
+    const q = emptyProject("2026-04");
+    q.rows = [
+      { id: "a", label: "Forza massima", kind: "training", values: [2, 3, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0] },
+      { id: "b", label: "Massa magra", kind: "training", values: [2, 1, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0] },
+    ];
+    expect(effectivePhases(q).slice(0, 5)).toEqual(["transition", "intensity", "intensity", "volume", ""]);
+  });
+  it("la fase scelta dal trainer vince", () => {
+    expect(effectivePhases(p).slice(0, 5)).toEqual(["intensity", "volume", "transition", "", "race"]);
+    expect(p.phases[0]).toBe("");
+  });
+  it("l'AI e il testo di adesso usano la fase dedotta", () => {
+    expect(projectForAI(p, "2026-10-05")).toContain("ottobre 2026 (adesso): fase Intensificazione");
+    expect(projectNowText(p, "2026-10-05")).toBe("Adesso intensificazione questo mese, poi volumizzazione da novembre.");
+  });
+});

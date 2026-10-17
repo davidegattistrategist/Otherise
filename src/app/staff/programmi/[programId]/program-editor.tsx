@@ -39,6 +39,7 @@ import {
   unpublishProgram,
 } from "../actions";
 import { AiPanel, RowAiButtons } from "./ai-tools";
+import type { JobView } from "@/lib/ai/program-jobs-shared";
 import { estimateDayMinutes } from "@/lib/program/balance";
 import { useOpenDays } from "@/components/use-open-days";
 import { keepInView } from "@/components/one-day-open";
@@ -73,6 +74,8 @@ type Props = {
   backHref: string;
   /** Allenamenti già registrati dal cliente su questo programma */
   loggedWorkouts?: number;
+  /** bozza AI in coda ancora aperta per questo programma */
+  aiJob?: JobView | null;
 };
 
 const STATUS_LABEL = { draft: "Bozza", published: "Pubblicato", archived: "Archiviato" } as const;
@@ -83,7 +86,7 @@ const PreviousPhase = dynamic(() => import("./previous-phase"), { ssr: false });
 /** data-ex sulle righe degli esercizi: il pannello "Fase precedente" segue quello che scrivi */
 const exAttrs = (it: ProgramItem) => (it.name.trim() ? { "data-ex": exerciseKey(it), "data-ex-name": it.name.trim() } : { "data-ex": "" });
 
-export function ProgramEditor({ program, initialContent, exercises, lastLogs, nextPhaseNotes, clientName, aiEnabled, backHref, loggedWorkouts = 0 }: Props) {
+export function ProgramEditor({ program, initialContent, exercises, lastLogs, nextPhaseNotes, clientName, aiEnabled, backHref, loggedWorkouts = 0, aiJob = null }: Props) {
   const [title, setTitle] = useState(program.title);
   const [description, setDescription] = useState(program.description);
   const [weeks, setWeeks] = useState(program.weeks);
@@ -455,6 +458,9 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
 
       {aiEnabled && program.client_id ? (
         <AiPanel
+          initialJob={aiJob}
+          updatedAt={updatedAt}
+          getEdits={() => edits.current}
           programId={program.id}
           disabled={pending}
           dirty={dirty}

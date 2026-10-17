@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { loadDraft, useDraft } from "@/components/use-draft";
-import { MONTHS, PROJECT_PHASES, PHASE_BY_KEY, levelLabel, projectMonths, rowId, type Project } from "@/lib/project";
+import { MONTHS, PROJECT_PHASES, PHASE_BY_KEY, inferPhase, levelLabel, projectMonths, rowId, type Project } from "@/lib/project";
 import { Button, Card, Eyebrow, Input, Notice, Textarea, cx } from "@/components/ui";
 import { IconPlus, IconX } from "@/components/icons";
 import type { SaveProjectResult } from "./actions";
@@ -142,18 +142,21 @@ export function ProjectEditor({
               <tr className="border-t border-sand-deep">
                 <th scope="row" className="sticky left-0 z-10 bg-card px-2 py-2 text-left font-semibold">Fase</th>
                 {months.map((m, i) => {
-                  const ph = PHASE_BY_KEY.get(p.phases[i]);
+                  // senza fase scelta si mostra quella dedotta dalla forza prioritaria ("Auto")
+                  const auto = p.phases[i] ? "" : inferPhase(p, i);
+                  const ph = PHASE_BY_KEY.get(p.phases[i] || auto);
                   return (
                     <td key={m.key} className={cx(cell, i === now && "bg-accent-soft/60")}>
                       <select
                         aria-label={`Fase di ${m.long}`}
-                        title={ph?.label}
+                        title={auto && ph ? `${ph.label}, dedotta dalla forza prioritaria: scegline una per fissarla` : ph?.label}
                         value={p.phases[i]}
                         onChange={(e) => edit((d) => void (d.phases[i] = e.target.value))}
-                        className={cx("w-full rounded-lg px-1 py-1.5 text-xs font-semibold", ph ? "" : "bg-sand text-muted")}
+                        className={cx("w-full rounded-lg px-1 py-1.5 text-xs font-semibold", ph ? "" : "bg-sand text-muted", auto && "opacity-70 outline-1 outline-dashed outline-offset-[-2px] outline-current")}
+                        data-auto-phase={auto || undefined}
                         style={ph ? { background: ph.color, color: ["race", "volume", "intensity"].includes(ph.key) ? "#f6f2eb" : "#1b1a17" } : undefined}
                       >
-                        <option value="">—</option>
+                        <option value="">{auto ? PHASE_BY_KEY.get(auto)?.short : "—"}</option>
                         {PROJECT_PHASES.map((x) => <option key={x.key} value={x.key}>{x.short}</option>)}
                       </select>
                     </td>
@@ -225,7 +228,7 @@ export function ProjectEditor({
             <Button onClick={() => onSave()} disabled={pending}>{pending ? "Salvataggio…" : "Salva il progetto"}</Button>
             {dirty ? <span className="text-sm text-muted">Modifiche da salvare</span> : msg ? <span className={cx("text-sm", msg.ok ? "text-muted" : "text-accent-deep")}>{msg.ok ? "Salvato" : "Non salvato: guarda il messaggio in alto"}</span> : null}
           </div>
-          <p className="mt-3 text-sm text-muted">Tocca una cella per cambiare il livello: vuoto = assente, poi mantenimento, medio, alto. Per l&apos;alimentazione: non trattata, deficit, normocalorica, surplus. Nelle note: gare, vacanze, obiettivi del mese.</p>
+          <p className="mt-3 text-sm text-muted">Tocca una cella per cambiare il livello: vuoto = assente, poi mantenimento, medio, alto. Per l&apos;alimentazione: non trattata, deficit, normocalorica, surplus. Nelle note: gare, vacanze, obiettivi del mese. Fase con il bordo tratteggiato: non l&apos;hai scelta e la deduco dalla forza prioritaria (massima → intensificazione, resistente o massa magra → volumizzazione, pari → transizione); cambia da sola se cambi i livelli, sceglila tu per fissarla.</p>
         </div>
       </Card>
       {ask ? <NotifyDialog clientName={clientName} pending={pending} onChoose={(n) => doSave(ask.visible, n)} onClose={() => setAsk(null)} /> : null}

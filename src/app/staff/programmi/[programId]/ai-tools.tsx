@@ -8,7 +8,10 @@ import { loadDraft, useDraft } from "@/components/use-draft";
  * Le proposte dell'AI arrivano nell'editor come modifiche NON salvate: il
  * trainer le rivede e decide se salvarle.
  */
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { jobLabel, type JobView } from "@/lib/ai/program-jobs-shared";
+import { closeAiJob } from "./ai-job-actions";
 import { useDictation } from "@/components/use-dictation";
 import { friendlyError } from "@/lib/friendly-error";
 import type { ProgramContent, ProgramItem } from "@/lib/program/types";
@@ -73,6 +76,9 @@ export function AiPanel({
   disabled,
   dirty,
   onApply,
+  initialJob = null,
+  updatedAt,
+  getEdits,
 }: {
   programId: string;
   currentContent: ProgramContent;
@@ -80,9 +86,20 @@ export function AiPanel({
   disabled: boolean;
   dirty: boolean;
   onApply: (content: ProgramContent, notes: Record<string, string>, weeks?: number, sessionMinutes?: number | null) => void;
+  /** richiesta in coda ancora aperta per questo programma (in preparazione, domande, pronta, non riuscita) */
+  initialJob?: JobView | null;
+  /** updated_at del programma salvato: se cambia dopo la richiesta, aprendo la bozza si avvisa */
+  updatedAt: string;
+  /** contatore delle modifiche nell'editor */
+  getEdits: () => number;
 }) {
-  const [open, setOpen] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("ai") === "1");
-  const [instruction, setInstruction] = useState("");
+  const [open, setOpen] = useState(() => Boolean(initialJob) || (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("ai") === "1"));
+  // bozza in coda: l'AI lavora sul server, intanto puoi passare a un altro cliente
+  const [job, setJob] = useState<JobView | null>(initialJob);
+  // richiesta partita da qui (in questa visita): se arriva la bozza e non hai toccato niente, si apre da sola
+  const startedHere = useRef<{ edits: number } | null>(null);
+  // ripresa di una richiesta in coda: c'è già il testo che avevi scritto
+  const [instruction, setInstruction] = useState(initialJob?.instruction ?? "");
   // la richiesta all'assistente resta anche se esci prima di mandarla
   const instructionKey = `assistente:${programId}`;
   const { adopt: adoptInstruction, clear: clearInstruction } = useDraft(instructionKey, instruction, { isEmpty: (t) => !t.trim() });
@@ -102,10 +119,10 @@ export function AiPanel({
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   // domande dell'AI prima della bozza (null = non ancora chieste per questa richiesta)
-  const [questions, setQuestions] = useState<Array<{ question: string; options: string[] }> | null>(null);
-  const [answers, setAnswers] = useState<string[]>([]);
+  const [questions, setQuestions] = useState<Array<{ question: string; options: string[] }> | null>(initialJob?.status === "questions" ? initialJob.questions ?? [] : null);
+  const [answers, setAnswers] = useState<string[]>(() => (initialJob?.status === "questions" ? (initialJob.questions ?? []).map(() => "") : []));
   // risposte già date in questo giro (es. il tempo per seduta), da rimandare con le successive
-  const [asked, setAsked] = useState<Array<{ question: string; answer: string }>>([]);
+  const [asked, setAsked] = useState<Array<{ question: string; answer: string }>>(initialJob?.status === "questions" ? initialJob.answers : []);
   const dictation = useDictation((text) => setInstruction((v) => (v ? `${v.trimEnd()} ${text}` : text)));
   const { listening, interim, transcribing } = dictation;
   // tempo trascorso mentre l'AI lavora, così si vede che non è bloccata
@@ -140,19 +157,11 @@ export function AiPanel({
     };
   };
 
-  type Q = { question: string; options: string[] };
   type QA = { question: string; answer: string };
-  type DraftRes = { questions?: Q[]; summary?: string; content?: ProgramContent; notes?: Record<string, string>; weeks?: number; sessionMinutes?: number | null };
+  type DraftRes = NonNullable<JobView["draft"]>;
 
-  /** Risposta dell'assistente: altre domande oppure la bozza pronta. */
-  const handle = (res: DraftRes, given: QA[]) => {
-    if (res.questions?.length) {
-      setAsked(given);
-      setQuestions(res.questions);
-      setAnswers(res.questions.map(() => ""));
-      return;
-    }
-    if (!res.content) throw new Error("L'assistente non ha preparato la bozza: riprova.");
+  /** La bozza arriva nell'editor (modifiche da rivedere e salvare). */
+  const applyDraft = (res: DraftRes) => {
     onApply(res.content, res.notes ?? {}, res.weeks, res.sessionMinutes);
     // richiesta eseguita: non serve più ritrovarla alla prossima apertura
     clearInstruction();
@@ -162,9 +171,76 @@ export function AiPanel({
     setAsked([]);
   };
 
+  /** Apre la bozza pronta della richiesta in coda (con l'avviso se nel frattempo il programma è cambiato). */
+  const openJobDraft = (j: JobView, confirmChanges = true) => {
+    if (!j.draft) return;
+    const changedSaved = Boolean(j.baseUpdatedAt && j.baseUpdatedAt !== updatedAt);
+    const changedHere = startedHere.current ? getEdits() !== startedHere.current.edits : dirty;
+    if (confirmChanges && (changedSaved || changedHere) && !window.confirm("Dopo aver chiesto la bozza hai modificato il programma: aprendo la bozza dell'AI quelle modifiche vengono sostituite. Aprirla lo stesso?")) return;
+    applyDraft(j.draft);
+    setJob(null);
+    startedHere.current = null;
+    void closeAiJob(j.id, "applied");
+  };
+
+  /** Arrivato un aggiornamento della richiesta in coda. */
+  const onJob = (j: JobView) => {
+    setJob(j);
+    if (j.status === "questions") {
+      setAsked(j.answers);
+      setQuestions(j.questions ?? []);
+      setAnswers((j.questions ?? []).map(() => ""));
+    }
+    // partita da qui e non hai toccato niente nel frattempo: la bozza si apre da sola, come prima
+    if (j.status === "ready" && j.draft && startedHere.current && getEdits() === startedHere.current.edits) openJobDraft(j, false);
+  };
+
+  // finché l'AI lavora, la pagina chiede a che punto è (se sei andato altrove ti avvisa la notifica)
+  useEffect(() => {
+    if (job?.status !== "working") return;
+    let stop = false;
+    const tick = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const r = await fetch(`/api/ai/jobs?id=${job.id}`, { cache: "no-store" });
+        if (!r.ok || stop) return;
+        const d = (await r.json()) as { job: JobView };
+        if (!stop && d.job.status !== "working") onJob(d.job);
+      } catch {
+        // rete assente: si riprova al giro dopo
+      }
+    };
+    const t = setInterval(tick, 3000);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      stop = true;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", tick);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.id, job?.status]);
+
+  // tempo che passa sulla richiesta in coda
+  const [, setNow] = useState(0);
+  useEffect(() => {
+    if (job?.status !== "working") return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [job?.status]);
+
+  /** Manda la richiesta in coda: risponde subito, l'AI lavora sul server. */
+  const enqueue = async (payload: Record<string, unknown>) => {
+    const res = await post<{ job: JobView }>({ ...payload, background: true, baseUpdatedAt: updatedAt });
+    startedHere.current = { edits: getEdits() };
+    setSummary(null);
+    setQuestions(null);
+    setAnswers([]);
+    setJob(res.job);
+  };
+
   /**
-   * Un tocco: l'AI scrive subito la bozza oppure, se ha un dubbio forte, fa
-   * prima qualche domanda (spesso nessuna). Le risposte già date restano.
+   * Un tocco: l'AI scrive la bozza oppure, se ha un dubbio forte, fa prima
+   * qualche domanda (spesso nessuna). Le risposte già date restano.
    */
   const run = async () => {
     setBusy(true);
@@ -177,10 +253,10 @@ export function AiPanel({
         return;
       }
       if (questions === null) {
-        handle(await post<DraftRes>({ mode: "questions", ...request(extra) }), []);
+        await enqueue({ mode: "questions", ...request(extra) });
       } else {
-        const qa = [...asked, ...questions.map((q, i) => ({ question: q.question, answer: answers[i]?.trim() ?? "" }))];
-        handle(await post<DraftRes>({ mode: "revise", ...request(extra), answers: qa }), qa);
+        const qa: QA[] = [...asked, ...questions.map((q, i) => ({ question: q.question, answer: answers[i]?.trim() ?? "" }))];
+        await enqueue({ mode: "revise", ...request(extra), answers: qa });
       }
     } catch (e) {
       setError(friendlyError(e));
@@ -194,12 +270,22 @@ export function AiPanel({
     setError(null);
     try {
       const extra = await finishDictation();
-      handle(await post<DraftRes>({ mode: "revise", ...request(extra), answers: asked, skip: true }), asked);
+      await enqueue({ mode: "revise", ...request(extra), answers: asked, skip: true });
     } catch (e) {
       setError(friendlyError(e));
     } finally {
       setBusy(false);
     }
+  };
+
+  const discardJob = () => {
+    if (!job) return;
+    void closeAiJob(job.id, "discarded");
+    setJob(null);
+    setQuestions(null);
+    setAnswers([]);
+    setAsked([]);
+    startedHere.current = null;
   };
 
   if (!open) {
@@ -330,23 +416,47 @@ export function AiPanel({
             <button type="button" onClick={skipQuestions} disabled={busy} className="self-start text-sm font-semibold text-muted-dark underline disabled:opacity-50">Salta le domande e prepara la bozza</button>
           </div>
         ) : null}
+        {job?.status === "working" ? (
+          <div className="flex flex-col gap-3 rounded-2xl bg-[#26241f] px-4 py-4" data-ai-job="working" aria-live="polite">
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-3 w-3 shrink-0"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" /><span className="relative inline-flex h-3 w-3 rounded-full bg-accent" /></span>
+              <span className="font-semibold">{jobLabel(job)}</span>
+            </div>
+            <p className="text-sm leading-relaxed text-muted-dark">Puoi passare a un altro cliente: l&apos;AI continua da sola. Quando è pronta ti arriva la notifica e la trovi qui, in questo programma, e tra le Bozze AI (il pulsante con la stellina).</p>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Link href="/staff#programmi" className="inline-flex min-h-11 items-center rounded-full bg-card px-4 text-sm font-semibold text-ink">Prossimo cliente</Link>
+              <button type="button" onClick={discardJob} className="min-h-11 px-2 text-sm font-semibold text-muted-dark underline">Annulla la richiesta</button>
+            </div>
+          </div>
+        ) : null}
+        {job?.status === "ready" && job.draft ? (
+          <div className="flex flex-col gap-3 rounded-2xl bg-[#26241f] px-4 py-4" data-ai-job="ready">
+            <div className="font-semibold">La bozza è pronta</div>
+            {job.draft.summary ? <p className="text-[15px] leading-relaxed text-muted-dark">{job.draft.summary}</p> : null}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button type="button" onClick={() => openJobDraft(job)} className="inline-flex min-h-11 items-center rounded-full bg-card px-4 text-sm font-semibold text-ink">Apri la bozza</button>
+              <button type="button" onClick={discardJob} className="min-h-11 px-2 text-sm font-semibold text-muted-dark underline">Scartala</button>
+            </div>
+          </div>
+        ) : null}
+        {job?.status === "failed" ? <Notice tone="error">{job.error ?? "La bozza non è riuscita: riprova."}</Notice> : null}
         {summary ? (
           <div className="rounded-2xl bg-[#26241f] px-4 py-3 text-[15px] leading-relaxed">
             <div className="mb-1 font-semibold">Cosa ha cambiato l&apos;AI</div>
             {summary}
           </div>
         ) : null}
-        <div>
+        <div className={cx((job?.status === "working" || job?.status === "ready") && "hidden")}>
           <button
             type="button"
             onClick={run}
-            disabled={busy || transcribing || disabled || (fullInstruction().length < 3 && !listening)}
+            disabled={busy || transcribing || disabled || job?.status === "working" || (fullInstruction().length < 3 && !listening)}
             className="inline-flex min-h-12 items-center gap-3 rounded-full bg-card py-1.5 pr-5 pl-1.5 font-semibold text-ink disabled:opacity-50"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-accent"><IconSparkle size={18} /></span>
             {busy
-              ? `${questions === null ? "Sto leggendo i dati" : "Sto preparando la bozza"}… ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`
-              : questions?.length ? "Prepara la bozza con queste risposte" : "Prepara la bozza"}
+              ? `Invio la richiesta… ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`
+              : questions?.length ? "Prepara la bozza con queste risposte" : job?.status === "failed" ? "Riprova" : "Prepara la bozza"}
           </button>
         </div>
       </div>

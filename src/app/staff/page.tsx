@@ -12,6 +12,7 @@ import { startCheckMode } from "@/app/check/actions";
 import { ageOn, formatHeading, formatShort, isBirthday, todayISO } from "@/lib/dates";
 import { Card, Dot, Eyebrow, LinkButton, Notice, PageTitle, cx } from "@/components/ui";
 import { getBillingLines } from "@/lib/data/billing";
+import { myOpenJobs } from "@/lib/ai/program-jobs";
 import { QuickPay } from "@/components/quick-pay";
 import { markDiscomfortSeen, markNoteSeen, snoozeChatSilence } from "./today-actions";
 import { CHAT_SNOOZE_DAYS, chatSilence, romeDay } from "@/lib/chat-silence";
@@ -96,7 +97,19 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
     ).then((data) => ({ data })),
     supabase.from("chat_snoozes").select("client_id, until"),
   ]);
-  const { programs, checks, training } = buildTodayList(clients, today);
+  const { programs: todayPrograms, checks, training } = buildTodayList(clients, today);
+  // bozze AI in coda: in Programmi si vede a che punto sono (e si va dritti all'editor)
+  const jobs = await myOpenJobs(supabase, me.id).catch(() => []);
+  const jobByClient = new Map(jobs.map((j) => [j.clientId, j]));
+  const programs: TodayItem[] = todayPrograms.map((p) => {
+    const j = jobByClient.get(p.clientId);
+    if (!j) return p;
+    const href = `/staff/programmi/${j.programId}?ai=1`;
+    if (j.status === "working") return { ...p, text: "Bozza AI in preparazione", tone: "ink", href, action: { label: "Apri", href } };
+    if (j.status === "questions") return { ...p, text: "L'AI ha qualche domanda sulla bozza", tone: "accent", href, action: { label: "Rispondi", href } };
+    if (j.status === "ready") return { ...p, text: "Bozza AI pronta da rivedere", tone: "accent", href, action: { label: "Rivedi", href } };
+    return { ...p, text: "Bozza AI non riuscita: riprova", tone: "accent", href, action: { label: "Riprova", href } };
+  });
   const billing = me.role === "owner" ? (await getBillingLines(supabase)).lines.filter((l) => !l.paused && (l.status.state === "overdue" || l.status.state === "due_soon")) : [];
   const active = clients.filter((c) => c.status === "active").length;
   const birthdays = clients.filter((c) => c.status === "active" && isBirthday(c.birth_date, today));
@@ -225,7 +238,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
           </Card>
         ) : null}
 
-        <Card>
+        <Card id="programmi" className="scroll-mt-6">
           <CardTitle title="Programmi" count={programs.length} />
           <List items={programs} empty="Nessun programma da preparare: qui compaiono le bozze e i programmi che finiscono entro 7 giorni." />
         </Card>
