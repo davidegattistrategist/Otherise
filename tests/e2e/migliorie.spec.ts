@@ -37,8 +37,9 @@ test("cliente gratis: sparisce da pagamenti e previsioni, si può togliere", asy
   await expect(page.getByText("Non compare in pagamenti, scadenze, incassi, previsioni ed export").filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText("Gratis", { exact: true }).first()).toBeVisible();
   await page.goto("/staff/pagamenti");
-  await expect(page.getByText("Incassi per mese")).toBeVisible();
-  await expect(page.getByText("Demo Marta")).toHaveCount(0);
+  // .filter visible: mentre la pagina arriva il contenuto c'è per un attimo anche in una copia nascosta
+  await expect(page.getByText("Incassi per mese").filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText("Demo Marta").filter({ visible: true })).toHaveCount(0);
   await page.goto(`${base}/pagamenti`);
   await page.getByRole("button", { name: "Non è più gratis" }).click();
   await expect(page.locator("#sistema")).toBeVisible();

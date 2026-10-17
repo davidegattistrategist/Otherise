@@ -16,6 +16,7 @@ import { IconDownload, IconPaperclip, IconPlay, IconSend, IconSparkle, IconX } f
 import { prepareImage, saveAttachment, uploadWithProgress, videoSize } from "./media";
 import { VoicePlayer, useVoiceRecorder, voiceSupported } from "./voice";
 import { useKeepAwake } from "../use-keep-awake";
+import { opensKeyboard } from "../nav-behavior";
 import { METHOD_LABELS, canCompressVideo, compressVideo, shouldCompress, type CompressMethod } from "./compress-video";
 
 const MicIcon = () => (
@@ -257,8 +258,14 @@ export function ChatThread({
       on = false;
       for (const k of KEYS) box.style[k] = "";
     };
+    // sul telefono basta stare scrivendo nella chat: su iPhone (app sulla Home)
+    // la pagina a volte si accorcia insieme alla tastiera e la differenza di
+    // altezza non si vede, così la chat restava alta come prima, staccata dalla tastiera
+    const touch = window.matchMedia("(pointer: coarse)").matches;
     const fit = () => {
-      const keyboard = window.innerHeight - vv.height > 120 && box.contains(document.activeElement);
+      const active = document.activeElement;
+      const inChat = box.contains(active);
+      const keyboard = inChat && ((touch && opensKeyboard(active)) || window.innerHeight - vv.height > 120);
       if (!keyboard) return reset();
       const wasOn = on;
       on = true;
@@ -277,19 +284,27 @@ export function ChatThread({
     };
     // dopo il tocco la tastiera si apre in un attimo: si ricontrolla appena ha finito
     const later = () => {
-      fit();
+      // subito solo se si entra in una casella; toccando un pulsante (microfono,
+      // graffetta) la chat non deve muoversi sotto il dito
+      if (opensKeyboard(document.activeElement)) fit();
       setTimeout(fit, 150);
       setTimeout(fit, 400);
     };
     vv.addEventListener("resize", fit);
     vv.addEventListener("scroll", fit);
     document.addEventListener("focusin", later);
-    document.addEventListener("focusout", later);
+    // uscendo dalla casella si aspetta un attimo: toccando "Invia" la chat non
+    // deve saltare tra il dito giù e il dito su (il tocco andrebbe perso)
+    const leave = () => {
+      setTimeout(fit, 180);
+      setTimeout(fit, 450);
+    };
+    document.addEventListener("focusout", leave);
     return () => {
       vv.removeEventListener("resize", fit);
       vv.removeEventListener("scroll", fit);
       document.removeEventListener("focusin", later);
-      document.removeEventListener("focusout", later);
+      document.removeEventListener("focusout", leave);
       reset();
     };
   }, []);
@@ -740,7 +755,7 @@ export function ChatThread({
               <MicIcon />
             </button>
           ) : (
-            <button type="button" aria-label="Invia" onClick={() => void send()} disabled={sending || preparingVideo || (!text.trim() && pending.length === 0)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white disabled:opacity-40">
+            <button type="button" aria-label="Invia" onPointerDown={(e) => { if (e.pointerType !== "mouse") e.preventDefault(); }} onClick={() => void send()} disabled={sending || preparingVideo || (!text.trim() && pending.length === 0)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white disabled:opacity-40">
               {sending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <IconSend size={19} />}
             </button>
           )}
