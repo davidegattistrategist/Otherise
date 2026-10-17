@@ -3,15 +3,17 @@
  * pochi secondi (src/components/live.tsx), così gli avvisi compaiono senza
  * ricaricare. Risposta piccola, passa dai permessi del database.
  */
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { getMe } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getCheckMode } from "@/lib/check-mode";
 import { myOpenJobs } from "@/lib/ai/program-jobs";
+import { homeFor } from "@/lib/auth";
+import { HOME_COOKIE, HOME_COOKIE_OPTIONS, homeFromCookie } from "@/lib/home-cookie";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const me = await getMe();
   if (!me) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   const supabase = await createClient();
@@ -33,7 +35,7 @@ export async function GET() {
     const { data: c } = await supabase.from("clients").select("first_name, last_name").eq("id", newest.client_id).maybeSingle();
     chatFrom = c ? `${c.first_name} ${c.last_name}`.trim() : null;
   }
-  return NextResponse.json(
+  const res = NextResponse.json(
     {
       notifications: count ?? 0,
       // stesso conteggio dei menu: lo staff vede quante conversazioni, il cliente quanti messaggi
@@ -47,4 +49,10 @@ export async function GET() {
     },
     { headers: { "cache-control": "no-store" } },
   );
+  // pagina iniziale per la prossima apertura dell'app (src/lib/home-cookie.ts)
+  const home = homeFromCookie(homeFor(me.role));
+  const saved = request.cookies.get(HOME_COOKIE)?.value;
+  if (home && saved !== home) res.cookies.set(HOME_COOKIE, home, HOME_COOKIE_OPTIONS);
+  if (!home && saved) res.cookies.delete(HOME_COOKIE);
+  return res;
 }

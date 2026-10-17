@@ -8,15 +8,28 @@ import type { Me } from "@/lib/auth";
 import { Button, Card, Eyebrow, Input, cx } from "@/components/ui";
 import { renameStaff } from "./team/actions";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { unstable_cache } from "next/cache";
+import { invalidateSettings } from "@/lib/data/cached";
 
 const DONE_KEY = "first_steps_done";
+
+// letto una volta e tenuto in memoria sul server: prima era una lettura lenta
+// (circa 0,4 s) a ogni apertura di Oggi, in fondo a tutte le altre
+const firstStepsDone = unstable_cache(
+  async () => {
+    const { data, error } = await createAdminClient().from("app_secrets").select("value").eq("name", DONE_KEY).maybeSingle();
+    if (error) throw error;
+    return data?.value === "1";
+  },
+  ["first-steps-done"],
+  { tags: ["settings"], revalidate: 3600 },
+);
 
 export async function FirstSteps({ supabase, me }: { supabase: ServerSupabase; me: Me }) {
   if (me.role !== "owner") return null;
   // una volta fatti tutti i passi non si ricontrolla più (3 letture in meno a ogni apertura di Oggi)
+  if (await firstStepsDone()) return null;
   const admin = createAdminClient();
-  const { data: flag } = await admin.from("app_secrets").select("value").eq("name", DONE_KEY).maybeSingle();
-  if (flag?.value === "1") return null;
   const [{ data: s }, { count: exercises }, { count: clients }] = await Promise.all([
     supabase.from("app_settings").select("legal_name, legal_address, legal_tax_id, privacy_email, coaching_method").maybeSingle(),
     supabase.from("exercises").select("id", { count: "exact", head: true }),
@@ -33,6 +46,7 @@ export async function FirstSteps({ supabase, me }: { supabase: ServerSupabase; m
   const done = steps.filter((x) => x.done).length;
   if (done === steps.length) {
     await admin.from("app_secrets").upsert({ name: DONE_KEY, value: "1" }, { onConflict: "name" });
+    invalidateSettings();
     return null;
   }
   return (

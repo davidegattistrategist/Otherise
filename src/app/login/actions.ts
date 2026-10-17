@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { HOME_COOKIE } from "@/lib/home-cookie";
 import { createClient } from "@/lib/supabase/server";
 import { siteUrl } from "@/lib/site";
 import type { ActionState } from "@/components/form-bits";
@@ -12,6 +14,8 @@ export async function signIn(_: ActionState, formData: FormData): Promise<Action
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: "Email o password non corrette." };
+  // un altro account su questo telefono: la pagina iniziale la decide di nuovo "/"
+  (await cookies()).delete(HOME_COOKIE);
   redirect("/");
 }
 
@@ -38,6 +42,7 @@ export async function setPassword(_: ActionState, formData: FormData): Promise<A
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
+  (await cookies()).delete(HOME_COOKIE);
   redirect("/login");
 }
 

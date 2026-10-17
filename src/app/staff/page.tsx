@@ -66,7 +66,8 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
   const me = await requireStaff();
   const supabase = await createClient();
   const today = todayISO();
-  const [clients, { data: checkins }, { data: pains }, { data: brand }, { data: clientNotes }, { data: lastMessages }, { data: snoozes }] = await Promise.all([
+  // tutto in parallelo: ogni attesa in fila allunga l'apertura di Oggi
+  const [clients, { data: checkins }, { data: pains }, { data: brand }, { data: clientNotes }, { data: lastMessages }, { data: snoozes }, jobs, billingAll] = await Promise.all([
     getClientsOverview(supabase, me),
     supabase
       .from("checkins")
@@ -96,10 +97,11 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
       (await supabase.from("messages").select("client_id, created_at").is("deleted_at", null).order("created_at", { ascending: false }).limit(1000)).data ?? [],
     ).then((data) => ({ data })),
     supabase.from("chat_snoozes").select("client_id, until"),
+    // bozze AI in coda: in Programmi si vede a che punto sono (e si va dritti all'editor)
+    myOpenJobs(supabase, me.id).catch(() => []),
+    me.role === "owner" ? getBillingLines(supabase) : Promise.resolve(null),
   ]);
   const { programs: todayPrograms, checks, training } = buildTodayList(clients, today);
-  // bozze AI in coda: in Programmi si vede a che punto sono (e si va dritti all'editor)
-  const jobs = await myOpenJobs(supabase, me.id).catch(() => []);
   const jobByClient = new Map(jobs.map((j) => [j.clientId, j]));
   const programs: TodayItem[] = todayPrograms.map((p) => {
     const j = jobByClient.get(p.clientId);
@@ -110,7 +112,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
     if (j.status === "ready") return { ...p, text: "Bozza AI pronta da rivedere", tone: "accent", href, action: { label: "Rivedi", href } };
     return { ...p, text: "Bozza AI non riuscita: riprova", tone: "accent", href, action: { label: "Riprova", href } };
   });
-  const billing = me.role === "owner" ? (await getBillingLines(supabase)).lines.filter((l) => !l.paused && (l.status.state === "overdue" || l.status.state === "due_soon")) : [];
+  const billing = billingAll ? billingAll.lines.filter((l) => !l.paused && (l.status.state === "overdue" || l.status.state === "due_soon")) : [];
   const active = clients.filter((c) => c.status === "active").length;
   const birthdays = clients.filter((c) => c.status === "active" && isBirthday(c.birth_date, today));
   const noBirth = clients.filter((c) => c.status === "active" && !c.birth_date);

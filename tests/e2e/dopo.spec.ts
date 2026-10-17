@@ -81,7 +81,7 @@ test("impostazioni con indice; notifiche dicono come arrivano le email", async (
   await nav.getByRole("link", { name: "Email" }).click();
   await expect(page).toHaveURL(/#email$/);
   await page.goto("/staff/notifiche");
-  await expect(page.getByText(/per email solo se lo scegli in/)).toBeVisible();
+  await expect(page.getByText(/per email solo se lo scegli in/).filter({ visible: true }).first()).toBeVisible();
 });
 
 test("il video dell'esercizio si apre dentro l'app", async ({ page }) => {

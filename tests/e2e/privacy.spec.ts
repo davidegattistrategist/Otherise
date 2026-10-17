@@ -94,5 +94,6 @@ test("il titolare chiude a mano un pacchetto e può annullare", async ({ page })
   await page.getByRole("button", { name: "Annulla" }).click();
   // aspetta che l'annullamento sia salvato (il progetto "telefono" ripete la prova sugli stessi dati)
   await expect(page.getByText(/Chiuso a mano il/)).toHaveCount(0);
-  await expect(page.getByText(/sessioni? rimast/).first()).toBeVisible();
+  // il pacchetto è di nuovo aperto: si può richiudere (le sessioni rimaste dipendono dalle altre prove)
+  await expect(page.locator("#sistema summary", { hasText: "Chiudi il pacchetto" })).toBeVisible();
 });

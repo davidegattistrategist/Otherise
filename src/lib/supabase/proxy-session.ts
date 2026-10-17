@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAnonKey, supabaseUrl } from "./env";
+import { HOME_COOKIE, homeFromCookie } from "@/lib/home-cookie";
 
 const PUBLIC_PATHS = ["/login", "/password-dimenticata", "/auth", "/api/cron", "/privacy"];
 
@@ -31,6 +32,17 @@ export async function updateSession(request: NextRequest) {
     url.pathname = "/login";
     url.search = "";
     return NextResponse.redirect(url);
+  }
+  // apertura dell'app ("/"): dritti alla pagina iniziale ricordata, senza il giro dalla pagina "/"
+  const home = path === "/" && data?.claims?.sub ? homeFromCookie(request.cookies.get(HOME_COOKIE)?.value) : null;
+  if (home) {
+    const url = request.nextUrl.clone();
+    url.pathname = home;
+    url.search = "";
+    const redirect = NextResponse.redirect(url);
+    // la sessione eventualmente rinnovata qui sopra va anche nella risposta di rinvio
+    response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+    return redirect;
   }
   return response;
 }
