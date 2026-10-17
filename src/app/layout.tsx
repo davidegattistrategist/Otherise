@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { AutoGrow } from "@/components/auto-grow";
 import "@fontsource-variable/manrope";
 import "./globals.css";
 import { ServiceWorker } from "@/components/service-worker";
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="min-h-dvh">
         {children}
         <ServiceWorker />
+        <AutoGrow />
       </body>
     </html>
   );

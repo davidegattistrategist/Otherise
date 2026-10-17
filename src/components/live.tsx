@@ -233,8 +233,8 @@ function LiveBanner({ banner, onClose }: { banner: Banner; onClose: () => void }
     <>
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white"><Icon size={18} /></span>
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate font-semibold">{banner.title}</span>
-        {banner.body ? <span className="line-clamp-2 block text-sm text-muted-dark">{banner.body}</span> : null}
+        <span className="block font-semibold break-words">{banner.title}</span>
+        {banner.body ? <span className="line-clamp-2 block text-sm text-muted-dark" data-clamp-ok>{banner.body}</span> : null}
       </span>
     </>
   );

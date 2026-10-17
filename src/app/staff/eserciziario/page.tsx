@@ -48,7 +48,7 @@ export default async function ExercisesPage({ searchParams }: { searchParams: Pr
                 </div>
                 <div className="min-w-0">
                   <div className="font-semibold leading-snug">{e.name}</div>
-                  <div className="mt-0.5 line-clamp-2 text-xs text-muted">{e.description || "Nessuna descrizione"}</div>
+                  <div className="mt-0.5 line-clamp-2 text-xs text-muted" data-clamp-ok>{e.description || "Nessuna descrizione"}</div>
                 </div>
               </Link>
             );

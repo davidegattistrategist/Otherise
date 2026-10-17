@@ -19,7 +19,7 @@ export function StrengthTests({ series, title = "Test di forza", footer }: { ser
   const delta = Math.round((last.value - first.value) * 10) / 10;
   const allEstimated = cur.points.every((p) => p.estimated);
   return (
-    <Card className="flex flex-col gap-3" data-strength-tests>
+    <Card className="@container flex flex-col gap-3" data-strength-tests>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <Eyebrow>{title}</Eyebrow>
         <span className="text-sm text-muted">{allEstimated ? "massimale stimato, kg" : "massimale stimato o carico, kg"}</span>
@@ -34,7 +34,8 @@ export function StrengthTests({ series, title = "Test di forza", footer }: { ser
         </div>
       ) : null}
       {/* sul computer il grafico non si allarga oltre una card normale (scritte giganti): accanto, i numeri */}
-      <div className="grid gap-x-8 gap-y-3 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:items-start">
+      {/* grafico e numeri affiancati solo se la card è larga (in Panoramica è stretta anche sul computer) */}
+      <div className="grid gap-x-8 gap-y-3 @min-[44rem]:grid-cols-[minmax(0,560px)_minmax(0,1fr)] @min-[44rem]:items-start">
       {cur.points.length > 1 ? (
         <div className="min-w-0"><LineChart label={cur.name} unit="kg" points={cur.points.map((p) => ({ date: p.date, value: p.value, label: p.label }))} /></div>
       ) : null}
@@ -54,9 +55,9 @@ export function StrengthTests({ series, title = "Test di forza", footer }: { ser
           <summary className="cursor-pointer list-none text-sm font-semibold underline [&::-webkit-details-marker]:hidden">Tutti i test ({cur.points.length})</summary>
           <ul className="mt-2 flex flex-col">
             {[...cur.points].reverse().map((p, i) => (
-              <li key={i} className="flex items-baseline justify-between gap-3 border-t border-sand-deep py-1.5 text-sm first:border-t-0">
+              <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-sand-deep py-1.5 text-sm first:border-t-0">
                 <span className="text-muted">{p.label}</span>
-                <span className="tabular"><span className="font-semibold">{fmtNum(p.value)} kg</span>{testDetail(p) ? <span className="text-muted"> · {testDetail(p)}</span> : null}</span>
+                <span className="ml-auto text-right tabular"><span className="font-semibold">{fmtNum(p.value)} kg</span>{testDetail(p) ? <span className="text-muted"> · {testDetail(p)}</span> : null}</span>
               </li>
             ))}
           </ul>

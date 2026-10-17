@@ -80,7 +80,7 @@ export function AiJobsButton({ variant }: { variant: "header" | "sidebar" }) {
               <li key={j.id}>
                 <Link href={`/staff/programmi/${j.programId}?ai=1`} className="flex min-h-12 items-center justify-between gap-3 rounded-2xl px-3 py-2 hover:bg-sand" data-ai-job-row={j.status}>
                   <span className="min-w-0">
-                    <span className="block truncate font-semibold">{j.clientName || "Cliente"}</span>
+                    <span className="block font-semibold break-words">{j.clientName || "Cliente"}</span>
                     <span className={cx("block text-sm", j.status === "working" ? "text-muted" : j.status === "failed" ? "text-accent-deep" : "text-ink")}>{jobLabel({ status: j.status as never, createdAt: j.createdAt })}</span>
                   </span>
                   <span className="shrink-0 text-sm font-semibold underline">{j.status === "working" ? "Apri" : j.status === "questions" ? "Rispondi" : j.status === "failed" ? "Riprova" : "Rivedi"}</span>

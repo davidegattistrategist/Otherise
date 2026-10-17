@@ -621,7 +621,7 @@ export function ChatThread({
                     onClick={() => m.mine && setSelected(selected === m.id ? null : m.id)}
                     onKeyDown={(e) => m.mine && (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setSelected(selected === m.id ? null : m.id))}
                     className={cx(
-                      "rounded-[20px] px-3.5 py-2 text-left text-[15px] leading-snug whitespace-pre-wrap break-words",
+                      "rounded-[20px] px-3.5 py-2 text-left text-[15px] leading-snug whitespace-pre-wrap [overflow-wrap:anywhere]",
                       m.mine ? "cursor-pointer rounded-br-md bg-ink text-card" : "rounded-bl-md bg-sand text-ink",
                     )}
                   >
@@ -656,7 +656,7 @@ export function ChatThread({
               <span className="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-muted uppercase"><IconSparkle size={14} /> Bozza di risposta</span>
               <button type="button" onClick={() => void askDraft()} disabled={draftBusy} className="-my-2 min-h-10 px-2 text-sm font-semibold text-muted underline disabled:opacity-50">{draftBusy ? "Sto riscrivendo…" : "Rifai"}</button>
             </div>
-            <p className="mt-1.5 max-h-40 overflow-y-auto text-[15px] leading-snug whitespace-pre-wrap">{draft.body}</p>
+            <p className="mt-1.5 max-h-40 overflow-y-auto text-[15px] leading-snug whitespace-pre-wrap [overflow-wrap:anywhere]">{draft.body}</p>
             <div className="mt-2.5 flex flex-wrap gap-2">
               <button type="button" onClick={() => applyDraft(draft)} className="min-h-10 rounded-full bg-ink px-4 text-sm font-semibold text-card">Usa e modifica</button>
               <button type="button" onClick={() => writeFromScratch(draft)} className="min-h-10 rounded-full px-4 text-sm font-semibold ring-1 ring-sand-deep">Scrivo da zero</button>
@@ -748,6 +748,7 @@ export function ChatThread({
             }}
             placeholder="Scrivi un messaggio"
             maxLength={4000}
+            data-clamp-ok
             className="max-h-40 min-h-11 flex-1 resize-none rounded-[22px] border border-sand-deep bg-sand px-4 py-2.5 text-[16px] leading-snug focus:border-ink focus:outline-none"
           />
           {canVoice && !text.trim() && pending.length === 0 && !sending ? (

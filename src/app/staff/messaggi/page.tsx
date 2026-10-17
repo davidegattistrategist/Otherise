@@ -86,7 +86,7 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sand text-sm font-bold">{c.last_name[0] ?? ""}{c.first_name[0]}</span>
                 <span className="min-w-0 flex-1">
                   <span className={c.unread ? "block font-bold" : "block font-semibold"}>{listName(c)}{c.status === "archived" ? <span className="ml-2 text-xs font-normal text-muted">percorso terminato</span> : c.status === "paused" ? <span className="ml-2 text-xs font-normal text-muted">in pausa</span> : null}</span>
-                  <span className="block truncate text-sm text-muted">{c.last ? c.last.preview : c.user_id ? "Nessun messaggio: scrivigli tu per primo" : "Non ha ancora l'app: invitalo dalla scheda"}</span>
+                  <span className="block truncate text-sm text-muted" data-clamp-ok>{c.last ? c.last.preview : c.user_id ? "Nessun messaggio: scrivigli tu per primo" : "Non ha ancora l'app: invitalo dalla scheda"}</span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1">
                   {c.last ? <span className="text-xs text-muted">{when(c.last.at)}</span> : null}

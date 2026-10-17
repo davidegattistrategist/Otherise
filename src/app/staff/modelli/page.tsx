@@ -36,7 +36,7 @@ export default async function TemplatesPage() {
               <Link key={t.id} href={`/staff/programmi/${t.id}`} className="flex flex-col gap-2 rounded-[24px] bg-card p-5 hover:bg-white">
                 <span className="text-lg font-semibold">{t.title}</span>
                 <span className="text-sm text-muted">{t.weeks} settimane · {c.days.length} giorni · {exercises} esercizi</span>
-                {t.description ? <span className="line-clamp-2 text-sm text-ink-soft">{t.description}</span> : null}
+                {t.description ? <span className="line-clamp-2 text-sm text-ink-soft" data-clamp-ok>{t.description}</span> : null}
                 <span className="mt-auto pt-2 text-xs text-muted">Modificato il {formatShort(t.updated_at.slice(0, 10))}</span>
                 <span className={buttonClass("secondary", "sm") + " self-start"}>Apri</span>
               </Link>

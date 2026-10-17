@@ -14,7 +14,7 @@ import { findExercise, type CompareView, type PhaseOption } from "@/lib/program/
 import { Select, cx } from "@/components/ui";
 import { IconX } from "@/components/icons";
 import { loadPreviousPhase } from "./previous-actions";
-import { EDITOR_FOCUS_EVENT, lastEditorFocus, type EditorFocus } from "./editor-focus";
+import { EDITOR_FOCUS_EVENT, keepEditorRowInPlace, lastEditorFocus, type EditorFocus } from "./editor-focus";
 
 const DESKTOP = "(min-width: 1024px)";
 
@@ -77,14 +77,14 @@ export default function PreviousPhase({ programId, open, onClose }: { programId:
     if (phone) {
       html.style.overflow = "hidden";
       closeBtn.current?.focus({ preventScroll: true });
-    } else html.dataset.sidePanel = "1";
+    } else keepEditorRowInPlace(() => (html.dataset.sidePanel = "1"));
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       html.style.overflow = before;
-      delete html.dataset.sidePanel;
+      if (html.dataset.sidePanel) keepEditorRowInPlace(() => delete html.dataset.sidePanel);
       window.removeEventListener("keydown", onKey);
     };
   }, [open, onClose]);

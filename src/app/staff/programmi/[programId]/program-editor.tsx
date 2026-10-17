@@ -433,12 +433,13 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-[1_1_420px]">
             <label htmlFor="program-title" className="sr-only">Nome del programma</label>
-            <input
+            <AutoText
+              singleLine
               id="program-title"
               data-large
               value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
+              onChange={(v) => {
+                setTitle(v);
                 markDirty();
               }}
               className="w-full rounded-xl bg-transparent px-1 py-1 text-[32px] leading-tight font-normal tracking-tight hover:bg-card focus:bg-card focus:outline-none"
@@ -646,11 +647,12 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               <IconDown size={20} className={cx("transition-transform", open && "rotate-180")} />
             </button>
             <label htmlFor={`day-${day.id}`} className="sr-only">Nome del giorno</label>
-            <input
+            <AutoText
+              singleLine
               id={`day-${day.id}`}
               data-large
               value={day.title}
-              onChange={(e) => mutate((d) => void (d.days[dayIdx].title = e.target.value))}
+              onChange={(v) => mutate((d) => void (d.days[dayIdx].title = v))}
               className="min-w-[13rem] flex-[1_1_13rem] rounded-lg bg-transparent px-1 py-1 text-xl font-semibold hover:bg-sand focus:bg-sand focus:outline-none"
             />
             {selecting && day.blocks.some((b) => picked.has(b.id)) ? (
@@ -697,16 +699,16 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
           </div>
           {!open ? (
             <button type="button" onClick={(e) => { const opening = !open; days.toggle(day.id, content.days.map((d) => d.id)); if (opening) keepInView(e.currentTarget.closest("[data-day-card]")); }} className="block w-full px-5 pt-1 pb-5 text-left text-sm text-muted sm:px-6">
-              <span className="line-clamp-2">{names.length ? names.join(" · ") : "Nessun esercizio"}</span>
+              <span className="line-clamp-2" data-clamp-ok>{names.length ? names.join(" · ") : "Nessun esercizio"}</span>
             </button>
           ) : (
           <div id={`daybody-${day.id}`}>
           <div className="px-5 pt-2 sm:px-6">
             <label htmlFor={`daynotes-${day.id}`} className="sr-only">Note del giorno</label>
-            <input
+            <AutoText
               id={`daynotes-${day.id}`}
               value={day.notes}
-              onChange={(e) => mutate((d) => void (d.days[dayIdx].notes = e.target.value))}
+              onChange={(v) => mutate((d) => void (d.days[dayIdx].notes = v))}
               placeholder="Note del giorno (facoltative)"
               className="w-full rounded-lg bg-transparent px-1 py-1 text-sm text-muted hover:bg-sand focus:bg-sand focus:outline-none"
             />
@@ -857,7 +859,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             </div>
             {clip ? (
               <p className="flex min-w-0 items-center gap-2 text-xs text-card/70" data-clip>
-                <span className="min-w-0 truncate">
+                <span className="min-w-0 truncate" data-clamp-ok>
                   Copiati: {blockNames(clip.blocks).join(", ")}
                   {clip.programId !== program.id ? ` · da “${clip.programTitle}”` : ""}
                 </span>
@@ -1061,12 +1063,15 @@ const cellInput = "w-full rounded-lg border border-transparent bg-sand/70 px-2 p
 
 type Selection = { checked: boolean; label: string; onPick: (shift: boolean) => void };
 
+const fieldSizing = () => typeof CSS !== "undefined" && Boolean(CSS.supports?.("field-sizing", "content"));
+
 /** Casella di testo che cresce con il contenuto: si legge sempre tutto, senza tagli. */
 function AutoText({ value, onChange, className, singleLine, ...rest }: Omit<React.ComponentProps<"textarea">, "onChange" | "value"> & { value: string; onChange: (v: string) => void; singleLine?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fit = useCallback(() => {
     const el = ref.current;
-    if (!el) return;
+    // dove il CSS lo sa fare (field-sizing in globals.css) ci pensa lui, subito e senza salti
+    if (!el || fieldSizing()) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight + 2}px`;
   }, []);
@@ -1074,7 +1079,7 @@ function AutoText({ value, onChange, className, singleLine, ...rest }: Omit<Reac
   useEffect(() => {
     // la larghezza delle colonne cambia con la finestra: ricalcola l'altezza
     const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
+    if (!el || fieldSizing() || typeof ResizeObserver === "undefined") return;
     let w = el.clientWidth;
     const ro = new ResizeObserver(() => {
       if (el.clientWidth !== w) {
@@ -1356,10 +1361,10 @@ function BlockSettings({ block, weeks, onBlock }: { block: ProgramBlock; weeks: 
                   <NumField label="sec recupero" value={block.restSec} onChange={(v) => onBlock((b) => void (b.restSec = v))} allowZero />
                 </>
               ) : null}
-              <input
+              <AutoText
                 aria-label="Nota sul blocco"
                 value={block.notes}
-                onChange={(e) => onBlock((b) => void (b.notes = e.target.value))}
+                onChange={(v) => onBlock((b) => void (b.notes = v))}
                 placeholder="Nota sul blocco (es. recupero 90&quot; a fine giro)"
                 className={cx(cellInput, "min-w-[200px] flex-1 bg-card")}
               />
@@ -1558,20 +1563,24 @@ function MobileBlock({
           const last = lastLogFor(it);
           return (
             <div key={it.id} {...exAttrs(it)} className={cx("flex flex-col gap-1.5", itemIdx > 0 && "border-t border-sand-deep pt-3", aiNotes[it.id] && "rounded-xl bg-accent-soft/40 p-2")}>
-              <div className="flex items-center gap-2">
-                <span className="w-7 shrink-0 text-sm font-semibold text-muted">{itemLabel(block, blockIdx, itemIdx)}</span>
+              {/* nome a tutta larghezza (si legge intero anche se lungo), sotto prescrizione e recupero */}
+              <div className="flex items-start gap-2">
+                <span className="w-7 shrink-0 pt-2 text-sm font-semibold text-muted">{itemLabel(block, blockIdx, itemIdx)}</span>
                 <NameField value={it.name} onChange={(v) => onItemName(itemIdx, v)} placeholder="Esercizio" className={cx(cellInput, "min-w-0 flex-1 font-semibold")} />
-                {multi && block.items.length > 1 ? (
-                  <>
-                    <IconBtn label="Sposta su nel gruppo" disabled={itemIdx === 0} onClick={() => onBlock((b) => swap(b.items, itemIdx, itemIdx - 1))}><IconUp size={16} /></IconBtn>
-                    <IconBtn label="Sposta giù nel gruppo" disabled={itemIdx === block.items.length - 1} onClick={() => onBlock((b) => swap(b.items, itemIdx, itemIdx + 1))}><IconDown size={16} /></IconBtn>
-                  </>
-                ) : null}
                 <IconBtn label="Togli esercizio" onClick={() => onBlock((b, s) => { b.items.splice(itemIdx, 1); if (b.items.length === 0) s.splice(blockIdx, 1); else if (b.items.length === 1 && b.kind === "superset") b.kind = "single"; })}><IconX size={16} /></IconBtn>
               </div>
-              <div className="grid grid-cols-[1fr_6rem] gap-2 pl-9">
-                <input aria-label={`${it.name || "Esercizio"}, settimana ${week + 1}`} value={it.prescriptions[week] ?? ""} onChange={(e) => onBlock((b) => void (b.items[itemIdx].prescriptions[week] = e.target.value))} placeholder={`Settimana ${week + 1}: 4x8 60kg`} className={cellInput} />
-                <input aria-label="Recupero" value={it.rest} onChange={(e) => onBlock((b) => void (b.items[itemIdx].rest = e.target.value))} placeholder="Rec. 90&quot;" className={cellInput} />
+              <div className="flex flex-col gap-2 pl-9">
+                <AutoText singleLine aria-label={`${it.name || "Esercizio"}, settimana ${week + 1}`} value={it.prescriptions[week] ?? ""} onChange={(v) => onBlock((b) => void (b.items[itemIdx].prescriptions[week] = v))} placeholder={`Settimana ${week + 1}: 4x8 60kg`} className={cellInput} />
+                <div className="flex items-start gap-2">
+                  <span className="shrink-0 pt-2 text-xs font-semibold text-muted">Recupero</span>
+                  <AutoText singleLine aria-label="Recupero" value={it.rest} onChange={(v) => onBlock((b) => void (b.items[itemIdx].rest = v))} placeholder="90&quot;" className={cx(cellInput, "min-w-0 flex-1")} />
+                  {multi && block.items.length > 1 ? (
+                    <>
+                      <IconBtn label="Sposta su nel gruppo" disabled={itemIdx === 0} onClick={() => onBlock((b) => swap(b.items, itemIdx, itemIdx - 1))}><IconUp size={16} /></IconBtn>
+                      <IconBtn label="Sposta giù nel gruppo" disabled={itemIdx === block.items.length - 1} onClick={() => onBlock((b) => swap(b.items, itemIdx, itemIdx + 1))}><IconDown size={16} /></IconBtn>
+                    </>
+                  ) : null}
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-9 text-xs text-muted">
                 {last ? <span>Ultimo log: {last}</span> : null}
@@ -1590,6 +1599,7 @@ function MobileBlock({
                 />
                 {aiEnabled && it.name.trim() ? (
                   <RowAiButtons
+                    inline
                     programId={programId}
                     item={it}
                     weeks={weeks}
@@ -1598,14 +1608,13 @@ function MobileBlock({
                   />
                 ) : null}
               </div>
-              <details className="pl-9">
-                <summary className="cursor-pointer text-xs font-semibold text-muted">Indicazioni{it.notes ? ": " + (it.notes.length > 30 ? it.notes.slice(0, 30) + "…" : it.notes) : ""}</summary>
-                <textarea aria-label="Indicazioni" rows={2} value={it.notes} onChange={(e) => onBlock((b) => void (b.items[itemIdx].notes = e.target.value))} className={cx(cellInput, "mt-1.5")} />
-              </details>
+              <div className="pl-9">
+                <AutoText aria-label="Indicazioni" value={it.notes} onChange={(v) => onBlock((b) => void (b.items[itemIdx].notes = v))} placeholder="Indicazioni (facoltative)" className={cx(cellInput, "text-[13px] leading-snug")} />
+              </div>
             </div>
           );
         })}
-        <button type="button" className="flex min-h-11 items-center gap-1.5 self-start pl-9 text-sm font-semibold text-muted" onClick={() => onBlock((b) => { b.items.push(emptyItem(weeks)); if (b.kind === "single") b.kind = "superset"; })}>
+        <button type="button" className="flex min-h-11 items-center gap-1.5 self-start pl-9 text-left text-sm font-semibold text-muted" onClick={() => onBlock((b) => { b.items.push(emptyItem(weeks)); if (b.kind === "single") b.kind = "superset"; })}>
           <IconPlus size={14} /> {multi ? `Esercizio in ${BLOCK_KIND_LABELS[block.kind].toLowerCase()}` : "Fai superserie con un altro esercizio"}
         </button>
       </div>

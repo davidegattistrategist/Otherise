@@ -41,6 +41,8 @@ body {
   /* niente scorrimento di lato: se qualcosa sfora di qualche pixel (iPhone)
      la pagina resta ferma invece di spostarsi a destra */
   overflow-x: clip;
+  /* parole lunghissime e link senza spazi vanno a capo invece di uscire */
+  overflow-wrap: break-word;
   background: var(--color-sand);
   color: var(--color-ink);
   font-family: var(--font-sans);
@@ -70,6 +72,15 @@ body {
 }
 
 @layer base {
+  /* Caselle di testo che crescono con quello che scrivi: si legge sempre
+     tutto, senza barre di scorrimento nascoste (oltre il 60% dello schermo
+     scorrono dentro). Dove il browser non lo sa fare (iPhone) ci pensa
+     AutoGrow in src/components/auto-grow.tsx. */
+  textarea:not([data-no-autogrow]) {
+    field-sizing: content;
+    max-height: 60vh;
+  }
+
   input,
   textarea,
   select,
@@ -81,7 +92,7 @@ body {
 /* Sul telefono e sul tablet i campi restano a 16px: sotto, iPhone e iPad ingrandiscono la pagina quando li tocchi */
 @media (max-width: 640px), (hover: none) and (pointer: coarse) {
   input:not([data-large]),
-  textarea,
+  textarea:not([data-large]),
   select {
     font-size: 16px !important;
   }

@@ -60,7 +60,7 @@ export function PrivacyForm({ action, values }: { action: Action; values: { lega
       <Field label="Indirizzo" hint="sede o residenza fiscale">
         <Input name="legal_address" defaultValue={values.legal_address} placeholder="Via Roma 1, 20100 Milano" />
       </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(15rem,1fr))]">
         <Field label="Codice fiscale o P. IVA">
           <Input name="legal_tax_id" defaultValue={values.legal_tax_id} />
         </Field>

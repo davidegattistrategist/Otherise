@@ -96,7 +96,7 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
                 <span className="min-w-0 text-sm">
                   <span className="font-semibold group-open:hidden">{names.length === 1 ? "1 esercizio" : `${names.length} esercizi`}</span>
                   <span className="hidden font-semibold group-open:inline">Gli esercizi</span>
-                  <span className="line-clamp-1 text-muted group-open:hidden">{names.join(" · ")}</span>
+                  <span className="line-clamp-1 text-muted group-open:hidden" data-clamp-ok>{names.join(" · ")}</span>
                 </span>
                 <IconDown size={18} className="shrink-0 transition-transform group-open:rotate-180" />
               </summary>

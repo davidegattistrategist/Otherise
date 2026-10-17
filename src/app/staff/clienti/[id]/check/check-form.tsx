@@ -71,7 +71,8 @@ const toNum = (s: string) => {
   const n = Number(s.replace(",", "."));
   return s.trim() && Number.isFinite(n) ? n : null;
 };
-const str = (n: number | null | undefined) => (n === null || n === undefined ? "" : n.toString().replace(".", ","));
+// al massimo 2 decimali: niente "27,400000000000002" dai conti con la virgola
+const str = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(Math.round(n * 100) / 100).replace(".", ","));
 
 /** Righe dei test di forza al massimo (le legge anche il salvataggio). */
 const MAX_TESTS = 10;
@@ -294,7 +295,7 @@ export function CheckForm({
                 const prev = previous?.folds[s.key];
                 return (
                   <tr key={s.key} className={cx("border-t border-sand-deep", lastMissing.includes(s.key) && "bg-accent-soft/60")}>
-                    <th scope="row" className="w-[28%] py-2 pr-1 text-left text-sm font-semibold break-words sm:w-auto sm:text-[15px]">
+                    <th scope="row" className="w-[24%] py-2 pr-1 text-left text-sm font-semibold break-words sm:w-auto sm:text-[15px]">
                       {s.label}
                       {prev !== undefined ? <span className="block text-xs font-normal text-muted tabular">prima {fmtNum(prev, 1)}</span> : null}
                       {lastMissing.includes(s.key) ? <span className="block text-xs font-normal text-accent-deep">l&apos;ultima volta non presa</span> : null}
@@ -312,7 +313,7 @@ export function CheckForm({
                           data-nav-col={i}
                           value={f.sf[s.key][i]}
                           onChange={(e) => set("sf", { ...f.sf, [s.key]: f.sf[s.key].map((x, j) => (j === i ? e.target.value : x)) })}
-                          className={cx("w-full min-w-0 rounded-lg border bg-sand px-1 py-2 text-center text-base sm:px-2", lastMissing.includes(s.key) ? "border-accent" : "border-sand-deep")}
+                          className={cx("w-full min-w-0 rounded-lg border bg-sand px-0 py-2 text-center text-base sm:px-2", lastMissing.includes(s.key) ? "border-accent" : "border-sand-deep")}
                         />
                       </td>
                     ))}

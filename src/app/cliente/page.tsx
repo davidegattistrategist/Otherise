@@ -158,7 +158,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
               <Ring value={timeProgress(current.start_date, current.weeks, today)} label={`${current.week}/${current.weeks}`} />
               <div className="min-w-0">
                 <Eyebrow>La fase</Eyebrow>
-                <div className="mt-1 truncate text-lg font-semibold">{current.title}</div>
+                <div className="mt-1 text-lg font-semibold break-words">{current.title}</div>
                 <div className="text-sm text-muted">
                   {current.position.state === "finished" ? `Conclusa il ${formatShort(end!)}` : daysLeft === 0 ? "Ultimo giorno" : daysLeft === 1 ? "Manca 1 giorno" : `Mancano ${daysLeft} giorni`}
                 </div>

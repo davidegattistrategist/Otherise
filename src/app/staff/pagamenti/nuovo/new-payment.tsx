@@ -48,7 +48,7 @@ const euro = (s: string) => {
   const n = parseEuro(s);
   return Number.isFinite(n) && n > 0 ? n : null;
 };
-const num = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n).replace(".", ","));
+const num = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(Math.round(n * 100) / 100).replace(".", ","));
 
 export function NewPayment({ clients, today, initialClient, initialType = null, initialSessions = null }: { clients: PayClient[]; today: string; initialClient: string | null; initialType?: Type | null; initialSessions?: number | null }) {
   const [round, setRound] = useState(0);
@@ -265,9 +265,9 @@ function Wizard({ clients, today, carry, initialClient, initialType, initialSess
             <ul className="flex max-h-72 flex-col overflow-y-auto rounded-2xl bg-sand/60" aria-label="Clienti">
               {matches.map((c) => (
                 <li key={c.id} className="border-t border-sand-deep first:border-t-0">
-                  <button type="button" onClick={() => pickClient(c)} className="flex min-h-12 w-full items-center justify-between gap-3 px-3.5 py-2 text-left hover:bg-white/70">
-                    <span className="font-semibold">{c.name}</span>
-                    <span className={cx("shrink-0 text-xs", c.due ? "font-semibold text-accent-deep" : "text-muted")}>{c.due ?? (c.plan ? PLAN_LABELS[c.plan.kind] : "nessun piano")}{c.paused ? " · in pausa" : ""}</span>
+                  <button type="button" onClick={() => pickClient(c)} className="flex min-h-12 w-full flex-wrap items-center justify-between gap-x-3 px-3.5 py-2 text-left hover:bg-white/70">
+                    <span className="min-w-0 font-semibold break-words">{c.name}</span>
+                    <span className={cx("ml-auto text-xs", c.due ? "font-semibold text-accent-deep" : "text-muted")}>{c.due ?? (c.plan ? PLAN_LABELS[c.plan.kind] : "nessun piano")}{c.paused ? " · in pausa" : ""}</span>
                   </button>
                 </li>
               ))}

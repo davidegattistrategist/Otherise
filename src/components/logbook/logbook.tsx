@@ -56,7 +56,7 @@ const numOrNull = (v: string): number | null => {
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 };
-const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n).replace(".", ","));
+const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(Math.round(n * 100) / 100).replace(".", ","));
 
 const HINT_KEY = "otherise:logbook-hint";
 
@@ -591,7 +591,7 @@ export function Logbook(props: LogbookProps) {
                     >
                       <span className="flex min-w-0 items-center gap-2 font-semibold">
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-ink text-card"><IconCheck size={16} /></span>
-                        <span className="truncate tabular">{summarizeSets(st.sets) ?? "Fatto"}</span>
+                        <span className="min-w-0 break-words tabular">{summarizeSets(st.sets) ?? "Fatto"}</span>
                       </span>
                       <span className="shrink-0 text-sm font-semibold text-muted underline">Modifica</span>
                     </button>

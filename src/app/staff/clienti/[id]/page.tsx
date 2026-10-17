@@ -140,7 +140,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
               <div><div className="text-xs text-muted">Magra</div><BigNumber value={fmtNum(last.lean_mass_kg)} unit="kg" /><Delta now={n(last.lean_mass_kg)} before={n(prev?.lean_mass_kg)} unit="kg" goodWhen="up" /></div>
             </div>
             {bf.length > 1 ? <LineChart label="Massa grassa" unit="%" height={110} points={bf} /> : weight.length > 1 ? <LineChart label="Peso" unit="kg" height={110} points={weight} /> : null}
-            {last.notes_next_phase ? <p className="line-clamp-6 text-sm whitespace-pre-line text-ink-soft"><span className="font-semibold">Per la prossima fase:</span>{"\n"}{last.notes_next_phase}</p> : null}
+            {last.notes_next_phase ? <p className="line-clamp-6 text-sm whitespace-pre-line text-ink-soft" data-clamp-ok><span className="font-semibold">Per la prossima fase:</span>{"\n"}{last.notes_next_phase}</p> : null}
             <ArrowCTA href={`/staff/clienti/${id}/check`}>Tutti i check</ArrowCTA>
           </>
         ) : (
@@ -181,7 +181,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
             {sessions.data.map((s) => (
               <li key={s.id} className="text-[15px]">
                 <div className="text-sm font-semibold">{formatShort(s.session_date, 0)}</div>
-                <p className="line-clamp-3 whitespace-pre-line text-ink-soft">{s.notes || <span className="text-muted">Nessuna nota</span>}</p>
+                <p className="line-clamp-3 whitespace-pre-line text-ink-soft" data-clamp-ok>{s.notes || <span className="text-muted">Nessuna nota</span>}</p>
               </li>
             ))}
           </ul>

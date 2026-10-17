@@ -106,6 +106,7 @@ export function NoteArea({ title, ref, onClick, plain, ...rest }: ComponentProps
                 value={text}
                 placeholder={rest.placeholder}
                 onChange={(e) => write(e.target.value)}
+                data-no-autogrow
                 className="w-full flex-1 resize-none bg-card px-4 py-3 text-[17px] leading-relaxed outline-none"
               />
             </div>,

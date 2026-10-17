@@ -250,7 +250,7 @@ function CheckProgramDays({ content, week, group }: { content: ReturnType<typeof
           <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 sm:px-6 [&::-webkit-details-marker]:hidden">
             <span className="min-w-0">
               <span className="block font-semibold">{d.title}</span>
-              <span className="line-clamp-1 block text-sm text-muted">{d.blocks.flatMap((b) => b.items.map((it) => it.name)).filter(Boolean).join(" · ") || "Nessun esercizio"}</span>
+              <span className="line-clamp-1 block text-sm text-muted" data-clamp-ok>{d.blocks.flatMap((b) => b.items.map((it) => it.name)).filter(Boolean).join(" · ") || "Nessun esercizio"}</span>
             </span>
             <IconDown size={18} className="shrink-0 text-muted transition-transform group-open:rotate-180" />
           </summary>

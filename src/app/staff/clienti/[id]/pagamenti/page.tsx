@@ -250,11 +250,11 @@ export default async function ClientPaymentsPage({ params, searchParams }: { par
           </Card>
         ) : null}
         <Card className="flex flex-col gap-2">
-          <div className="flex items-baseline justify-between">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <Eyebrow>Storico pagamenti</Eyebrow>
-            <span className="flex items-baseline gap-3">
-              <span className="text-sm text-muted">{formatEuro(totalYear)} nel {today.slice(0, 4)}</span>
-              <Link href={`/staff/pagamenti/nuovo?cliente=${id}`} className="text-sm font-semibold underline">Nuovo pagamento</Link>
+            <span className="flex flex-wrap items-baseline gap-x-3">
+              <span className="text-sm whitespace-nowrap text-muted">{formatEuro(totalYear)} nel {today.slice(0, 4)}</span>
+              <Link href={`/staff/pagamenti/nuovo?cliente=${id}`} className="text-sm font-semibold whitespace-nowrap underline">Nuovo pagamento</Link>
             </span>
           </div>
           {payments?.length ? (

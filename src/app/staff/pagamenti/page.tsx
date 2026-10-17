@@ -35,7 +35,7 @@ function DueRow({ name, href, status, late, reminder, items }: { name: string; h
     <li className="flex flex-col gap-1 border-t border-sand-deep py-3.5 first:border-t-0" aria-label={`Da sistemare: ${name}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <Link href={href} className="block truncate font-semibold hover:underline">{name}</Link>
+          <Link href={href} className="block font-semibold break-words hover:underline">{name}</Link>
           <span className="flex items-center gap-1.5 text-sm text-muted"><Dot tone={late ? "accent" : "deep"} />{status}</span>
         </div>
         {items.length ? null : remind}
@@ -223,7 +223,7 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
                 const c = p.clients as unknown as { first_name: string; last_name: string } | null;
                 return (
                   <li key={p.id} className="flex items-center justify-between gap-2 border-t border-sand-deep py-1.5 first:border-t-0">
-                    <span className="min-w-0 truncate"><span className="font-semibold">{c ? listName(c) : "Cliente eliminato"}</span> <span className="text-sm text-muted">· {formatShort(p.paid_on)} · {METHOD_LABELS[p.method as PaymentMethod]}</span></span>
+                    <span className="min-w-0 break-words"><span className="font-semibold">{c ? listName(c) : "Cliente eliminato"}</span> <span className="text-sm text-muted">· {formatShort(p.paid_on)} · {METHOD_LABELS[p.method as PaymentMethod]}</span></span>
                     <span className="flex shrink-0 items-center gap-3">
                       <span className="font-semibold tabular">{formatEuro(p.amount)}</span>
                       <EditPaymentButton clientId={p.client_id} paymentId={p.id} name={c ? `${c.first_name} ${c.last_name}`.trim() : "Cliente"} values={paymentValues(p)} />
@@ -303,14 +303,14 @@ export default async function PaymentsOverviewPage({ searchParams }: { searchPar
         <ul>
           {others.map((l) => (
             <li key={l.clientId} className="flex flex-col gap-2 border-t border-sand-deep px-4 py-3.5 first:border-t-0">
-              <div className="flex items-baseline justify-between gap-3">
-                <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="min-w-0 truncate font-semibold hover:underline">{l.name}</Link>
-                <span className="shrink-0 text-sm text-muted">{l.planLabel}</span>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                <Link href={`/staff/clienti/${l.clientId}/pagamenti`} className="min-w-0 font-semibold break-words hover:underline">{l.name}</Link>
+                <span className="text-sm text-muted">{l.planLabel}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="inline-flex min-w-0 items-center gap-2 text-sm">
                   <Dot tone={l.status.state === "overdue" ? "accent" : l.status.state === "due_soon" ? "deep" : l.status.state === "none" ? "muted" : "ink"} />
-                  <span className="truncate">
+                  <span className="min-w-0 break-words">
                     {l.status.label}
                     {l.status.dueDate ? ` · ${formatShort(l.status.dueDate)}` : l.status.sessionsLeft !== null ? ` · ${l.sessionsUsed}/${l.sessionsBought} sessioni` : ""}
                   </span>

@@ -44,10 +44,10 @@ export default async function StaffChatPage({ params, searchParams }: { params: 
   return (
     <div className="flex flex-col gap-3">
       {promemoria ? <ClearParams names={["promemoria"]} /> : null}
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+        <div className="min-w-0 flex-[1_1_12rem]">
           <Link href="/staff/messaggi" className="flex min-h-10 items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink"><IconArrowLeft size={16} /> Messaggi</Link>
-          <h1 className="mt-1 truncate text-[28px] leading-tight font-normal tracking-tight">{client.first_name} {client.last_name}</h1>
+          <h1 className="mt-1 text-[26px] break-words leading-tight sm:text-[28px] font-normal tracking-tight">{client.first_name} {client.last_name}</h1>
         </div>
         <div className="flex shrink-0 items-center gap-4">
           {fromClient ? (

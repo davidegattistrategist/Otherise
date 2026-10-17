@@ -144,7 +144,7 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
                   {missing.length ? <div className="mt-1 text-sm text-muted">Pliche non prese: {lower(missing)}</div> : null}
                   {tests.length ? <div className="mt-1.5 text-sm text-muted">{tests.map((t) => `${t.exercise}${t.e1rm ? ` ≈ ${fmtNum(t.e1rm)} kg` : t.load ? ` ${fmtNum(t.load)}×${t.reps ?? "?"}` : ""}`).join(" · ")}</div> : null}
                   {c.tests_text ? <div className="mt-1 text-sm whitespace-pre-line text-muted">{c.tests_text}</div> : null}
-                  {c.notes_next_phase ? <div className="mt-2 line-clamp-3 text-sm whitespace-pre-line text-ink-soft">Prossima fase: {c.notes_next_phase}</div> : null}
+                  {c.notes_next_phase ? <div className="mt-2 line-clamp-3 text-sm whitespace-pre-line text-ink-soft" data-clamp-ok>Prossima fase: {c.notes_next_phase}</div> : null}
                   <div className="mt-2 flex items-center gap-1.5 text-sm text-muted">
                     <IconPhoto size={15} />
                     {photos.get(c.id)?.length ? `${photos.get(c.id)!.length} foto · le vedi aprendo il check` : "Nessuna foto: le aggiungi aprendo il check"}

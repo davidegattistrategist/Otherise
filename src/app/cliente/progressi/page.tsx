@@ -119,8 +119,8 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
           <ul className="flex flex-col">
             {records.map((r) => (
               <li key={r.key} className="flex items-center justify-between gap-3 border-t border-sand-deep py-2.5 first:border-t-0">
-                <span className="flex min-w-0 items-center gap-2.5"><IconTrophy size={18} className="shrink-0 text-accent-deep" /><span className="truncate font-semibold">{r.name}</span></span>
-                <span className="shrink-0 text-right text-sm"><span className="font-semibold tabular">{fmtNum(r.record!.kg)} kg × {r.record!.reps}</span> <span className="text-muted">· {formatShort(r.record!.date)}</span></span>
+                <span className="flex min-w-0 items-center gap-2.5"><IconTrophy size={18} className="shrink-0 text-accent-deep" /><span className="min-w-0 font-semibold break-words">{r.name}</span></span>
+                <span className="max-w-[45%] shrink-0 text-right text-sm"><span className="font-semibold tabular">{fmtNum(r.record!.kg)} kg × {r.record!.reps}</span> <span className="text-muted">· {formatShort(r.record!.date)}</span></span>
               </li>
             ))}
           </ul>

@@ -158,7 +158,7 @@ export function VoicePlayer({ url, seconds, transcript, mine, expired = false }:
               <span className={cx("inline-block text-[10px] transition-transform", open && "rotate-90")} aria-hidden="true">▶</span>
               {open ? "Nascondi trascrizione" : "Visualizza trascrizione"}
             </button>
-            {open ? <p className="pb-0.5 text-[14px] leading-snug whitespace-pre-wrap">{transcript.text}</p> : null}
+            {open ? <p className="pb-0.5 text-[14px] leading-snug whitespace-pre-wrap [overflow-wrap:anywhere]">{transcript.text}</p> : null}
           </div>
         ) : (
           <span className={cx("text-[12px]", mine ? "text-card/70" : "text-muted")}>
