@@ -27,6 +27,20 @@ export type ParsedPrescription =
 
 const num = (s: string) => Number(s.replace(",", "."));
 
+/** Ripetizioni "al massimo": max, max rip, a esaurimento, a cedimento */
+export const MAX_REPS = String.raw`(?:max(?:imo|imali)?|a\s*esaurimento|esaurimento|a\s*cedimento|cedimento)(?:\s*(?:rip\w*|reps?))?`;
+const MAX_SETS = new RegExp(String.raw`^(\d{1,2})\s*[x×]\s*${MAX_REPS}\b(.*)$`, "i");
+
+/** Tempo, distanza o ripetizioni da fare "per lato" (ogni gamba, ogni braccio). */
+export function isPerSideText(text: string | null | undefined): boolean {
+  return /\b(?:per|x|ogni|each|per\s+ogni)\s*(?:lato|gamba|braccio|parte|side|leg|arm)\b|\/\s*lato\b|\bdx\s*(?:e|\+|\/|-)\s*sx\b|\bsx\s*(?:e|\+|\/|-)\s*dx\b|\bper\s+side\b|\bentrambi\s+i\s+lati\b/i.test(text ?? "");
+}
+
+/** Esercizi che di solito si fanno un lato alla volta (dal nome). */
+export function isOneSideExercise(name: string | null | undefined): boolean {
+  return /monolater|monopodal|unilater|single[\s-]*(?:leg|arm)|one[\s-]*(?:leg|arm)|\buna\s+gamba\b|\bun\s+braccio\b|side\s*plank|plank\s+(?:laterale|sul\s+fianco)|copenhagen|\bpistol\b|bulgar|\baffond|split\s*squat|\blunge|suitcase|windmill|turkish|\bstep[\s-]*up\b|pallof/i.test(name ?? "");
+}
+
 export function parsePrescription(raw: string | null | undefined): ParsedPrescription {
   const text = (raw ?? "").trim();
   if (!text || /\+/.test(text)) return { kind: "text" };
@@ -42,8 +56,17 @@ export function parsePrescription(raw: string | null | undefined): ParsedPrescri
     return { kind: "distance", sets: Number(m[1]), meters };
   }
 
+  // 3xmax · 3 x max rip · 2xmax 20kg · 3x a esaurimento: le ripetizioni le scrive chi si allena
+  m = MAX_SETS.exec(text);
+  if (m) {
+    const sets = Number(m[1]);
+    if (sets < 1 || sets > 20) return { kind: "text" };
+    const load = /(\d+(?:[.,]\d+)?)\s*kg/i.exec(m[2] ?? "");
+    return { kind: "sets", sets, reps: null, repsText: "max", kg: load ? num(load[1]) : null, loadText: load ? `${load[1]} kg` : "", pct: null };
+  }
+
   // 4x8 65kg · 4x8/10 · 2x 6/8 ripetizioni · 1x1 72,5kg · 4x10 45/47,5kg · 3x8/14
-  m = /^(\d{1,2})\s*[x×]\s*(\d{1,3}(?:\s*[/-]\s*\d{1,3})?)(?!\s*(?:m|km|"|''))\b(.*)$/i.exec(text);
+  m =/^(\d{1,2})\s*[x×]\s*(\d{1,3}(?:\s*[/-]\s*\d{1,3})?)(?!\s*(?:m|km|"|''))\b(.*)$/i.exec(text);
   if (m) {
     const sets = Number(m[1]);
     if (sets < 1 || sets > 20) return { kind: "text" };

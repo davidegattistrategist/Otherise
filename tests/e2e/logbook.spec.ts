@@ -97,9 +97,12 @@ test("timer di EMOM e intervalli: parte da solo, si mette in pausa e riparte", a
 
   // pausa: il tempo si ferma
   await timer.getByRole("button", { name: "Metti in pausa" }).click();
-  await page.clock.runFor(10_000);
   await expect(timer).toContainText("In pausa");
-  await expect(clock).toHaveText("0:59");
+  // il tocco può arrivare un attimo dopo lo scatto del secondo: conta che poi resti fermo
+  const paused = await clock.textContent();
+  expect(paused).toMatch(/^0:5[89]$/);
+  await page.clock.runFor(10_000);
+  await expect(clock).toHaveText(paused!);
   // riprende da dove era
   await timer.getByRole("button", { name: "Riprendi" }).click();
   await page.clock.runFor(60_000);

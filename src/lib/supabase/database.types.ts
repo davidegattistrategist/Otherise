@@ -842,6 +842,9 @@ isOneToOne: false
                            },
 "set_instagram_consent":
 { Args: { "consent": boolean }; Returns: undefined
+                           },
+"start_program_early":
+{ Args: { "pid": string }; Returns: string
                            }
           }
           Enums: {

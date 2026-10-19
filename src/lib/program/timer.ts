@@ -65,13 +65,27 @@ export function restTimer(seconds: number): TimerPlan {
   return { title: "Recupero", adjustable: true, phases: [{ kind: "rest", label: "Recupero", seconds }] };
 }
 
-/** Serie a tempo (plank 30", isometrie…): 3 secondi per prepararsi e poi il lavoro. */
-export function timedSetTimer(seconds: number, setNumber: number, sets: number, name = ""): TimerPlan {
+/** Secondi per cambiare lato tra il primo e il secondo (esercizi monolaterali a tempo). */
+export const SWITCH_SIDE_SECONDS = 5;
+
+/**
+ * Serie a tempo (plank 30", isometrie…): 3 secondi per prepararsi e poi il lavoro.
+ * Con `perSide` (side plank, affondo isometrico…) il tempo vale per ogni lato:
+ * primo lato, 5 secondi per cambiare, secondo lato.
+ */
+export function timedSetTimer(seconds: number, setNumber: number, sets: number, name = "", perSide = false): TimerPlan {
   const set = sets > 1 ? `serie ${setNumber}/${sets}` : "serie";
+  const title = name ? `${name} · ${set}` : set.charAt(0).toUpperCase() + set.slice(1);
+  if (!perSide) return { title, adjustable: false, phases: [lead(), { kind: "work", label: "Lavoro", seconds }] };
   return {
-    title: name ? `${name} · ${set}` : set.charAt(0).toUpperCase() + set.slice(1),
+    title,
     adjustable: false,
-    phases: [lead(), { kind: "work", label: "Lavoro", seconds }],
+    phases: [
+      lead(),
+      { kind: "work", label: `Primo lato · ${title}`, seconds },
+      { kind: "lead", label: "Cambia lato", seconds: SWITCH_SIDE_SECONDS },
+      { kind: "work", label: `Secondo lato · ${title}`, seconds },
+    ],
   };
 }
 

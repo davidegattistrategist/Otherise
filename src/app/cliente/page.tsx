@@ -8,7 +8,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getMyLogs, getMyPaymentNotices, getMyPrograms } from "@/lib/data/me";
 import { PaymentNotices } from "@/components/payment-notice";
 import { diffDays, formatHeading, formatLong, formatShort, todayISO } from "@/lib/dates";
-import { completedCount, nextWorkout, programEndDate, timeProgress } from "@/lib/program/schedule";
+import { completedCount, earlyStartDays, nextWorkout, programEndDate, startsLabel, timeProgress } from "@/lib/program/schedule";
+import { EarlyStart } from "@/components/early-start/early-start";
 import { blockHeading } from "@/lib/program/types";
 import { type BillingRow } from "@/lib/billing";
 import { checkinWeekFor } from "@/lib/checkin";
@@ -65,6 +66,8 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
   const end = current ? programEndDate(current.start_date, current.weeks) : null;
   const daysLeft = end ? diffDays(today, end) : null;
   const inProgress = current && next ? logs.find((l) => l.week === next!.week && l.day_id === next!.day.id && !l.completed) : null;
+  // la fase nuova si può iniziare qualche giorno prima (es. la domenica quella del lunedì)
+  const early = upcoming && earlyStartDays(upcoming.start_date, today) ? upcoming : current?.position.state === "not_started" && earlyStartDays(current.start_date, today) ? current : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -114,6 +117,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
           ) : (
             <ArrowCTA href="/cliente/programma" dark>Vedi il programma</ArrowCTA>
           )}
+          {early ? <EarlyStart programId={early.id} title={early.title} startsLabel={startsLabel(early.start_date, today)} dark hasLeftovers={early !== current && Boolean(next)} /> : null}
         </Card>
       ) : (
         <Card dark className="flex flex-col gap-2">

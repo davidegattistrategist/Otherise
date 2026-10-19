@@ -22,6 +22,7 @@ export function prescriptionRule(rx: string): string {
   if (p.kind === "timed") return "tempo deciso dal programma";
   if (p.kind === "distance") return "distanza decisa dal programma";
   if (p.kind !== "sets") return "";
+  if (p.repsText === "max") return p.kg !== null ? "carico deciso dal programma, ripetizioni al massimo: conta quante ne ha fatte" : "ripetizioni al massimo: conta quante ne ha fatte";
   const range = p.reps === null && /[/-]/.test(p.repsText);
   const load = p.kg !== null || p.pct !== null || Boolean(p.loadText);
   if (load && !range) return "carico e ripetizioni decisi dal programma: non suggerire cambi";

@@ -4,7 +4,8 @@ import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getMyLogs, getMyMaxes, getMyPrograms, getVideoMap, type MyProgram } from "@/lib/data/me";
 import { addDays, formatShort, todayISO } from "@/lib/dates";
-import { nextWorkout, programEndDate } from "@/lib/program/schedule";
+import { earlyStartDays, nextWorkout, programEndDate, startsLabel } from "@/lib/program/schedule";
+import { EarlyStart } from "@/components/early-start/early-start";
 import { Card, EmptyState, Eyebrow, cx } from "@/components/ui";
 import { ProgramDayView } from "@/components/program-day";
 import { IconCheck, IconDown } from "@/components/icons";
@@ -70,6 +71,11 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
         </details>
       </div>
 
+      {!canLog && program.status === "published" && earlyStartDays(program.start_date, todayISO()) ? (
+        <Card>
+          <EarlyStart programId={program.id} title={program.title} startsLabel={startsLabel(program.start_date, todayISO())} hasLeftovers={Boolean(current && current.id !== program.id && current.position.state !== "not_started")} />
+        </Card>
+      ) : null}
       <OneDayOpen group="giorni" />
       {program.content.days.map((day) => {
         const st = status(day.id);
@@ -113,9 +119,9 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
         <Card className="flex flex-col gap-2">
           <Eyebrow>Altre fasi</Eyebrow>
           {[current, upcoming].filter((p): p is MyProgram => Boolean(p) && p!.id !== program.id).map((p) => (
-            <Link key={p.id} href={`/cliente/programma?programma=${p.id}&settimana=1`} className="flex items-baseline justify-between gap-3 border-t border-sand-deep py-2.5 first:border-t-0 hover:opacity-70">
-              <span className="font-semibold">{p.title}</span>
-              <span className="text-sm text-muted">{p.id === current?.id ? "in corso" : `dal ${formatShort(p.start_date)}`}</span>
+            <Link key={p.id} href={`/cliente/programma?programma=${p.id}&settimana=1`} className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-sand-deep py-2.5 first:border-t-0 hover:opacity-70">
+              <span className="min-w-0 font-semibold break-words">{p.title}</span>
+              <span className="shrink-0 text-sm whitespace-nowrap text-muted">{p.id === current?.id ? (p.position.state === "finished" ? "conclusa" : "in corso") : `dal ${formatShort(p.start_date)}`}</span>
             </Link>
           ))}
         </Card>
@@ -131,9 +137,9 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
           </summary>
           <div className="flex flex-col px-5 pb-3">
             {pastOthers.map((p) => (
-              <Link key={p.id} href={`/cliente/programma?programma=${p.id}&settimana=1`} className="flex items-baseline justify-between gap-3 border-t border-sand-deep py-2.5 hover:opacity-70">
-                <span className="font-semibold">{p.title}</span>
-                <span className="text-sm text-muted">dal {formatShort(p.start_date)}</span>
+              <Link key={p.id} href={`/cliente/programma?programma=${p.id}&settimana=1`} className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-sand-deep py-2.5 hover:opacity-70">
+                <span className="min-w-0 font-semibold break-words">{p.title}</span>
+                <span className="shrink-0 text-sm whitespace-nowrap text-muted">dal {formatShort(p.start_date)}</span>
               </Link>
             ))}
           </div>

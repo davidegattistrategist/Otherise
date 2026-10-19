@@ -187,13 +187,14 @@ export function TimerBar({ timer }: { timer: WorkoutTimer }) {
   const soft = kind === "rest" ? "bg-ink/10" : "bg-white/20";
   // una sola fase di lavoro (recupero, AMRAP, serie a tempo): basta il titolo; altrimenti il giro
   const single = active.plan.phases.filter((p) => p.kind !== "lead").length === 1;
-  const label = kind === "lead" ? `Si parte · ${active.plan.title}` : single ? active.plan.title : state.phase.label;
+  // il "via tra" in mezzo (cambia lato) dice cosa fare, quello iniziale cosa parte
+  const label = kind === "lead" ? (state.index > 0 ? `${state.phase.label} · ${active.plan.title}` : `Si parte · ${active.plan.title}`) : single ? active.plan.title : state.phase.label;
   return (
     // key: a ogni cambio di fase la barra "lampeggia" (su iPhone il web non può vibrare)
     <div key={state.index} className={cx("timer-flash flex flex-col gap-1.5 rounded-[22px] px-4 py-2.5 shadow-lg", tone)} role="timer" aria-live="off" aria-label={`Timer: ${label}`}>
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold">{active.running ? label : `In pausa · ${label}`}</div>
+          <div className="text-[13px] leading-snug font-semibold break-words">{active.running ? label : `In pausa · ${label}`}</div>
           <div className={cx("text-[26px] leading-none font-bold tabular", !active.running && "opacity-60")} data-testid="timer-clock">{kind === "lead" ? Math.ceil(state.remaining) : fmtClock(state.remaining)}</div>
         </div>
         {active.plan.adjustable ? (

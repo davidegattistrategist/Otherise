@@ -9,7 +9,7 @@ import { blockTimer, emomItemTimer, fmtClock, restTimerFor, timedSetTimer } from
 import { TimerBar, useWorkoutTimer } from "./workout-timer";
 import { DictateButton } from "@/components/dictate-button";
 import { VideoLink } from "@/components/video-link";
-import { summarizeSets, type SetLog } from "@/lib/program/prescription";
+import { isOneSideExercise, isPerSideText, summarizeSets, type SetLog } from "@/lib/program/prescription";
 import { saveWorkout } from "./actions";
 import { cx, fmtNum } from "@/components/ui";
 import { IconCheck, IconPlay, IconPlus, IconTrophy } from "@/components/icons";
@@ -59,6 +59,11 @@ const numOrNull = (v: string): number | null => {
 const fmt = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(Math.round(n * 100) / 100).replace(".", ","));
 
 const HINT_KEY = "otherise:logbook-hint";
+/** Esercizi a tempo fatti "un lato alla volta" scelti dal cliente (nome → sì/no) */
+const SIDE_KEY = "otherise:per-side";
+
+/** Superserie e circuiti: si fa un esercizio dopo l'altro, giro dopo giro */
+const inRounds = (b: { kind: string; items: unknown[] }) => (b.kind === "superset" || b.kind === "circuit") && b.items.length > 1;
 
 function storageKey(p: { programId: string; week: number; day: ProgramDay }) {
   return `otherise:log:${p.programId}:${p.week}:${p.day.id}`;
@@ -176,8 +181,8 @@ export function Logbook(props: LogbookProps) {
       return next;
     });
   /** Porta in vista l'esercizio dopo (se è sotto la barra o fuori schermo) */
-  const scrollToNextItem = (itemId: string) => {
-    const key = nextSetAfter(itemId);
+  const scrollToNextItem = (itemId: string, setIndex?: number) => {
+    const key = nextSetAfter(itemId, setIndex);
     if (!key || key.startsWith(`${itemId}:`)) return;
     requestAnimationFrame(() => {
       const el = document.querySelector<HTMLElement>(`[data-set="${CSS.escape(key)}"]`)?.closest<HTMLElement>("[data-item]");
@@ -350,10 +355,31 @@ export function Logbook(props: LogbookProps) {
     if (it) checkRecord(it, next[itemId].sets.filter((x) => x.done || (x.kg !== null && x.reps !== null)));
   };
 
-  /** La prima serie ancora da fare dopo quella appena spuntata (stesso esercizio, poi i successivi). */
-  const nextSetAfter = (itemId: string): string | null => {
+  /**
+   * La prima serie ancora da fare dopo quella appena spuntata: nelle superserie
+   * e nei circuiti l'esercizio dopo dello stesso giro (rematore 1 → push up 1 →
+   * rematore 2…), altrimenti la serie dopo dello stesso esercizio; poi i successivi.
+   */
+  const nextSetAfter = (itemId: string, setIndex?: number): string | null => {
     const order = day.blocks.flatMap((b) => b.items).filter((it) => plans[it.id].mode !== "text");
-    const from = order.findIndex((it) => it.id === itemId);
+    let fromId = itemId;
+    const block = day.blocks.find((b) => b.items.some((it) => it.id === itemId));
+    if (block && inRounds(block) && setIndex !== undefined) {
+      const its = block.items.filter((it) => plans[it.id].mode !== "text");
+      const k = its.findIndex((it) => it.id === itemId);
+      const setsOf = (id: string) => latest.current.items[id]?.sets ?? [];
+      const rounds = Math.max(0, ...its.map((it) => setsOf(it.id).length));
+      const pos: Array<[number, number]> = [];
+      for (let r = 0; r < rounds; r++) for (let j = 0; j < its.length; j++) pos.push([r, j]);
+      const at = pos.findIndex(([r, j]) => r === setIndex && j === k);
+      for (const [r, j] of [...pos.slice(at + 1), ...pos.slice(0, Math.max(0, at))]) {
+        const x = setsOf(its[j].id)[r];
+        if (x && !x.done) return `${its[j].id}:${r}`;
+      }
+      // giro finito del tutto: si continua dopo il blocco
+      fromId = its[its.length - 1]?.id ?? itemId;
+    }
+    const from = order.findIndex((it) => it.id === fromId);
     for (const it of [...order.slice(from), ...order.slice(0, from)]) {
       const si = (latest.current.items[it.id]?.sets ?? []).findIndex((x) => !x.done);
       if (si >= 0) return `${it.id}:${si}`;
@@ -362,8 +388,8 @@ export function Logbook(props: LogbookProps) {
   };
 
   /** Finito (o saltato) il recupero: la prossima serie si illumina e, se è fuori schermo, viene in vista. */
-  const showNext = (itemId: string) => {
-    const key = nextSetAfter(itemId);
+  const showNext = (itemId: string, setIndex?: number) => {
+    const key = nextSetAfter(itemId, setIndex);
     if (!key) return;
     setUpNext(key);
     if (upNextTimer.current) clearTimeout(upNextTimer.current);
@@ -377,24 +403,51 @@ export function Logbook(props: LogbookProps) {
   };
 
   /** Recupero dopo una serie spuntata: non interrompe un AMRAP, EMOM o intervalli in corso. */
-  const startRest = (rest: string, itemId?: string) => {
+  const startRest = (rest: string, itemId?: string, setIndex?: number) => {
     setUpNext(null);
     const p = restTimerFor(rest);
-    if (!p) return;
+    if (!p) {
+      // niente recupero (es. il primo esercizio di un circuito): si illumina subito il prossimo
+      if (itemId) showNext(itemId, setIndex);
+      return;
+    }
     if (clock.active && clock.active.id !== "rest" && !clock.active.id.startsWith("set:")) return;
-    clock.start("rest", p, itemId ? () => showNext(itemId) : undefined);
+    clock.start("rest", p, itemId ? () => showNext(itemId, setIndex) : undefined);
   };
 
   /** Serie a tempo (es. plank 30"): parte il tempo, alla fine la serie si spunta e parte il recupero. */
-  const startTimedSet = (it: { id: string; name: string; rest: string }, seconds: number) => {
+  const startTimedSet = (it: { id: string; name: string; rest: string }, seconds: number, perSide: boolean) => {
     const sets = latest.current.items[it.id]?.sets ?? [];
     const si = sets.findIndex((x) => !x.done);
     if (si < 0) return;
-    clock.start(`set:${it.id}`, timedSetTimer(seconds, si + 1, sets.length, it.name), () => {
+    clock.start(`set:${it.id}`, timedSetTimer(seconds, si + 1, sets.length, it.name, perSide), () => {
       update(it.id, (cur) => ({ ...cur, sets: cur.sets.map((x, i) => (i === si ? { ...x, done: true } : x)) }));
       const rest = restTimerFor(it.rest);
-      if (rest) clock.start("rest", rest, () => showNext(it.id));
+      if (rest) clock.start("rest", rest, () => showNext(it.id, si));
+      else showNext(it.id, si);
     });
+  };
+
+  /** Tempo "per ogni lato": dalla prescrizione o dal nome, oppure come l'ha scelto il cliente. */
+  const [sideChoice, setSideChoice] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SIDE_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- scelta salvata sul telefono
+      if (raw) setSideChoice(JSON.parse(raw) as Record<string, boolean>);
+    } catch {}
+  }, []);
+  const perSideOf = (it: { name: string; notes?: string }, rx: string) => {
+    const k = it.name.trim().toLowerCase();
+    if (k in sideChoice) return sideChoice[k];
+    return isPerSideText(rx) || isPerSideText(it.notes) || isOneSideExercise(it.name);
+  };
+  const setPerSide = (it: { name: string }, on: boolean) => {
+    const next = { ...sideChoice, [it.name.trim().toLowerCase()]: on };
+    setSideChoice(next);
+    try {
+      localStorage.setItem(SIDE_KEY, JSON.stringify(next));
+    } catch {}
   };
 
   /** Serie non spuntate, per esercizio (solo dove si spuntano le serie). */
@@ -419,6 +472,47 @@ export function Logbook(props: LogbookProps) {
     else void finish();
   };
 
+  /** Una serie segnata "fatta come scritto": prende i valori proposti dove è vuota. */
+  const filledDone = (it: { id: string; exerciseId?: string | null; name: string }, x: SetLog, si: number, all: SetLog[]): SetLog => {
+    if (plans[it.id].mode !== "sets") return { ...x, done: true };
+    const sug = suggestion(it, si);
+    return { kg: x.kg ?? sug.kg ?? (si > 0 ? all[si - 1].kg ?? null : null), reps: x.reps ?? sug.reps, done: true };
+  };
+
+  /** "Segna tutto il circuito come fatto": tutte le serie del blocco, con Annulla. */
+  const [blockUndo, setBlockUndo] = useState<{ blockId: string; before: Record<string, ItemState> } | null>(null);
+  const markBlockDone = (b: (typeof day.blocks)[number]) => {
+    const cur = latest.current.items;
+    const before: Record<string, ItemState> = {};
+    const next = { ...cur };
+    for (const it of b.items) {
+      const st = cur[it.id];
+      if (!st || plans[it.id].mode === "text") continue;
+      before[it.id] = st;
+      next[it.id] = { ...st, sets: st.sets.map((x, si, all) => (x.done ? x : filledDone(it, x, si, all))) };
+    }
+    latest.current = { ...latest.current, items: next };
+    setItems(next);
+    touch();
+    setBlockUndo({ blockId: b.id, before });
+    setUpNext(null);
+    // il recupero del circuito non serve più
+    if (clock.active && (clock.active.id === "rest" || b.items.some((it) => clock.active!.id === `set:${it.id}`))) clock.stop();
+    for (const it of b.items) if (plans[it.id].mode === "sets") toggleCollapsed(it.id, true);
+    if (hint) closeHint();
+    const lastItem = [...b.items].reverse().find((it) => plans[it.id].mode !== "text");
+    if (lastItem) scrollToNextItem(lastItem.id);
+  };
+  const undoBlock = () => {
+    if (!blockUndo) return;
+    const next = { ...latest.current.items, ...blockUndo.before };
+    latest.current = { ...latest.current, items: next };
+    setItems(next);
+    touch();
+    for (const id of Object.keys(blockUndo.before)) toggleCollapsed(id, false);
+    setBlockUndo(null);
+  };
+
   /** Dalla domanda finale: segna come fatte le serie non spuntate, o le lascia come saltate. */
   const resolveUnchecked = (markDone: boolean) => {
     setUnchecked(null);
@@ -437,9 +531,7 @@ export function Logbook(props: LogbookProps) {
             // serie saltata: senza ripetizioni il carico proposto non va registrato
             return x.reps === null || x.reps === undefined ? { ...x, kg: null } : x;
           }
-          if (plans[it.id].mode !== "sets") return { ...x, done: true };
-          const sug = suggestion(it, si);
-          return { kg: x.kg ?? sug.kg ?? (si > 0 ? all[si - 1].kg ?? null : null), reps: x.reps ?? sug.reps, done: true };
+          return filledDone(it, x, si, all);
         });
         next[it.id] = { ...st, sets };
       }
@@ -677,10 +769,10 @@ export function Logbook(props: LogbookProps) {
                                 // ultima serie dell'esercizio: si compatta in una riga e si passa al prossimo
                                 const last = st.sets.every((x, i) => i === si || x.done);
                                 if (last) toggleCollapsed(it.id, true);
-                                if (it.rest) startRest(it.rest, it.id);
+                                if (it.rest || multi) startRest(it.rest, it.id, si);
                                 else {
                                   setUpNext(null);
-                                  if (last) scrollToNextItem(it.id);
+                                  if (last) scrollToNextItem(it.id, si);
                                 }
                               }
                             }}
@@ -720,7 +812,7 @@ export function Logbook(props: LogbookProps) {
                             className={cx("flex h-11 min-w-16 items-center justify-center gap-1 rounded-xl px-3 text-sm font-semibold tabular", s.done ? "bg-ink text-card" : upNext === `${it.id}:${si}` ? "bg-accent-soft ring-2 ring-accent" : "bg-sand-deep/70")}
                             onClick={() => {
                               update(it.id, (cur) => ({ ...cur, sets: cur.sets.map((x, i) => (i === si ? { ...x, done: !x.done } : x)) }));
-                              if (!s.done && it.rest) startRest(it.rest, it.id);
+                              if (!s.done && (it.rest || multi)) startRest(it.rest, it.id, si);
                               else setUpNext(null);
                             }}
                           >
@@ -729,17 +821,28 @@ export function Logbook(props: LogbookProps) {
                         ))}
                       </div>
                       {timedSeconds(plan.label) && st.sets.some((x) => !x.done) ? (
-                        <TimerButton
-                          running={clock.active?.id === `set:${it.id}`}
-                          label={`Avvia ${plan.label}: la serie si spunta da sola`}
-                          onClick={() => startTimedSet(it, timedSeconds(plan.label)!)}
-                        />
+                        <>
+                          <TimerButton
+                            running={clock.active?.id === `set:${it.id}`}
+                            label={perSideOf(it, rx) ? `Avvia ${plan.label} per lato` : `Avvia ${plan.label}: la serie si spunta da sola`}
+                            onClick={() => startTimedSet(it, timedSeconds(plan.label)!, perSideOf(it, rx))}
+                          />
+                          <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm" data-per-side>
+                            <input
+                              type="checkbox"
+                              className="h-5 w-5 shrink-0 accent-[#1b1a17]"
+                              checked={perSideOf(it, rx)}
+                              onChange={(e) => setPerSide(it, e.target.checked)}
+                            />
+                            <span><span className="font-semibold">Un lato alla volta</span> <span className="text-muted">· {plan.label} per lato, 5&quot; per cambiare; la serie si spunta da sola</span></span>
+                          </label>
+                        </>
                       ) : null}
                       <div className="flex items-center gap-1">
                         <input
                           aria-label={`Note su ${it.name}`}
                           className="h-11 min-w-0 flex-1 rounded-xl border border-sand-deep bg-sand px-3 text-[15px]"
-                          placeholder="Carico, tempo o note (facoltativo)"
+                          placeholder="Carico, tempo o note"
                           value={st.resultText}
                           onChange={(e) => update(it.id, (cur) => ({ ...cur, resultText: e.target.value }))}
                         />
@@ -758,6 +861,26 @@ export function Logbook(props: LogbookProps) {
                 </div>
               );
             })}
+            {multi && b.items.some((it) => plans[it.id].mode !== "text") ? (
+              b.items.every((it) => plans[it.id].mode === "text" || (items[it.id]?.sets ?? []).every((x) => x.done)) ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-sand px-4 py-2.5 text-[15px]" data-block-done={b.id}>
+                  <span className="inline-flex items-center gap-2 font-semibold"><IconCheck size={18} /> {b.kind === "superset" ? "Superserie fatta" : "Circuito fatto"}</span>
+                  {blockUndo?.blockId === b.id ? (
+                    <button type="button" onClick={undoBlock} className="min-h-10 px-1 text-sm font-semibold text-muted underline">Annulla</button>
+                  ) : null}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => markBlockDone(b)}
+                  data-mark-block={b.id}
+                  className="flex min-h-12 w-full flex-col items-center justify-center rounded-2xl bg-sand px-4 py-2 text-[15px] font-semibold ring-1 ring-sand-deep"
+                >
+                  <span className="inline-flex items-center gap-2"><IconCheck size={18} /> {b.kind === "superset" ? "Segna tutta la superserie come fatta" : "Segna tutto il circuito come fatto"}</span>
+                  <span className="text-[13px] font-normal text-muted">Dove non hai scritto niente vale quello proposto</span>
+                </button>
+              )
+            ) : null}
           </section>
         );
       })}

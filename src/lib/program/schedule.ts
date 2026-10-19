@@ -3,7 +3,7 @@
  * Il cliente non è legato ai giorni della settimana e gli allenamenti vanno fatti
  * in ordine: se ne salta uno, il prossimo è ancora quello (si "scala", non si salta).
  */
-import { addDays, diffDays, type ISODate } from "../dates";
+import { addDays, diffDays, formatHeading, type ISODate } from "../dates";
 import type { ProgramContent } from "./types";
 
 export function programEndDate(startDate: ISODate, weeks: number): ISODate {
@@ -66,6 +66,23 @@ export function timeProgress(startDate: ISODate, weeks: number, today: ISODate):
   const total = weeks * 7;
   const d = Math.min(Math.max(diffDays(startDate, today) + 1, 0), total);
   return Math.round((d / total) * 100);
+}
+
+/** Quanti giorni prima si può iniziare una fase nuova (es. la domenica quella del lunedì). Uguale in start_program_early. */
+export const EARLY_START_DAYS = 3;
+
+/** Giorni che mancano all'inizio se la fase si può già iniziare oggi, altrimenti null. */
+export function earlyStartDays(startDate: ISODate | null | undefined, today: ISODate): number | null {
+  if (!startDate) return null;
+  const d = diffDays(today, startDate);
+  return d >= 1 && d <= EARLY_START_DAYS ? d : null;
+}
+
+/** "domani, lunedì 20 ottobre" */
+export function startsLabel(startDate: ISODate, today: ISODate): string {
+  const d = diffDays(today, startDate);
+  const day = formatHeading(startDate).toLowerCase();
+  return d === 1 ? `domani, ${day}` : d === 2 ? `dopodomani, ${day}` : `${day}`;
 }
 
 /**

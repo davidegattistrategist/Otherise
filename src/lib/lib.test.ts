@@ -7,7 +7,7 @@ import { sortChecks } from "./check-order";
 import { checkDue } from "./check-due";
 import { DEDICATIONS, QUOTES, dedicationOfDay, quoteOfDay } from "./quotes";
 import { estimateOneRepMax } from "./strength/e1rm";
-import { parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
+import { isOneSideExercise, isPerSideText, parsePrescription, prescriptionFromSets, summarizeSets } from "./program/prescription";
 import { parseEuro, billingStatus, clientFacingStatus, unpaidPeriods, withUnpaidRows, usesCredit, nextPaymentProposal, creditChange, dueAmount, isCoaching, ptCounterView, periodEnd, suggestNextPeriod, type PlanKind } from "./billing";
 import { clientNotices, ptLeft } from "./client-notice";
 import { triageFallback, triageWithoutAi } from "./note-triage";
@@ -565,6 +565,36 @@ describe("logbook", () => {
     expect(logPlan({ ...emptyItem(1), prescriptions: ["1'"] }, circuit, 1)).toEqual({ mode: "check", rows: 3, label: "1'" });
     expect(logPlan({ ...emptyItem(1), prescriptions: ["30\""] }, single, 1)).toEqual({ mode: "text" });
   });
+  it("nei circuiti anche max, per lato, distanze e calorie si spuntano", () => {
+    const circuit = { ...emptyBlock(1, "circuit"), rounds: 3 };
+    const plan = (rx: string, b: ReturnType<typeof emptyBlock> = circuit) => logPlan({ ...emptyItem(1), prescriptions: [rx] }, b, 1);
+    expect(plan("max")).toMatchObject({ mode: "sets", rows: 3, repsHint: "max", kgHint: null });
+    expect(plan("Max rip")).toMatchObject({ mode: "sets", rows: 3, repsHint: "max" });
+    expect(plan("a esaurimento")).toMatchObject({ mode: "sets", repsHint: "max" });
+    expect(plan("max 10kg")).toMatchObject({ mode: "sets", repsHint: "max", kgHint: 10 });
+    expect(plan("30\" per lato")).toEqual({ mode: "check", rows: 3, label: "30\"" });
+    expect(plan("10 per gamba")).toMatchObject({ mode: "sets", repsHint: "10" });
+    expect(plan("250m")).toEqual({ mode: "check", rows: 3, label: "250 m" });
+    expect(plan("1 km")).toEqual({ mode: "check", rows: 3, label: "1 km" });
+    expect(plan("15 cal")).toEqual({ mode: "check", rows: 3, label: "15 cal" });
+    expect(plan("sprint a sensazione")).toEqual({ mode: "text" });
+    // fuori dai circuiti "max" da solo resta testo, "3xmax" diventa serie
+    expect(plan("max", emptyBlock(1))).toEqual({ mode: "text" });
+    expect(plan("3xmax", emptyBlock(1))).toMatchObject({ mode: "sets", rows: 3, repsHint: "max" });
+  });
+  it("riconosce gli esercizi da fare un lato alla volta", () => {
+    expect(isPerSideText("3x30\" per lato")).toBe(true);
+    expect(isPerSideText("2x20\" x gamba")).toBe(true);
+    expect(isPerSideText("30\" dx e sx")).toBe(true);
+    expect(isPerSideText("3x30\"")).toBe(false);
+    expect(isPerSideText("da fare a parte")).toBe(false);
+    expect(isOneSideExercise("Side plank")).toBe(true);
+    expect(isOneSideExercise("Plank laterale")).toBe(true);
+    expect(isOneSideExercise("Affondo isometrico")).toBe(true);
+    expect(isOneSideExercise("Wall sit monopodalico")).toBe(true);
+    expect(isOneSideExercise("Plank")).toBe(false);
+    expect(isOneSideExercise("Hollow hold")).toBe(false);
+  });
   it("legge i recuperi", () => {
     expect(restSeconds('90"')).toBe(90);
     expect(restSeconds("1'30\"")).toBe(90);
@@ -1027,6 +1057,14 @@ describe("timer dell'allenamento", async () => {
     expect(adjustPlan(r, 55, -15).phases[0].seconds).toBe(56);
     expect(fmtClock(65)).toBe("1:05");
     expect(fmtClock(0.2)).toBe("0:01");
+  });
+
+  it("serie a tempo per lato: primo lato, 5 secondi per cambiare, secondo lato", () => {
+    const t = timedSetTimer(30, 1, 3, "Side plank", true);
+    expect(t.phases.map((p) => [p.kind, p.seconds])).toEqual([["lead", LEAD_SECONDS], ["work", 30], ["lead", 5], ["work", 30]]);
+    expect(t.phases[1].label).toBe("Primo lato · Side plank · serie 1/3");
+    expect(t.phases[2].label).toBe("Cambia lato");
+    expect(totalSeconds(t)).toBe(LEAD_SECONDS + 65);
   });
 });
 

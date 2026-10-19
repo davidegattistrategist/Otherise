@@ -4,7 +4,8 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { todayISO } from "@/lib/dates";
 import { parseContent } from "@/lib/program/types";
-import { currentProgram, displayWeek, nextWorkout } from "@/lib/program/schedule";
+import { currentProgram, displayWeek, earlyStartDays, nextWorkout, startsLabel } from "@/lib/program/schedule";
+import { EarlyStart } from "@/components/early-start/early-start";
 import { Card, Eyebrow, cx } from "@/components/ui";
 import { IconArrowRight, IconNote, IconPlay } from "@/components/icons";
 
@@ -26,10 +27,18 @@ export default async function PtSessionChoice({ params }: { params: Promise<{ id
   const { data: programs } = await supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", id).eq("status", "published").not("start_date", "is", null).order("start_date", { ascending: false });
   const current = currentProgram(programs ?? [], today, { upcoming: false });
   const content = current ? parseContent(current.content) : null;
+  // fase nuova che parte tra pochi giorni: se oggi fate già quella, si inizia da qui
+  const upcoming = (programs ?? []).filter((p) => p.start_date! > today).pop() ?? null;
+  const early = upcoming && earlyStartDays(upcoming.start_date, today) ? (
+    <Card>
+      <EarlyStart programId={upcoming.id} title={upcoming.title} startsLabel={startsLabel(upcoming.start_date!, today)} staff hasLeftovers={Boolean(current)} />
+    </Card>
+  ) : null;
   if (!current || !content?.days.length) {
     return (
       <div className="flex max-w-2xl flex-col gap-4">
         <h2 className="text-[24px] leading-tight font-semibold">Sessione PT di oggi</h2>
+        {early}
         <p className="text-[15px] text-muted">Nessun programma in corso: registri la lezione come lezione libera, con data, &quot;si scala&quot; e note.</p>
         <Link href={free} className="flex min-h-16 items-center justify-between gap-3 rounded-[24px] bg-ink px-5 py-4 text-card">
           <span className="flex items-center gap-3">
@@ -51,6 +60,7 @@ export default async function PtSessionChoice({ params }: { params: Promise<{ id
   return (
     <div className="flex max-w-2xl flex-col gap-4">
       <h2 className="text-[24px] leading-tight font-semibold">Sessione PT di oggi</h2>
+      {early}
       <Card className="flex flex-col gap-3">
         <Eyebrow>Un allenamento del suo programma</Eyebrow>
         <p className="text-sm text-muted">{current.title} · settimana {week}. Registri le serie nel suo logbook e in fondo trovi le note della lezione: chiudendo si salva anche la sessione PT.</p>

@@ -130,6 +130,31 @@ async function main() {
   const { data: lucaProgram } = await db.from("programs").insert({ client_id: luca, title: "Rientro · Fase 1", weeks: 4, start_date: addDays(mondayOf(today), -21), status: "published", content: lucaContent as never, created_by: coach, published_at: new Date().toISOString() }).select("id").single().throwOnError();
   // Luca segnala un fastidio nel logbook: compare al trainer in "Oggi"
   await db.from("workout_logs").insert({ client_id: luca, program_id: lucaProgram!.id, day_id: lucaContent.days[0].id, week: 1, performed_on: addDays(today, -1), completed: true, notes: "", discomfort: "Fastidio al ginocchio destro negli affondi camminati, dalla seconda serie" });
+  // Nadia: fase finita ieri e la prossima che parte domani (si può iniziare oggi),
+  // con un circuito vogatore + push up "max" e un esercizio a tempo per lato
+  const { data: nadiaRow } = await db.from("clients").insert({ first_name: "Nadia", last_name: "Anticipo", sex: "F", email: "nadia@prova.local", goals: "Resistenza e forza per la HYROX.", start_date: addDays(today, -40), free: true, ...consent("app") }).select("id").single().throwOnError();
+  const nadia = nadiaRow!.id;
+  await user("nadia@prova.local", "Nadia Anticipo");
+  const nadiaBase = programA();
+  const { data: nadiaPast } = await db.from("programs").insert({ client_id: nadia, title: "HYROX · Base", weeks: 4, start_date: addDays(today, -28), status: "published", content: nadiaBase as never, created_by: owner, published_at: new Date().toISOString() }).select("id").single().throwOnError();
+  const blank = { title: "", notes: "", durationMin: null, everySec: null, workSec: null, restSec: null };
+  const nadiaNext: ProgramContent = {
+    days: [
+      {
+        id: newId(), title: "Giorno 1 · Circuito", notes: "",
+        blocks: [
+          { id: newId(), kind: "circuit", rounds: 3, ...blank, items: [item("Vogatore", ["250m", "250m", "300m", "300m"]), item("Push up", ["max", "max", "max", "max"], "90\"")] },
+          { id: newId(), kind: "single", rounds: null, ...blank, items: [item("Side plank", ["2x30\" per lato", "2x30\" per lato", "2x35\" per lato", "2x40\" per lato"], "30\"")] },
+        ],
+      },
+      { id: newId(), title: "Giorno 2 · Forza", notes: "", blocks: [{ id: newId(), kind: "single", rounds: null, ...blank, items: [item("Back squat", ["4x6 60kg", "4x6 62,5kg", "4x5 65kg", "4x5 67,5kg"], "2'")] }] },
+    ],
+  };
+  await db.from("programs").insert({ client_id: nadia, title: "HYROX · Circuiti", weeks: 4, start_date: addDays(today, 1), status: "published", content: nadiaNext as never, previous_program_id: nadiaPast!.id, created_by: owner, published_at: new Date().toISOString() }).throwOnError();
+  for (const [i, d] of nadiaBase.days.entries()) {
+    for (const w of [1, 2, 3, 4]) await db.from("workout_logs").insert({ client_id: nadia, program_id: nadiaPast!.id, day_id: d.id, week: w, performed_on: addDays(today, -28 + (w - 1) * 7 + i * 2), completed: true, notes: "" });
+  }
+
   await db.from("programs").insert({ client_id: sara, title: "Base aerobica (bozza)", weeks: 6, status: "draft", content: programA() as never, created_by: owner });
   await db.from("programs").insert({ client_id: null, is_template: true, title: "Modello · Total body 3 giorni", weeks: 4, content: programA() as never, created_by: owner });
 

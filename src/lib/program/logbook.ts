@@ -2,7 +2,7 @@
  * Come si presenta il logbook di un esercizio: righe di serie con kg e
  * ripetizioni, spunte per lavori a tempo o distanza, oppure testo libero.
  */
-import { parsePrescription } from "./prescription";
+import { MAX_REPS, parsePrescription } from "./prescription";
 import type { ProgramBlock, ProgramItem } from "./types";
 
 export type LogPlan =
@@ -17,15 +17,30 @@ export function logPlan(item: ProgramItem, block: ProgramBlock, week: number): L
   if (p.kind === "sets") return { mode: "sets", rows: p.sets, repsHint: p.repsText, kgHint: p.kg, loadText: p.loadText, ...(p.pct ? { pct: p.pct } : {}) };
   if (p.kind === "timed") return { mode: "check", rows: p.sets, label: `${p.seconds}"` };
   if (p.kind === "distance") return { mode: "check", rows: p.sets, label: p.meters >= 1000 ? `${p.meters / 1000} km` : `${p.meters} m` };
-  // Nei circuiti spesso si scrive solo "12" o "10-12": le serie sono i giri del blocco
-  const plain = /^(\d{1,3}(?:\s*[-/]\s*\d{1,3})?)(?:\s*(?:rip|reps?|ripetizioni))?(?:\s+(\d+(?:[.,]\d+)?)\s*kg)?$/i.exec(rx.trim());
-  if (plain && block.rounds && block.rounds <= 12) {
-    return { mode: "sets", rows: block.rounds, repsHint: plain[1].replace(/\s+/g, ""), kgHint: plain[2] ? Number(plain[2].replace(",", ".")) : null, loadText: plain[2] ? `${plain[2]} kg` : "" };
+  if (!block.rounds || block.rounds > 12) return { mode: "text" };
+  // Nei circuiti spesso si scrive solo "12", "10-12" o "max": le serie sono i giri del blocco
+  const t = rx.trim();
+  const rounds = block.rounds;
+  const plain = /^(\d{1,3}(?:\s*[-/]\s*\d{1,3})?)(?:\s*(?:rip|reps?|ripetizioni))?(?:\s+(\d+(?:[.,]\d+)?)\s*kg)?(?:\s+(?:per|x|ogni)\s*(?:lato|gamba|braccio))?$/i.exec(t);
+  if (plain) {
+    return { mode: "sets", rows: rounds, repsHint: plain[1].replace(/\s+/g, ""), kgHint: plain[2] ? Number(plain[2].replace(",", ".")) : null, loadText: plain[2] ? `${plain[2]} kg` : "" };
   }
-  // ...oppure solo il tempo ("30\"", "1'"): una spunta (e un timer) per giro
-  if (block.rounds && block.rounds <= 12 && /^\d{1,3}\s*(?:"|”|″|''|sec|s)$|^\d{1,2}\s*['’]\s*(?:\d{1,2}\s*(?:"|”|″))?$/i.test(rx.trim())) {
-    const secs = restSeconds(rx);
-    if (secs) return { mode: "check", rows: block.rounds, label: secs % 60 === 0 && secs >= 60 ? `${secs / 60}'` : secs > 60 ? `${Math.floor(secs / 60)}'${secs % 60}"` : `${secs}"` };
+  const max = new RegExp(String.raw`^${MAX_REPS}(?:\s+(\d+(?:[.,]\d+)?)\s*kg)?$`, "i").exec(t);
+  if (max) {
+    return { mode: "sets", rows: rounds, repsHint: "max", kgHint: max[1] ? Number(max[1].replace(",", ".")) : null, loadText: max[1] ? `${max[1]} kg` : "" };
+  }
+  // ...oppure solo il tempo ("30\"", "1'", "30\" per lato"): una spunta (e un timer) per giro
+  const side = String.raw`(?:\s+(?:per|x|ogni)\s*(?:lato|gamba|braccio))?`;
+  if (new RegExp(String.raw`^(?:\d{1,3}\s*(?:"|”|″|''|sec|s)|\d{1,2}\s*['’]\s*(?:\d{1,2}\s*(?:"|”|″))?)${side}$`, "i").test(t)) {
+    const secs = restSeconds(t);
+    if (secs) return { mode: "check", rows: rounds, label: secs % 60 === 0 && secs >= 60 ? `${secs / 60}'` : secs > 60 ? `${Math.floor(secs / 60)}'${secs % 60}"` : `${secs}"` };
+  }
+  // ...o la distanza o le calorie (vogatore, bike): "250m", "1 km", "15 cal"
+  const dist = new RegExp(String.raw`^(\d+(?:[.,]\d+)?)\s*(m|mt|metri|km|cal|kcal|calorie)${side}$`, "i").exec(t);
+  if (dist) {
+    const unit = dist[2].toLowerCase();
+    const label = unit.startsWith("k") && unit !== "kcal" ? `${dist[1]} km` : /cal/.test(unit) ? `${dist[1]} cal` : `${dist[1]} m`;
+    return { mode: "check", rows: rounds, label };
   }
   return { mode: "text" };
 }

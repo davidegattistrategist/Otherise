@@ -701,4 +701,39 @@ describe.skipIf(!run)("permessi", () => {
     expect((await clientC.rpc("my_active_client_id")).data).toBe(clientCId);
     expect((await clientC.from("payment_plans").select("id")).error).toBeNull();
   });
+
+  it("fase nuova in anticipo: il cliente la sua (entro 3 giorni), lo staff solo i clienti che segue", async () => {
+    const romeDay = (offset: number) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome" }).format(new Date(Date.now() + offset * 86_400_000));
+    const content = { days: [{ id: "d1", title: "Giorno 1", blocks: [] }] };
+    const make = async (clientId: string, start: string, status = "published") =>
+      (await owner.from("programs").insert({ client_id: clientId, title: `Anticipo ${start}`, weeks: 4, content, status, start_date: start }).select("id").single().throwOnError()).data!.id as string;
+    const startOf = async (id: string) => (await admin.from("programs").select("start_date").eq("id", id).single()).data!.start_date;
+    const soon = await make(clientAId, romeDay(1));
+    const far = await make(clientAId, romeDay(5));
+    const draft = await make(clientAId, romeDay(1), "draft");
+    const other = await make(clientBId, romeDay(2));
+
+    // il cliente: la sua, pubblicata, entro 3 giorni
+    expect((await clientA.rpc("start_program_early", { pid: far })).error).not.toBeNull();
+    expect(await startOf(far)).toBe(romeDay(5));
+    expect((await clientA.rpc("start_program_early", { pid: draft })).error).not.toBeNull();
+    expect((await clientA.rpc("start_program_early", { pid: other })).error).not.toBeNull();
+    expect(await startOf(other)).toBe(romeDay(2));
+    expect((await stranger.rpc("start_program_early", { pid: soon })).error).not.toBeNull();
+    const ok = await clientA.rpc("start_program_early", { pid: soon });
+    expect(ok.error).toBeNull();
+    expect(await startOf(soon)).toBe(romeDay(0));
+    // già iniziata: non cambia niente
+    expect((await clientA.rpc("start_program_early", { pid: soon })).data).toBe(romeDay(0));
+    // il cliente continua a non poter cambiare i programmi da sé
+    await clientA.from("programs").update({ start_date: romeDay(-30) }).eq("id", far);
+    expect(await startOf(far)).toBe(romeDay(5));
+
+    // lo staff: il collaboratore non tocca un cliente non suo, il titolare sì
+    expect((await coach.rpc("start_program_early", { pid: other })).error).not.toBeNull();
+    expect(await startOf(other)).toBe(romeDay(2));
+    expect((await owner.rpc("start_program_early", { pid: other })).error).toBeNull();
+    expect(await startOf(other)).toBe(romeDay(0));
+    await admin.from("programs").delete().in("id", [soon, far, draft, other]).throwOnError();
+  });
 });

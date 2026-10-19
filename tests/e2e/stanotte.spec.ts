@@ -67,8 +67,9 @@ test("Sessione PT senza programma in corso: lo dice e porta alla lezione libera"
 });
 
 test("logbook: quanti esercizi e spiegazione la prima volta", async ({ page }) => {
-  await page.addInitScript(() => localStorage.removeItem("otherise:logbook-hint"));
   await login(page, "giulia@prova.local");
+  // la spiegazione non ancora vista (una volta sola: dopo "Ho capito" deve restare chiusa anche ricaricando)
+  await page.evaluate(() => localStorage.removeItem("otherise:logbook-hint"));
   await page.goto("/cliente/programma");
   // istruzioni a richiesta, i giorni chiusi tranne il prossimo
   await expect(page.getByText(/Fai gli allenamenti in ordine/)).toBeHidden();
@@ -87,6 +88,8 @@ test("logbook: quanti esercizi e spiegazione la prima volta", async ({ page }) =
   await hint.getByRole("button", { name: "Ho capito" }).click();
   await expect(hint).toHaveCount(0);
   await page.reload();
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByText(/^\d+ di \d+ esercizi$/)).toBeVisible();
   await expect(page.getByRole("note").filter({ hasText: "Come si usa" })).toHaveCount(0);
 });
 
