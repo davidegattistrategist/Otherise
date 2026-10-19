@@ -148,6 +148,9 @@ async function main() {
         ],
       },
       { id: newId(), title: "Giorno 2 · Forza", notes: "", blocks: [{ id: newId(), kind: "single", rounds: null, ...blank, items: [item("Back squat", ["4x6 60kg", "4x6 62,5kg", "4x5 65kg", "4x5 67,5kg"], "2'")] }] },
+      // corsa di qualità che alterna ripetute e fartlek: al cliente "Ripetute"/"Fartlek" con riscaldamento e defaticamento
+      { id: newId(), title: "Giorno 3 · Corsa di qualità", notes: "", blocks: [{ id: newId(), kind: "single", rounds: null, ...blank, items: [item("Corsa di qualità", ["Ripetute 6x400m rec 1'30\"", "Fartlek 20': 1' forte / 1' piano", "Ripetute 5x600m rec 2'", "Fartlek 24': 2' forte / 1' piano"])] }] },
+      { id: newId(), title: "Giorno 4 · Lento lungo", notes: "", blocks: [{ id: newId(), kind: "single", rounds: null, ...blank, items: [item("Lento lungo", ["6km facile", "6,5km facile", "7km facile", "7,5km facile"])] }] },
     ],
   };
   await db.from("programs").insert({ client_id: nadia, title: "HYROX · Circuiti", weeks: 4, start_date: addDays(today, 1), status: "published", content: nadiaNext as never, previous_program_id: nadiaPast!.id, created_by: owner, published_at: new Date().toISOString() }).throwOnError();

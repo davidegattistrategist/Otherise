@@ -14,6 +14,8 @@ import { saveWorkout } from "./actions";
 import { cx, fmtNum } from "@/components/ui";
 import { IconCheck, IconPlay, IconPlus, IconTrophy } from "@/components/icons";
 import { epley, loadFromPercent } from "@/lib/strength/records";
+import { RUN_COOLDOWN, RUN_WARMUP, runRx, runTitle, runWarmup } from "@/lib/program/running";
+import { RunStep } from "@/components/program-day";
 
 type ItemState = { sets: SetLog[]; resultText: string };
 type Last = { date: string; summary: string };
@@ -97,6 +99,7 @@ export function Logbook(props: LogbookProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day, week, maxes]);
 
+  const run = useMemo(() => runWarmup(day, week), [day, week]);
   const blockPlans = useMemo(() => Object.fromEntries(day.blocks.map((b) => [b.id, blockTimer(b)])), [day]);
 
   /** Valori proposti per una serie: dal programma, altrimenti dall'ultima volta */
@@ -641,12 +644,13 @@ export function Logbook(props: LogbookProps) {
               const video = videoFor(it);
               return (
                 <div key={it.id} data-item={it.id} className={cx("flex flex-col gap-2.5", ii > 0 && "border-t border-sand-deep pt-3")}>
+                  {run?.before === it.id ? <RunStep label="Prima, riscaldamento" text={RUN_WARMUP} /> : null}
                   <div className="flex items-start gap-3">
                     <span className="mt-0.5 flex h-7 min-w-7 items-center justify-center rounded-full bg-ink px-1.5 text-xs font-bold text-card">{itemLabel(b, bi, ii)}</span>
                     <div className="min-w-0 flex-1">
-                      <div className="text-[17px] leading-snug font-semibold">{it.name}</div>
+                      <div className="text-[17px] leading-snug font-semibold">{runTitle(it.name, rx)}</div>
                       <div className="mt-0.5 flex flex-wrap gap-x-3 text-[15px]">
-                        {rx ? <span className="font-bold">{rx}</span> : null}
+                        {rx ? <span className="font-bold">{runRx(it.name, rx)}</span> : null}
                         {plan.mode === "sets" && plan.pct ? (
                           <span className="font-semibold text-accent-deep">{plan.kgHint ? `≈ ${fmtNum(plan.kgHint)} kg` : "massimale non ancora misurato"}</span>
                         ) : null}
@@ -858,6 +862,7 @@ export function Logbook(props: LogbookProps) {
                       onChange={(e) => update(it.id, (cur) => ({ ...cur, resultText: e.target.value }))}
                     />
                   )}
+                  {run?.after === it.id ? <RunStep label="Dopo, defaticamento" text={RUN_COOLDOWN} /> : null}
                 </div>
               );
             })}

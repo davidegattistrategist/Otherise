@@ -42,12 +42,17 @@ export function isOneSideExercise(name: string | null | undefined): boolean {
 }
 
 export function parsePrescription(raw: string | null | undefined): ParsedPrescription {
-  const text = (raw ?? "").trim();
+  // "Ripetute 6x400m rec 1'30\"": il tipo di corsa davanti non cambia le serie
+  const text = (raw ?? "").trim().replace(/^(?:ripetute|fartlek)\s*:?\s*(?=\d)/i, "");
   if (!text || /\+/.test(text)) return { kind: "text" };
 
   // 3x20"  · 2x20" per gamba · 1x30''
   let m = /^(\d{1,2})\s*[x×]\s*(\d{1,3})(?:\s*[/-]\s*\d{1,3})?\s*(?:"|''|”|″|sec\b|s\b)/i.exec(text);
   if (m) return { kind: "timed", sets: Number(m[1]), seconds: Number(m[2]) };
+
+  // 6x2' · 4 x 3 min (ripetute a tempo in minuti)
+  m = /^(\d{1,2})\s*[x×]\s*(\d{1,2})\s*(?:'|’|min\b)(?!\s*\d)/i.exec(text);
+  if (m) return { kind: "timed", sets: Number(m[1]), seconds: Number(m[2]) * 60 };
 
   // 5x800m · 4x1000 4:30 (ripetute)  · 4x1km
   m = /^(\d{1,2})\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(m|km)\b/i.exec(text);
@@ -66,7 +71,7 @@ export function parsePrescription(raw: string | null | undefined): ParsedPrescri
   }
 
   // 4x8 65kg · 4x8/10 · 2x 6/8 ripetizioni · 1x1 72,5kg · 4x10 45/47,5kg · 3x8/14
-  m =/^(\d{1,2})\s*[x×]\s*(\d{1,3}(?:\s*[/-]\s*\d{1,3})?)(?!\s*(?:m|km|"|''))\b(.*)$/i.exec(text);
+  m =/^(\d{1,2})\s*[x×]\s*(\d{1,3}(?:\s*[/-]\s*\d{1,3})?)(?!\s*(?:m|km|"|''|'|’|min))\b(.*)$/i.exec(text);
   if (m) {
     const sets = Number(m[1]);
     if (sets < 1 || sets > 20) return { kind: "text" };

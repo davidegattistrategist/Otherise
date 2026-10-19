@@ -10,6 +10,7 @@ import { PaymentNotices } from "@/components/payment-notice";
 import { diffDays, formatHeading, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { completedCount, earlyStartDays, nextWorkout, programEndDate, startsLabel, timeProgress } from "@/lib/program/schedule";
 import { EarlyStart } from "@/components/early-start/early-start";
+import { runTitle } from "@/lib/program/running";
 import { blockHeading } from "@/lib/program/types";
 import { type BillingRow } from "@/lib/billing";
 import { checkinWeekFor } from "@/lib/checkin";
@@ -102,7 +103,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
               </div>
               <div className="mt-1 text-sm text-muted-dark">
                 {next
-                  ? next.day.blocks.filter((b) => b.kind !== "text").slice(0, 4).map((b) => (b.kind === "single" ? b.items[0]?.name : `${blockHeading(b).title} ${blockHeading(b).detail}`.trim())).filter(Boolean).join(" · ")
+                  ? next.day.blocks.filter((b) => b.kind !== "text").slice(0, 4).map((b) => (b.kind === "single" ? (b.items[0] ? runTitle(b.items[0].name, b.items[0].prescriptions[next!.week - 1] ?? "") : undefined) : `${blockHeading(b).title} ${blockHeading(b).detail}`.trim())).filter(Boolean).join(" · ")
                   : current.position.state === "not_started" ? current.title : `Hai fatto tutti gli allenamenti della fase. ${coach ?? "Il tuo coach"} sta preparando la prossima.`}
               </div>
             </div>

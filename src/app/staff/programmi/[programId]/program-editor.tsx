@@ -39,6 +39,7 @@ import {
   unpublishProgram,
 } from "../actions";
 import { AiPanel, RowAiButtons } from "./ai-tools";
+import { runHint } from "@/lib/program/running";
 import type { JobView } from "@/lib/ai/program-jobs-shared";
 import { estimateDayMinutes } from "@/lib/program/balance";
 import { useOpenDays } from "@/components/use-open-days";
@@ -1210,6 +1211,7 @@ function BlockRows({
               />
               <div className="mt-1 flex flex-col gap-0.5 px-1 text-xs text-muted">
                 {it.name.trim() && !it.exerciseId ? <span>Non in eserciziario</span> : null}
+                {runHint(it.name, it.prescriptions) ? <span className="text-ink-soft" data-run-hint>{runHint(it.name, it.prescriptions)}</span> : null}
                 {ex && !ex.video_url ? <span>Senza video</span> : null}
                 {last ? <span>Ultimo log: {last}</span> : null}
                 {aiNote ? <span className="text-ink"><IconSparkle size={12} className="mr-1 inline" />{aiNote}</span> : null}
@@ -1583,6 +1585,7 @@ function MobileBlock({
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-9 text-xs text-muted">
+                {runHint(it.name, [it.prescriptions[week] ?? ""]) ? <span className="w-full text-ink-soft" data-run-hint>{runHint(it.name, [it.prescriptions[week] ?? ""])}</span> : null}
                 {last ? <span>Ultimo log: {last}</span> : null}
                 {aiNotes[it.id] ? <span className="text-ink"><IconSparkle size={12} className="mr-1 inline" />{aiNotes[it.id]}</span> : null}
                 {week > 0 && !it.prescriptions[week] && it.prescriptions[week - 1] ? (

@@ -7,6 +7,7 @@ import { VideoLink } from "./video-link";
 import { blockHeading, itemLabel, type ProgramDay } from "@/lib/program/types";
 import { parsePrescription } from "@/lib/program/prescription";
 import { loadFromPercent } from "@/lib/strength/records";
+import { RUN_COOLDOWN, RUN_WARMUP, runRx, runTitle, runWarmup } from "@/lib/program/running";
 import { cx } from "./ui";
 
 export type VideoMap = Record<string, string>;
@@ -27,7 +28,18 @@ function pctKg(rx: string, item: { exerciseId?: string | null; name: string }, m
   return max ? loadFromPercent(p.pct, max) : null;
 }
 
+/** Riscaldamento o defaticamento di corsa aggiunto dall'app (vedi running.ts). */
+export function RunStep({ label, text, className }: { label: string; text: string; className?: string }) {
+  return (
+    <span className={cx("flex flex-wrap items-baseline gap-x-2 rounded-xl bg-sand/80 px-3 py-1.5 text-[15px]", className)} data-run-step={label}>
+      <span className="font-semibold">{label}</span>
+      <span className="text-ink-soft">{text}</span>
+    </span>
+  );
+}
+
 export function ProgramDayView({ day, week, videos, compact, maxes }: { day: ProgramDay; week: number; videos: VideoMap; compact?: boolean; maxes?: Record<string, number> }) {
+  const run = runWarmup(day, week);
   return (
     <div className="flex flex-col gap-3">
       {day.notes ? <p className="text-sm text-muted whitespace-pre-line">{day.notes}</p> : null}
@@ -53,21 +65,25 @@ export function ProgramDayView({ day, week, videos, compact, maxes }: { day: Pro
             <ul className="flex flex-col">
               {b.items.map((it, ii) => {
                 const video = videoFor(videos, it);
-                const rx = it.prescriptions[week - 1] || "";
+                const raw = it.prescriptions[week - 1] || "";
+                const name = runTitle(it.name, raw);
+                const rx = runRx(it.name, raw);
                 return (
-                  <li key={it.id} className="flex items-start gap-3 py-1.5">
+                  <li key={it.id} className="flex flex-col py-1.5">
+                    {run?.before === it.id ? <RunStep label="Riscaldamento" text={RUN_WARMUP} className="mb-1.5 ml-10" /> : null}
+                    <span className="flex items-start gap-3">
                     <span className="w-7 shrink-0 pt-0.5 text-sm font-bold text-muted tabular">{itemLabel(b, bi, ii)}</span>
                     <span className="min-w-0 flex-1">
                       {rx.length > LONG_RX ? (
                         // prescrizione lunga (es. una corsa con i ritmi): sotto il nome, a tutta larghezza
                         <>
-                          <span className="block font-semibold break-words">{it.name}</span>
+                          <span className="block font-semibold break-words">{name}</span>
                           <span className="block font-semibold break-words tabular">{rx}</span>
                         </>
                       ) : (
                         // nome e prescrizione sulla stessa riga se ci stanno; se il nome è lungo la prescrizione va sotto, a destra
                         <span className="flex flex-wrap items-start justify-between gap-x-3">
-                          <span className="min-w-0 max-w-full font-semibold break-words">{it.name}</span>
+                          <span className="min-w-0 max-w-full font-semibold break-words">{name}</span>
                           <span className="ml-auto max-w-full text-right font-semibold break-words tabular">
                             {rx || "—"}
                             {pctKg(rx, it, maxes) ? <span className="block text-xs font-semibold text-accent-deep">≈ {String(pctKg(rx, it, maxes)).replace(".", ",")} kg</span> : null}
@@ -81,6 +97,8 @@ export function ProgramDayView({ day, week, videos, compact, maxes }: { day: Pro
                         <VideoLink url={video} title={it.name} className="mt-0.5 inline-flex min-h-8 items-center gap-1 text-sm font-semibold text-accent-deep" />
                       ) : null}
                     </span>
+                    </span>
+                    {run?.after === it.id ? <RunStep label="Defaticamento" text={RUN_COOLDOWN} className="mt-1.5 ml-10" /> : null}
                   </li>
                 );
               })}

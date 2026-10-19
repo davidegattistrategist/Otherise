@@ -77,3 +77,36 @@ test("nuova fase in anticipo, circuito con serie max, segna tutto e timer per la
   await expect(side.getByRole("button", { name: /^Avvia 30": la serie/ })).toBeVisible();
   await side.getByLabel(/Un lato alla volta/).check();
 });
+
+test("corse di qualità: si legge se sono ripetute o fartlek, con riscaldamento e defaticamento", async ({ page }) => {
+  await login(page, "nadia@prova.local");
+  await page.goto("/cliente/programma");
+  await expect(page.locator("h1")).toBeVisible();
+  if (!(await page.getByRole("heading", { name: "HYROX · Circuiti", level: 1 }).count())) {
+    await page.getByRole("link", { name: /HYROX · Circuiti/ }).click();
+  }
+  await expect(page.getByRole("heading", { name: "HYROX · Circuiti", level: 1 })).toBeVisible();
+  // sul telefono un giorno aperto alla volta: si apre quello che serve
+  const open = (card: ReturnType<typeof page.locator>) => card.locator("details").evaluate((d) => void ((d as HTMLDetailsElement).open = true));
+  const quality = page.locator("[data-day-card]").filter({ hasText: "Giorno 3 · Corsa di qualità" });
+  const long = page.locator("[data-day-card]").filter({ hasText: "Giorno 4 · Lento lungo" });
+
+  await page.getByRole("link", { name: /^Settimana 1/ }).click();
+  await expect(page).toHaveURL(/settimana=1/);
+  await open(quality);
+  await expect(quality.locator("li").getByText("Ripetute", { exact: true })).toBeVisible();
+  await expect(quality.getByText("6x400m rec 1'30\"")).toBeVisible();
+  await expect(quality.locator('[data-run-step="Riscaldamento"]')).toContainText("10' di corsa blanda");
+  await expect(quality.locator('[data-run-step="Defaticamento"]')).toContainText("5' di corsa blanda");
+  // il lento lungo è già volume: niente riscaldamento a parte
+  await open(long);
+  await expect(long.locator("li").getByText("Lento lungo", { exact: true })).toBeVisible();
+  await expect(long.locator("[data-run-step]")).toHaveCount(0);
+
+  await page.getByRole("link", { name: /^Settimana 2/ }).click();
+  await expect(page).toHaveURL(/settimana=2/);
+  await open(quality);
+  await expect(quality.locator("li").getByText("Fartlek", { exact: true })).toBeVisible();
+  await expect(quality.getByText("20': 1' forte / 1' piano")).toBeVisible();
+  await expect(quality.locator('[data-run-step="Riscaldamento"]')).toBeVisible();
+});

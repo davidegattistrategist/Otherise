@@ -175,6 +175,7 @@ Come ragioni:
 - Complementari: di solito un intervallo di ripetizioni ("4x8/10") con il carico scelto dal cliente, che sale quando completa il massimo delle ripetizioni in tutte le serie.
 - Non usare RPE o RIR nelle prescrizioni, salvo richiesta del trainer (al massimo nelle indicazioni).
 - Non indicare giorni della settimana: gli allenamenti si fanno in sequenza.
+- Corse: il cliente deve leggere cosa fa. Nei giorni di qualità l'esercizio si chiama "Ripetute" o "Fartlek" (non "Corsa di qualità"); se nelle settimane alterni ripetute e fartlek per dare varietà, ogni prescrizione comincia con il tipo ("Ripetute 6x400m rec 1'30\"", "Fartlek 20': 1' forte / 1' piano"). Prima del blocco forte metti sempre un esercizio "Riscaldamento corsa" con "10' corsa blanda" (eventualmente con un paio di allunghi alla fine) e dopo un esercizio "Defaticamento" con almeno "5' corsa blanda". Il lungo facile si chiama "Lento lungo" e non ha bisogno di riscaldamento a parte.
 - Campo sessionMinutes: i minuti per seduta su cui hai costruito il programma. timeFromTrainer = true solo se il tempo l'ha scritto il trainer nella richiesta o nelle risposte (per esempio "ora ha solo 45 minuti").
 - Scrivi tutto in italiano.`;
 

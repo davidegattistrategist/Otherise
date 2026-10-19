@@ -144,9 +144,9 @@ describe("frase del giorno", () => {
   });
   it("una frase per ogni data, uguale per tutti; il 29 febbraio solo negli anni bisestili", () => {
     expect(Object.keys(QUOTES)).toHaveLength(366);
-    expect(quoteOfDay("2027-01-01")).toEqual({ text: "Il passato è un prologo.", author: "Shakespeare" });
+    expect(quoteOfDay("2027-01-01")).toEqual({ text: "Devi cambiare la tua vita.", author: "Rilke" });
     expect(quoteOfDay("2026-12-25").text).toMatch(/Natale/);
-    expect(quoteOfDay("2028-02-29").text).toMatch(/quattro anni/);
+    expect(quoteOfDay("2028-02-29").text).toMatch(/calendario/);
     expect(quoteOfDay("2027-03-01")).toBe(QUOTES["03-01"]);
     expect(quoteOfDay(addDays("2027-02-28", 1))).toBe(QUOTES["03-01"]);
   });
@@ -1705,5 +1705,45 @@ describe("copia e incolla di esercizi", () => {
     expect(parseClip("{rotto")).toBeNull();
     expect(parseClip(JSON.stringify({ ...clip, blocks: [] }))).toBeNull();
     expect(blockNames(c.blocks)).toEqual(["Cat-cow", "Bird dog", "Dead bug"]);
+  });
+});
+
+import { runHint, runKind, runRx, runTitle, runWarmup } from "./program/running";
+
+describe("corse: tipo, riscaldamento e defaticamento", () => {
+  it("dice se sono ripetute, fartlek o lento lungo", () => {
+    expect(runKind("Corsa di qualità", "6x400m rec 1'30\"")).toBe("Ripetute");
+    expect(runKind("Corsa di qualità", "Fartlek 20': 1' forte / 1' piano")).toBe("Fartlek");
+    expect(runKind("Corsa di qualità", "5x3' rec 2'")).toBe("Ripetute");
+    expect(runKind("Corsa", "8km lento lungo")).toBe("Lento lungo");
+    expect(runKind("Lento lungo", "50'")).toBe("Lento lungo");
+    expect(runKind("Vogatore", "5x500m")).toBeNull();
+    expect(runKind("Riscaldamento corsa", "10' corsa blanda")).toBeNull();
+    expect(runTitle("Corsa di qualità", "6x400m")).toBe("Ripetute");
+    expect(runTitle("Corsa di qualità", "fartlek 20'")).toBe("Fartlek");
+    expect(runTitle("Corsa tapis roulant", "6x400m")).toBe("Corsa tapis roulant · Ripetute");
+    expect(runTitle("Ripetute in salita", "8x30\"")).toBe("Ripetute in salita");
+    expect(runTitle("Squat", "4x8 60kg")).toBe("Squat");
+    expect(runRx("Corsa di qualità", "Ripetute 6x400m rec 1'30\"")).toBe("6x400m rec 1'30\"");
+    expect(runRx("Corsa di qualità", "Fartlek: 20' 1'/1'")).toBe("20' 1'/1'");
+    expect(runHint("Corsa di qualità", ["6x400m", "Fartlek 20'"])).toMatch(/sett. 1 «Ripetute», sett. 2 «Fartlek»/);
+    expect(runHint("Squat", ["4x8"])).toBeNull();
+  });
+  it("riscaldamento e defaticamento solo se il trainer non li ha già scritti", () => {
+    const day = (items: ReturnType<typeof emptyItem>[], notes = "") => ({ id: "d", title: "Corsa", notes, blocks: items.map((it, i) => ({ ...emptyBlock(1), id: `b${i}`, items: [it] })) });
+    const q = { ...emptyItem(1), id: "q", name: "Corsa di qualità", prescriptions: ["6x400m"] };
+    expect(runWarmup(day([q]), 1)).toEqual({ before: "q", after: "q" });
+    const warm = { ...emptyItem(1), id: "w", name: "Riscaldamento corsa", prescriptions: ["10' corsa blanda"] };
+    expect(runWarmup(day([warm, q]), 1)).toEqual({ before: null, after: "q" });
+    const cool = { ...emptyItem(1), id: "c", name: "Defaticamento", prescriptions: ["5'"] };
+    expect(runWarmup(day([warm, q, cool]), 1)).toBeNull();
+    const long = { ...emptyItem(1), id: "l", name: "Lento lungo", prescriptions: ["10km"] };
+    expect(runWarmup(day([long]), 1)).toBeNull();
+  });
+  it("ripetute con il tipo davanti o in minuti diventano serie da spuntare", () => {
+    expect(parsePrescription("Ripetute 6x400m rec 1'30\"")).toEqual({ kind: "distance", sets: 6, meters: 400 });
+    expect(parsePrescription("5x3' rec 2'")).toEqual({ kind: "timed", sets: 5, seconds: 180 });
+    expect(parsePrescription("4x1'30\"").kind).not.toBe("sets");
+    expect(logPlan({ ...emptyItem(1), prescriptions: ["5x3'"] }, emptyBlock(1), 1)).toEqual({ mode: "check", rows: 5, label: "3'" });
   });
 });

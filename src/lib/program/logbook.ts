@@ -15,7 +15,7 @@ export function logPlan(item: ProgramItem, block: ProgramBlock, week: number): L
   const p = parsePrescription(rx);
   if (block.kind === "amrap" || block.kind === "emom" || block.kind === "interval") return { mode: "text" };
   if (p.kind === "sets") return { mode: "sets", rows: p.sets, repsHint: p.repsText, kgHint: p.kg, loadText: p.loadText, ...(p.pct ? { pct: p.pct } : {}) };
-  if (p.kind === "timed") return { mode: "check", rows: p.sets, label: `${p.seconds}"` };
+  if (p.kind === "timed") return { mode: "check", rows: p.sets, label: secondsLabel(p.seconds) };
   if (p.kind === "distance") return { mode: "check", rows: p.sets, label: p.meters >= 1000 ? `${p.meters / 1000} km` : `${p.meters} m` };
   if (!block.rounds || block.rounds > 12) return { mode: "text" };
   // Nei circuiti spesso si scrive solo "12", "10-12" o "max": le serie sono i giri del blocco
@@ -33,7 +33,7 @@ export function logPlan(item: ProgramItem, block: ProgramBlock, week: number): L
   const side = String.raw`(?:\s+(?:per|x|ogni)\s*(?:lato|gamba|braccio))?`;
   if (new RegExp(String.raw`^(?:\d{1,3}\s*(?:"|”|″|''|sec|s)|\d{1,2}\s*['’]\s*(?:\d{1,2}\s*(?:"|”|″))?)${side}$`, "i").test(t)) {
     const secs = restSeconds(t);
-    if (secs) return { mode: "check", rows: rounds, label: secs % 60 === 0 && secs >= 60 ? `${secs / 60}'` : secs > 60 ? `${Math.floor(secs / 60)}'${secs % 60}"` : `${secs}"` };
+    if (secs) return { mode: "check", rows: rounds, label: secondsLabel(secs) };
   }
   // ...o la distanza o le calorie (vogatore, bike): "250m", "1 km", "15 cal"
   const dist = new RegExp(String.raw`^(\d+(?:[.,]\d+)?)\s*(m|mt|metri|km|cal|kcal|calorie)${side}$`, "i").exec(t);
@@ -43,6 +43,11 @@ export function logPlan(item: ProgramItem, block: ProgramBlock, week: number): L
     return { mode: "check", rows: rounds, label };
   }
   return { mode: "text" };
+}
+
+/** 30" · 1' · 1'30" */
+function secondsLabel(secs: number): string {
+  return secs % 60 === 0 && secs >= 60 ? `${secs / 60}'` : secs > 60 ? `${Math.floor(secs / 60)}'${secs % 60}"` : `${secs}"`;
 }
 
 /** Secondi di recupero da un testo come 90", 1'30", 2', 60-90", 2 min (null se non si capisce). */

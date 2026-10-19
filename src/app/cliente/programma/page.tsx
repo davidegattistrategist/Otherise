@@ -6,6 +6,7 @@ import { getMyLogs, getMyMaxes, getMyPrograms, getVideoMap, type MyProgram } fro
 import { addDays, formatShort, todayISO } from "@/lib/dates";
 import { earlyStartDays, nextWorkout, programEndDate, startsLabel } from "@/lib/program/schedule";
 import { EarlyStart } from "@/components/early-start/early-start";
+import { runTitle } from "@/lib/program/running";
 import { Card, EmptyState, Eyebrow, cx } from "@/components/ui";
 import { ProgramDayView } from "@/components/program-day";
 import { IconCheck, IconDown } from "@/components/icons";
@@ -81,7 +82,7 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
         const st = status(day.id);
         // aperto solo il prossimo da fare: gli altri si aprono al tocco
         const isNext = Boolean(next && next.week === week && next.day.id === day.id);
-        const names = day.blocks.flatMap((b) => b.items.map((it) => it.name)).filter(Boolean);
+        const names = day.blocks.flatMap((b) => b.items.map((it) => runTitle(it.name, it.prescriptions[week - 1] ?? ""))).filter(Boolean);
         return (
           <Card key={day.id} className="flex flex-col gap-3" data-day-card>
             <div className="flex items-center justify-between gap-3">
