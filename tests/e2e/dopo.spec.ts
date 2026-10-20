@@ -42,7 +42,9 @@ test("editor: elimina programma con allenamenti registrati propone di archiviarl
     // il primo giorno aperto: impostazioni del blocco e copia della settimana anche dal telefono
     await page.getByRole("button", { name: /Gambe e spinta/ }).first().click().catch(() => undefined);
     await expect(page.getByText("Tipo, giri, minuti e nota del blocco").filter({ visible: true }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: /Copia la settimana 1 sulle successive vuote/ }).filter({ visible: true }).first()).toBeVisible();
+    // si apre sulla prima settimana non ancora fatta (le fatte sono bloccate)
+    await expect(page.getByRole("tab", { name: "Settimana 1 (fatta)" }).filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /Copia la settimana [2-4] sulle successive vuote/ }).filter({ visible: true }).first()).toBeVisible();
   }
 });
 

@@ -68,7 +68,7 @@ test("il titolare scarica i dati di un cliente, il collaboratore no", async ({ p
   await login(page, "titolare@prova.local");
   const id = await openClient(page, "Esempio Giulia");
   await page.goto(`/staff/clienti/${id}/profilo`);
-  await expect(page.getByText(/Consenso dati salute:/)).toBeVisible();
+  await expect(page.getByText(/Consenso dati salute:/).filter({ visible: true }).first()).toBeVisible();
   const res = await page.request.get(`/api/clienti/${id}/export`);
   expect(res.status()).toBe(200);
   const data = await res.json();
