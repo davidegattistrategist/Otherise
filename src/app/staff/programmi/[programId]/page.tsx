@@ -6,7 +6,10 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { parseContent } from "@/lib/program/types";
 import { summarizeSets, type SetLog } from "@/lib/program/prescription";
-import { formatShort } from "@/lib/dates";
+import { formatShort, todayISO } from "@/lib/dates";
+import { doneWeeks } from "@/lib/program/locks";
+import { activeLimitation } from "@/lib/ai-profile";
+import { getAiProfile } from "@/lib/data/ai-profile";
 import { aiEnabled } from "@/lib/ai/claude";
 import { openJobForProgram } from "@/lib/ai/program-jobs";
 import { ProgramEditor, type EditorProgram } from "./program-editor";
@@ -25,15 +28,24 @@ export default async function ProgramEditorPage({ params }: { params: Promise<{ 
     .maybeSingle();
   if (!program) notFound();
 
-  const [exercises, lastLogsRes, checkRes, { count: loggedWorkouts }, aiJob] = await Promise.all([
+  const [exercises, lastLogsRes, checkRes, { data: workoutLogs }, aiJob, { data: revisions }, profile] = await Promise.all([
     getExerciseLibrary().then((all) => all.filter((e) => !e.archived).map(({ id, name, video_url }) => ({ id, name, video_url }))),
     program.client_id ? supabase.rpc("last_exercise_logs", { cid: program.client_id }) : Promise.resolve({ data: [] as Array<{ exercise_id: string | null; exercise_name: string; performed_on: string; sets: unknown; result_text: string }> }),
     program.client_id
       ? supabase.from("checks").select("check_date, sequence, created_at, order_hint, notes_next_phase").eq("client_id", program.client_id).neq("notes_next_phase", "").limit(200)
       : Promise.resolve({ data: [] as Array<{ check_date: string | null; sequence: number | null; created_at: string; order_hint: string | null; notes_next_phase: string }> }),
-    supabase.from("workout_logs").select("id", { count: "exact", head: true }).eq("program_id", programId),
+    supabase.from("workout_logs").select("week, day_id, completed").eq("program_id", programId),
     program.client_id && aiEnabled() ? openJobForProgram(supabase, programId) : Promise.resolve(null),
+    program.client_id
+      ? supabase.from("program_revisions").select("id, created_at, reason").eq("program_id", programId).order("created_at", { ascending: false }).limit(30)
+      : Promise.resolve({ data: [] as Array<{ id: string; created_at: string; reason: string }> }),
+    program.client_id ? getAiProfile(supabase, program.client_id) : Promise.resolve(null),
   ]);
+  const loggedWorkouts = workoutLogs?.length ?? 0;
+  const content = parseContent(program.content);
+  // settimane già fatte di un programma in corso: restano come le ha viste il cliente
+  const done = program.status === "published" ? doneWeeks(content, program.weeks, workoutLogs ?? []) : 0;
+  const limitation = activeLimitation(profile, todayISO());
   const lastNotes = sortChecks(checkRes.data ?? []).pop() ?? null;
 
   const lastLogs: Record<string, string> = {};
@@ -52,15 +64,18 @@ export default async function ProgramEditorPage({ params }: { params: Promise<{ 
       // un programma = un editor: passando da un cliente all'altro non resta niente del precedente
       key={program.id}
       program={{ ...(program as unknown as EditorProgram), ai_notes: (program.ai_notes as Record<string, string> | null) ?? null }}
-      initialContent={parseContent(program.content)}
+      initialContent={content}
       exercises={exercises ?? []}
       lastLogs={lastLogs}
       nextPhaseNotes={lastNotes ? { label: checkLabel(lastNotes), text: lastNotes.notes_next_phase } : null}
       clientName={clientName}
       aiEnabled={aiEnabled()}
       backHref={program.client_id ? `/staff/clienti/${program.client_id}/programma` : "/staff/modelli"}
-      loggedWorkouts={loggedWorkouts ?? 0}
+      loggedWorkouts={loggedWorkouts}
       aiJob={aiJob}
+      doneWeeks={done}
+      revisions={revisions ?? []}
+      limitation={limitation}
     />
   );
 }

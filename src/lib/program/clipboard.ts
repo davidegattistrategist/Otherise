@@ -13,7 +13,7 @@
  * portate a quelle del programma di arrivo.
  */
 import { z } from "zod";
-import { newId, programBlockSchema, type ProgramBlock, type ProgramContent } from "./types";
+import { newId, programBlockSchema, withoutSwaps, type ProgramBlock, type ProgramContent } from "./types";
 
 export type ProgramClip = {
   v: 1;
@@ -60,7 +60,8 @@ export function fitBlock(b: ProgramBlock, weeks: number): ProgramBlock {
   return {
     ...structuredClone(b),
     id: newId(),
-    items: b.items.map((it) => ({ ...structuredClone(it), id: newId(), prescriptions: fitPrescriptions(it.prescriptions, weeks) })),
+    // le sostituzioni temporanee sono di quel cliente in quella fase: non si copiano
+    items: b.items.map((it) => ({ ...withoutSwaps(structuredClone(it)), id: newId(), prescriptions: fitPrescriptions(it.prescriptions, weeks) })),
   };
 }
 

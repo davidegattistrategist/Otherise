@@ -4,7 +4,7 @@
  */
 import { restLabel } from "@/lib/program/logbook";
 import { VideoLink } from "./video-link";
-import { blockHeading, itemLabel, type ProgramDay } from "@/lib/program/types";
+import { blockHeading, dayForWeek, itemLabel, swappedFrom, weeksLabel, type ProgramDay } from "@/lib/program/types";
 import { parsePrescription } from "@/lib/program/prescription";
 import { loadFromPercent } from "@/lib/strength/records";
 import { RUN_COOLDOWN, RUN_WARMUP, runRx, runTitle, runWarmup } from "@/lib/program/running";
@@ -38,7 +38,9 @@ export function RunStep({ label, text, className }: { label: string; text: strin
   );
 }
 
-export function ProgramDayView({ day, week, videos, compact, maxes }: { day: ProgramDay; week: number; videos: VideoMap; compact?: boolean; maxes?: Record<string, number> }) {
+export function ProgramDayView({ day: planned, week, videos, compact, maxes }: { day: ProgramDay; week: number; videos: VideoMap; compact?: boolean; maxes?: Record<string, number> }) {
+  // in quella settimana: con i sostituti al posto degli esercizi sostituiti
+  const day = dayForWeek(planned, week);
   const run = runWarmup(day, week);
   return (
     <div className="flex flex-col gap-3">
@@ -90,6 +92,9 @@ export function ProgramDayView({ day, week, videos, compact, maxes }: { day: Pro
                           </span>
                         </span>
                       )}
+                      {swappedFrom(it) ? (
+                        <span className="block text-sm text-ink-soft break-words" data-swapped>Al posto di {swappedFrom(it)!.name} · {weeksLabel(swappedFrom(it)!.from, swappedFrom(it)!.to)}</span>
+                      ) : null}
                       {!compact && (it.rest || it.notes) ? (
                         <span className="block text-sm text-muted break-words">{[restLabel(it.rest), it.notes].filter(Boolean).join(" · ")}</span>
                       ) : null}

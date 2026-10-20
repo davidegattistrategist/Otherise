@@ -1747,3 +1747,111 @@ describe("corse: tipo, riscaldamento e defaticamento", () => {
     expect(logPlan({ ...emptyItem(1), prescriptions: ["5x3'"] }, emptyBlock(1), 1)).toEqual({ mode: "check", rows: 5, label: "3'" });
   });
 });
+
+import { carrySwaps, doneWeeks, keepLockedWeeks, lockedWeeksDiffer, mergeSwaps } from "./program/locks";
+import { applyChanges, placeSwap, previewRows, sanitizeChanges, scopeItems, allRowKeys } from "./program/retouch";
+import { emptyDay, cloneWithNewIds as cloneIds, dayForWeek, itemForWeek, swapFor, swappedFrom, withoutSwaps } from "./program/types";
+import { EMPTY_PROFILE, activeLimitation, parseProfileForm, profileText } from "./ai-profile";
+
+describe("ritocchi: sostituzioni, settimane fatte e modifiche dell'AI", () => {
+  const item = (id: string, name: string, rx: string[], extra: Partial<ReturnType<typeof emptyItem>> = {}) => ({ ...emptyItem(4, name), id, prescriptions: rx, ...extra });
+  const program = (items: ReturnType<typeof item>[]) => ({ days: [{ id: "d1", title: "Giorno 1", notes: "", blocks: items.map((it, i) => ({ ...emptyBlock(4), id: `b${i}`, items: [it] })) }] });
+
+  it("sostituto solo in alcune settimane: nome, esercizio e indicazioni di quelle settimane", () => {
+    const panca = item("p", "Panca piana", ["4x8 60kg", "4x8 62kg", "4x6 65kg", "4x6 67kg"], { notes: "scapole addotte", swaps: [{ from: 2, to: 3, name: "Panca manubri", exerciseId: null, notes: "", reason: "polso" }] });
+    expect(swapFor(panca, 1)).toBeNull();
+    expect(itemForWeek(panca, 2)).toMatchObject({ id: "p", name: "Panca manubri", notes: "scapole addotte" });
+    expect(swappedFrom(itemForWeek(panca, 3))).toEqual({ name: "Panca piana", from: 2, to: 3, reason: "polso" });
+    expect(itemForWeek(panca, 4).name).toBe("Panca piana");
+    expect(dayForWeek(program([panca]).days[0], 2).blocks[0].items[0].name).toBe("Panca manubri");
+    // copie e nuove fasi non portano i sostituti
+    expect(withoutSwaps(panca).swaps).toBeUndefined();
+    expect(cloneIds(program([panca])).days[0].blocks[0].items[0].swaps).toBeUndefined();
+    // la nuova fase non usa quello che ha fatto il sostituto
+    const next = buildNextPhase(program([panca]), 4, [{ item_id: "p", week: 3, sets: [{ kg: 20, reps: 10 }], result_text: "" }, { item_id: "p", week: 1, sets: [{ kg: 60, reps: 8 }, { kg: 60, reps: 8 }], result_text: "" }]);
+    expect(next.days[0].blocks[0].items[0].prescriptions[0]).toBe("2x8 60kg");
+    expect(next.days[0].blocks[0].items[0].swaps).toBeUndefined();
+  });
+
+  it("settimane fatte: le prime prima del prossimo allenamento in sequenza", () => {
+    const c = { days: [{ ...emptyDay(4, 0), id: "a" }, { ...emptyDay(4, 1), id: "b" }] };
+    expect(doneWeeks(c, 4, [])).toBe(0);
+    expect(doneWeeks(c, 4, [{ week: 1, day_id: "a", completed: true }])).toBe(0);
+    expect(doneWeeks(c, 4, [{ week: 1, day_id: "a", completed: true }, { week: 1, day_id: "b", completed: true }, { week: 2, day_id: "a", completed: true }])).toBe(1);
+    const all = [1, 2, 3, 4].flatMap((w) => ["a", "b"].map((d) => ({ week: w, day_id: d, completed: true })));
+    expect(doneWeeks(c, 4, all)).toBe(4);
+  });
+
+  it("nessuna modifica tocca le settimane fatte (prescrizioni e sostituti)", () => {
+    const base = program([item("s", "Squat", ["4x8 60kg", "4x8 62kg", "4x8 64kg", "4x8 66kg"], { swaps: [{ from: 1, to: 1, name: "Leg press", exerciseId: null, notes: "", reason: "" }] })]);
+    const edited = program([
+      item("s", "Squat", ["5x5 80kg", "5x5 80kg", "4x8 70kg", "4x8 72kg"], { swaps: [{ from: 1, to: 4, name: "Hack squat", exerciseId: null, notes: "", reason: "ginocchio" }] }),
+      item("new", "Affondi", ["3x10", "3x10", "3x10", "3x10"]),
+    ]);
+    const kept = keepLockedWeeks(edited, base, 2);
+    const s = kept.days[0].blocks[0].items[0];
+    expect(s.prescriptions).toEqual(["4x8 60kg", "4x8 62kg", "4x8 70kg", "4x8 72kg"]);
+    expect(s.swaps).toEqual([{ from: 1, to: 1, name: "Leg press", exerciseId: null, notes: "", reason: "" }, { from: 3, to: 4, name: "Hack squat", exerciseId: null, notes: "", reason: "ginocchio" }]);
+    // un esercizio nuovo non risulta fatto nelle settimane passate
+    expect(kept.days[0].blocks[1].items[0].prescriptions).toEqual(["", "", "3x10", "3x10"]);
+    // senza settimane fatte non cambia niente (stesso oggetto)
+    expect(keepLockedWeeks(edited, base, 0)).toBe(edited);
+    expect(keepLockedWeeks(base, base, 2)).toBe(base);
+    expect(lockedWeeksDiffer(edited, base, 2)).toBe(true);
+    expect(mergeSwaps([{ from: 3, to: 4, name: "X", exerciseId: null, notes: "", reason: "" }, { from: 1, to: 2, name: "X", exerciseId: null, notes: "", reason: "" }])).toEqual([{ from: 1, to: 4, name: "X", exerciseId: null, notes: "", reason: "" }]);
+    // la bozza completa dell'AI non fa sparire un sostituto deciso dal trainer
+    const ai = program([item("s", "Squat", ["4x8 60kg", "4x8 62kg", "4x8 64kg", "4x8 66kg"])]);
+    expect(carrySwaps(ai, base).days[0].blocks[0].items[0].swaps?.[0].name).toBe("Leg press");
+  });
+
+  it("dell'AI resta solo quello che può cambiare, e si applica riga per riga", () => {
+    const c = program([item("r", "Ripetute", ["6x400m rec 1'30\"", "6x400m rec 1'30\"", "7x400m rec 1'30\"", "8x400m rec 1'30\""]), item("q", "Squat", ["4x8", "4x8", "4x8", "4x8"])]);
+    const proposal = {
+      summary: "Le ha fatte più forti: alzo il volume.",
+      changes: [
+        { itemId: "r", prescriptions: [{ week: 2, text: "8x400m rec 1'30\"" }, { week: 3, text: "8x400m rec 1'15\"" }, { week: 4, text: "8x400m rec 1'30\"" }, { week: 9, text: "x" }], rest: null, notes: "Ultime due a ritmo gara", swap: null, reason: "Più volume" },
+        { itemId: "q", prescriptions: [{ week: 3, text: "5x5" }], rest: null, notes: null, swap: null, reason: "fuori dal pezzo" },
+        { itemId: "nessuno", prescriptions: [{ week: 3, text: "x" }], rest: null, notes: null, swap: null, reason: "" },
+      ],
+    };
+    const clean = sanitizeChanges(c, { kind: "item", itemId: "r" }, proposal, { from: 2, to: 4, done: 2, weeks: 4 });
+    // solo la riga scelta, solo le settimane 3-4 (la 2 è fatta), niente righe uguali a prima
+    expect(clean).toEqual([{ itemId: "r", prescriptions: [{ week: 3, text: "8x400m rec 1'15\"" }], rest: null, notes: "Ultime due a ritmo gara", swap: null, reason: "Più volume" }]);
+    const groups = previewRows(c, clean);
+    expect(groups[0].rows.map((r) => [r.what, r.before, r.after])).toEqual([["Settimana 3", "7x400m rec 1'30\"", "8x400m rec 1'15\""], ["Indicazioni", "—", "Ultime due a ritmo gara"]]);
+    const keys = allRowKeys(groups);
+    // tengo solo la settimana 3
+    const out = applyChanges(c, clean, new Set([keys[0]]));
+    expect(out.days[0].blocks[0].items[0].prescriptions[2]).toBe("8x400m rec 1'15\"");
+    expect(out.days[0].blocks[0].items[0].notes).toBe("");
+    expect(c.days[0].blocks[0].items[0].prescriptions[2]).toBe("7x400m rec 1'30\"");
+    expect(scopeItems(c, { kind: "day", dayId: "d1" }).map((f) => f.label)).toEqual(["A", "B"]);
+  });
+
+  it("sostituto proposto dall'AI: nelle settimane scelte, togliendo quello di prima in quelle settimane", () => {
+    const c = program([item("p", "Panca piana", ["4x8 60kg", "4x8 62kg", "4x6 65kg", "4x6 67kg"], { swaps: [{ from: 2, to: 4, name: "Floor press", exerciseId: null, notes: "", reason: "" }] })]);
+    const clean = sanitizeChanges(c, { kind: "program" }, { summary: "", changes: [{ itemId: "p", prescriptions: [{ week: 3, text: "4x10 18kg" }], rest: null, notes: null, swap: { from: 1, to: 3, name: "Panca manubri", exerciseId: null, notes: "presa neutra", reason: "polso" }, reason: "Polso" }] }, { from: 1, to: 4, done: 2, weeks: 4 });
+    expect(clean[0].swap).toMatchObject({ from: 3, to: 3, name: "Panca manubri" });
+    const out = applyChanges(c, clean, new Set(allRowKeys(previewRows(c, clean))));
+    expect(out.days[0].blocks[0].items[0].swaps).toEqual([
+      { from: 2, to: 2, name: "Floor press", exerciseId: null, notes: "", reason: "" },
+      { from: 3, to: 3, name: "Panca manubri", exerciseId: null, notes: "presa neutra", reason: "polso" },
+      { from: 4, to: 4, name: "Floor press", exerciseId: null, notes: "", reason: "" },
+    ]);
+    expect(placeSwap(undefined, { from: 1, to: 2, name: "A", exerciseId: null, notes: "", reason: "" })).toHaveLength(1);
+  });
+
+  it("limitazione temporanea: vale fino alla data, poi l'AI non ne tiene più conto", () => {
+    expect(activeLimitation({ limitation: "niente prese a sinistra", limitation_until: "2026-11-03" }, "2026-10-20")).toEqual({ text: "niente prese a sinistra", until: "2026-11-03" });
+    expect(activeLimitation({ limitation: "niente prese a sinistra", limitation_until: "2026-11-03" }, "2026-11-04")).toBeNull();
+    expect(activeLimitation({ limitation: "spalla", limitation_until: null }, "2030-01-01")?.text).toBe("spalla");
+    expect(profileText({ ...EMPTY_PROFILE, limitation: "spalla destra", limitation_until: "2026-11-03" }, "2026-10-20")).toMatch(/LIMITAZIONE TEMPORANEA fino al 2026-11-03: spalla destra/);
+    expect(profileText({ ...EMPTY_PROFILE, limitation: "spalla destra", limitation_until: "2026-11-03" }, "2026-12-01")).toBe("");
+    const fd = new FormData();
+    fd.set("limitation", " polso ");
+    fd.set("limitation_until", "2026-11-03");
+    expect(parseProfileForm(fd)).toMatchObject({ limitation: "polso", limitation_until: "2026-11-03" });
+    fd.set("limitation", "");
+    expect(parseProfileForm(fd).limitation_until).toBeNull();
+  });
+});

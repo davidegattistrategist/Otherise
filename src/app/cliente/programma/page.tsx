@@ -7,6 +7,7 @@ import { addDays, formatShort, todayISO } from "@/lib/dates";
 import { earlyStartDays, nextWorkout, programEndDate, startsLabel } from "@/lib/program/schedule";
 import { EarlyStart } from "@/components/early-start/early-start";
 import { runTitle } from "@/lib/program/running";
+import { dayForWeek } from "@/lib/program/types";
 import { Card, EmptyState, Eyebrow, cx } from "@/components/ui";
 import { ProgramDayView } from "@/components/program-day";
 import { IconCheck, IconDown } from "@/components/icons";
@@ -25,7 +26,7 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
   }
   const isCurrent = program.id === current?.id;
   // ha aperto il programma: l'avviso "programma pronto" è visto (niente email di promemoria)
-  await (await createClient()).from("notifications").update({ read_at: new Date().toISOString() }).eq("recipient_id", me.id).eq("kind", "program_published").is("read_at", null);
+  await (await createClient()).from("notifications").update({ read_at: new Date().toISOString() }).eq("recipient_id", me.id).in("kind", ["program_published", "program_updated"]).is("read_at", null);
   const weekParam = Number(sp.settimana);
   const [logs, videos, maxes] = await Promise.all([getMyLogs(program.id), getVideoMap(), getMyMaxes(me.clientId)]);
   // la settimana "di adesso" è quella del prossimo allenamento in sequenza
@@ -82,7 +83,7 @@ export default async function ClientProgramPage({ searchParams }: { searchParams
         const st = status(day.id);
         // aperto solo il prossimo da fare: gli altri si aprono al tocco
         const isNext = Boolean(next && next.week === week && next.day.id === day.id);
-        const names = day.blocks.flatMap((b) => b.items.map((it) => runTitle(it.name, it.prescriptions[week - 1] ?? ""))).filter(Boolean);
+        const names = dayForWeek(day, week).blocks.flatMap((b) => b.items.map((it) => runTitle(it.name, it.prescriptions[week - 1] ?? ""))).filter(Boolean);
         return (
           <Card key={day.id} className="flex flex-col gap-3" data-day-card>
             <div className="flex items-center justify-between gap-3">

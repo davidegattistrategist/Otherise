@@ -37,8 +37,16 @@ import {
   saveProgram,
   setAiExample,
   unpublishProgram,
+  loadRevision,
+  notifyProgramChanged,
 } from "../actions";
 import { AiPanel, RowAiButtons } from "./ai-tools";
+import { RetouchPanel, type RetouchStart } from "./retouch-panel";
+import { SwapTools } from "./swaps";
+import { keepLockedWeeks, lockedWeeksDiffer } from "@/lib/program/locks";
+import { applyChanges } from "@/lib/program/retouch";
+import { swapFor, type ItemSwap } from "@/lib/program/types";
+import { formatShort } from "@/lib/dates";
 import { runHint } from "@/lib/program/running";
 import type { JobView } from "@/lib/ai/program-jobs-shared";
 import { estimateDayMinutes } from "@/lib/program/balance";
@@ -79,6 +87,12 @@ type Props = {
   loggedWorkouts?: number;
   /** bozza AI in coda ancora aperta per questo programma */
   aiJob?: JobView | null;
+  /** settimane già fatte (programma in corso): restano come le ha viste il cliente */
+  doneWeeks?: number;
+  /** versioni di prima (programma in corso): "Ritocchi" → Ripristina */
+  revisions?: Array<{ id: string; created_at: string; reason: string }>;
+  /** limitazione temporanea del cliente ancora valida */
+  limitation?: { text: string; until: string | null } | null;
 };
 
 const STATUS_LABEL = { draft: "Bozza", published: "Pubblicato", archived: "Archiviato" } as const;
@@ -89,13 +103,25 @@ const PreviousPhase = dynamic(() => import("./previous-phase"), { ssr: false });
 /** data-ex sulle righe degli esercizi: il pannello "Fase precedente" segue quello che scrivi */
 const exAttrs = (it: ProgramItem) => (it.name.trim() ? { "data-ex": exerciseKey(it), "data-ex-name": it.name.trim() } : { "data-ex": "" });
 
-export function ProgramEditor({ program, initialContent, exercises, lastLogs, nextPhaseNotes, clientName, aiEnabled, backHref, loggedWorkouts = 0, aiJob = null }: Props) {
+export function ProgramEditor({ program, initialContent, exercises, lastLogs, nextPhaseNotes, clientName, aiEnabled, backHref, loggedWorkouts = 0, aiJob = null, doneWeeks = 0, revisions = [], limitation = null }: Props) {
   const [title, setTitle] = useState(program.title);
   const [description, setDescription] = useState(program.description);
   const [weeks, setWeeks] = useState(program.weeks);
   const [startDate, setStartDate] = useState(program.start_date ?? "");
   const [minutes, setMinutes] = useState(program.session_minutes ? String(program.session_minutes) : "");
   const [content, setContent] = useState<ProgramContent>(() => normalizeWeeks(initialContent, program.weeks));
+  // settimane fatte: bloccate finché non le sblocchi (vale per ogni modifica, anche dell'AI)
+  const [unlocked, setUnlocked] = useState(false);
+  const lockBase = useRef<ProgramContent>(normalizeWeeks(initialContent, program.weeks));
+  const through = !unlocked && program.status === "published" && !program.is_template ? doneWeeks : 0;
+  const throughRef = useRef(through);
+  useEffect(() => {
+    throughRef.current = through;
+  }, [through]);
+  const guard = useCallback((c: ProgramContent) => (throughRef.current > 0 ? keepLockedWeeks(c, lockBase.current, throughRef.current) : c), []);
+  // motivo della modifica, per lo storico "Ritocchi" (si azzera dopo il salvataggio)
+  const revisionReason = useRef<string | null>(null);
+  const [askNotify, setAskNotify] = useState(false);
   const [aiNotes, setAiNotes] = useState<Record<string, string>>(program.ai_notes ?? {});
   const [updatedAt, setUpdatedAt] = useState(program.updated_at);
   const [dirty, setDirty] = useState(false);
@@ -111,7 +137,8 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState(program.status);
   const [isExample, setIsExample] = useState(program.is_ai_example);
-  const [mobileWeek, setMobileWeek] = useState(0);
+  // sul telefono si parte dalla prima settimana ancora da fare
+  const [mobileWeek, setMobileWeek] = useState(() => (program.status === "published" ? Math.min(doneWeeks, program.weeks - 1) : 0));
   // "Fase precedente": montato al primo tocco, poi solo nascosto (riapre all'istante)
   const [prevOpen, setPrevOpen] = useState(false);
   const [prevMounted, setPrevMounted] = useState(false);
@@ -131,10 +158,10 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
     setContent((c) => {
       const d = structuredClone(c);
       fn(d);
-      return d;
+      return guard(d);
     });
     markDirty();
-  }, [markDirty]);
+  }, [markDirty, guard]);
 
   /** Salva subito; restituisce l'errore (o null se è andato bene). */
   const saveNow = useCallback(async (): Promise<string | null> => {
@@ -149,9 +176,13 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         content,
         expected_updated_at: updatedAt,
         ai_notes: aiNotes,
+        ...(revisionReason.current ? { revision_reason: revisionReason.current } : {}),
       });
       if (res.ok) {
         setUpdatedAt(res.updated_at);
+        revisionReason.current = null;
+        // programma in corso cambiato: si chiede se avvisare il cliente
+        if (res.inProgressChanged && program.client_id) setAskNotify(true);
         if (edits.current === version) setDirty(false);
         setSavedAt(new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }));
         setUnknown(res.unknownExercises);
@@ -161,7 +192,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
       setMessage({ tone: "error", text: res.error });
       return res.error;
     }
-  }, [program.id, program.is_template, title, description, weeks, startDate, minutes, content, updatedAt, aiNotes]);
+  }, [program.id, program.is_template, program.client_id, title, description, weeks, startDate, minutes, content, updatedAt, aiNotes]);
   const doSave = useCallback(() => {
     startTransition(async () => {
       await saveNow();
@@ -194,14 +225,17 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
       setWeeks(d.data.weeks);
       setStartDate(d.data.startDate);
       setMinutes(d.data.minutes);
-      setContent(normalizeWeeks(d.data.content, d.data.weeks));
+      const back = normalizeWeeks(d.data.content, d.data.weeks);
+      // la bozza ha correzioni nelle settimane fatte (le avevi sbloccate): restano sbloccate
+      if (doneWeeks > 0 && lockedWeeksDiffer(back, lockBase.current, doneWeeks)) setUnlocked(true);
+      setContent(back);
       markDirty();
       setRestored(d.at);
     });
     return () => {
       alive = false;
     };
-  }, [draftKey, program.updated_at, adoptBackup, markDirty]);
+  }, [draftKey, program.updated_at, adoptBackup, markDirty, doneWeeks]);
   const autoSave = status !== "published" || program.is_template;
   useEffect(() => {
     if (!dirty || !autoSave || pending) return;
@@ -253,15 +287,19 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
 
   /** Copia la settimana w sulle successive vuote (da computer e da telefono). */
   const copyForward = (w: number) => {
-    setContent((c) => copyWeekForward(c, w, weeks));
+    setContent((c) => guard(copyWeekForward(c, w, weeks)));
     markDirty();
   };
 
   const changeWeeks = (n: number) => {
+    if (n < through) {
+      setMessage({ tone: "error", text: `Le settimane fino alla ${through} sono già fatte: il programma non può durare di meno.` });
+      return;
+    }
     const losing = content.days.some((d) => d.blocks.some((b) => b.items.some((it) => it.prescriptions.slice(n).some((p) => p.trim()))));
     if (losing && !window.confirm(`Le settimane dalla ${n + 1} in poi contengono prescrizioni che verranno cancellate. Continuare?`)) return;
     setWeeks(n);
-    setContent((c) => normalizeWeeks(c, n));
+    setContent((c) => guard(normalizeWeeks(c, n)));
     markDirty();
   };
 
@@ -286,6 +324,79 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
     });
 
   const lastLogFor = (it: ProgramItem) => (it.exerciseId ? lastLogs[it.exerciseId] : undefined) ?? lastLogs[`n:${it.name.trim().toLowerCase()}`];
+  const resolveId = (name: string) => exerciseByName.get(name.trim().toLowerCase())?.id ?? null;
+
+  // ---- "Ritocca da qui" (retouch-panel.tsx, calcoli in src/lib/program/retouch.ts)
+  const canRetouch = aiEnabled && Boolean(program.client_id) && !program.is_template && status === "published";
+  const [retouch, setRetouch] = useState<RetouchStart | null>(null);
+  const [retouchUndo, setRetouchUndo] = useState<{ before: ProgramContent; after: ProgramContent; text: string } | null>(null);
+  const openRetouch = (start: RetouchStart) => {
+    setPrevOpen(false);
+    setRetouch(start);
+  };
+  // arrivi da una nota del cliente ("Ritocca da qui" in Oggi): il ritocco è già impostato
+  useEffect(() => {
+    if (!canRetouch) return;
+    const q = new URLSearchParams(window.location.search);
+    const r = q.get("ritocco");
+    if (!r) return;
+    const [kind, id] = r.split(":");
+    const scope = kind === "item" && id ? { kind: "item" as const, itemId: id } : kind === "day" && id ? { kind: "day" as const, dayId: id } : { kind: "program" as const };
+    const from = Number(q.get("da"));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- apertura dal link
+    setRetouch({ scope, reason: q.get("motivo") ?? "", from: Number.isInteger(from) && from > 0 ? from : undefined });
+    // il link non resta nella barra: ricaricando non si riapre
+    q.delete("ritocco");
+    q.delete("motivo");
+    q.delete("da");
+    window.history.replaceState(null, "", `${window.location.pathname}${q.toString() ? `?${q}` : ""}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const closeRetouch = useCallback(() => setRetouch(null), []);
+  const applyRetouch = (changes: Parameters<typeof applyChanges>[1], accepted: Set<string>, summary: string, reason: string) => {
+    const next = guard(applyChanges(content, changes, accepted));
+    const n = accepted.size;
+    setRetouchUndo({ before: content, after: next, text: summary });
+    setContent(next);
+    markDirty();
+    revisionReason.current = `Ritocco con l'AI: ${reason.trim().slice(0, 300)}`;
+    setRetouch(null);
+    // gli esercizi cambiati si vedono: i loro giorni si aprono
+    const touched = new Set(changes.map((c) => c.itemId));
+    for (const d of next.days) if (d.blocks.some((b) => b.items.some((it) => touched.has(it.id)))) days.setOpen(d.id);
+    setMessage({ tone: "info", text: `${n === 1 ? "1 modifica applicata" : `${n} modifiche applicate`}: rivedile e salva. Il cliente le vede solo dopo il salvataggio.` });
+  };
+  const undoRetouch = () => {
+    if (!retouchUndo || retouchUndo.after !== content) return;
+    setContent(retouchUndo.before);
+    markDirty();
+    setRetouchUndo(null);
+    revisionReason.current = null;
+    setMessage({ tone: "info", text: "Ritocco annullato: è tutto come prima." });
+  };
+  const setSwaps = (dayIdx: number, blockIdx: number, itemIdx: number, swaps: ItemSwap[] | undefined, what: string) => {
+    mutate((d) => {
+      const it = d.days[dayIdx].blocks[blockIdx].items[itemIdx];
+      if (swaps?.length) it.swaps = swaps;
+      else delete it.swaps;
+    });
+    revisionReason.current = revisionReason.current ?? `Sostituzione: ${what}`;
+  };
+
+  // ---- "Ritocchi": versioni di prima di un programma in corso
+  const [restoring, setRestoring] = useState<string | null>(null);
+  const restoreRevision = async (id: string, label: string) => {
+    if (!window.confirm(`Tornare alla versione di prima del ${label}? Il programma si rimette com'era (le settimane fatte non cambiano); poi salvi per confermarlo.`)) return;
+    setRestoring(id);
+    const r = await loadRevision(id);
+    setRestoring(null);
+    if (!r.ok) return setMessage({ tone: "error", text: r.error });
+    if (r.weeks !== weeks) setWeeks(r.weeks);
+    setContent(guard(normalizeWeeks(r.content, r.weeks)));
+    markDirty();
+    revisionReason.current = `Ripristinata la versione del ${label}`;
+    setMessage({ tone: "info", text: `Rimessa la versione di prima del ${label}: controlla e salva per confermarla.` });
+  };
 
   // ---- copia e incolla (copy-paste.tsx, calcoli in src/lib/program/clipboard.ts)
   const [selecting, setSelecting] = useState(false);
@@ -331,8 +442,9 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
     lastPick.current = { day: dayIdx, block: blockIdx };
   };
   const applyBulk = (r: PasteResult, text: string) => {
-    setUndo({ text, before: content, after: r.content });
-    setContent(r.content);
+    const next = guard(r.content);
+    setUndo({ text, before: content, after: next });
+    setContent(next);
     markDirty();
     clearPicked();
     setSelNote(null);
@@ -411,7 +523,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   return (
     <div data-program-editor className="flex flex-col gap-5" onFocusCapture={canCompare ? (e) => reportEditorFocus(e.target) : undefined} onInputCapture={canCompare ? (e) => reportEditorFocus(e.target) : undefined}>
       {canCompare && prevMounted ? <PreviousPhase programId={program.id} open={prevOpen} onClose={closePrev} /> : null}
-      {canCompare && !prevOpen && !selecting ? (
+      {canCompare && !prevOpen && !selecting && !retouch ? (
         <button
           type="button"
           onClick={openPrev}
@@ -502,7 +614,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               onClick={() =>
                 runAction(async () => {
                   const r = await addMissingExercises(program.id);
-                  if (r.content) setContent(normalizeWeeks(r.content, weeks));
+                  if (r.content) setContent(guard(normalizeWeeks(r.content, weeks)));
                   if (r.updated_at) setUpdatedAt(r.updated_at);
                   setUnknown([]);
                   return r;
@@ -513,6 +625,38 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             </Button>
           </div>
         </Notice>
+      ) : null}
+
+      {through > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-sand-deep/60 px-4 py-3 text-[15px]" data-locked-weeks>
+          <span className="min-w-0 flex-[1_1_18rem]">
+            <span className="font-semibold">{through === 1 ? "La settimana 1 è fatta" : through >= weeks ? "Tutte le settimane sono fatte" : `Le settimane 1–${through} sono fatte`}</span>: restano come le ha viste il cliente, con il suo logbook.{through < weeks ? ` Puoi cambiare dalla settimana ${through + 1}.` : ""}
+          </span>
+          <button
+            type="button"
+            className={buttonClass("secondary", "sm")}
+            onClick={() => {
+              if (window.confirm("Sbloccare le settimane fatte? Le correzioni cambiano anche quello che il cliente ha già visto (il suo logbook resta).")) setUnlocked(true);
+            }}
+            data-unlock-weeks
+          >
+            Sblocca per correggere
+          </button>
+        </div>
+      ) : unlocked ? (
+        <Notice tone="info">Settimane fatte sbloccate: stai correggendo anche quello che il cliente ha già visto.</Notice>
+      ) : null}
+      {limitation ? (
+        <div className="rounded-2xl bg-accent-soft px-4 py-3 text-[15px]" data-limitation-note>
+          <span className="font-semibold">Limitazione{limitation.until ? ` fino al ${formatShort(limitation.until)}` : ""}:</span> {limitation.text}
+          {program.client_id ? <Link href={`/staff/clienti/${program.client_id}/programma#indicazioni-ai`} className="ml-2 text-sm font-semibold underline">Modifica</Link> : null}
+        </div>
+      ) : null}
+      {retouchUndo && retouchUndo.after === content ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-ink px-4 py-3 text-[15px] text-card" data-retouch-done>
+          <span className="min-w-0 flex-[1_1_18rem] leading-relaxed">{retouchUndo.text || "Ritocco applicato."}</span>
+          <button type="button" onClick={undoRetouch} className="min-h-10 shrink-0 rounded-full bg-card px-4 text-sm font-semibold text-ink" data-retouch-undo>Annulla il ritocco</button>
+        </div>
       ) : null}
 
       {/* impostazioni del programma */}
@@ -579,6 +723,27 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         ) : null}
       </Card>
 
+      {canRetouch ? (
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button variant="secondary" onClick={() => openRetouch({ scope: { kind: "program" } })} data-open-retouch>
+            <IconSparkle size={18} /> Ritocca da qui in poi
+          </Button>
+          <span className="text-sm text-muted">Cambia solo le settimane che restano, a partire da quello che ha fatto.</span>
+        </div>
+      ) : null}
+      {canRetouch && retouch ? (
+        <RetouchPanel
+          programId={program.id}
+          title={title}
+          description={description}
+          weeks={weeks}
+          content={content}
+          done={through > 0 ? through : doneWeeks}
+          start={retouch}
+          onClose={closeRetouch}
+          onApply={applyRetouch}
+        />
+      ) : null}
       {aiEnabled && program.client_id ? (
         <AiPanel
           initialJob={aiJob}
@@ -590,7 +755,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
           onApply={(next, notes, nextWeeks, nextMinutes) => {
             if (nextWeeks && nextWeeks !== weeks) setWeeks(nextWeeks);
             if (nextMinutes) setMinutes(String(nextMinutes));
-            setContent(normalizeWeeks(next, nextWeeks ?? weeks));
+            setContent(guard(normalizeWeeks(next, nextWeeks ?? weeks)));
             days.setAll(next.days.map((d) => d.id), true);
             setAiNotes(notes);
             markDirty();
@@ -682,7 +847,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                   const next = duplicateDay(content, day.id);
                   const known = new Set(content.days.map((d) => d.id));
                   for (const d of next.days) if (!known.has(d.id)) days.setOpen(d.id);
-                  setContent(next);
+                  setContent(guard(next));
                   markDirty();
                 }}
               >
@@ -719,11 +884,14 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
           <div className="mt-3 flex flex-col gap-3 px-4 pb-3 @min-[52rem]:hidden">
             <div className="scroll-x -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Settimana da modificare">
               {Array.from({ length: weeks }, (_, w) => (
-                <button key={w} type="button" role="tab" aria-selected={w === Math.min(mobileWeek, weeks - 1)} onClick={() => setMobileWeek(w)} className={cx("shrink-0 rounded-full px-3.5 py-2 text-sm font-semibold", w === Math.min(mobileWeek, weeks - 1) ? "bg-ink text-card" : "bg-sand")}>
-                  S{w + 1}
+                <button key={w} type="button" role="tab" aria-selected={w === Math.min(mobileWeek, weeks - 1)} aria-label={`Settimana ${w + 1}${w < through ? " (fatta)" : ""}`} onClick={() => setMobileWeek(w)} className={cx("shrink-0 rounded-full px-3.5 py-2 text-sm font-semibold", w === Math.min(mobileWeek, weeks - 1) ? "bg-ink text-card" : w < through ? "bg-sand text-muted" : "bg-sand")}>
+                  S{w + 1}{w < through ? " ✓" : ""}
                 </button>
               ))}
             </div>
+            {Math.min(mobileWeek, weeks - 1) < through ? (
+              <p className="-mt-1 text-sm text-muted">Settimana fatta: resta com&apos;è. Per correggerla usa &quot;Sblocca per correggere&quot; in alto.</p>
+            ) : null}
             {Math.min(mobileWeek, weeks - 1) < weeks - 1 ? (
               <button type="button" onClick={() => copyForward(Math.min(mobileWeek, weeks - 1))} className="-mt-1 flex min-h-10 items-center gap-1.5 self-start text-sm font-semibold text-ink-soft underline">
                 <IconCopy size={14} /> Copia la settimana {Math.min(mobileWeek, weeks - 1) + 1} sulle successive vuote
@@ -744,6 +912,11 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                 select={selectFor(dayIdx, blockIdx, block)}
                 onBlock={(fn) => mutate((d) => fn(d.days[dayIdx].blocks[blockIdx], d.days[dayIdx].blocks))}
                 onItemName={(itemIdx, name) => setItemName(dayIdx, blockIdx, itemIdx, name)}
+                done={through}
+                swapsOn={!program.is_template && Boolean(program.client_id)}
+                resolveId={resolveId}
+                onSwaps={(itemIdx, sw, what) => setSwaps(dayIdx, blockIdx, itemIdx, sw, what)}
+                onRetouchItem={canRetouch ? (itemId, reason) => openRetouch({ scope: { kind: "item", itemId }, reason }) : undefined}
               />
             ))}
           </div>
@@ -765,7 +938,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                   {Array.from({ length: weeks }, (_, w) => (
                     <th key={w} scope="col" className="px-1 py-2 font-semibold">
                       <span className="flex items-center gap-1">
-                        S{w + 1}
+                        S{w + 1}{w < through ? <span className="font-normal" title="Settimana fatta: resta com'è">· fatta</span> : null}
                         {w < weeks - 1 ? (
                           <button
                             type="button"
@@ -800,12 +973,22 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                     select={selectFor(dayIdx, blockIdx, block)}
                     onBlock={(fn) => mutate((d) => fn(d.days[dayIdx].blocks[blockIdx], d.days[dayIdx].blocks))}
                     onItemName={(itemIdx, name) => setItemName(dayIdx, blockIdx, itemIdx, name)}
+                    done={through}
+                    swapsOn={!program.is_template && Boolean(program.client_id)}
+                    resolveId={resolveId}
+                    onSwaps={(itemIdx, sw, what) => setSwaps(dayIdx, blockIdx, itemIdx, sw, what)}
+                    onRetouchItem={canRetouch ? (itemId, reason) => openRetouch({ scope: { kind: "item", itemId }, reason }) : undefined}
                   />
                 ))}
               </tbody>
             </table>
           </div>
           <div className="flex flex-wrap items-center gap-2 border-t border-sand-deep px-5 py-4 sm:px-6">
+            {canRetouch && day.blocks.some((b) => b.items.some((it) => it.name.trim())) ? (
+              <button type="button" className={buttonClass("secondary", "sm")} onClick={() => openRetouch({ scope: { kind: "day", dayId: day.id } })} data-retouch-day>
+                <IconSparkle size={16} /> Ritocca il giorno
+              </button>
+            ) : null}
             {selecting && clip ? (
               <button type="button" className={buttonClass("primary", "sm")} onClick={() => pasteAtEnd(day.id, day.title)} data-paste-end>
                 <IconCopy size={16} /> Incolla qui in fondo ({clip.blocks.length})
@@ -912,6 +1095,59 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
           <option key={e.id} value={e.name} />
         ))}
       </datalist>
+
+      {revisions.length ? (
+        <details className="group rounded-[24px] bg-card" data-revisions>
+          <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+            <span>
+              <span className="font-semibold">Ritocchi</span>
+              <span className="ml-2 text-sm text-muted">{revisions.length === 1 ? "1 versione di prima" : `${revisions.length} versioni di prima`}</span>
+            </span>
+            <IconDown size={18} className="shrink-0 transition-transform group-open:rotate-180" />
+          </summary>
+          <ul className="flex flex-col px-5 pb-4">
+            {revisions.map((r) => {
+              const when = `${formatShort(r.created_at.slice(0, 10))} alle ${new Date(r.created_at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
+              return (
+                <li key={r.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-sand-deep py-2.5 first:border-t-0">
+                  <span className="min-w-0 flex-[1_1_16rem] text-[15px]">
+                    <span className="block font-semibold">{when}</span>
+                    <span className="block text-sm break-words text-muted">{r.reason || "Modifica"}</span>
+                  </span>
+                  <button type="button" disabled={restoring !== null || pending} onClick={() => void restoreRevision(r.id, when)} className={buttonClass("ghost", "sm")} data-restore-revision>
+                    {restoring === r.id ? "Carico…" : "Ripristina com'era prima"}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </details>
+      ) : null}
+
+      {askNotify ? (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-ink/40 sm:items-center" role="dialog" aria-modal="true" aria-label="Avvisare il cliente?">
+          <div className="w-full max-w-md rounded-t-[28px] bg-sand px-5 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:rounded-[28px]">
+            <h2 className="text-[22px] leading-tight font-semibold">Avvisare {clientName ?? "il cliente"}?</h2>
+            <p className="mt-2 text-[16px] leading-relaxed">Hai cambiato un programma che sta già facendo: le modifiche le vede subito aprendo l&apos;app. Vuoi che gli arrivi anche una notifica?</p>
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAskNotify(false);
+                  runAction(() => notifyProgramChanged(program.id));
+                }}
+                className="min-h-12 w-full rounded-full bg-ink text-[16px] font-semibold text-card"
+                data-notify-yes
+              >
+                Sì, manda la notifica
+              </button>
+              <button type="button" onClick={() => setAskNotify(false)} className="min-h-12 w-full rounded-full bg-card text-[16px] font-semibold ring-1 ring-sand-deep" data-notify-no>
+                No, non serve
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* azioni sul programma */}
       <Card>
@@ -1064,6 +1300,23 @@ const cellInput = "w-full rounded-lg border border-transparent bg-sand/70 px-2 p
 
 type Selection = { checked: boolean; label: string; onPick: (shift: boolean) => void };
 
+/** Settimane fatte, sostituzioni e ritocco: uguali per la griglia del computer e per il telefono. */
+type ItemExtras = {
+  done: number;
+  swapsOn: boolean;
+  resolveId: (name: string) => string | null;
+  onSwaps: (itemIdx: number, swaps: ItemSwap[] | undefined, what: string) => void;
+  onRetouchItem?: (itemId: string, reason?: string) => void;
+};
+
+function RetouchItemButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} title="Ritocca questo esercizio con l'AI dalle prossime settimane" className="flex h-8 items-center gap-1 rounded-full px-2 text-xs font-semibold whitespace-nowrap text-muted hover:bg-sand hover:text-ink" data-retouch-item-open>
+      <IconSparkle size={15} /> Ritocca
+    </button>
+  );
+}
+
 const fieldSizing = () => typeof CSS !== "undefined" && Boolean(CSS.supports?.("field-sizing", "content"));
 
 /** Casella di testo che cresce con il contenuto: si legge sempre tutto, senza tagli. */
@@ -1123,6 +1376,11 @@ function BlockRows({
   select,
   onBlock,
   onItemName,
+  done,
+  swapsOn,
+  resolveId,
+  onSwaps,
+  onRetouchItem,
 }: {
   block: ProgramBlock;
   blockIdx: number;
@@ -1136,7 +1394,7 @@ function BlockRows({
   programId: string;
   onBlock: (fn: (b: ProgramBlock, siblings: ProgramBlock[]) => void) => void;
   onItemName: (itemIdx: number, name: string) => void;
-}) {
+} & ItemExtras) {
   const multi = block.kind !== "single" && block.kind !== "text";
   const colCount = 4 + weeks;
   const picked = select?.checked;
@@ -1236,20 +1494,28 @@ function BlockRows({
                     onReplace={(name) => onItemName(itemIdx, name)}
                   />
                 ) : null}
+                {onRetouchItem && it.name.trim() ? <RetouchItemButton onClick={() => onRetouchItem(it.id)} /> : null}
               </div>
+              {swapsOn ? <div className="mt-1"><SwapTools item={it} weeks={weeks} done={done} resolveId={resolveId} onChange={(sw, what) => onSwaps(itemIdx, sw, what)} onAskAi={onRetouchItem ? () => onRetouchItem(it.id, "Dolore o infortunio: serve un sostituto.") : undefined} /></div> : null}
             </td>
-            {Array.from({ length: weeks }, (_, w) => (
-              <td key={w} className="px-1 py-2">
-                <AutoText
-                  singleLine
-                  aria-label={`${it.name || "Esercizio"}, settimana ${w + 1}`}
-                  value={it.prescriptions[w] ?? ""}
-                  onChange={(v) => onBlock((b) => void (b.items[itemIdx].prescriptions[w] = v))}
-                  className={cellInput}
-                  placeholder={w === 0 ? "4x8 60kg" : ""}
-                />
-              </td>
-            ))}
+            {Array.from({ length: weeks }, (_, w) => {
+              const sw = swapFor(it, w + 1);
+              const locked = w < done;
+              return (
+                <td key={w} className="px-1 py-2">
+                  {sw ? <span className="mb-0.5 block px-1 text-[11px] leading-tight font-semibold break-words text-accent-deep" data-swap-cell>→ {sw.name}</span> : null}
+                  <AutoText
+                    singleLine
+                    readOnly={locked}
+                    aria-label={`${it.name || "Esercizio"}, settimana ${w + 1}${locked ? " (fatta)" : ""}`}
+                    value={it.prescriptions[w] ?? ""}
+                    onChange={(v) => onBlock((b) => void (b.items[itemIdx].prescriptions[w] = v))}
+                    className={cx(cellInput, locked && "cursor-default !border-transparent !bg-transparent text-muted")}
+                    placeholder={w === 0 && !locked ? "4x8 60kg" : ""}
+                  />
+                </td>
+              );
+            })}
             <td className="px-1 py-2">
               <AutoText singleLine aria-label="Recupero" value={it.rest} onChange={(v) => onBlock((b) => void (b.items[itemIdx].rest = v))} className={cellInput} placeholder="90&quot;" />
             </td>
@@ -1513,6 +1779,11 @@ function MobileBlock({
   select,
   onBlock,
   onItemName,
+  done,
+  swapsOn,
+  resolveId,
+  onSwaps,
+  onRetouchItem,
 }: {
   block: ProgramBlock;
   blockIdx: number;
@@ -1526,7 +1797,7 @@ function MobileBlock({
   lastLogFor: (it: ProgramItem) => string | undefined;
   onBlock: (fn: (b: ProgramBlock, siblings: ProgramBlock[]) => void) => void;
   onItemName: (itemIdx: number, name: string) => void;
-}) {
+} & ItemExtras) {
   const multi = block.kind !== "single" && block.kind !== "text";
   const moves = (
     <div className="flex items-center">
@@ -1572,7 +1843,8 @@ function MobileBlock({
                 <IconBtn label="Togli esercizio" onClick={() => onBlock((b, s) => { b.items.splice(itemIdx, 1); if (b.items.length === 0) s.splice(blockIdx, 1); else if (b.items.length === 1 && b.kind === "superset") b.kind = "single"; })}><IconX size={16} /></IconBtn>
               </div>
               <div className="flex flex-col gap-2 pl-9">
-                <AutoText singleLine aria-label={`${it.name || "Esercizio"}, settimana ${week + 1}`} value={it.prescriptions[week] ?? ""} onChange={(v) => onBlock((b) => void (b.items[itemIdx].prescriptions[week] = v))} placeholder={`Settimana ${week + 1}: 4x8 60kg`} className={cellInput} />
+                {swapFor(it, week + 1) ? <span className="text-sm font-semibold break-words text-accent-deep" data-swap-cell>Settimana {week + 1}: al suo posto {swapFor(it, week + 1)!.name}</span> : null}
+                <AutoText singleLine readOnly={week < done} aria-label={`${it.name || "Esercizio"}, settimana ${week + 1}${week < done ? " (fatta)" : ""}`} value={it.prescriptions[week] ?? ""} onChange={(v) => onBlock((b) => void (b.items[itemIdx].prescriptions[week] = v))} placeholder={week < done ? "" : `Settimana ${week + 1}: 4x8 60kg`} className={cx(cellInput, week < done && "cursor-default !bg-transparent text-muted")} />
                 <div className="flex items-start gap-2">
                   <span className="shrink-0 pt-2 text-xs font-semibold text-muted">Recupero</span>
                   <AutoText singleLine aria-label="Recupero" value={it.rest} onChange={(v) => onBlock((b) => void (b.items[itemIdx].rest = v))} placeholder="90&quot;" className={cx(cellInput, "min-w-0 flex-1")} />
@@ -1588,7 +1860,7 @@ function MobileBlock({
                 {runHint(it.name, [it.prescriptions[week] ?? ""]) ? <span className="w-full text-ink-soft" data-run-hint>{runHint(it.name, [it.prescriptions[week] ?? ""])}</span> : null}
                 {last ? <span>Ultimo log: {last}</span> : null}
                 {aiNotes[it.id] ? <span className="text-ink"><IconSparkle size={12} className="mr-1 inline" />{aiNotes[it.id]}</span> : null}
-                {week > 0 && !it.prescriptions[week] && it.prescriptions[week - 1] ? (
+                {week > 0 && week >= done && !it.prescriptions[week] && it.prescriptions[week - 1] ? (
                   <button type="button" className="font-semibold text-ink underline" onClick={() => onBlock((b) => void (b.items[itemIdx].prescriptions[week] = b.items[itemIdx].prescriptions[week - 1]))}>Copia dalla settimana {week}</button>
                 ) : null}
                 <ProgressionMenu
@@ -1610,7 +1882,9 @@ function MobileBlock({
                     onReplace={(name) => onItemName(itemIdx, name)}
                   />
                 ) : null}
+                {onRetouchItem && it.name.trim() ? <RetouchItemButton onClick={() => onRetouchItem(it.id)} /> : null}
               </div>
+              {swapsOn ? <div className="pl-9"><SwapTools item={it} weeks={weeks} done={done} resolveId={resolveId} onChange={(sw, what) => onSwaps(itemIdx, sw, what)} onAskAi={onRetouchItem ? () => onRetouchItem(it.id, "Dolore o infortunio: serve un sostituto.") : undefined} /></div> : null}
               <div className="pl-9">
                 <AutoText aria-label="Indicazioni" value={it.notes} onChange={(v) => onBlock((b) => void (b.items[itemIdx].notes = v))} placeholder="Indicazioni (facoltative)" className={cx(cellInput, "text-[13px] leading-snug")} />
               </div>

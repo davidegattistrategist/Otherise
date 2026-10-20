@@ -10,7 +10,7 @@
  * progredire).
  */
 import { parsePrescription, type SetLog } from "./program/prescription";
-import type { ProgramDay } from "./program/types";
+import { dayForWeek, type ProgramDay } from "./program/types";
 
 export type LoggedItem = { item_id: string; sets: SetLog[] | null; result_text: string };
 
@@ -70,7 +70,8 @@ export function setDifferences(rx: string, sets: SetLog[] | null): string[] {
  * Un allenamento in testo compatto: per ogni esercizio la prescrizione della
  * settimana, chi decide carico e ripetizioni, cosa ha fatto e le differenze.
  */
-export function workoutVsPlan(day: ProgramDay, week: number, logs: LoggedItem[]): string {
+export function workoutVsPlan(planned: ProgramDay, week: number, logs: LoggedItem[]): string {
+  const day = dayForWeek(planned, week);
   const byItem = new Map(logs.map((l) => [l.item_id, l]));
   const lines: string[] = [];
   for (const b of day.blocks) {

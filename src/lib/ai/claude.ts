@@ -522,3 +522,100 @@ export async function writeReplyDraft(user: string | Part[]) {
   const parsed = z.object({ needsReply: z.boolean(), draft: z.string() }).parse(json);
   return { needsReply: parsed.needsReply && Boolean(parsed.draft.trim()), draft: parsed.draft.trim().slice(0, 3900), usage };
 }
+
+const RETOUCH_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["summary", "changes"],
+  properties: {
+    summary: { type: "string" },
+    changes: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["itemId", "prescriptions", "rest", "notes", "swap", "reason"],
+        properties: {
+          itemId: { type: "string" },
+          prescriptions: {
+            type: "array",
+            items: { type: "object", additionalProperties: false, required: ["week", "text"], properties: { week: { type: "integer" }, text: { type: "string" } } },
+          },
+          rest: { anyOf: [{ type: "null" }, { type: "string" }] },
+          notes: { anyOf: [{ type: "null" }, { type: "string" }] },
+          swap: {
+            anyOf: [
+              { type: "null" },
+              {
+                type: "object",
+                additionalProperties: false,
+                required: ["from", "to", "name", "exerciseId", "notes", "reason"],
+                properties: {
+                  from: { type: "integer" },
+                  to: { type: "integer" },
+                  name: { type: "string" },
+                  exerciseId: { anyOf: [{ type: "null" }, { type: "string" }] },
+                  notes: { type: "string" },
+                  reason: { type: "string" },
+                },
+              },
+            ],
+          },
+          reason: { type: "string" },
+        },
+      },
+    },
+  },
+} as const;
+
+export type RetouchInput = ReviseInput & {
+  /** cosa ritoccare, già scritto per l'AI: "l'esercizio Panca piana (id abc…) del Giorno 1" */
+  scopeText: string;
+  from: number;
+  to: number;
+  /** settimane già fatte (non si toccano) */
+  done: number;
+  /** logbook di questa fase sugli esercizi da ritoccare */
+  logbook: string;
+};
+
+/**
+ * Ritocco di un programma in corso: solo un pezzo e solo alcune settimane.
+ * Stesso system prompt e stessa prima parte del messaggio della bozza
+ * completa (si rilegge dalla cache); cambia la richiesta e lo schema.
+ */
+export async function retouchProgram(input: RetouchInput): Promise<{ summary: string; changes: Array<{ itemId: string; prescriptions: Array<{ week: number; text: string }>; rest: string | null; notes: string | null; swap: { from: number; to: number; name: string; exerciseId: string | null; notes: string; reason: string } | null; reason: string }>; usage: AiUsage }> {
+  const task = `# Cosa fare adesso: RITOCCO di un programma IN CORSO (non una bozza nuova)
+Il cliente sta già facendo questo programma. Cambia SOLO ${input.scopeText}, e SOLO le settimane da ${input.from} a ${input.to}.${input.done > 0 ? ` Le settimane da 1 a ${input.done} sono già fatte: non toccarle mai.` : ""}
+
+# Cosa ha fatto davvero il cliente in questa fase (logbook)
+${input.logbook || "Ancora niente registrato su questi esercizi."}
+
+# Come ragionare (fallo bene: è il lavoro del trainer)
+- Parti da quello che ha fatto davvero e dal motivo del trainer. Se è stato più facile del previsto (ripetizioni oltre il range, carichi o ritmi migliori, note come "facile" o "potevo fare di più"), progredisci di più: carichi, ripetizioni, ritmi o volume, secondo il metodo e la fase. Se è stato più difficile, regredisci quanto basta per tornare nella zona giusta, senza stravolgere.
+- Mantieni la logica della progressione già scritta settimana per settimana (stessa struttura e stesso modo di scrivere): sposti il livello, non riscrivi il programma. Cambia il minimo che serve per il motivo.
+- Dolore, infortunio o attrezzo che manca: proponi un sostituto (swap) solo per le settimane che servono, scelto dall'eserciziario (exerciseId = il codice "E…", null se non c'è), che rispetti la limitazione e mantenga lo stimolo il più possibile. Scrivi in "prescriptions" le prescrizioni del sostituto per quelle settimane (carichi adatti al nuovo esercizio, non quelli dell'originale), in swap.reason il motivo in poche parole, in swap.notes come eseguirlo se serve. Dopo quelle settimane l'esercizio originale riprende: se serve, fallo ripartire un po' più leggero.
+- Non intervenire di tua iniziativa su dolori che il trainer non ha nominato in questa richiesta: segnalali nel summary.
+- Per ogni esercizio cambiato: itemId = l'id dell'esercizio nel JSON del programma; prescriptions solo per le settimane che cambi (week = numero della settimana, text = prescrizione completa come la scrive il trainer); rest e notes null se non cambiano; swap null se non serve un sostituto; reason una frase per il trainer.
+- Se non serve cambiare niente: changes = [] e spiegalo nel summary.
+- summary: 1-3 frasi per il trainer su cosa hai cambiato e perché, citando i dati del logbook che hai usato.`;
+  const { parts, idByCode } = promptParts(input, task);
+  const { json, usage } = await runJson(SYSTEM, parts, RETOUCH_SCHEMA as unknown as Record<string, unknown>, [], 8000, true);
+  const parsed = z
+    .object({
+      summary: z.string(),
+      changes: z.array(
+        z.object({
+          itemId: z.string(),
+          prescriptions: z.array(z.object({ week: z.number(), text: z.string() })),
+          rest: z.string().nullable(),
+          notes: z.string().nullable(),
+          swap: z.object({ from: z.number(), to: z.number(), name: z.string(), exerciseId: z.string().nullable(), notes: z.string(), reason: z.string() }).nullable(),
+          reason: z.string(),
+        }),
+      ),
+    })
+    .parse(json);
+  const changes = parsed.changes.map((c) => ({ ...c, swap: c.swap ? { ...c.swap, exerciseId: c.swap.exerciseId ? idByCode.get(c.swap.exerciseId) ?? null : null } : null }));
+  return { summary: parsed.summary, changes, usage };
+}

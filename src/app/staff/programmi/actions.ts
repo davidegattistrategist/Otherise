@@ -143,17 +143,19 @@ const saveSchema = z.object({
   expected_updated_at: z.string().nullable(),
   /** Note dell'AI sulle righe cambiate (presenti dopo una bozza preparata con l'assistente) */
   ai_notes: z.record(z.string(), z.string()).nullable().optional(),
+  /** perché è cambiato (per lo storico "Ritocchi" di un programma in corso) */
+  revision_reason: z.string().trim().max(500).optional(),
 });
 
-export type SaveResult = { ok: true; updated_at: string; unknownExercises: string[] } | { ok: false; error: string; conflict?: boolean };
+export type SaveResult = { ok: true; updated_at: string; unknownExercises: string[]; /** programma in corso cambiato: si chiede se avvisare il cliente */ inProgressChanged?: boolean } | { ok: false; error: string; conflict?: boolean };
 
 export async function saveProgram(id: string, input: unknown): Promise<SaveResult> {
-  await requireStaff();
+  const me = await requireStaff();
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   const v = parsed.data;
   const supabase = await createClient();
-  const { data: current } = await supabase.from("programs").select("updated_at, status").eq("id", id).maybeSingle();
+  const { data: current } = await supabase.from("programs").select("updated_at, status, title, weeks, start_date, content, client_id").eq("id", id).maybeSingle();
   if (!current) return { ok: false, error: "Programma non trovato" };
   if (v.expected_updated_at && current.updated_at !== v.expected_updated_at) {
     return { ok: false, conflict: true, error: "Qualcun altro ha modificato questo programma nel frattempo. Ricarica la pagina per vedere la versione aggiornata (le tue modifiche non salvate andrebbero perse: copiale prima)." };
@@ -176,12 +178,43 @@ export async function saveProgram(id: string, input: unknown): Promise<SaveResul
     .select("updated_at, client_id")
     .single();
   if (error || !data) return { ok: false, error: "Salvataggio non riuscito. Riprova." };
+  // programma pubblicato e già iniziato: si tiene la versione di prima (Ritocchi → Ripristina)
+  let inProgressChanged = false;
+  if (current.status === "published" && current.client_id && current.start_date && current.start_date <= todayISO()) {
+    const before = normalizeWeeks(parseContent(current.content), current.weeks);
+    if (JSON.stringify(before) !== JSON.stringify(content) || current.weeks !== v.weeks) {
+      inProgressChanged = true;
+      await supabase.from("program_revisions").insert({ program_id: id, client_id: current.client_id, created_by: me.id, reason: v.revision_reason || "Modifica a mano", title: current.title, weeks: current.weeks, content: asJson(before) });
+    }
+  }
   const unknown = new Set<string>();
   content.days.forEach((d) => d.blocks.forEach((b) => b.items.forEach((it) => !it.exerciseId && it.name.trim() && unknown.add(it.name.trim()))));
   // programma già pubblicato e ritoccato dopo una bozza dell'AI: aggiorna il confronto (le lezioni arrivano più tardi)
   if (current.status === "published") await compareWithDraft(id, content, { maxAgeHours: 48 });
   if (data.client_id) revalidatePath(`/staff/clienti/${data.client_id}`, "layout");
-  return { ok: true, updated_at: data.updated_at, unknownExercises: [...unknown] };
+  return { ok: true, updated_at: data.updated_at, unknownExercises: [...unknown], inProgressChanged };
+}
+
+/** "Sì, avvisa il cliente": il programma in corso è cambiato. */
+export async function notifyProgramChanged(id: string): Promise<ActionState> {
+  await requireStaff();
+  const supabase = await createClient();
+  const { data: p } = await supabase.from("programs").select("id, client_id, title, status, updated_at, clients(user_id)").eq("id", id).maybeSingle();
+  if (!p?.client_id || p.status !== "published") return { error: "Programma non trovato." };
+  const userId = (p.clients as unknown as { user_id: string | null } | null)?.user_id;
+  if (!userId) return { ok: true, message: "Il cliente non è ancora entrato nell'app: vedrà il programma aggiornato al primo accesso." };
+  await notify([{ recipient_id: userId, client_id: p.client_id, kind: "program_updated", title: "Il tuo programma è stato aggiornato", body: p.title, link: "/cliente/programma", dedupe_key: `updated:${id}:${p.updated_at}` }]); // una per versione salvata (doppio tocco = una sola)
+  await emailsLater();
+  return { ok: true, message: "Avviso mandato: il cliente lo vede nelle notifiche." };
+}
+
+/** Una versione salvata di un programma in corso (per "Ripristina" nei Ritocchi). */
+export async function loadRevision(revisionId: string): Promise<{ ok: true; content: ProgramContent; weeks: number; title: string } | { ok: false; error: string }> {
+  await requireStaff();
+  const supabase = await createClient();
+  const { data } = await supabase.from("program_revisions").select("content, weeks, title").eq("id", revisionId).maybeSingle();
+  if (!data) return { ok: false, error: "Versione non trovata." };
+  return { ok: true, content: normalizeWeeks(parseContent(data.content), data.weeks), weeks: data.weeks, title: data.title };
 }
 
 /** Esito delle azioni sullo stato del programma: `updated_at` nuovo, così il Salva dopo non segnala un conflitto finto. */

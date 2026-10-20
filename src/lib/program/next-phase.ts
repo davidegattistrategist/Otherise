@@ -6,7 +6,7 @@
  * vuote: le compila l'allenatore, o le propone l'assistente AI.
  */
 import { prescriptionFromSets, type SetLog } from "./prescription";
-import { newId, type ProgramContent } from "./types";
+import { newId, swapFor, withoutSwaps, type ProgramContent } from "./types";
 
 export type ItemLastLog = { item_id: string; week: number; sets: SetLog[]; result_text: string };
 
@@ -20,9 +20,13 @@ export function buildNextPhase(
   newWeeks: number,
   lastLogs: ItemLastLog[] = [],
 ): ProgramContent {
-  // ultimo log per esercizio (settimana più alta)
+  // ultimo log per esercizio (settimana più alta), senza le settimane in cui
+  // c'era un sostituto: quello che ha fatto il sostituto non vale per l'originale
+  const swapsOf = new Map(previous.days.flatMap((d) => d.blocks.flatMap((b) => b.items.map((it) => [it.id, it] as const))));
   const byItem = new Map<string, ItemLastLog>();
   for (const l of lastLogs) {
+    const it = swapsOf.get(l.item_id);
+    if (it && swapFor(it, l.week)) continue;
     const cur = byItem.get(l.item_id);
     if (!cur || l.week > cur.week) byItem.set(l.item_id, l);
   }
@@ -34,8 +38,9 @@ export function buildNextPhase(
         items: b.items.map((it) => {
           const fromLog = byItem.get(it.id) ? prescriptionFromSets(byItem.get(it.id)!.sets) : null;
           const first = fromLog ?? lastNonEmpty(it.prescriptions);
+          // le sostituzioni temporanee restano nella fase vecchia
           return {
-            ...it,
+            ...withoutSwaps(it),
             prescriptions: Array.from({ length: newWeeks }, (_, i) => (i === 0 ? first : "")),
           };
         }),

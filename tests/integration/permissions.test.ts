@@ -736,4 +736,43 @@ describe.skipIf(!run)("permessi", () => {
     expect(await startOf(other)).toBe(romeDay(0));
     await admin.from("programs").delete().in("id", [soon, far, draft, other]).throwOnError();
   });
+  it("ritocchi: versioni di prima solo per lo staff che segue il cliente, al massimo 30; limitazione temporanea", async () => {
+    const content = { days: [{ id: "d1", title: "Giorno 1", blocks: [] }] };
+    const otherProgram = (await owner.from("programs").insert({ client_id: clientBId, title: "Di Bruno", weeks: 1, content, status: "published", start_date: "2026-10-05" }).select("id").single().throwOnError()).data!.id as string;
+    const rev = (programId: string, clientId: string, reason = "Ritocco con l'AI") => ({ program_id: programId, client_id: clientId, reason, title: "Prima", weeks: 1, content });
+    await coach.from("program_revisions").insert(rev(publishedId, clientAId)).throwOnError();
+    expect((await coach.from("program_revisions").select("reason").eq("program_id", publishedId)).data).toEqual([{ reason: "Ritocco con l'AI" }]);
+    expect((await owner.from("program_revisions").select("id").eq("program_id", publishedId)).data).toHaveLength(1);
+    // il cliente e gli estranei non le vedono e non le scrivono
+    expect((await clientA.from("program_revisions").select("*")).data ?? []).toEqual([]);
+    expect((await clientA.from("program_revisions").insert(rev(publishedId, clientAId))).error).not.toBeNull();
+    expect((await stranger.from("program_revisions").select("*")).data ?? []).toEqual([]);
+    // il collaboratore non tocca clienti non suoi, nemmeno spacciando il programma di un altro cliente
+    expect((await coach.from("program_revisions").insert(rev(otherProgram, clientBId))).error).not.toBeNull();
+    expect((await coach.from("program_revisions").insert(rev(otherProgram, clientAId))).error).not.toBeNull();
+    expect((await owner.from("program_revisions").insert(rev(otherProgram, clientAId))).error).not.toBeNull();
+    await owner.from("program_revisions").insert(rev(otherProgram, clientBId)).throwOnError();
+    expect((await coach.from("program_revisions").select("id").eq("program_id", otherProgram)).data ?? []).toEqual([]);
+    // non si modificano: si aggiungono o si cancellano
+    await coach.from("program_revisions").update({ reason: "cambiato" }).eq("program_id", publishedId);
+    expect((await admin.from("program_revisions").select("reason").eq("program_id", publishedId)).data).toEqual([{ reason: "Ritocco con l'AI" }]);
+    // al massimo 30 per programma: restano le più recenti
+    for (let i = 0; i < 31; i++) await admin.from("program_revisions").insert({ ...rev(publishedId, clientAId, `n${i}`), created_at: new Date(Date.now() + (i + 1) * 1000).toISOString() }).throwOnError();
+    const kept = (await admin.from("program_revisions").select("reason").eq("program_id", publishedId)).data!.map((r) => r.reason);
+    expect(kept).toHaveLength(30);
+    expect(kept).toContain("n30");
+    expect(kept).not.toContain("n0");
+    expect(kept).not.toContain("Ritocco con l'AI");
+    // eliminando il programma se ne vanno anche le versioni
+    await admin.from("programs").delete().eq("id", otherProgram).throwOnError();
+    expect((await admin.from("program_revisions").select("id").eq("program_id", otherProgram)).data).toEqual([]);
+    await admin.from("program_revisions").delete().eq("program_id", publishedId).throwOnError();
+
+    // limitazione temporanea nelle indicazioni per l'AI: la scrive lo staff, il cliente no
+    await coach.from("client_ai_profiles").upsert({ client_id: clientAId, limitation: "Niente prese con la mano sinistra", limitation_until: "2026-11-03" }).throwOnError();
+    expect((await coach.from("client_ai_profiles").select("limitation, limitation_until").eq("client_id", clientAId)).data).toEqual([{ limitation: "Niente prese con la mano sinistra", limitation_until: "2026-11-03" }]);
+    expect((await coach.from("client_ai_profiles").update({ limitation: "x".repeat(501) }).eq("client_id", clientAId)).error).not.toBeNull();
+    await clientA.from("client_ai_profiles").update({ limitation: "" }).eq("client_id", clientAId);
+    expect((await admin.from("client_ai_profiles").select("limitation").eq("client_id", clientAId).single()).data!.limitation).toBe("Niente prese con la mano sinistra");
+  });
 });

@@ -6,7 +6,7 @@ import "server-only";
  */
 import type { ServerSupabase } from "../supabase/server";
 import { addDays, formatShort, todayISO } from "../dates";
-import { parseContent, type ProgramDay } from "../program/types";
+import { dayForWeek, parseContent, type ProgramDay } from "../program/types";
 import { summarizeSets, type SetLog } from "../program/prescription";
 import { computeRecords, recordsFromRows, type ExerciseRecord } from "../strength/records";
 import { rpcOr } from "./rpc";
@@ -33,8 +33,10 @@ export async function loadSession(supabase: ServerSupabase, programId: string, w
   const week = Number(weekStr);
   if (!program?.client_id || program.status === "draft" || !Number.isInteger(week) || week < 1 || week > program.weeks) return null;
   const content = parseContent(program.content);
-  const day = content.days.find((d) => d.id === dayId);
-  if (!day) return null;
+  const found = content.days.find((d) => d.id === dayId);
+  if (!found) return null;
+  // in quella settimana: con i sostituti al posto degli esercizi sostituiti
+  const day = dayForWeek(found, week);
   const today = todayISO();
   const cid = program.client_id;
 

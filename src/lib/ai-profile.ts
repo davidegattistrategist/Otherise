@@ -18,6 +18,9 @@ export type AiProfile = {
   squat_share: number | null;
   intensity_techniques: boolean | null;
   notes: string;
+  /** limitazione temporanea (es. "non può usare la mano sinistra"), vale fino a `limitation_until` (vuota = finché non la togli) */
+  limitation: string;
+  limitation_until: string | null;
   /** come scrivere a questo cliente: lo impara l'AI dalle risposte del trainer (solo per le bozze di risposta) */
   reply_lessons: string;
   auto_note: string;
@@ -32,6 +35,8 @@ export const EMPTY_PROFILE: AiProfile = {
   squat_share: null,
   intensity_techniques: null,
   notes: "",
+  limitation: "",
+  limitation_until: null,
   reply_lessons: "",
   auto_note: "",
   updated_at: null,
@@ -40,10 +45,20 @@ export const EMPTY_PROFILE: AiProfile = {
 const VERTICAL_LABEL: Record<string, string> = { si: "sì, si possono fare", poche: "poche", no: "no, da evitare" };
 const RUN_LABEL: Record<string, string> = { nessuno: "non corre", principiante: "principiante", intermedio: "intermedio", avanzato: "avanzato" };
 
+/** La limitazione temporanea se vale ancora oggi (null se non c'è o è scaduta). */
+export function activeLimitation(p: Pick<AiProfile, "limitation" | "limitation_until"> | null, today: string): { text: string; until: string | null } | null {
+  const text = p?.limitation?.trim();
+  if (!text) return null;
+  if (p!.limitation_until && p!.limitation_until < today) return null;
+  return { text, until: p!.limitation_until };
+}
+
 /** Testo per l'AI (vuoto se non c'è nessuna indicazione). */
-export function profileText(p: AiProfile | null): string {
+export function profileText(p: AiProfile | null, today = new Date().toISOString().slice(0, 10)): string {
   if (!p) return "";
+  const lim = activeLimitation(p, today);
   const lines = [
+    lim ? `- LIMITAZIONE TEMPORANEA${lim.until ? ` fino al ${lim.until}` : ""}: ${lim.text}. Rispettala sempre: niente esercizi che la mettono in difficoltà, proponi sostituti.` : "",
     p.session_minutes ? `- Tempo per seduta: ${p.session_minutes} minuti` : "",
     p.strength_level ? `- Livello forza/muscolazione: ${p.strength_level}` : "",
     p.running_level ? `- Livello corsa: ${RUN_LABEL[p.running_level] ?? p.running_level}` : "",
@@ -99,6 +114,8 @@ export function parseProfileForm(fd: FormData): Omit<AiProfile, "auto_note" | "u
     squat_share: auto || !Number.isFinite(share) ? null : Math.min(100, Math.max(0, Math.round(share / 10) * 10)),
     intensity_techniques: tech === "si" ? true : tech === "no" ? false : null,
     notes: String(fd.get("notes") ?? "").slice(0, 2000),
+    limitation: String(fd.get("limitation") ?? "").trim().slice(0, 500),
+    limitation_until: /^\d{4}-\d{2}-\d{2}$/.test(String(fd.get("limitation_until") ?? "")) && String(fd.get("limitation") ?? "").trim() ? String(fd.get("limitation_until")) : null,
     reply_lessons: String(fd.get("reply_lessons") ?? "")
       .split("\n")
       .map((l) => l.trim().replace(/^[-•]\s*/, ""))

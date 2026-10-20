@@ -96,7 +96,19 @@ test("note del cliente: quella importante arriva in Oggi con il motivo, tutte ne
   }).toPass({ timeout: 20_000 });
   const row = card.locator("li", { hasText: tag });
   await expect(row).toContainText("Fastidio al ginocchio sullo squat");
-  await row.getByRole("link").click();
+  // "Ritocca da qui": l'editor apre il ritocco del giorno con la nota come motivo
+  await row.locator("[data-retouch-from-note]").click();
+  await staff.waitForURL(/\/staff\/programmi\/[0-9a-f-]{36}/);
+  const panel = staff.getByRole("dialog", { name: "Ritocca da qui" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("radio", { name: "Un giorno" })).toBeChecked();
+  await expect(panel.getByLabel("Motivo del ritocco")).toHaveValue(new RegExp(`Nota del cliente dopo l'allenamento della settimana \\d+: "Male al ginocchio sullo squat ${tag}`));
+  // il link non resta nell'indirizzo: ricaricando non si riapre
+  await expect(staff).not.toHaveURL(/ritocco=/);
+  await panel.getByRole("button", { name: "Torna al programma" }).click();
+  await expect(panel).toHaveCount(0);
+  await staff.goto("/staff");
+  await card.locator("li", { hasText: tag }).getByRole("link").filter({ hasNotText: "Ritocca da qui" }).first().click();
   await staff.waitForURL(/\/note\?vista=cliente$/);
   await expect(staff.locator("li", { hasText: tag })).toContainText("Fastidio al ginocchio sullo squat");
   await staff.goto("/staff");

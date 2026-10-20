@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isISODate, todayISO } from "@/lib/dates";
-import { flattenItems, parseContent } from "@/lib/program/types";
+import { flattenItems, itemForWeek, parseContent } from "@/lib/program/types";
 import type { Json } from "@/lib/supabase/database.types";
 import { notify, staffRecipients } from "@/lib/notify";
 import { emailsLater } from "@/lib/email";
@@ -83,7 +83,8 @@ export async function saveWorkout(raw: SaveWorkoutInput): Promise<SaveWorkoutRes
   if (!program?.client_id || program.status === "draft") return { ok: false, error: "Programma non trovato." };
   if (input.week > program.weeks) return { ok: false, error: "Settimana non valida." };
   const content = parseContent(program.content);
-  const items = new Map(flattenItems(content).filter((f) => f.day.id === input.dayId).map((f) => [f.item.id, f.item]));
+  // nome ed esercizio di quella settimana (con un sostituto si registra il sostituto)
+  const items = new Map(flattenItems(content).filter((f) => f.day.id === input.dayId).map((f) => [f.item.id, itemForWeek(f.item, input.week)]));
   if (items.size === 0 && !content.days.some((d) => d.id === input.dayId)) return { ok: false, error: "Giornata non trovata." };
 
   const discomfort = input.discomfort.trim();

@@ -4,7 +4,7 @@
  * cosa ha fatto davvero, settimana per settimana). Solo calcoli.
  */
 import type { ISODate } from "../dates";
-import { blockLetter, blockSummary, itemLabel, BLOCK_KIND_LABELS, type ProgramContent } from "./types";
+import { blockLetter, blockSummary, itemLabel, swapFor, BLOCK_KIND_LABELS, type ProgramContent } from "./types";
 import { summarizeSets, type SetLog } from "./prescription";
 
 export type CompareItem = {
@@ -96,7 +96,9 @@ export function buildCompareView(
                     const log = logBy.get(`${w + 1}:${d.id}`);
                     const txt = log ? doneBy.get(`${log.id}:${it.id}`) ?? null : null;
                     if (txt) loggedWeeks.add(w);
-                    return txt;
+                    // settimana con un sostituto: si dice quale esercizio è stato fatto
+                    const s = swapFor(it, w + 1);
+                    return txt && s ? `${s.name}: ${txt}` : txt;
                   }),
                 })),
       };

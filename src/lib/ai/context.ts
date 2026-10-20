@@ -7,7 +7,7 @@ import "server-only";
  */
 import type { ServerSupabase } from "../supabase/server";
 import { addDays, ageOn, todayISO } from "../dates";
-import { blockSummary, BLOCK_KIND_LABELS, itemLabel, parseContent, type ProgramContent } from "../program/types";
+import { blockSummary, BLOCK_KIND_LABELS, itemLabel, parseContent, weeksLabel, type ProgramContent } from "../program/types";
 import { summarizeSets, type SetLog } from "../program/prescription";
 import { parseProject, projectForAI } from "../project";
 import { balanceText, programBalance } from "../program/balance";
@@ -28,7 +28,8 @@ export function programToText(title: string, weeks: number, content: ProgramCont
       if (b.kind !== "single") lines.push(`  Blocco ${BLOCK_KIND_LABELS[b.kind]}${b.title ? ` "${b.title}"` : ""}: ${blockSummary(b)}${b.notes ? ` — ${b.notes}` : ""}`);
       b.items.forEach((it, ii) => {
         const weeksTxt = it.prescriptions.map((p, w) => `S${w + 1}: ${p || "—"}`).join(" | ");
-        lines.push(`    ${itemLabel(b, bi, ii)} ${it.name}${it.rest ? ` [rec ${it.rest}]` : ""} → ${weeksTxt}${it.notes ? ` (indicazioni: ${it.notes})` : ""}`);
+        const swaps = (it.swaps ?? []).map((s) => `nelle ${weeksLabel(s.from, s.to)} al suo posto ${s.name}${s.reason ? ` (${s.reason})` : ""}`).join("; ");
+        lines.push(`    ${itemLabel(b, bi, ii)} ${it.name}${it.rest ? ` [rec ${it.rest}]` : ""} → ${weeksTxt}${it.notes ? ` (indicazioni: ${it.notes})` : ""}${swaps ? ` [SOSTITUITO ${swaps}]` : ""}`);
       });
     });
   }
@@ -68,7 +69,7 @@ export async function buildClientContext(
     const age = ageOn(c.birth_date, today);
     parts.push(`## Cliente\nSesso: ${c.sex === "F" ? "donna" : c.sex === "M" ? "uomo" : "non indicato"}${age ? `, ${age} anni` : ""}. In percorso dal ${c.start_date}.\nObiettivi: ${c.goals || "non indicati"}\nDurata delle fasi del suo piano: ${c.phase_weeks ? `${c.phase_weeks} settimane` : "non ancora decisa (di solito 4 settimane)"}.`);
   }
-  const indications = profileText(aiProfile);
+  const indications = profileText(aiProfile, today);
   if (indications) parts.push(`## Indicazioni del trainer per questo cliente\n${indications}`);
 
   // prima di tutto: cosa il trainer ha già deciso di fare in questa fase

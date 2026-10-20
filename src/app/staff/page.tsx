@@ -19,6 +19,8 @@ import { CHAT_SNOOZE_DAYS, chatSilence, romeDay } from "@/lib/chat-silence";
 import { FirstSteps } from "./first-steps";
 import { ClearParams } from "@/components/clear-param";
 import { PushPrompt } from "@/components/push";
+import { IconSparkle } from "@/components/icons";
+import { aiEnabled } from "@/lib/ai/claude";
 
 export const metadata: Metadata = { title: "Oggi" };
 
@@ -66,6 +68,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
   const me = await requireStaff();
   const supabase = await createClient();
   const today = todayISO();
+  const aiOn = aiEnabled();
   // tutto in parallelo: ogni attesa in fila allunga l'apertura di Oggi
   const [clients, { data: checkins }, { data: pains }, { data: brand }, { data: clientNotes }, { data: lastMessages }, { data: snoozes }, jobs, billingAll] = await Promise.all([
     getClientsOverview(supabase, me),
@@ -87,7 +90,7 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
     // note finali dei clienti che l'AI ha giudicato da leggere
     supabase
       .from("workout_logs")
-      .select("id, client_id, week, performed_on, notes, note_reason, clients(first_name, last_name)")
+      .select("id, client_id, program_id, day_id, week, performed_on, notes, note_reason, clients(first_name, last_name), programs(status, weeks)")
       .eq("note_flag", true)
       .is("note_seen_at", null)
       .order("updated_at", { ascending: false })
@@ -208,9 +211,22 @@ export default async function StaffToday({ searchParams }: { searchParams: Promi
                       <span className="block font-semibold">{cl ? listName(cl) : "Cliente"}{n.note_reason ? <span className="font-normal text-ink-soft"> · {n.note_reason}</span> : null}</span>
                       <span className="block text-sm text-muted">{formatShort(n.performed_on)} · settimana {n.week} · “{n.notes.slice(0, 160)}{n.notes.length > 160 ? "…" : ""}”</span>
                     </Link>
-                    <form action={markNoteSeen.bind(null, n.id)}>
-                      <button type="submit" className="min-h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-sand-deep hover:bg-sand">Letta</button>
-                    </form>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center">
+                      {(() => {
+                        // nota su un programma in corso: "Ritocca da qui" apre il ritocco del giorno dalle settimane dopo
+                        const pr = n.programs as unknown as { status: string; weeks: number } | null;
+                        if (!aiOn || !n.program_id || pr?.status !== "published" || n.week >= pr.weeks) return null;
+                        const motivo = `Nota del cliente dopo l'allenamento della settimana ${n.week}: "${n.notes.slice(0, 500)}"`;
+                        return (
+                          <Link href={`/staff/programmi/${n.program_id}?ritocco=day:${n.day_id}&da=${n.week + 1}&motivo=${encodeURIComponent(motivo)}`} className="inline-flex min-h-9 items-center gap-1 rounded-full bg-ink px-3 text-sm font-semibold whitespace-nowrap text-card" data-retouch-from-note>
+                            <IconSparkle size={14} /> Ritocca da qui
+                          </Link>
+                        );
+                      })()}
+                      <form action={markNoteSeen.bind(null, n.id)}>
+                        <button type="submit" className="min-h-9 rounded-full px-3 text-sm font-semibold ring-1 ring-sand-deep hover:bg-sand">Letta</button>
+                      </form>
+                    </div>
                   </li>
                 );
               })}

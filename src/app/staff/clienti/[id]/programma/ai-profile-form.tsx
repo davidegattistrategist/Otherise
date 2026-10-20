@@ -89,6 +89,16 @@ export function AiProfileForm({ action, values, actualSquat }: { action: Action;
         <div className="flex items-end justify-between gap-2"><Label htmlFor="ai-notes" hint="facoltativo">Altre indicazioni per l&apos;AI</Label><DictateButton targetId="ai-notes" /></div>
         <Textarea id="ai-notes" name="notes" rows={3} defaultValue={values.notes} placeholder="es. In palestra ha solo manubri fino a 30 kg; preferisce non correre sul tapis roulant" />
       </div>
+      <fieldset className="rounded-2xl bg-sand/70 px-4 py-3" data-limitation>
+        <legend className="sr-only">Limitazione temporanea</legend>
+        <div className="flex items-end justify-between gap-2"><Label htmlFor="ai-limitation" hint="facoltativa">Limitazione temporanea</Label><DictateButton targetId="ai-limitation" /></div>
+        <Textarea id="ai-limitation" name="limitation" rows={2} defaultValue={values.limitation} placeholder="es. Distorsione al polso sinistro: niente prese con la mano sinistra" />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label htmlFor="ai-limitation-until" className="text-sm font-semibold">Fino al</label>
+          <Input id="ai-limitation-until" name="limitation_until" type="date" defaultValue={values.limitation_until ?? ""} className="!w-auto" />
+          <span className="text-sm text-muted">Poi l&apos;AI smette di tenerne conto da sola.</span>
+        </div>
+      </fieldset>
       <div>
         <Label htmlFor="ai-reply" hint="una per riga">Come scrivergli in chat</Label>
         <Textarea id="ai-reply" name="reply_lessons" rows={3} defaultValue={values.reply_lessons} placeholder="Si riempie da solo quando correggi le bozze di risposta. Puoi anche scriverlo tu: es. La chiamo Giuly; con lei niente emoji" />

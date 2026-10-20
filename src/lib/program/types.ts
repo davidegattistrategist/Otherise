@@ -25,6 +25,18 @@ export const BLOCK_KIND_LABELS: Record<BlockKind, string> = {
   text: "Testo libero",
 };
 
+export const swapSchema = z.object({
+  /** prima e ultima settimana (comprese) */
+  from: z.number().int().min(1).max(12),
+  to: z.number().int().min(1).max(12),
+  name: z.string().min(1).max(200),
+  exerciseId: z.string().uuid().nullish(),
+  /** indicazioni per il sostituto (se vuote valgono quelle dell'esercizio) */
+  notes: z.string().max(1000).optional().default(""),
+  /** perché (lo vede lo staff, e il cliente come "al posto di …") */
+  reason: z.string().max(300).optional().default(""),
+});
+
 export const programItemSchema = z.object({
   id: z.string().min(1),
   exerciseId: z.string().uuid().nullish(),
@@ -35,6 +47,12 @@ export const programItemSchema = z.object({
   notes: z.string().optional().default(""),
   /** Una prescrizione per settimana: "4x8 65kg", "3x20\"", "5x800m" */
   prescriptions: z.array(z.string()).default([]),
+  /**
+   * Sostituzioni per alcune settimane (infortunio, attrezzo che manca): in
+   * quelle settimane il cliente fa un altro esercizio, poi torna questo con la
+   * sua progressione. La prescrizione resta quella della settimana.
+   */
+  swaps: z.array(swapSchema).max(6).optional(),
 });
 
 export const programBlockSchema = z.object({
@@ -67,6 +85,7 @@ export const programContentSchema = z.object({
 });
 
 export type ProgramItem = z.infer<typeof programItemSchema>;
+export type ItemSwap = z.infer<typeof swapSchema>;
 export type ProgramBlock = z.infer<typeof programBlockSchema>;
 export type ProgramDay = z.infer<typeof programDaySchema>;
 export type ProgramContent = z.infer<typeof programContentSchema>;
@@ -171,7 +190,7 @@ export function flattenItems(content: ProgramContent) {
   return out;
 }
 
-/** Copia profonda con id nuovi (per i modelli assegnati e le copie). */
+/** Copia profonda con id nuovi (per i modelli assegnati e le copie): le sostituzioni temporanee non passano. */
 export function cloneWithNewIds(content: ProgramContent): ProgramContent {
   return {
     days: content.days.map((d) => ({
@@ -180,10 +199,56 @@ export function cloneWithNewIds(content: ProgramContent): ProgramContent {
       blocks: d.blocks.map((b) => ({
         ...b,
         id: newId(),
-        items: b.items.map((it) => ({ ...it, id: newId(), prescriptions: [...it.prescriptions] })),
+        items: b.items.map((it) => ({ ...withoutSwaps(it), id: newId(), prescriptions: [...it.prescriptions] })),
       })),
     })),
   };
+}
+
+/** L'esercizio senza le sostituzioni temporanee (nuove fasi, copie, modelli). */
+export function withoutSwaps<T extends ProgramItem>(it: T): T {
+  if (!it.swaps) return it;
+  const rest = { ...it };
+  delete rest.swaps;
+  return rest;
+}
+
+/** La sostituzione attiva in quella settimana (1 = prima), se c'è. */
+export function swapFor(item: Pick<ProgramItem, "swaps">, week: number): ItemSwap | null {
+  return item.swaps?.find((s) => week >= s.from && week <= s.to) ?? null;
+}
+
+/**
+ * L'esercizio come va fatto in quella settimana: con una sostituzione attiva
+ * nome, esercizio e indicazioni sono quelli del sostituto (stesso id: il
+ * logbook resta agganciato alla stessa riga del programma).
+ */
+export function itemForWeek(item: ProgramItem, week: number): ProgramItem & { swappedFrom?: { name: string; from: number; to: number; reason: string } } {
+  const s = swapFor(item, week);
+  if (!s) return item;
+  return {
+    ...item,
+    name: s.name,
+    exerciseId: s.exerciseId ?? null,
+    notes: s.notes?.trim() ? s.notes : item.notes,
+    swappedFrom: { name: item.name, from: s.from, to: s.to, reason: s.reason ?? "" },
+  };
+}
+
+/** Se l'esercizio (già passato da itemForWeek/dayForWeek) è un sostituto: cosa sostituisce. */
+export function swappedFrom(it: ProgramItem): { name: string; from: number; to: number; reason: string } | null {
+  return (it as ReturnType<typeof itemForWeek>).swappedFrom ?? null;
+}
+
+/** La giornata come va fatta in quella settimana (sostituzioni applicate). */
+export function dayForWeek(day: ProgramDay, week: number): ProgramDay {
+  if (!day.blocks.some((b) => b.items.some((it) => it.swaps?.length))) return day;
+  return { ...day, blocks: day.blocks.map((b) => ({ ...b, items: b.items.map((it) => itemForWeek(it, week)) })) };
+}
+
+/** "settimana 3" · "settimane 3–4" */
+export function weeksLabel(from: number, to: number): string {
+  return from === to ? `settimana ${from}` : `settimane ${from}–${to}`;
 }
 
 /** Titolo e dettaglio di un blocco senza ripetizioni ("AMRAP" + "10 min", non "AMRAP AMRAP 10 min"). */

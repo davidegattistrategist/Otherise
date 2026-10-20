@@ -5,7 +5,9 @@ import { dedicationOfDay, quoteOfDay } from "@/lib/quotes";
 import type { Metadata } from "next";
 import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { getMyLogs, getMyPaymentNotices, getMyPrograms } from "@/lib/data/me";
+import { getMyLogs, getMyMaxes, getMyPaymentNotices, getMyPrograms, getVideoMap } from "@/lib/data/me";
+import { ProgramDayView } from "@/components/program-day";
+import { dayForWeek } from "@/lib/program/types";
 import { PaymentNotices } from "@/components/payment-notice";
 import { diffDays, formatHeading, formatLong, formatShort, todayISO } from "@/lib/dates";
 import { completedCount, earlyStartDays, nextWorkout, programEndDate, startsLabel, timeProgress } from "@/lib/program/schedule";
@@ -16,7 +18,7 @@ import { type BillingRow } from "@/lib/billing";
 import { checkinWeekFor } from "@/lib/checkin";
 import { LineChart } from "@/components/line-chart";
 import { ArrowCTA, BigNumber, Card, Eyebrow, LinkButton, Notice, ProgressBar, Ring, fmtNum } from "@/components/ui";
-import { IconPlay } from "@/components/icons";
+import { IconDown, IconPlay } from "@/components/icons";
 import { ClearParams } from "@/components/clear-param";
 import { PushPrompt } from "@/components/push";
 import { SubmitButton } from "@/components/form-bits";
@@ -44,10 +46,13 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
   const row = (billing as BillingRow[] | null)?.[0];
   const coachFirst = coach?.split(" ")[0] || "il tuo coach";
   const checkinWeek = client?.weekly_checkin ? checkinWeekFor(today) : null;
-  const [logs, { notices, pay }, { data: thisCheckin }] = await Promise.all([
+  const [logs, { notices, pay }, { data: thisCheckin }, videos, maxes] = await Promise.all([
     current ? getMyLogs(current.id) : Promise.resolve([]),
     getMyPaymentNotices({ clientId: me.clientId, clientStatus: me.clientStatus, row, coach: coachFirst }),
     checkinWeek ? supabase.from("checkins").select("id").eq("client_id", me.clientId).eq("week_start", checkinWeek).maybeSingle() : Promise.resolve({ data: null }),
+    // per l'anteprima dell'allenamento di oggi (video e carichi in %)
+    current ? getVideoMap() : Promise.resolve({} as Record<string, string>),
+    current ? getMyMaxes(me.clientId) : Promise.resolve({} as Record<string, number>),
   ]);
 
   const bf = (checks ?? []).filter((c) => c.body_fat_pct !== null).map((c) => ({ date: c.check_date, value: Number(c.body_fat_pct) }));
@@ -95,19 +100,34 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
 
       {current ? (
         <Card dark className="flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <Eyebrow dark>{next ? (inProgress ? `Da finire · settimana ${next.week}` : `Prossimo allenamento · settimana ${next.week}`) : current.position.state === "not_started" ? "Si parte presto" : "Fase completata"}</Eyebrow>
-              <div className="mt-2 text-[26px] leading-tight font-semibold">
-                {next ? next.day.title : current.position.state === "not_started" ? `Il ${formatLong(current.start_date)}` : "Ottimo lavoro"}
+          {next ? (
+            // tocchi la card e vedi gli esercizi di oggi, senza far partire l'allenamento
+            <details className="group" data-next-preview>
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden" aria-label={`${next.day.title}: tocca per vedere gli esercizi`}>
+                <span className="min-w-0">
+                  <Eyebrow dark>{inProgress ? `Da finire · settimana ${next.week}` : `Prossimo allenamento · settimana ${next.week}`}</Eyebrow>
+                  <span className="mt-2 block text-[26px] leading-tight font-semibold">{next.day.title}</span>
+                  <span className="mt-1 block text-sm text-muted-dark">
+                    {dayForWeek(next.day, next.week).blocks.filter((b) => b.kind !== "text").slice(0, 4).map((b) => (b.kind === "single" ? (b.items[0] ? runTitle(b.items[0].name, b.items[0].prescriptions[next!.week - 1] ?? "") : undefined) : `${blockHeading(b).title} ${blockHeading(b).detail}`.trim())).filter(Boolean).join(" · ")}
+                  </span>
+                  <span className="mt-2 inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-card underline group-open:hidden">Vedi gli esercizi</span>
+                  <span className="mt-2 hidden min-h-9 items-center gap-1 text-sm font-semibold text-card underline group-open:inline-flex">Chiudi gli esercizi</span>
+                </span>
+                <IconDown size={20} className="mt-1 shrink-0 text-card transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="mt-3 rounded-2xl bg-card p-4 text-ink">
+                <ProgramDayView day={next.day} week={next.week} videos={videos} maxes={maxes} />
               </div>
+            </details>
+          ) : (
+            <div className="min-w-0">
+              <Eyebrow dark>{current.position.state === "not_started" ? "Si parte presto" : "Fase completata"}</Eyebrow>
+              <div className="mt-2 text-[26px] leading-tight font-semibold">{current.position.state === "not_started" ? `Il ${formatLong(current.start_date)}` : "Ottimo lavoro"}</div>
               <div className="mt-1 text-sm text-muted-dark">
-                {next
-                  ? next.day.blocks.filter((b) => b.kind !== "text").slice(0, 4).map((b) => (b.kind === "single" ? (b.items[0] ? runTitle(b.items[0].name, b.items[0].prescriptions[next!.week - 1] ?? "") : undefined) : `${blockHeading(b).title} ${blockHeading(b).detail}`.trim())).filter(Boolean).join(" · ")
-                  : current.position.state === "not_started" ? current.title : `Hai fatto tutti gli allenamenti della fase. ${coach ?? "Il tuo coach"} sta preparando la prossima.`}
+                {current.position.state === "not_started" ? current.title : `Hai fatto tutti gli allenamenti della fase. ${coach ?? "Il tuo coach"} sta preparando la prossima.`}
               </div>
             </div>
-          </div>
+          )}
           {next ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
               <LinkButton href={`/cliente/sessione/${current.id}/${next.week}/${next.day.id}`} variant="light" className="w-full justify-center sm:w-auto">

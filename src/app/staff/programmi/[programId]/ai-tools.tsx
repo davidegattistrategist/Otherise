@@ -23,7 +23,7 @@ type Img = { mediaType: "image/jpeg"; data: string; preview: string };
 /** Oltre questo tempo smettiamo di aspettare (il server si ferma comunque a 5 minuti). */
 const AI_TIMEOUT_MS = 290_000;
 
-async function post<T>(body: unknown): Promise<T> {
+export async function post<T>(body: unknown): Promise<T> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
   let res: Response;

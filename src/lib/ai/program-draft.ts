@@ -11,6 +11,7 @@ import { minutesFromAnswer } from "@/lib/ai-profile";
 import { getAiProfile, saveAiProfile } from "@/lib/data/ai-profile";
 import { buildClientContext, buildMethodContext } from "./context";
 import type { ProgramContent } from "@/lib/program/types";
+import { carrySwaps } from "@/lib/program/locks";
 
 type DB = ServerSupabase;
 
@@ -63,14 +64,16 @@ export async function runProgramDraft(
   if (newMinutes && newMinutes !== profile.session_minutes) {
     await saveAiProfile(supabase, program.client_id, { session_minutes: newMinutes });
   }
+  // le sostituzioni temporanee decise dal trainer restano sugli esercizi che la bozza tiene
+  const content = carrySwaps(result.content, body.current.content);
   // la bozza si conserva: alla pubblicazione si vede cosa hai corretto e l'AI impara
-  await recordDraft(supabase, { programId: program.id, clientId: program.client_id, userId, content: result.content, instruction: body.instruction });
+  await recordDraft(supabase, { programId: program.id, clientId: program.client_id, userId, content, instruction: body.instruction });
   return {
     summary: result.summary,
     title: result.title,
     description: result.description,
     weeks: result.weeks,
-    content: result.content,
+    content,
     notes: result.notes,
     sessionMinutes: newMinutes ?? sessionMinutes ?? null,
   };

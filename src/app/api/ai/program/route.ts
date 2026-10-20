@@ -8,6 +8,7 @@ import { aiEnabled, progressRow, suggestAlternatives, type AiUsage } from "@/lib
 import { learnPending } from "@/lib/ai/learn";
 import { runProgramDraft, type DraftInput } from "@/lib/ai/program-draft";
 import { startProgramJob } from "@/lib/ai/program-jobs";
+import { runRetouch } from "@/lib/ai/program-retouch";
 import { after } from "next/server";
 import { buildClientContext, buildMethodContext } from "@/lib/ai/context";
 import { programContentSchema } from "@/lib/program/types";
@@ -45,6 +46,19 @@ const bodySchema = z.discriminatedUnion("mode", [
     programId: z.string().uuid(),
     weeks: z.number().int().min(1).max(12),
     item: z.object({ name: z.string(), prescriptions: z.array(z.string()), notes: z.string().default(""), exerciseId: z.string().nullish() }),
+  }),
+  z.object({
+    mode: z.literal("retouch"),
+    programId: z.string().uuid(),
+    current: reviseFields.current,
+    scope: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("program") }),
+      z.object({ kind: z.literal("day"), dayId: z.string().min(1).max(40) }),
+      z.object({ kind: z.literal("item"), itemId: z.string().min(1).max(40) }),
+    ]),
+    from: z.number().int().min(1).max(12),
+    to: z.number().int().min(1).max(12),
+    reason: z.string().trim().min(3, "Scrivi o scegli il motivo del ritocco").max(3000),
   }),
   z.object({
     mode: z.literal("alternatives"),
@@ -85,6 +99,10 @@ export async function POST(req: NextRequest) {
       const outcome = await runProgramDraft(supabase, me.id, { ...program, client_id: program.client_id }, input);
       // correzioni di programmi già pubblicati, ritoccati da almeno mezz'ora: diventano lezioni
       if (!("questions" in outcome)) after(() => learnPending(me.id, { olderThanMinutes: 30 }));
+      return NextResponse.json(outcome);
+    }
+    if (body.mode === "retouch") {
+      const outcome = await runRetouch(supabase, me.id, { ...program, client_id: program.client_id }, body);
       return NextResponse.json(outcome);
     }
     if (body.mode === "progress") {

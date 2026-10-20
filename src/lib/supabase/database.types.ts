@@ -201,6 +201,26 @@ isOneToOne: true
       referencedColumns: ["id"]
     }
                   ]
+                },"program_revisions": {
+                  Row: {
+                    "client_id": string,"content": Json,"created_at": string,"created_by": string | null,"id": string,"program_id": string,"reason": string,"title": string,"weeks": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"content": Json,"created_at"?: string,"created_by"?: string | null,"id"?: string,"program_id": string,"reason"?: string,"title"?: string,"weeks": number
+                  }
+                  Update: {
+                    "client_id"?: string,"content"?: Json,"created_at"?: string,"created_by"?: string | null,"id"?: string,"program_id"?: string,"reason"?: string,"title"?: string,"weeks"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "program_revisions_program_id_fkey"
+      columns: ["program_id"]
+isOneToOne: false
+      referencedRelation: "programs"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"drafts": {
                   Row: {
                     "data": Json,"key": string,"updated_at": string,"user_id": string
@@ -310,14 +330,14 @@ isOneToOne: true
                   ]
                 },"client_ai_profiles": {
                   Row: {
-                    "auto_note": string,"client_id": string,"intensity_techniques": boolean | null,"notes": string,"reply_lessons": string,"running_level": string | null,"session_minutes": number | null,"squat_share": number | null,"strength_level": string | null,"updated_at": string,"vertical_push": string | null
+                    "auto_note": string,"client_id": string,"intensity_techniques": boolean | null,"limitation": string,"limitation_until": string | null,"notes": string,"reply_lessons": string,"running_level": string | null,"session_minutes": number | null,"squat_share": number | null,"strength_level": string | null,"updated_at": string,"vertical_push": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "auto_note"?: string,"client_id": string,"intensity_techniques"?: boolean | null,"notes"?: string,"reply_lessons"?: string,"running_level"?: string | null,"session_minutes"?: number | null,"squat_share"?: number | null,"strength_level"?: string | null,"updated_at"?: string,"vertical_push"?: string | null
+                    "auto_note"?: string,"client_id": string,"intensity_techniques"?: boolean | null,"limitation"?: string,"limitation_until"?: string | null,"notes"?: string,"reply_lessons"?: string,"running_level"?: string | null,"session_minutes"?: number | null,"squat_share"?: number | null,"strength_level"?: string | null,"updated_at"?: string,"vertical_push"?: string | null
                   }
                   Update: {
-                    "auto_note"?: string,"client_id"?: string,"intensity_techniques"?: boolean | null,"notes"?: string,"reply_lessons"?: string,"running_level"?: string | null,"session_minutes"?: number | null,"squat_share"?: number | null,"strength_level"?: string | null,"updated_at"?: string,"vertical_push"?: string | null
+                    "auto_note"?: string,"client_id"?: string,"intensity_techniques"?: boolean | null,"limitation"?: string,"limitation_until"?: string | null,"notes"?: string,"reply_lessons"?: string,"running_level"?: string | null,"session_minutes"?: number | null,"squat_share"?: number | null,"strength_level"?: string | null,"updated_at"?: string,"vertical_push"?: string | null
                   }
                   Relationships: [
                     {
