@@ -221,6 +221,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"weight_logs": {
+                  Row: {
+                    "client_id": string,"created_at": string,"created_by": string | null,"id": string,"kg": number,"log_date": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "client_id": string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"kg": number,"log_date": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "client_id"?: string,"created_at"?: string,"created_by"?: string | null,"id"?: string,"kg"?: number,"log_date"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "weight_logs_client_id_fkey"
+      columns: ["client_id"]
+isOneToOne: false
+      referencedRelation: "clients"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"drafts": {
                   Row: {
                     "data": Json,"key": string,"updated_at": string,"user_id": string

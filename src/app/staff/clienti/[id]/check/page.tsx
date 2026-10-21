@@ -26,6 +26,9 @@ import { SexPrompt } from "./sex-prompt";
 import { CheckPhotoUploader, PhotoAlbums, PhotoCompare } from "@/components/check-photos";
 import { staffCheckPhotos } from "@/lib/check-photos";
 import { IconPhoto } from "@/components/icons";
+import { DailyWeight } from "@/components/daily-weight";
+import { getWeights } from "@/lib/data/weights";
+import { todayISO } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Check" };
 
@@ -42,11 +45,11 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
   if (!client.sex) return <SexPrompt clientId={id} />;
   const supabase = await createClient();
   // foto: nell'elenco solo quante sono; si aprono dal check, dall'elenco qui sotto o nel confronto
-  const [{ data: checks }, photos] = await Promise.all([supabase
+  const [{ data: checks }, photos, weights] = await Promise.all([supabase
     .from("checks")
     .select("id, check_date, sequence, created_at, order_hint, age_years, skinfolds, weight_kg, body_fat_pct, fat_mass_kg, lean_mass_kg, body_fat_formula, circumferences, strength_tests, tests_text, notes_next_phase, visible_to_client")
     .eq("client_id", id)
-    .order("check_date", { ascending: true }), staffCheckPhotos(supabase, id)]);
+    .order("check_date", { ascending: true }), staffCheckPhotos(supabase, id), getWeights(supabase, id)]);
   const sex = client.sex as Sex;
   const body = staffBodyData(checks ?? [], sex, client.birth_date, client.skinfold_formula);
   const list = body.list;
@@ -89,6 +92,7 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
         <form action={startCheckMode.bind(null, id, null)}><Button type="submit">Inizia il check</Button></form>
       </div>
       <p className="-mt-3 text-right text-xs text-muted">Modalità check: a tutto schermo, con confronti, programma e pagamenti a portata di mano, e insieme sul telefono e sul computer.</p>
+      <div id="peso" className="scroll-mt-24"><DailyWeight entries={weights} today={todayISO()} clientId={id} staff /></div>
       {list.length === 0 ? (
         <EmptyState title="Ancora nessun check">Registra pliche, circonferenze e test: i grafici si costruiscono da soli.</EmptyState>
       ) : (

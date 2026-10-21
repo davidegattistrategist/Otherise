@@ -161,6 +161,15 @@ async function main() {
   await db.from("programs").insert({ client_id: sara, title: "Base aerobica (bozza)", weeks: 6, status: "draft", content: programA() as never, created_by: owner });
   await db.from("programs").insert({ client_id: null, is_template: true, title: "Modello · Total body 3 giorni", weeks: 4, content: programA() as never, created_by: owner });
 
+  // Peso giorno per giorno di Giulia: ultime 6 settimane, qualche giorno saltato (oggi no: lo segna il test)
+  const wobble = [0.3, -0.2, 0.5, 0.1, -0.4, 0.2, 0.6, -0.1, 0.0, 0.4, -0.3];
+  const weightRows = [];
+  for (let d = 42; d >= 1; d--) {
+    if (d % 5 === 0 || d % 11 === 0) continue;
+    weightRows.push({ client_id: giulia, log_date: addDays(today, -d), kg: Math.round((65.6 - (42 - d) * 0.02 + wobble[d % wobble.length]) * 100) / 100 });
+  }
+  await db.from("weight_logs").insert(weightRows).throwOnError();
+
   // Logbook: settimane 1 e 2 complete, settimana 3 a metà
   async function logWeek(programId: string, c: ProgramContent, week: number, dayCount: number, base: string, kgBonus = 0) {
     for (let d = 0; d < dayCount; d++) {

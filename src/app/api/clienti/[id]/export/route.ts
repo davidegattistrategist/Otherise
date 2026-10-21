@@ -16,6 +16,7 @@ const TABLES = [
   "pt_sessions",
   "checks",
   "check_photos",
+  "weight_logs",
   "posture_assessments",
   "checkins",
   "payment_plans",

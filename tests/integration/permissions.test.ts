@@ -775,4 +775,33 @@ describe.skipIf(!run)("permessi", () => {
     await clientA.from("client_ai_profiles").update({ limitation: "" }).eq("client_id", clientAId);
     expect((await admin.from("client_ai_profiles").select("limitation").eq("client_id", clientAId).single()).data!.limitation).toBe("Niente prese con la mano sinistra");
   });
+  it("peso giorno per giorno: il cliente il suo, lo staff dei clienti che segue; niente date future; a fine percorso il cliente non lo vede", async () => {
+    const day = (offset: number) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome" }).format(new Date(Date.now() + offset * 86_400_000));
+    // il cliente segna e corregge il suo
+    await clientA.from("weight_logs").insert({ client_id: clientAId, log_date: day(-1), kg: 64.5 }).throwOnError();
+    await clientA.from("weight_logs").upsert({ client_id: clientAId, log_date: day(-1), kg: 64.2 }, { onConflict: "client_id,log_date" }).throwOnError();
+    expect((await clientA.from("weight_logs").select("kg").eq("client_id", clientAId)).data).toEqual([{ kg: 64.2 }]);
+    // non quello di un altro cliente, non nel futuro, non valori assurdi
+    expect((await clientA.from("weight_logs").insert({ client_id: clientBId, log_date: day(-1), kg: 70 })).error).not.toBeNull();
+    expect((await clientA.from("weight_logs").insert({ client_id: clientAId, log_date: day(5), kg: 64 })).error).not.toBeNull();
+    expect((await clientA.from("weight_logs").insert({ client_id: clientAId, log_date: day(-2), kg: 12 })).error).not.toBeNull();
+    // lo staff che lo segue lo vede e lo può scrivere; il collaboratore non tocca clienti non suoi
+    expect((await coach.from("weight_logs").select("kg").eq("client_id", clientAId)).data).toEqual([{ kg: 64.2 }]);
+    await coach.from("weight_logs").insert({ client_id: clientAId, log_date: day(-3), kg: 64.8 }).throwOnError();
+    expect((await coach.from("weight_logs").insert({ client_id: clientBId, log_date: day(-3), kg: 80 })).error).not.toBeNull();
+    await owner.from("weight_logs").insert({ client_id: clientBId, log_date: day(-3), kg: 80 }).throwOnError();
+    expect((await coach.from("weight_logs").select("id").eq("client_id", clientBId)).data ?? []).toEqual([]);
+    expect((await clientA.from("weight_logs").select("id").eq("client_id", clientBId)).data ?? []).toEqual([]);
+    expect((await stranger.from("weight_logs").select("*")).data ?? []).toEqual([]);
+    // il cliente può togliere i suoi
+    await clientA.from("weight_logs").delete().eq("client_id", clientAId).eq("log_date", day(-3)).throwOnError();
+    expect((await admin.from("weight_logs").select("kg").eq("client_id", clientAId)).data).toEqual([{ kg: 64.2 }]);
+    // a fine percorso il cliente non lo vede e non lo scrive più; lo staff sì
+    await admin.from("clients").update({ status: "archived" }).eq("id", clientAId).throwOnError();
+    expect((await clientA.from("weight_logs").select("id")).data ?? []).toEqual([]);
+    expect((await clientA.from("weight_logs").insert({ client_id: clientAId, log_date: day(-4), kg: 64 })).error).not.toBeNull();
+    expect((await coach.from("weight_logs").select("kg").eq("client_id", clientAId)).data).toEqual([{ kg: 64.2 }]);
+    await admin.from("clients").update({ status: "active" }).eq("id", clientAId).throwOnError();
+    await admin.from("weight_logs").delete().in("client_id", [clientAId, clientBId]).throwOnError();
+  });
 });

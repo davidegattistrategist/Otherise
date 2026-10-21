@@ -21,6 +21,8 @@ import { TrainingHistoryList } from "@/components/training-history";
 import { TrainingSummaryView } from "@/components/training-summary";
 import { ArrowCTA, BigNumber, Card, Dot, EmptyState, Eyebrow, LinkButton, Notice, ProgressBar, Ring, fmtNum } from "@/components/ui";
 import { ClearParams } from "@/components/clear-param";
+import { getWeights } from "@/lib/data/weights";
+import { weightSummary } from "@/lib/body/weights";
 
 export const metadata: Metadata = { title: "Cliente" };
 
@@ -45,7 +47,7 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
   const today = todayISO();
 
   // tutto insieme: una sola attesa invece di quattro una dopo l'altra
-  const [programs, checks, sessions, checkins, history, notes, billing, settings, exerciseSeries, ptCounterRes, unpaidRows] = await Promise.all([
+  const [programs, checks, sessions, checkins, history, notes, billing, settings, exerciseSeries, ptCounterRes, unpaidRows, weights] = await Promise.all([
     supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", id).in("status", ["published", "draft"]).order("start_date", { ascending: false, nullsFirst: true }),
     supabase.from("checks").select("check_date, sequence, created_at, order_hint, weight_kg, body_fat_pct, lean_mass_kg, notes_next_phase, strength_tests").eq("client_id", id).order("check_date", { ascending: true }),
     supabase.from("pt_sessions").select("id, session_date, notes").eq("client_id", id).order("session_date", { ascending: false }).limit(3),
@@ -57,7 +59,9 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
     getExerciseProgress(supabase, id),
     me.role === "owner" ? getPtCounter(supabase, id) : Promise.resolve(null),
     me.role === "owner" ? getUnpaidRows(supabase, id) : Promise.resolve(null),
+    getWeights(supabase, id),
   ]);
+  const dailyWeight = weightSummary(weights, today);
   const published = (programs.data ?? []).filter((p) => p.status === "published" && p.start_date);
   const current = currentProgram(published, today);
   const drafts = (programs.data ?? []).filter((p) => p.status === "draft");
@@ -189,6 +193,23 @@ export default async function ClientOverviewPage({ params, searchParams }: { par
           <p className="text-[15px] text-muted">Nessuna sessione registrata.</p>
         )}
       </Card>
+
+      {dailyWeight ? (
+        <Card className="flex flex-col gap-2" data-weight-overview>
+          <div className="flex items-baseline justify-between gap-2"><Eyebrow>Peso giorno per giorno</Eyebrow><Link href={`/staff/clienti/${id}/check#peso`} className="text-sm font-semibold underline">Grafico e pesate</Link></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-xs text-muted">Media ultimi 7 giorni</div>
+              <BigNumber value={fmtNum(dailyWeight.avg7, 1)} unit="kg" />
+            </div>
+            <div>
+              <div className="text-xs text-muted">In 4 settimane</div>
+              <BigNumber value={dailyWeight.change28 === null ? "–" : `${dailyWeight.change28 > 0 ? "+" : dailyWeight.change28 < 0 ? "−" : ""}${fmtNum(Math.abs(dailyWeight.change28), 1)}`} unit={dailyWeight.change28 === null ? undefined : "kg"} />
+            </div>
+          </div>
+          <p className="text-sm text-muted">Ultima pesata {dailyWeight.last.date === today ? "oggi" : `il ${formatShort(dailyWeight.last.date)}`}: {fmtNum(dailyWeight.last.kg, 2)} kg{dailyWeight.stale ? " · non si pesa da più di 10 giorni" : ""}</p>
+        </Card>
+      ) : null}
 
       <ExerciseProgress series={exerciseSeries} selected={esercizio} />
       <StrengthTests series={strengthTestSeries(checkList)} title="Test di forza dei check" footer={<Link href={`/staff/clienti/${id}/check`} className="text-sm font-semibold underline">Tutti i check</Link>} />

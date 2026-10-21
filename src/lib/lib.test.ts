@@ -1855,3 +1855,49 @@ describe("ritocchi: sostituzioni, settimane fatte e modifiche dell'AI", () => {
     expect(parseProfileForm(fd).limitation_until).toBeNull();
   });
 });
+
+import { averageUntil, lastDays as weightLastDays, normalizeWeights, parseKg, rollingAverage, weightSummary, weightTrendText } from "./body/weights";
+
+describe("peso giorno per giorno", () => {
+  it("legge il peso come lo scrive una persona", () => {
+    expect(parseKg("63,95")).toBe(63.95);
+    expect(parseKg("64.5 kg")).toBe(64.5);
+    expect(parseKg(" 65 ")).toBe(65);
+    expect(parseKg("63,957")).toBe(63.96);
+    expect(parseKg("6")).toBeNull();
+    expect(parseKg("abc")).toBeNull();
+    expect(parseKg("")).toBeNull();
+    expect(parseKg("1.000")).toBeNull();
+  });
+  it("una pesata per giorno, in ordine; media dei 7 giorni e differenza in 4 settimane", () => {
+    const rows = [
+      { log_date: "2026-10-03", kg: "65" },
+      { log_date: "2026-09-05", kg: 66 },
+      { log_date: "2026-09-04", kg: 66.4 },
+      { log_date: "2026-10-01", kg: 64.6 },
+      { log_date: "2026-10-01", kg: 64.8 },
+      { log_date: "non-data", kg: 70 },
+      { log_date: "2026-10-02", kg: 999 },
+    ];
+    const w = normalizeWeights(rows);
+    expect(w).toEqual([
+      { date: "2026-09-04", kg: 66.4 },
+      { date: "2026-09-05", kg: 66 },
+      { date: "2026-10-01", kg: 64.8 },
+      { date: "2026-10-03", kg: 65 },
+    ]);
+    expect(averageUntil(w, "2026-10-03")).toBe(64.9);
+    expect(averageUntil(w, "2026-09-20")).toBeNull();
+    expect(rollingAverage(w).map((r) => r.avg)).toEqual([66.4, 66.2, 64.8, 64.9]);
+    const s = weightSummary(w, "2026-10-05")!;
+    expect(s).toMatchObject({ last: { date: "2026-10-03", kg: 65 }, avg7: 64.9, count7: 2, stale: false });
+    // 4 settimane prima del 3/10 = 5/9: media di 4 e 5 settembre = 66,2
+    expect(s.change28).toBe(-1.3);
+    expect(weightSummary(w, "2026-10-20")!.stale).toBe(true);
+    expect(weightSummary([], "2026-10-20")).toBeNull();
+    expect(weightLastDays(w, 30, "2026-10-03").map((e) => e.date)).toEqual(["2026-09-04", "2026-09-05", "2026-10-01", "2026-10-03"]);
+    expect(weightLastDays(w, 7, "2026-10-03").map((e) => e.date)).toEqual(["2026-10-01", "2026-10-03"]);
+    expect(weightTrendText(w, "2026-10-05")).toBe("Peso giornaliero scritto dal cliente: media degli ultimi 7 giorni 64,9 kg (2 pesate, l'ultima il 2026-10-03), −1,3 kg rispetto a 4 settimane prima.");
+    expect(weightTrendText([], "2026-10-05")).toBe("");
+  });
+});

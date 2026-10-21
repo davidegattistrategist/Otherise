@@ -7,6 +7,7 @@ import "server-only";
  */
 import type { ServerSupabase } from "../supabase/server";
 import { addDays, ageOn, todayISO } from "../dates";
+import { normalizeWeights, weightTrendText } from "../body/weights";
 import { blockSummary, BLOCK_KIND_LABELS, itemLabel, parseContent, weeksLabel, type ProgramContent } from "../program/types";
 import { summarizeSets, type SetLog } from "../program/prescription";
 import { parseProject, projectForAI } from "../project";
@@ -51,7 +52,7 @@ export async function buildClientContext(
 ) {
   const today = todayISO();
   const since = addDays(today, -16 * 7);
-  const [client, programs, logs, checks, posture, checkins, pt, project, aiProfile] = await Promise.all([
+  const [client, programs, logs, checks, posture, checkins, pt, project, aiProfile, weights] = await Promise.all([
     supabase.from("clients").select("sex, birth_date, goals, start_date, phase_weeks").eq("id", clientId).single(),
     supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", clientId).neq("status", "draft").order("start_date", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(3),
     supabase.from("exercise_logs").select("exercise_name, performed_on, week, sets, result_text").eq("client_id", clientId).gte("performed_on", since).order("performed_on"),
@@ -61,6 +62,7 @@ export async function buildClientContext(
     supabase.from("pt_sessions").select("session_date, notes").eq("client_id", clientId).order("session_date", { ascending: false }).limit(6),
     supabase.from("client_projects").select("data").eq("client_id", clientId).maybeSingle(),
     getAiProfile(supabase, clientId),
+    supabase.from("weight_logs").select("log_date, kg").eq("client_id", clientId).gte("log_date", addDays(today, -70)).order("log_date"),
   ]);
 
   const parts: string[] = [];
@@ -138,6 +140,9 @@ export async function buildClientContext(
           .join("\n"),
     );
   }
+
+  const weightLine = weightTrendText(normalizeWeights(weights.data ?? []), today);
+  if (weightLine) parts.push(`## Peso giorno per giorno\n${weightLine}`);
 
   if (posture.data?.length) {
     parts.push(

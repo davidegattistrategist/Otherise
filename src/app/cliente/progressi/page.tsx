@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { requireActiveClient } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatLong, formatShort } from "@/lib/dates";
+import { formatLong, formatShort, todayISO } from "@/lib/dates";
+import { DailyWeight } from "@/components/daily-weight";
+import { getWeights } from "@/lib/data/weights";
 import { averagesOf, type SkinfoldReadings } from "@/lib/body/skinfolds";
 import { circOf, firstToLast, sitesInAll, toNumber, type BodyPoint } from "@/lib/body/progress";
 import { BodyCharts, CheckCompare } from "@/components/body-progress";
@@ -21,13 +23,14 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
   const { esercizio } = await searchParams;
   const me = await requireActiveClient();
   const supabase = await createClient();
-  const [{ data: checks }, { data: posture }, { data: checkins }, { data: sessions }, exerciseSeries, photos] = await Promise.all([
+  const [{ data: checks }, { data: posture }, { data: checkins }, { data: sessions }, exerciseSeries, photos, weights] = await Promise.all([
     supabase.rpc("my_checks"),
     supabase.from("posture_assessments").select("id, assessed_on, tight_muscles, what_works, posture_work, notes").eq("client_id", me.clientId).order("assessed_on", { ascending: false }).limit(3),
     supabase.from("checkins").select("week_start, training, sleep, stress, adherence").eq("client_id", me.clientId).order("week_start", { ascending: true }).limit(26),
     supabase.rpc("my_pt_session_dates"),
     getExerciseProgress(supabase, me.clientId),
     myCheckPhotos(supabase),
+    getWeights(supabase, me.clientId),
   ]);
   const list = checks ?? [];
   // foto dei check, dal più recente
@@ -61,6 +64,7 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-[30px] leading-tight font-normal tracking-tight">I tuoi progressi</h1>
+      <div id="peso" className="scroll-mt-24"><DailyWeight entries={weights} today={todayISO()} /></div>
       {list.length === 0 ? (
         <EmptyState title="Ancora nessun check">Dopo il primo check con il tuo coach qui trovi peso, massa grassa, massa magra, circonferenze e test.</EmptyState>
       ) : (
