@@ -9,6 +9,7 @@
  * anche se in quel momento lavorava su altro), aggiorna il titolo della scheda
  * del browser con il numero da leggere e ricarica le pagine di riepilogo.
  */
+import { showAppBadge } from "@/lib/app-badge";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
@@ -122,6 +123,8 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
     const prev = last.current;
     last.current = { latestId: d.latest?.id ?? prev?.latestId ?? null, chatAt: d.chat?.at ?? prev?.chatAt ?? null, counts: { notifications: d.notifications, chats: d.chats } };
     setCounts({ notifications: d.notifications, chats: d.chats });
+    // numerino rosso sull'icona dell'app sulla Home (dove il telefono lo permette)
+    showAppBadge(d.chats);
     if (role === "staff") {
       setAiJobs(d.aiJobs ?? []);
       setCheckMode(d.checkMode ?? null);

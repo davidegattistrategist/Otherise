@@ -100,6 +100,12 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
           <BodyCharts points={body.points} sumSites={body.sumSites} formulas={body.formulas} />
           <StrengthTests series={strengthTestSeries(checks ?? [])} title="Test di forza e performance" />
           <CheckCompare points={body.points} sumSites={body.sumSites} />
+          {list.length > 1 ? (
+            <p className="-mt-2 text-right text-sm">
+              <Link href={`/staff/clienti/${id}/check/confronto`} className="font-semibold underline" data-open-print-compare>Confronto da stampare o salvare in PDF</Link>
+              <span className="block text-xs text-muted">Per esempio da mandare al nutrizionista</span>
+            </p>
+          ) : null}
           {photoAlbums.length ? (
             <Card className="flex flex-col gap-2">
               <Eyebrow>Le foto dei check</Eyebrow>

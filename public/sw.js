@@ -1,4 +1,4 @@
-/* Service worker di Otherise: riceve le notifiche push e le mostra. */
+/* Service worker di Otherise: riceve le notifiche push, le mostra e aggiorna il numerino sull'icona. */
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
@@ -23,9 +23,25 @@ self.addEventListener("push", (event) => {
       // le pagine aperte aggiornano subito campanella e messaggi
       const open = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       open.forEach((c) => c.postMessage({ type: "otherise:push" }));
+      await updateBadge();
     })(),
   );
 });
+
+/* Numerino rosso sull'icona dell'app: quante chat (staff) o quanti messaggi (cliente) da leggere. */
+async function updateBadge() {
+  const nav = self.navigator;
+  if (!nav || !nav.setAppBadge) return;
+  try {
+    const r = await fetch("/api/badge", { credentials: "include", cache: "no-store" });
+    if (!r.ok) return;
+    const { count } = await r.json();
+    if (count > 0) await nav.setAppBadge(count);
+    else if (nav.clearAppBadge) await nav.clearAppBadge();
+  } catch {
+    // senza rete o non supportato: resta il numero di prima
+  }
+}
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();

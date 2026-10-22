@@ -101,6 +101,11 @@ Nell'editor:
 - Tu lo vedi nella scheda del cliente: in **Panoramica** (media e cambiamento, con l'avviso se non si pesa da più di 10 giorni) e nella pagina **Check**, dove c'è il grafico e puoi anche segnare o correggere una pesata (per esempio quella fatta insieme in studio).
 - L'assistente AI riceve solo l'andamento (media e differenza in 4 settimane) per preparare le bozze.
 
+### Confronto da mandare (per esempio al nutrizionista)
+- Nella pagina **Check** del cliente, sotto "Confronta due check", tocca **Confronto da stampare o salvare in PDF**. Di partenza confronta gli ultimi due check; puoi sceglierne altri due.
+- Sul foglio ci sono peso, massa grassa e massa magra (prima → dopo e differenza), le pliche una per una con la somma, le circonferenze e, se il cliente segna il peso ogni giorno, la media della prima e dell'ultima settimana. In fondo c'è una spiegazione breve: pliche e bioimpedenza misurano cose diverse e non vanno confrontate tra loro.
+- Puoi scrivere una nota che finisce sul foglio (non viene salvata). Poi **Stampa o salva in PDF**: dal telefono si apre la stampa, e dall'anteprima tocchi Condividi per salvarlo o mandarlo.
+
 ## Durante e dopo le sessioni
 - **Sessione PT** (in alto nella scheda): se il cliente ha un programma scegli **"Un allenamento del suo programma"** (il prossimo è già in evidenza, oppure un altro giorno) o **"Lezione libera"**. Con l'allenamento del programma registri le serie nel suo logbook e in fondo trovi **"Sessione PT con te"** già spuntato, "si scala dalle sessioni PT pagate" e le **note della lezione**: premendo "Salva come fatto" si salvano insieme l'allenamento e la sessione PT. La lezione libera è solo data, "si scala" e note. Se la lezione finisce a metà allenamento e il cliente lo completa da solo, alla domanda sulle serie non spuntate scegli **"Le finisce in autonomia: lascia aperto"**: la sessione PT si registra, ma l'allenamento resta aperto e sul suo telefono è ancora il prossimo, con "Riprendi l'allenamento" (così non ne comincia un altro). Un allenamento aperto per sbaglio e lasciato vuoto non risulta "Iniziato". Se il cliente non ha un programma in corso la pagina te lo dice e offre solo la lezione libera.
 - **Note**, ovunque anche dettate con **"Detta"**: un tocco per iniziare a parlare, uno per finire (si vede il tempo che passa), poi in pochi secondi il testo compare nella casella. Funziona uguale su iPhone, Android e computer, e c'è anche nelle note del check, nelle indicazioni per l'AI, nella risposta al diario e, per il cliente, nel diario e nel logbook. Le sessioni "che contano nel pacchetto" scalano le sessioni rimaste di chi ha un pacchetto.
@@ -136,6 +141,7 @@ Quello che scrivi si salva da solo mentre scrivi, su questo dispositivo e sul se
 - **Finestra "Attiva le notifiche"**: quando il cliente (o tu) apre l'app dalla schermata Home la prima volta, compare una finestra che spiega perché attivarle (messaggi, programmi, promemoria). "Più tardi" la ripropone dopo 3 giorni. Con le notifiche attive non arrivano più email.
 
 ## Notifiche e app sul telefono
+- **Numerino rosso sull'icona**: con l'app sulla Home e le notifiche attive, sull'icona compare il numero dei messaggi da leggere (a te le chat a cui rispondere, al cliente i suoi messaggi non letti) e sparisce quando hai letto. Su iPhone serve iOS 16.4 o successivo; su Android il pallino o il numero li decide il telefono.
 
 **Quali notifiche arrivano.** I controlli automatici girano ogni mattina alle 8 (ora italiana, anche con l'ora solare; può arrivare qualche minuto dopo). Ogni avviso arriva **una volta sola**, quando succede; dopo, la cosa resta in **Oggi** finché non è sistemata.
 - *Ogni mattina, a te:*
