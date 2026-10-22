@@ -259,7 +259,5 @@ main > div:has(> [data-program-editor]) {
   [data-print-sheet] { position: absolute; inset: 0 auto auto 0; width: 100%; padding: 0 !important; border-radius: 0 !important; background: #fff !important; }
   [data-print-hide] { display: none !important; }
   [data-print-sheet] section, [data-print-sheet] tr { break-inside: avoid; }
-  .print-note { border: 0 !important; background: transparent !important; padding: 0 !important; resize: none; }
-  [data-print-sheet] section:has(.print-note:placeholder-shown) { display: none; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }

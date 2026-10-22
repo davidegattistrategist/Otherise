@@ -12,6 +12,7 @@ import { addDays, ageOn, diffDays, formatLong, todayISO } from "@/lib/dates";
 import type { Sex } from "@/lib/body/skinfolds";
 import { Card, cx, EmptyState, fmtNum } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
+import { PrintNote } from "@/components/print-note";
 
 export const metadata: Metadata = { title: "Confronto composizione corporea" };
 
@@ -132,15 +133,7 @@ export default async function ComparePrintPage({ params, searchParams }: { param
           </section>
         ) : null}
 
-        <section className="flex flex-col gap-2">
-          <h2 className="text-[17px] font-semibold">Note</h2>
-          <textarea
-            aria-label="Note per chi legge il confronto"
-            rows={3}
-            placeholder="Scrivi qui cosa vuoi far notare (resta sul foglio stampato, non viene salvato)"
-            className="print-note w-full rounded-xl border border-sand-deep bg-sand/40 px-3 py-2.5 text-[15px] leading-relaxed"
-          />
-        </section>
+        <PrintNote label="Note per chi legge il confronto" placeholder="Scrivi qui cosa vuoi far notare (resta sul foglio stampato, non viene salvato)" />
 
         <footer className="flex flex-col gap-2 border-t border-sand-deep pt-4 text-[13px] leading-relaxed text-ink-soft">
           <p>
