@@ -119,8 +119,12 @@ function DiffCell({ r }: { r: CompareRow }) {
  */
 export function CheckCompare({ points, sumSites, title = "Confronta due check" }: { points: BodyPoint[]; sumSites: SkinfoldSite[]; title?: string }) {
   const pair = defaultPair(points);
-  const [aId, setA] = useState(pair?.[0] ?? "");
-  const [bId, setB] = useState(pair?.[1] ?? "");
+  // finché non scegli tu, segue gli ultimi due (anche quando arriva il check in corso)
+  const [chosenA, setA] = useState<string | null>(null);
+  const [chosenB, setB] = useState<string | null>(null);
+  const has = (id: string | null) => id !== null && points.some((p) => p.id === id);
+  const aId = has(chosenA) ? chosenA! : (pair?.[0] ?? "");
+  const bId = has(chosenB) ? chosenB! : (pair?.[1] ?? "");
   const a = points.find((p) => p.id === aId);
   const b = points.find((p) => p.id === bId);
   if (points.length < 2 || !a || !b) return null;

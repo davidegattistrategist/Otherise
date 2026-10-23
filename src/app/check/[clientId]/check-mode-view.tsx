@@ -7,8 +7,10 @@
  * altre schede), si salva da solo a ogni lettera e passa da un dispositivo
  * all'altro.
  */
-import { useState, type ReactNode } from "react";
-import { CheckForm, type CheckState, type CheckValues, type PreviousCheck } from "@/app/staff/clienti/[id]/check/check-form";
+import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
+import { CheckForm, type CheckFormData, type CheckState, type CheckValues, type PreviousCheck } from "@/app/staff/clienti/[id]/check/check-form";
+import { withLiveCheck } from "@/lib/body/live-check";
+import { todayISO } from "@/lib/dates";
 import { BodyCharts, CheckCompare } from "@/components/body-progress";
 import type { BodyPoint, FormulaSeries } from "@/lib/body/progress";
 import type { CheckPhoto } from "@/lib/check-photos-shared";
@@ -19,6 +21,8 @@ import { cancelCheckMode, endCheckMode, pauseCheckMode } from "../actions";
 type Tab = "misure" | "confronti" | "appunti" | "programma" | "pagamenti";
 
 const FORM_ID = "check-form";
+// il modulo non si ridisegna quando cambiano solo i confronti
+const Form = memo(CheckForm);
 
 export function CheckModeView(props: {
   clientId: string;
@@ -52,6 +56,20 @@ export function CheckModeView(props: {
     ...(props.paymentsPanel ? [{ key: "pagamenti" as Tab, label: "Pagamenti" }] : []),
   ];
   const formView = tab === "appunti" ? "appunti" : "misure";
+  // il check che stai scrivendo entra nei confronti e nei grafici (anche dall'altro dispositivo)
+  const [now, setNow] = useState<CheckFormData | null>(null);
+  const live = useMemo(
+    () => (props.sex ? withLiveCheck(props.points, props.formulas, now, { sex: props.sex, birthDate: props.birthDate, formula: props.formula, today: todayISO() }) : { points: props.points, formulas: props.formulas }),
+    [props.points, props.formulas, now, props.sex, props.birthDate, props.formula],
+  );
+  const { clientId } = props;
+  const onSaved = useCallback(
+    (id: string) => {
+      setEnding(true);
+      void endCheckMode(clientId, id);
+    },
+    [clientId],
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -101,7 +119,7 @@ export function CheckModeView(props: {
           {tab === "appunti" ? (
             <p className="mb-3 px-1 text-sm text-muted">Gli appunti finiscono nelle note per la prossima fase del check: solo tu (e chi segue il cliente) le vedete, e riappaiono quando prepari il programma.</p>
           ) : null}
-          <CheckForm
+          <Form
             clientId={props.clientId}
             checkId={props.checkId}
             newCheck={!props.checkId}
@@ -120,10 +138,8 @@ export function CheckModeView(props: {
             view={formView}
             submitLabel="Check finito"
             onBusy={setEnding}
-            onSaved={(id) => {
-              setEnding(true);
-              void endCheckMode(props.clientId, id);
-            }}
+            onValues={setNow}
+            onSaved={onSaved}
           />
         </div>
       ) : null}
@@ -132,8 +148,13 @@ export function CheckModeView(props: {
         <div className="flex flex-col gap-4">
           {props.points.length ? (
             <>
-              <CheckCompare points={props.points} sumSites={props.sumSites} title="Confronta i check precedenti" />
-              <BodyCharts points={props.points} sumSites={props.sumSites} formulas={props.formulas} />
+              {live.points.length > props.points.length ? (
+                <p className="px-1 text-sm text-muted" data-live-check>Nei confronti e nei grafici c&apos;è anche questo check, con le misure prese finora (si aggiorna mentre scrivi).</p>
+              ) : (
+                <p className="px-1 text-sm text-muted">Appena scrivi una misura, questo check compare qui accanto ai precedenti.</p>
+              )}
+              <CheckCompare points={live.points} sumSites={props.sumSites} title="Confronta i check" />
+              <BodyCharts points={live.points} sumSites={props.sumSites} formulas={live.formulas} />
             </>
           ) : (
             <p className="px-1 text-[15px] text-muted">È il primo check: i confronti compaiono dal prossimo.</p>

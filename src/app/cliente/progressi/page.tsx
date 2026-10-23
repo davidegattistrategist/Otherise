@@ -16,6 +16,7 @@ import { IconTrophy } from "@/components/icons";
 import { BigNumber, Card, EmptyState, Eyebrow, fmtNum } from "@/components/ui";
 import { myCheckPhotos } from "@/lib/check-photos";
 import { PhotoAlbums, PhotoCompare } from "@/components/check-photos";
+import { RefreshOnReturn } from "@/components/refresh-on-return";
 
 export const metadata: Metadata = { title: "Progressi" };
 
@@ -63,6 +64,7 @@ export default async function ProgressPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="flex flex-col gap-4">
+      <RefreshOnReturn />
       <h1 className="text-[30px] leading-tight font-normal tracking-tight">I tuoi progressi</h1>
       <div id="peso" className="scroll-mt-24"><DailyWeight entries={weights} today={todayISO()} /></div>
       {list.length === 0 ? (

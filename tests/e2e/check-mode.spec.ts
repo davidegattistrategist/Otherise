@@ -49,7 +49,7 @@ test("modalità check: si entra, si chiude per ora, si riprende con tutto quello
   await expect(page.getByText(/Salvato in automatico alle/)).toBeVisible();
   // i confronti e il programma senza uscire
   await page.getByRole("button", { name: "Confronti" }).click();
-  await expect(page.getByLabel("Confronta i check precedenti")).toBeVisible();
+  await expect(page.getByLabel("Confronta i check")).toBeVisible();
   await page.getByRole("button", { name: "Programma" }).click();
   await expect(page.getByText("Programma in corso")).toBeVisible();
   // di partenza il programma in corso; quelli prima si aprono se servono
@@ -153,4 +153,60 @@ test("modalità check su due dispositivi: 'Check finito' toccato due volte da qu
   await other.getByRole("button", { name: "Elimina check" }).click();
   await other.waitForURL(new RegExp(`/staff/clienti/${id}/check$`));
   await other.context().close();
+});
+
+test("modalità check: le misure di oggi entrano subito nei confronti (anche sull'altro dispositivo) e, finito il check, nei progressi del cliente", async ({ page, browser }, info) => {
+  await login(page, "titolare@prova.local");
+  const id = await openClient(page, "Esempio Giulia");
+  await page.getByRole("button", { name: "Inizia il check" }).first().click();
+  await page.waitForURL(new RegExp(`/check/${id}$`));
+  await expect(page.locator("#weight_kg")).toBeVisible();
+
+  // l'altro dispositivo guarda i confronti
+  const other = await (await browser.newContext(info.project.use)).newPage();
+  await login(other, "titolare@prova.local");
+  await other.goto(`/check/${id}`);
+  await other.getByRole("button", { name: "Confronti" }).click();
+  await expect(other.getByText("Appena scrivi una misura")).toBeVisible();
+
+  // qui si scrive il peso: là compare il check di oggi, nel confronto e nel grafico
+  await page.locator("#weight_kg").fill("61,7");
+  await expect(other.locator("[data-live-check]")).toBeVisible({ timeout: 15000 });
+  const compare = other.getByLabel("Confronta i check");
+  await expect(compare.getByLabel("Dopo")).toHaveValue("check-in-corso");
+  await expect(compare.getByLabel("Dopo").locator("option:checked")).toHaveText("Oggi · in corso");
+  await expect(compare).toContainText("61,7");
+  await expect(other.getByRole("img", { name: /^Peso: da .* a 61,7 kg$/ })).toBeVisible();
+  // e anche qui, dalla scheda Confronti
+  await page.getByRole("button", { name: "Confronti" }).click();
+  await expect(page.getByRole("img", { name: /^Peso: da .* a 61,7 kg$/ })).toBeVisible();
+
+  // check finito: il cliente lo trova nei progressi
+  await page.locator("button[form='check-form']").click();
+  await page.waitForURL(/\/check\/[0-9a-f-]{36}\?salvato=1/, { timeout: 20000 });
+  const savedId = /\/check\/([0-9a-f-]{36})/.exec(page.url())![1];
+  const client = await (await browser.newContext(info.project.use)).newPage();
+  await login(client, "giulia@prova.local");
+  await client.goto("/cliente/progressi");
+  await expect(client.getByRole("img", { name: /^Peso: da / })).toBeVisible();
+  // il check di oggi è tra quelli da confrontare (altre prove possono averne salvato un altro oggi)
+  const box = client.getByLabel("Confronta due check");
+  const after = box.getByLabel("Dopo");
+  const values = await after.locator("option").evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value));
+  let found = false;
+  for (const v of values.reverse()) {
+    await after.selectOption(v);
+    if ((await box.innerText()).includes("61,7")) {
+      found = true;
+      break;
+    }
+  }
+  expect(found).toBe(true);
+  await client.context().close();
+  await other.context().close();
+
+  // via il check di prova
+  await page.goto(`/staff/clienti/${id}/check/${savedId}`);
+  await page.getByRole("button", { name: "Elimina check" }).click();
+  await page.waitForURL(new RegExp(`/staff/clienti/${id}/check$`));
 });

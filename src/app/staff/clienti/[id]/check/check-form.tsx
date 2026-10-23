@@ -120,6 +120,7 @@ export function CheckForm({
   live = false,
   onSaved,
   onBusy,
+  onValues,
   submitLabel,
   formId,
   view = "all",
@@ -149,6 +150,8 @@ export function CheckForm({
   onSaved?: (checkId: string) => void;
   /** il salvataggio è partito (true) o è tornato con un errore (false): per il pulsante "Check finito" fuori dal modulo */
   onBusy?: (busy: boolean) => void;
+  /** modalità check: il modulo com'è adesso (anche con quello che arriva dall'altro dispositivo), per i confronti */
+  onValues?: (data: CheckFormData) => void;
   submitLabel?: string;
   /** id del modulo (modalità check: "Check finito" in alto lo invia) */
   formId?: string;
@@ -182,6 +185,13 @@ export function CheckForm({
   const [restored, setRestored] = useState<number | null>(null);
   const draft = useDraft(key, f, { live, onRemote: (d) => setF(d) });
   const { adopt, clear, syncNow } = draft;
+  const onValuesRef = useRef(onValues);
+  useEffect(() => {
+    onValuesRef.current = onValues;
+  });
+  useEffect(() => {
+    onValuesRef.current?.(f);
+  }, [f]);
 
   // riprende quello che avevi scritto (anche sull'altro dispositivo). Solo
   // all'apertura: se la pagina si ridisegna (es. un pagamento registrato in

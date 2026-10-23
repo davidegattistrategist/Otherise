@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RefreshOnReturn } from "@/components/refresh-on-return";
 import { getBusinessName } from "@/lib/data/shared";
 import { DailyQuote } from "@/components/daily-quote";
 import { dedicationOfDay, quoteOfDay } from "@/lib/quotes";
@@ -77,6 +78,7 @@ export default async function ClientHome({ searchParams }: { searchParams: Promi
 
   return (
     <div className="flex flex-col gap-4">
+      <RefreshOnReturn />
       <div className="pb-1">
         <div className="text-[13px] text-muted capitalize">{formatHeading(today)}</div>
         <h1 className="mt-1 text-[34px] leading-tight font-normal tracking-tight">Ciao {client?.first_name}</h1>

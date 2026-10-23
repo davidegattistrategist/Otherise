@@ -1906,3 +1906,30 @@ describe("peso giorno per giorno", () => {
     expect(weightTrendText([], "2026-10-05")).toBe("");
   });
 });
+
+describe("check in corso nei confronti della modalità check", () => {
+  it("diventa un punto con peso, pliche (media delle rilevazioni), circonferenze e % con la formula del cliente", async () => {
+    const { livePoint, withLiveCheck, LIVE_POINT_ID } = await import("./body/live-check");
+    const pt = (id: string, date: string | null, o: Partial<BodyPoint> = {}): BodyPoint => ({ id, date, label: id, weight: null, fatPct: null, fatKg: null, leanKg: null, folds: {}, circ: {}, ...o });
+    const opts = { sex: "F" as const, birthDate: "1993-05-10", formula: "f5" as const, today: "2026-10-23" };
+    const empty = { check_date: "2026-10-23", weight: "", sf: { tricipite: ["", "", ""] }, circ: { vita: "" } };
+    expect(livePoint(empty, opts)).toBeNull();
+    const half = { ...empty, weight: "62,4", circ: { vita: "70,5", fianchi: "" } };
+    const p1 = livePoint(half, opts)!;
+    expect(p1).toMatchObject({ id: LIVE_POINT_ID, date: "2026-10-23", label: "Oggi · in corso", weight: 62.4, fatPct: null, circ: { vita: 70.5 } });
+    const full = { ...half, sf: { tricipite: ["16", "17", ""], sottoscapolare: ["13"], soprailiaca: ["14"], addominale: ["18"], coscia: ["24"] } };
+    const p2 = livePoint(full, opts)!;
+    expect(p2.folds.tricipite).toBe(16.5);
+    expect(p2.fatPct).toBeGreaterThan(10);
+    expect(p2.fatKg).toBeCloseTo((62.4 * p2.fatPct!) / 100, 1);
+    // senza le pliche della formula niente %, nemmeno con un'altra formula
+    expect(livePoint({ ...full, sf: { ...full.sf, coscia: [""] } }, opts)!.fatPct).toBeNull();
+    // in fondo ai check con data fino a oggi, con il valore anche nelle serie delle formule
+    const old = pt("a", "2026-07-20", { weight: 63, fatPct: 24 });
+    const nodate = pt("x", null, { weight: 66 });
+    const r = withLiveCheck([nodate, old], [{ id: "f5", label: "5 pliche", ref: true, values: { a: { pct: 24, kg: 15, lean: 48 } } }], full, opts);
+    expect(r.points.map((p) => p.id)).toEqual(["x", "a", LIVE_POINT_ID]);
+    expect(r.formulas[0].values[LIVE_POINT_ID].pct).toBe(p2.fatPct);
+    expect(withLiveCheck([old], [], null, opts).points).toHaveLength(1);
+  });
+});
