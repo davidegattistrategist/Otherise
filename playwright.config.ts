@@ -26,6 +26,9 @@ export default defineConfig({
     locale: "it-IT",
     timezoneId: "Europe/Rome",
     launchOptions,
+    // la pagina di avvio col logo (public/sw.js) aggiunge un passaggio a ogni pagina aperta:
+    // si prova solo in apertura.spec.ts, negli altri test il service worker è spento
+    serviceWorkers: "block",
   },
   projects: [
     { name: "pc", use: { viewport: { width: 1360, height: 900 } } },

@@ -2,6 +2,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const PASS = "Password-di-prova-123";
+// qui serve il service worker (negli altri test è spento, vedi playwright.config.ts)
+test.use({ serviceWorkers: "allow" });
+
 async function login(page: Page, email: string) {
   await page.goto("/login");
   await page.fill("input[name=email]", email);
