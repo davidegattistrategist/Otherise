@@ -18,6 +18,12 @@ export const INSTALL_READY = "otherise:install-ready";
 
 export function ServiceWorker() {
   useEffect(() => {
+    // "app=1" lo aggiunge a volte la pagina di avvio (public/sw.js): non serve nell'indirizzo
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("app")) {
+      url.searchParams.delete("app");
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    }
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).catch(() => undefined);
     }

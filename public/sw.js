@@ -1,14 +1,16 @@
 /* Service worker di Otherise: apertura immediata dell'app, notifiche push e numerino sull'icona. */
 
 /*
- * Apertura dell'app: aprendo "/" (l'icona sulla Home, l'app sul computer, il
- * sito scritto nella barra) il service worker mostra subito la pagina di
- * avvio /apertura (logo con il glitch, tenuta da parte qui), senza aspettare
- * il server; la pagina carica poi "/?app=1", che passa dalla rete come sempre.
- * Se cambi il logo o lo stile dello splash (src/lib/splash-markup.ts)
- * aumenta APERTURA_VERSION: così i telefoni riprendono la pagina nuova.
+ * Apertura dell'app: aprendo una pagina dell'app con il browser (icona sulla
+ * Home, app del computer, pagina ricaricata, notifica toccata) il service
+ * worker mostra subito la pagina di avvio /apertura (logo con il glitch,
+ * tenuta da parte qui), senza aspettare il server; la pagina di avvio carica
+ * subito lo stesso indirizzo, che questa volta passa dalla rete (`bypass`, o
+ * "app=1" nell'indirizzo). I cambi di pagina dentro l'app non passano di qui.
+ * Se cambi il logo, lo stile dello splash (src/lib/splash-markup.ts) o la
+ * pagina di avvio, aumenta APERTURA_VERSION: così i telefoni la riprendono.
  */
-const APERTURA_VERSION = 1;
+const APERTURA_VERSION = 2;
 const APERTURA_CACHE = `otherise-apertura-${APERTURA_VERSION}`;
 const APERTURA_URL = "/apertura";
 
@@ -31,18 +33,33 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+/* pagine che non passano dalla pagina di avvio */
+const SKIP = /^\/(api|auth|_next|apertura|sw\.js|manifest)(\/|$|\.)|\.[a-z0-9]{2,5}$/i;
+/* indirizzi appena mostrati con la pagina di avvio: la prossima richiesta va in rete */
+const bypass = new Map();
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.mode !== "navigate" || req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin || url.pathname !== "/" || url.searchParams.has("app")) return;
+  if (url.origin !== self.location.origin || SKIP.test(url.pathname) || url.searchParams.has("app")) return;
+  const key = url.href.split("#")[0];
+  const now = Date.now();
+  for (const [k, t] of bypass) if (now - t > 10000) bypass.delete(k);
+  if (bypass.has(key)) {
+    bypass.delete(key);
+    return;
+  }
   event.respondWith(
     (async () => {
       try {
         const cached = await caches.match(APERTURA_URL, { cacheName: APERTURA_CACHE });
-        if (cached) return cached;
+        if (cached) {
+          bypass.set(key, Date.now());
+          return cached;
+        }
       } catch {
-        // niente pagina di avvio: si va dritti all'app
+        // niente pagina di avvio: si va dritti alla pagina
       }
       return fetch(req);
     })(),

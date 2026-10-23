@@ -34,7 +34,7 @@ test("app aperta con il service worker: il logo compare subito dalla pagina di a
   // la pagina di avvio è pubblica e ha il logo
   const html = await (await page.request.get("/apertura")).text();
   expect(html).toContain("data-splash");
-  expect(html).toContain('location.replace("/?app=1")');
+  expect(html).toContain("otherise:launch");
 
   await login(page, "titolare@prova.local");
   await page.waitForLoadState("networkidle");
@@ -51,6 +51,18 @@ test("app aperta con il service worker: il logo compare subito dalla pagina di a
   // arrivati dalla pagina di avvio: lo splash della pagina vera non rifà l'entrata
   expect(await page.evaluate(() => document.documentElement.hasAttribute("data-splash-go"))).toBe(true);
   await expect(page.locator("[data-splash]")).toHaveCount(0);
+
+  // anche ricaricando una pagina interna (o aprendo una notifica): stesso indirizzo, senza "app=1"
+  await page.goto("/staff/clienti?q=Giulia");
+  await expect(page.getByRole("link", { name: /Esempio Giulia/ }).filter({ visible: true }).first()).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  expect(new URL(page.url()).pathname + new URL(page.url()).search).toBe("/staff/clienti?q=Giulia");
+  expect(await page.evaluate(() => document.documentElement.hasAttribute("data-splash-go"))).toBe(true);
+  // con il # nell'indirizzo si arriva alla pagina giusta e il # resta
+  await page.goto("/staff#programmi");
+  await expect(page.locator("main")).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  expect(new URL(page.url()).pathname + new URL(page.url()).search + new URL(page.url()).hash).toBe("/staff#programmi");
 });
 
 test("apertura senza accesso: dal logo si arriva al login", async ({ page }) => {
