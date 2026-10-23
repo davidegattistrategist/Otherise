@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAnonKey, supabaseUrl } from "./env";
 import { HOME_COOKIE, homeFromCookie } from "@/lib/home-cookie";
 
-const PUBLIC_PATHS = ["/login", "/password-dimenticata", "/auth", "/api/cron", "/privacy"];
+const PUBLIC_PATHS = ["/login", "/password-dimenticata", "/auth", "/api/cron", "/privacy", "/apertura"];
 
 /** Rinnova la sessione a ogni richiesta e manda al login chi non è collegato. */
 export async function updateSession(request: NextRequest) {

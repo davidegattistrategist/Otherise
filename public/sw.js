@@ -1,6 +1,53 @@
-/* Service worker di Otherise: riceve le notifiche push, le mostra e aggiorna il numerino sull'icona. */
-self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+/* Service worker di Otherise: apertura immediata dell'app, notifiche push e numerino sull'icona. */
+
+/*
+ * Apertura dell'app: aprendo "/" (l'icona sulla Home, l'app sul computer, il
+ * sito scritto nella barra) il service worker mostra subito la pagina di
+ * avvio /apertura (logo con il glitch, tenuta da parte qui), senza aspettare
+ * il server; la pagina carica poi "/?app=1", che passa dalla rete come sempre.
+ * Se cambi il logo o lo stile dello splash (src/lib/splash-markup.ts)
+ * aumenta APERTURA_VERSION: così i telefoni riprendono la pagina nuova.
+ */
+const APERTURA_VERSION = 1;
+const APERTURA_CACHE = `otherise-apertura-${APERTURA_VERSION}`;
+const APERTURA_URL = "/apertura";
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches
+      .open(APERTURA_CACHE)
+      .then((c) => c.add(new Request(APERTURA_URL, { cache: "reload" })))
+      .catch(() => undefined)
+      .then(() => self.skipWaiting()),
+  );
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k.startsWith("otherise-apertura-") && k !== APERTURA_CACHE).map((k) => caches.delete(k)));
+      await self.clients.claim();
+    })(),
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  if (req.mode !== "navigate" || req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin || url.pathname !== "/" || url.searchParams.has("app")) return;
+  event.respondWith(
+    (async () => {
+      try {
+        const cached = await caches.match(APERTURA_URL, { cacheName: APERTURA_CACHE });
+        if (cached) return cached;
+      } catch {
+        // niente pagina di avvio: si va dritti all'app
+      }
+      return fetch(req);
+    })(),
+  );
+});
 
 self.addEventListener("push", (event) => {
   let d = {};
