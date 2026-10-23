@@ -133,7 +133,11 @@ test.describe("titolare", () => {
 
     // importa un foglio Google come storico
     await page.goto(`${base}/programma`);
-    await page.getByText("Importa dal foglio Google").click();
+    // il pannello si apre al tocco (riprova se il tocco arriva mentre la pagina finisce di caricarsi)
+    await expect(async () => {
+      if (!(await page.locator("form input[name=title]").isVisible())) await page.getByText("Importa dal foglio Google").click();
+      await expect(page.locator("form input[name=title]")).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 20_000 });
     await page.setInputFiles("input[type=file][name=file]", path.join(FIX, "scheda.csv"));
     await page.fill("form input[name=title]", "Fase importata");
     await page.getByRole("button", { name: "Importa", exact: true }).click();
