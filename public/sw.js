@@ -10,7 +10,7 @@
  * Se cambi il logo, lo stile dello splash (src/lib/splash-markup.ts) o la
  * pagina di avvio, aumenta APERTURA_VERSION: così i telefoni la riprendono.
  */
-const APERTURA_VERSION = 2;
+const APERTURA_VERSION = 3;
 const APERTURA_CACHE = `otherise-apertura-${APERTURA_VERSION}`;
 const APERTURA_URL = "/apertura";
 
