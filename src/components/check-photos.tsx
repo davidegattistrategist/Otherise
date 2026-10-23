@@ -7,13 +7,14 @@
  * (posizione GPS, modello del telefono…); in più prepara una miniatura per le
  * griglie. Lo staff e il cliente le guardano a tutto schermo e le possono salvare.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useKeepAwake } from "./use-keep-awake";
 import { useRouter } from "next/navigation";
 import { MAX_PHOTOS_PER_UPLOAD, MOZ_QUALITY, MOZ_THUMB_QUALITY, PHOTO_LONG_SIDE, PHOTO_QUALITY, THUMB_LONG_SIDE, type CheckPhoto, type PendingPhoto } from "@/lib/check-photos-shared";
 import { deleteCheckPhoto, pendingPhotoLinks, preparePhotoUploads, removePendingPhoto, saveCheckPhotos } from "@/app/staff/clienti/[id]/check/actions";
 import { saveAttachment, uploadWithProgress } from "./chat/media";
-import { IconArrowLeft, IconArrowRight, IconDownload, IconPhoto, IconTrash, IconX } from "./icons";
+import { IconArrowLeft, IconArrowRight, IconCamera, IconDownload, IconPhoto, IconTrash, IconX } from "./icons";
+import { CheckCamera } from "./check-camera";
 import { buttonClass, cx } from "./ui";
 
 type Ready = { full: Blob; thumb: Blob; width: number; height: number };
@@ -209,10 +210,15 @@ export function CheckPhotoUploader({ clientId, checkId, label = "Aggiungi le fot
  */
 export function PendingPhotos({ clientId, checkId, photos, onAdd, onRemove }: { clientId: string; checkId: string; photos: PendingPhoto[]; onAdd: (p: PendingPhoto) => void; onRemove: (path: string) => void }) {
   const input = useRef<HTMLInputElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  // foto in fila: una alla volta (scatti o galleria), il resto aspetta
+  const queue = useRef<File[]>([]);
+  const running = useRef(false);
   const [state, setState] = useState<{ done: number; total: number; progress: number } | null>(null);
   const [error, setError] = useState("");
   const [links, setLinks] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<number | null>(null);
+  const [camera, setCamera] = useState(false);
   const missing = photos.flatMap((p) => [p.path, p.thumbPath]).filter((x) => !links[x]);
   const missingKey = missing.join("|");
   useEffect(() => {
@@ -224,19 +230,50 @@ export function PendingPhotos({ clientId, checkId, photos, onAdd, onRemove }: { 
     };
   }, [clientId, checkId, missingKey]);
 
-  const start = async (files: File[]) => {
-    setError("");
+  const run = useCallback(async () => {
+    if (running.current) return;
+    running.current = true;
+    let done = 0;
+    const errors: string[] = [];
     try {
-      const r = await uploadCheckPhotos(clientId, checkId, files, setState, { register: false, onEach: onAdd });
-      if (r.error) setError(r.error);
+      while (queue.current.length) {
+        const file = queue.current.shift()!;
+        // il totale cresce se intanto arrivano altri scatti
+        const r = await uploadCheckPhotos(clientId, checkId, [file], (p) => setState({ done: done + p.done, total: done + 1 + queue.current.length, progress: p.progress }), { register: false, onEach: onAdd });
+        if (r.error) errors.push(r.error);
+        done += 1;
+      }
     } finally {
+      running.current = false;
       setState(null);
+      setError(errors[0] ?? "");
       if (input.current) input.current.value = "";
+      if (cameraInput.current) cameraInput.current.value = "";
     }
-  };
+  }, [clientId, checkId, onAdd]);
+
+  const add = useCallback(
+    (files: File[]) => {
+      const list = onlyImages(files);
+      if (!list.length) return;
+      setError("");
+      queue.current.push(...list);
+      setState((s) => (s ? { ...s, total: s.total + list.length } : { done: 0, total: list.length, progress: 0 }));
+      void run();
+    },
+    [run],
+  );
+  const onShot = useCallback((f: File) => add([f]), [add]);
+  const closeCamera = useCallback(() => setCamera(false), []);
+  const phoneCamera = useCallback(() => {
+    setCamera(false);
+    cameraInput.current?.click();
+  }, []);
+
   const busy = state !== null;
   useKeepAwake(busy);
   const pct = state ? Math.round(((state.done + state.progress) / state.total) * 100) : 0;
+  const status = state ? `Carico ${Math.min(state.done + 1, state.total)} di ${state.total}… ${pct}%` : photos.length ? (photos.length === 1 ? "1 foto caricata nel check" : `${photos.length} foto caricate nel check`) : "";
   const shown: CheckPhoto[] = photos.map((p) => ({ id: p.path, checkId, checkDate: null, url: links[p.path] ?? null, thumbUrl: links[p.thumbPath] ?? links[p.path] ?? null, width: p.width, height: p.height, createdAt: "" }));
   return (
     <div className="flex flex-col gap-3">
@@ -275,13 +312,21 @@ export function PendingPhotos({ clientId, checkId, photos, onAdd, onRemove }: { 
         tabIndex={-1}
         aria-label="Scegli le foto del check"
         data-testid="pending-photo-input"
-        onChange={(e) => void start(Array.from(e.currentTarget.files ?? []))}
+        onChange={(e) => add(Array.from(e.currentTarget.files ?? []))}
       />
-      <button type="button" disabled={busy} onClick={() => input.current?.click()} className={cx(buttonClass(photos.length ? "secondary" : "primary", "sm"), "self-start")}>
-        <IconPhoto size={16} />
-        {busy ? `Carico ${Math.min(state.done + 1, state.total)} di ${state.total}… ${pct}%` : photos.length ? "Aggiungi altre foto" : "Scatta o scegli le foto"}
-      </button>
+      {/* la fotocamera del telefono, se quella dentro l'app non si può usare */}
+      <input ref={cameraInput} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-label="Scatta con la fotocamera del telefono" onChange={(e) => add(Array.from(e.currentTarget.files ?? []))} />
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => setCamera(true)} className={buttonClass("primary", "sm")} data-open-camera>
+          <IconCamera size={16} /> Scatta le foto
+        </button>
+        <button type="button" onClick={() => input.current?.click()} className={buttonClass("secondary", "sm")}>
+          <IconPhoto size={16} /> {photos.length ? "Aggiungi dalla galleria" : "Scegli dalla galleria"}
+        </button>
+      </div>
+      {busy ? <p className="text-sm text-muted" role="status" data-photo-progress>{status}</p> : null}
       {error ? <p className="text-sm text-accent-deep" role="alert">{error}</p> : null}
+      {camera ? <CheckCamera onShot={onShot} onClose={closeCamera} onUnavailable={phoneCamera} status={status} /> : null}
       {open !== null && shown[open] ? <Lightbox photos={shown} index={open} onIndex={setOpen} onClose={() => setOpen(null)} /> : null}
     </div>
   );

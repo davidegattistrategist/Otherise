@@ -68,7 +68,9 @@ export async function cancelCheckMode(clientId: string) {
   const key = `check:${clientId}:${mode?.checkId ?? "nuovo"}`;
   // le foto caricate in questo check e non ancora registrate: via anche i file
   const { data: draft } = await supabase.from("drafts").select("data").eq("user_id", me.id).eq("key", key).maybeSingle();
-  const pending = ((draft?.data as { photos?: PendingPhoto[] } | null)?.photos ?? []).filter((p) => p && typeof p.path === "string" && p.path.startsWith(`${clientId}/`) && typeof p.thumbPath === "string" && p.thumbPath.startsWith(`${clientId}/`));
+  // nella bozza le foto sono per percorso (oggetto); le versioni vecchie le avevano in un elenco
+  const raw = (draft?.data as { photos?: PendingPhoto[] | Record<string, PendingPhoto> } | null)?.photos ?? [];
+  const pending = (Array.isArray(raw) ? raw : Object.values(raw)).filter((p) => p && typeof p.path === "string" && p.path.startsWith(`${clientId}/`) && typeof p.thumbPath === "string" && p.thumbPath.startsWith(`${clientId}/`));
   if (pending.length) {
     const { data: registered } = await supabase.from("check_photos").select("path").in("path", pending.map((p) => p.path));
     const keep = new Set((registered ?? []).map((r) => r.path));

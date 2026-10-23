@@ -152,7 +152,9 @@ export function useDraft<T>(
           // il server ha unito anche le modifiche dell'altro dispositivo
           if (takeRemote(sent, d.data)) {
             pending.current = JSON.stringify(valueRef.current);
-            pendingAt.current = Date.now();
+            // stessa ora dell'ultima modifica scritta qui: se nel frattempo la bozza è stata
+            // cancellata ("Annulla il check", check salvato), questo rinvio non la fa tornare
+            pendingAt.current = Math.max(pendingAt.current, t);
             again.current = true;
           }
         } else synced.current = sent;
@@ -251,7 +253,7 @@ export function useDraft<T>(
         if (takeRemote(synced.current, s.data)) {
           // qui c'era qualcosa di non ancora mandato: parte unito
           pending.current = JSON.stringify(valueRef.current);
-          pendingAt.current = Date.now();
+          pendingAt.current = pendingAt.current || Date.now();
           if (timer.current) clearTimeout(timer.current);
           timer.current = setTimeout(() => void send(key), LIVE_DELAY);
         } else if (pending.current && sameDraft(JSON.parse(pending.current), s.data)) pending.current = null;
@@ -306,7 +308,7 @@ export function useDraft<T>(
         writeLocal(key, s.data);
         if (takeRemote(synced.current, s.data)) {
           pending.current = JSON.stringify(valueRef.current);
-          pendingAt.current = Date.now();
+          pendingAt.current = pendingAt.current || Date.now();
           await send(key);
         }
       }

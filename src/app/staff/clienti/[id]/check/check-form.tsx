@@ -215,7 +215,8 @@ export function CheckForm({
     };
   }, [key, adopt, live]);
 
-  const pendingList = Object.values(f.photos ?? {}).sort((a, b) => a.at - b.at);
+  // solo le foto di questo check (una bozza rimasta da un check annullato può averne di un'altra cartella)
+  const pendingList = Object.values(f.photos ?? {}).filter((p) => photoFolder && p.path.startsWith(`${clientId}/${photoFolder}/`)).sort((a, b) => a.at - b.at);
   const set = <K extends keyof CheckFormData>(k: K, v: CheckFormData[K]) => setF((x) => ({ ...x, [k]: v }));
 
   // foto scelte prima di salvare (solo per un check nuovo): si caricano appena il check è salvato
