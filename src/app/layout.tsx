@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
+import { Splash } from "@/components/splash";
 import { AutoGrow } from "@/components/auto-grow";
 import "@fontsource-variable/manrope";
 import "./globals.css";
@@ -23,7 +25,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="it">
       <body className="min-h-dvh">
-        {children}
+        {/* all'apertura dell'app si vede subito il logo animato mentre arrivano i dati */}
+        <Suspense fallback={<Splash />}>{children}</Suspense>
         <ServiceWorker />
         <AutoGrow />
       </body>

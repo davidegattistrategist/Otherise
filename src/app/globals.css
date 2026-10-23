@@ -265,3 +265,55 @@ main > div:has(> [data-program-editor]) {
 /* PDF creato nell'app (SheetPdfButton): copia del foglio larga come una pagina, anche dal telefono */
 [data-pdf] { color: var(--color-ink); }
 [data-pdf] [data-compare-summary] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* ---------- Schermata di apertura (src/components/splash.tsx) ----------
+   Il logo è diviso in 4 strisce che a ogni glitch (ogni 0,5 s, ciclo di 2 s)
+   scattano di lato e tornano a posto; il pallino ha un piccolo sussulto. */
+[data-splash] {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-sand);
+  --splash-w: min(62vw, 340px);
+}
+[data-splash] .splash-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+[data-splash] .splash-mark { display: flex; align-items: center; gap: calc(var(--splash-w) * 0.07); }
+[data-splash] .splash-dot {
+  flex: none;
+  width: calc(var(--splash-w) * 0.09);
+  height: calc(var(--splash-w) * 0.09);
+  border-radius: 9999px;
+  background: var(--color-accent);
+  animation: splash-dot-in 0.35s cubic-bezier(0.2, 0.9, 0.25, 1.2) both, splash-dot 2s 0.7s infinite step-end;
+}
+[data-splash] .splash-logo {
+  position: relative;
+  display: block;
+  width: var(--splash-w);
+  aspect-ratio: 3616 / 472;
+  animation: splash-wipe 0.55s 0.1s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+[data-splash] .splash-band { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--color-ink); overflow: visible; }
+[data-splash] .splash-b1 { clip-path: inset(0 0 73% 0); animation: splash-a1 2s 0.7s infinite step-end; }
+[data-splash] .splash-b2 { clip-path: inset(27% 0 51% 0); animation: splash-a2 2s 0.7s infinite step-end; }
+[data-splash] .splash-b3 { clip-path: inset(49% 0 29% 0); animation: splash-a3 2s 0.7s infinite step-end; }
+[data-splash] .splash-b4 { clip-path: inset(71% 0 0 0); animation: splash-a4 2s 0.7s infinite step-end; }
+@keyframes splash-dot-in { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes splash-wipe {
+  from { clip-path: inset(-20% 100% -20% 0); opacity: 0.2; }
+  to { clip-path: inset(-20% -4% -20% 0); opacity: 1; }
+}
+@keyframes splash-a1 { 0% { transform: none; } 50% { transform: translateX(-1.1%); } 52.5% { transform: translateX(0.5%); } 55% { transform: none; } 75% { transform: translateX(0.9%); } 79% { transform: none; } }
+@keyframes splash-a2 { 0% { transform: translateX(1.3%); } 2.5% { transform: translateX(-0.5%); } 5% { transform: none; } 50% { transform: translateX(-1.1%); } 54% { transform: none; } }
+@keyframes splash-a3 { 0% { transform: none; } 25% { transform: translateX(1.3%); } 27.5% { transform: translateX(-0.4%); } 30% { transform: none; } 50% { transform: translateX(0.7%); } 54% { transform: none; } }
+@keyframes splash-a4 { 0% { transform: translateX(-0.9%); } 4% { transform: none; } 50% { transform: translateX(1.1%); } 52.5% { transform: translateX(-0.5%); } 55% { transform: none; } 75% { transform: translateX(-1%); } 79% { transform: none; } }
+@keyframes splash-dot { 0% { transform: translateX(-18%); } 4% { transform: none; } 50% { transform: scale(0.8); } 54% { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  [data-splash] .splash-dot,
+  [data-splash] .splash-logo,
+  [data-splash] .splash-band { animation: none; }
+}
+@media print { [data-splash] { display: none; } }
