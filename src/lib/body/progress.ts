@@ -102,10 +102,13 @@ export function compareRows(a: BodyPoint, b: BodyPoint, sumSites: SkinfoldSite[]
 }
 
 /** Il confronto di partenza: penultimo e ultimo check (o l'unico). */
-export function defaultPair(points: BodyPoint[]): [string, string] | null {
+export function defaultPair(points: BodyPoint[], opts: { withFolds?: boolean } = {}): [string, string] | null {
   if (!points.length) return null;
-  const last = points[points.length - 1].id;
-  return [points.length > 1 ? points[points.length - 2].id : last, last];
+  // per la composizione corporea: gli ultimi due check con le pliche (un check di solo peso non serve)
+  const usable = opts.withFolds ? points.filter((p) => Object.keys(p.folds).length) : [];
+  const list = usable.length >= 2 ? usable : points;
+  const last = list[list.length - 1].id;
+  return [list.length > 1 ? list[list.length - 2].id : last, last];
 }
 
 /** Pliche prese in tutti i check che ne hanno (per una somma confrontabile). */

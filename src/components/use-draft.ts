@@ -286,7 +286,37 @@ export function useDraft<T>(
     if (at) serverAt.current = Math.max(serverAt.current, at);
   }, []);
 
-  return { status, clear, adopt };
+  /**
+   * Prima di salvare per davvero (modalità check): manda subito quello che c'è
+   * qui e prende quello che ha scritto l'altro dispositivo, unito. Così "Check
+   * finito" su un telefono appena ripreso in mano non salva una versione
+   * vecchia. Torna true se il modulo qui è cambiato (va ridisegnato).
+   */
+  const syncNow = useCallback(async (): Promise<boolean> => {
+    if (!key || cleared.current) return false;
+    if (timer.current) clearTimeout(timer.current);
+    // aspetta un invio in corso (massimo 5 secondi)
+    for (let i = 0; i < 50 && sending.current; i++) await new Promise((r) => setTimeout(r, 100));
+    if (pending.current) await send(key);
+    const before = JSON.stringify(valueRef.current);
+    try {
+      const s = await readServer<T>(key, 0);
+      if (s && s !== "same" && !cleared.current) {
+        serverAt.current = Math.max(serverAt.current, s.at);
+        writeLocal(key, s.data);
+        if (takeRemote(synced.current, s.data)) {
+          pending.current = JSON.stringify(valueRef.current);
+          pendingAt.current = Date.now();
+          await send(key);
+        }
+      }
+    } catch {
+      // senza rete si salva quello che c'è qui
+    }
+    return JSON.stringify(valueRef.current) !== before;
+  }, [key, send, takeRemote]);
+
+  return { status, clear, adopt, syncNow };
 }
 
 /** "Salvato in automatico alle 15:42" sotto il modulo. */

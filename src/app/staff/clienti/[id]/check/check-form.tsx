@@ -12,7 +12,7 @@
  * I risultati si aggiornano mentre scrivi; il server li ricalcola al salvataggio.
  */
 import { DictateButton } from "@/components/dictate-button";
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PendingPhotos, PhotoGrid, onlyImages, uploadCheckPhotos } from "@/components/check-photos";
 import type { CheckPhoto, PendingPhoto } from "@/lib/check-photos-shared";
@@ -119,6 +119,7 @@ export function CheckForm({
   previous = null,
   live = false,
   onSaved,
+  onBusy,
   submitLabel,
   formId,
   view = "all",
@@ -146,6 +147,8 @@ export function CheckForm({
   live?: boolean;
   /** modalità check: cosa fare dopo il salvataggio (al posto di andare alla pagina dei check) */
   onSaved?: (checkId: string) => void;
+  /** il salvataggio è partito (true) o è tornato con un errore (false): per il pulsante "Check finito" fuori dal modulo */
+  onBusy?: (busy: boolean) => void;
   submitLabel?: string;
   /** id del modulo (modalità check: "Check finito" in alto lo invia) */
   formId?: string;
@@ -158,7 +161,19 @@ export function CheckForm({
 }) {
   const hideMisure = view === "appunti";
   const hideAppunti = view === "misure";
-  const [state, formAction] = useActionState(action, null);
+  // senza rete (o se il server non risponde) un messaggio chiaro, non una pagina di errore:
+  // quello che hai scritto resta nel modulo e nella bozza
+  const safeAction = useCallback(
+    async (prev: CheckState, fd: FormData): Promise<CheckState> => {
+      try {
+        return await action(prev, fd);
+      } catch {
+        return { error: "Non sono riuscito a salvare: controlla la connessione e tocca di nuovo. Quello che hai scritto resta qui." };
+      }
+    },
+    [action],
+  );
+  const [state, formAction] = useActionState(safeAction, null);
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const key = checkDraftKey(clientId, checkId);
@@ -166,7 +181,7 @@ export function CheckForm({
   const [f, setF] = useState<CheckFormData>(start);
   const [restored, setRestored] = useState<number | null>(null);
   const draft = useDraft(key, f, { live, onRemote: (d) => setF(d) });
-  const { adopt, clear } = draft;
+  const { adopt, clear, syncNow } = draft;
 
   // riprende quello che avevi scritto (anche sull'altro dispositivo). Solo
   // all'apertura: se la pagina si ridisegna (es. un pagamento registrato in
@@ -224,6 +239,44 @@ export function CheckForm({
     });
   }, [state, clientId, photos, router, clear, onSaved]);
 
+  // un salvataggio alla volta (due tocchi su "Check finito" mandavano due salvataggi:
+  // il secondo dava errore anche se il check era salvato). In modalità check prima
+  // si prende l'ultima versione scritta sull'altro dispositivo.
+  const submitting = useRef(false);
+  const synced = useRef(false);
+  const onBusyRef = useRef(onBusy);
+  useEffect(() => {
+    onBusyRef.current = onBusy;
+  });
+  useEffect(() => {
+    if (!state || state.ok) return;
+    submitting.current = false;
+    synced.current = false;
+    onBusyRef.current?.(false);
+  }, [state]);
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    if (submitting.current) {
+      e.preventDefault();
+      return;
+    }
+    if (live && !synced.current) {
+      e.preventDefault();
+      submitting.current = true;
+      onBusyRef.current?.(true);
+      void syncNow().then(async () => {
+        // il modulo si ridisegna con quello che è arrivato, poi parte
+        await new Promise((r) => setTimeout(r, 80));
+        synced.current = true;
+        submitting.current = false;
+        formRef.current?.requestSubmit();
+      });
+      return;
+    }
+    synced.current = false;
+    submitting.current = true;
+    onBusyRef.current?.(true);
+  };
+
   // la plica che l'ultima volta non si è presa: su un check nuovo, dal computer,
   // il cursore parte già lì (dal telefono no: aprirebbe la tastiera da sola)
   const missedFocus = useRef(false);
@@ -253,7 +306,7 @@ export function CheckForm({
   const foldRows = SKINFOLD_SITES.filter((s) => sites.includes(s.key));
 
   return (
-    <form ref={formRef} id={formId} action={formAction} className="flex flex-col gap-5">
+    <form ref={formRef} id={formId} action={formAction} onSubmit={onSubmit} className="flex flex-col gap-5">
       <input type="hidden" name="draft_key" value={key} />
       {previous && !hideMisure ? (
         <p className="-mb-2 px-1 text-sm text-muted">Accanto a ogni misura: quella del check del <strong className="text-ink">{previous.label}</strong> e la differenza.</p>

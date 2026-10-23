@@ -42,6 +42,23 @@ test("confronto dei check da stampare: ultimi due di partenza, si cambiano, in s
   await expect(sheet.locator("header")).not.toHaveText(before);
   // nota che va sul foglio
   await sheet.getByLabel("Note per chi legge il confronto").fill("Bioimpedenza del 10/10: +4 kg di massa muscolare.");
+  // PDF fatto nell'app (sul telefono la stampa nelle app sulla Home non c'è): un vero PDF con la nota
+  await page.locator("[data-pdf-make]").click();
+  const download = page.locator("[data-pdf-download]");
+  await expect(download).toBeVisible({ timeout: 30000 });
+  await expect(download).toHaveAttribute("download", /^confronto-giulia-esempio-.*\.pdf$/);
+  const pdf = await download.evaluate(async (a: HTMLAnchorElement) => {
+    const buf = new Uint8Array(await (await fetch(a.href)).arrayBuffer());
+    const head = new TextDecoder().decode(buf.slice(0, 5));
+    const text = new TextDecoder("latin1").decode(buf);
+    return { head, size: buf.length, pages: (text.match(/\/Type\s*\/Page[^s]/g) ?? []).length };
+  });
+  expect(pdf.head).toBe("%PDF-");
+  expect(pdf.size).toBeGreaterThan(30000);
+  expect(pdf.pages).toBeGreaterThanOrEqual(1);
+  expect(pdf.pages).toBeLessThanOrEqual(3);
+  // la copia per il PDF non resta nella pagina
+  await expect(page.locator("[data-pdf]")).toHaveCount(0);
   // in stampa: comandi e menu spariscono, il foglio resta
   await page.emulateMedia({ media: "print" });
   await expect(page.locator("[data-print-button]")).toBeHidden();

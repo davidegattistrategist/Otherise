@@ -99,3 +99,58 @@ test("chat: i link nei messaggi si possono aprire", async ({ page }, info) => {
   await expect(link).toHaveAttribute("href", url);
   await expect(link).toHaveAttribute("target", "_blank");
 });
+
+/** id dei check salvati nella pagina Check del cliente */
+async function checkIds(page: Page, id: string) {
+  await page.goto(`/staff/clienti/${id}/check`);
+  await page.waitForLoadState("networkidle");
+  return page.evaluate(() => [...new Set([...document.querySelectorAll<HTMLAnchorElement>("a[href*='/check/']")].map((a) => /\/check\/([0-9a-f-]{36})/.exec(a.getAttribute("href") ?? "")?.[1]).filter(Boolean))]);
+}
+
+test("modalità check su due dispositivi: 'Check finito' toccato due volte da quello rimasto indietro salva una volta, con gli appunti, e chiude", async ({ page, browser }, info) => {
+  await login(page, "titolare@prova.local");
+  const id = await openClient(page, "Sara");
+  const before = await checkIds(page, id);
+  await page.goto(`/staff/clienti/${id}`);
+  await page.getByRole("button", { name: "Inizia il check" }).first().click();
+  await page.waitForURL(new RegExp(`/check/${id}$`));
+  await expect(page.locator("#weight_kg")).toBeVisible();
+
+  // il secondo dispositivo è aperto sullo stesso check, poi lo schermo si spegne (niente aggiornamenti)
+  const other = await (await browser.newContext(info.project.use)).newPage();
+  await login(other, "titolare@prova.local");
+  await other.goto(`/check/${id}`);
+  await expect(other.locator("#weight_kg")).toBeVisible();
+  await other.waitForTimeout(800);
+  await other.evaluate(() => Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" }));
+
+  // sul primo si scrivono misure e appunti
+  const notes = `Appunti da non perdere (${info.project.name}): più lavoro sul core.`;
+  await page.locator("#weight_kg").fill("61,4");
+  await page.getByRole("button", { name: "Appunti" }).click();
+  const saved = page.waitForResponse((r) => r.url().includes("/api/bozze") && r.request().method() === "POST");
+  await page.locator("#notes_next_phase").fill(notes);
+  await saved;
+  await page.waitForTimeout(500);
+  await expect(other.locator("#notes_next_phase")).toHaveValue("");
+
+  // dall'altro, rimasto indietro: due tocchi veloci su "Check finito"
+  await other.locator("button[form='check-form']").dblclick();
+  await other.waitForURL(/\/check\/[0-9a-f-]{36}\?salvato=1/, { timeout: 20000 });
+  await expect(other.getByText(/non riuscito|Non sono riuscito/)).toHaveCount(0);
+  const savedId = /\/check\/([0-9a-f-]{36})/.exec(other.url())![1];
+  await expect(other.locator("#notes_next_phase").filter({ visible: true }).first()).toHaveValue(notes);
+  await expect(other.locator("#weight_kg").filter({ visible: true }).first()).toHaveValue("61,4");
+  // un check solo in più
+  const after = await checkIds(other, id);
+  expect(after.length).toBe(before.length + 1);
+  expect(after).toContain(savedId);
+  // anche il primo dispositivo esce dalla modalità check
+  await page.waitForURL((u) => !u.pathname.startsWith("/check/"), { timeout: 20000 });
+
+  // via il check di prova
+  await other.goto(`/staff/clienti/${id}/check/${savedId}`);
+  await other.getByRole("button", { name: "Elimina check" }).click();
+  await other.waitForURL(new RegExp(`/staff/clienti/${id}/check$`));
+  await other.context().close();
+});

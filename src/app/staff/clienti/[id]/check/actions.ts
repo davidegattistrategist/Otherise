@@ -1,6 +1,6 @@
 "use server";
 
-import { draftTombstone } from "@/lib/draft-merge";
+import { deletedAt, draftTombstone } from "@/lib/draft-merge";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
@@ -77,6 +77,24 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
     tests.push({ exercise, load, reps, rpe: load && reps ? rpe ?? 10 : rpe, e1rm: load && reps ? estimateOneRepMax(load, reps, rpe ?? 10) : null });
   }
 
+  // la bozza del modulo sul server (in modalità check è l'ultima versione scritta su
+  // qualsiasi dispositivo): un testo che lì c'è non va mai perso perché da questo
+  // dispositivo è partito vuoto (es. telefono ripreso in mano e salvato subito)
+  const draftKey = String(fd.get("draft_key") ?? "");
+  const ownDraft = draftKey.startsWith(`check:${clientId}:`);
+  const [{ data: draftRow }, mode] = await Promise.all([
+    ownDraft ? supabase.from("drafts").select("data").eq("user_id", me.id).eq("key", draftKey).maybeSingle() : Promise.resolve({ data: null }),
+    getCheckMode(supabase, me.id),
+  ]);
+  const draft = draftRow && deletedAt(draftRow.data) === null ? (draftRow.data as { notes_next_phase?: unknown; tests_text?: unknown }) : null;
+  // solo in modalità check su questo stesso check (lì la bozza è la versione comune ai dispositivi)
+  const liveDraft = Boolean(mode && mode.clientId === clientId && (mode.checkId ?? null) === (checkId ?? null));
+  const fromDraft = (field: "notes_next_phase" | "tests_text") => {
+    const sent = String(fd.get(field) ?? "").trim();
+    const kept = liveDraft && typeof draft?.[field] === "string" ? (draft[field] as string).trim() : "";
+    return sent || kept;
+  };
+
   const age = ageOn(client.birth_date, date || todayISO());
   const row = {
     client_id: clientId,
@@ -87,18 +105,26 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
     skinfolds: skinfolds as unknown as NonNullable<Json>,
     circumferences: circumferences as unknown as NonNullable<Json>,
     strength_tests: tests as unknown as NonNullable<Json>,
-    tests_text: String(fd.get("tests_text") ?? "").trim(),
-    notes_next_phase: String(fd.get("notes_next_phase") ?? "").trim(),
+    tests_text: fromDraft("tests_text"),
+    notes_next_phase: fromDraft("notes_next_phase"),
     visible_to_client: fd.get("visible_to_client") === "on",
   };
   // modalità check: il check nuovo prende l'id già deciso (le foto sono già nella sua cartella)
   const newId = String(fd.get("new_id") ?? "");
   const presetId = !checkId && /^[0-9a-f-]{36}$/i.test(newId) && (await isPendingCheck(supabase, me.id, clientId, newId)) ? newId : null;
-  const { data: saved, error } = checkId
-    ? await supabase.from("checks").update(row).eq("id", checkId).eq("client_id", clientId).select("id").maybeSingle()
+  // il check nuovo della modalità check è già stato salvato (secondo tocco, o un
+  // salvataggio riuscito di cui il telefono non ha avuto risposta): si aggiorna quello
+  const { data: already } = presetId ? await supabase.from("checks").select("id").eq("id", presetId).eq("client_id", clientId).maybeSingle() : { data: null };
+  const updateId = checkId ?? already?.id ?? null;
+  let { data: saved, error } = updateId
+    ? await supabase.from("checks").update(row).eq("id", updateId).eq("client_id", clientId).select("id").maybeSingle()
     : // l'autore è chi lo crea (chi lo corregge dopo non ne diventa l'autore)
       await supabase.from("checks").insert({ ...row, created_by: me.id, id: presetId ?? undefined }).select("id").single();
-  if (error || !saved) return { error: "Salvataggio non riuscito." };
+  if (error?.code === "23505" && presetId) {
+    // salvato nel frattempo da un'altra richiesta: si aggiorna
+    ({ data: saved, error } = await supabase.from("checks").update(row).eq("id", presetId).eq("client_id", clientId).select("id").maybeSingle());
+  }
+  if (error || !saved) return { error: "Non sono riuscito a salvare il check. Controlla la connessione e tocca di nuovo: quello che hai scritto resta qui." };
   // foto caricate durante la modalità check: ora si registrano nel check
   const pendingRaw = String(fd.get("pending_photos") ?? "");
   if (pendingRaw) {
@@ -127,9 +153,11 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
   // cambiare per tutti i check se questo aggiunge o toglie una plica)
   await recomputeClientChecks(supabase, clientId);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
-  // la bozza del modulo non serve più (anche sull'altro dispositivo)
-  const draftKey = String(fd.get("draft_key") ?? "");
-  if (draftKey.startsWith(`check:${clientId}:`)) {
+  // la bozza del modulo non serve più (anche sull'altro dispositivo). Prima se ne
+  // tiene una copia legata al check salvato: se un giorno manca qualcosa, si recupera
+  // (le bozze vecchie si cancellano da sole dopo 60 giorni)
+  if (ownDraft) {
+    if (draft) await supabase.from("drafts").upsert({ user_id: me.id, key: `check-salvato:${clientId}:${saved.id}`, data: draft as unknown as Json, updated_at: new Date().toISOString() });
     await supabase.from("drafts").upsert({ user_id: me.id, key: draftKey, data: draftTombstone(Date.now()), updated_at: new Date().toISOString() });
   }
   // il browser cancella la bozza e poi: carica le foto scelte nel modulo,

@@ -261,3 +261,7 @@ main > div:has(> [data-program-editor]) {
   [data-print-sheet] section, [data-print-sheet] tr { break-inside: avoid; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* PDF creato nell'app (SheetPdfButton): copia del foglio larga come una pagina, anche dal telefono */
+[data-pdf] { color: var(--color-ink); }
+[data-pdf] [data-compare-summary] { grid-template-columns: repeat(4, minmax(0, 1fr)); }

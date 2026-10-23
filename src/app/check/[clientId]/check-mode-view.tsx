@@ -119,6 +119,7 @@ export function CheckModeView(props: {
             formId={FORM_ID}
             view={formView}
             submitLabel="Check finito"
+            onBusy={setEnding}
             onSaved={(id) => {
               setEnding(true);
               void endCheckMode(props.clientId, id);

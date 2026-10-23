@@ -1307,6 +1307,11 @@ describe("progressi: confronto tra check e dal primo check", () => {
     expect(rows.find((r) => r.key === "f:coscia")).toMatchObject({ a: 15, b: null, diff: null });
     expect(rows.find((r) => r.key === "c:vita")).toMatchObject({ diff: -1.5 });
     expect(defaultPair([a, b, c])).toEqual(["b", "c"]);
+    // per la composizione: un check di solo peso alla fine non si prende di partenza
+    const d = pt("d", "2026-08-10", { weight: 76.5, fatPct: null, folds: {}, circ: {} });
+    expect(defaultPair([a, b, c, d])).toEqual(["c", "d"]);
+    expect(defaultPair([a, b, c, d], { withFolds: true })).toEqual(["b", "c"]);
+    expect(defaultPair([a, d], { withFolds: true })).toEqual(["a", "d"]);
   });
 });
 

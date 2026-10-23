@@ -12,6 +12,7 @@ import { addDays, ageOn, diffDays, formatLong, todayISO } from "@/lib/dates";
 import type { Sex } from "@/lib/body/skinfolds";
 import { Card, cx, EmptyState, fmtNum } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
+import { SheetPdfButton } from "@/components/sheet-pdf";
 import { PrintNote } from "@/components/print-note";
 
 export const metadata: Metadata = { title: "Confronto composizione corporea" };
@@ -46,7 +47,7 @@ export default async function ComparePrintPage({ params, searchParams }: { param
   }
   const body = staffBodyData(checks, client.sex as Sex, client.birth_date, client.skinfold_formula);
   const points = body.points;
-  const pair = defaultPair(points);
+  const pair = defaultPair(points, { withFolds: true });
   const aId = points.some((p) => p.id === sp.da) ? sp.da! : pair![0];
   const bId = points.some((p) => p.id === sp.a) ? sp.a! : pair![1];
   const a = points.find((p) => p.id === aId)!;
@@ -83,9 +84,9 @@ export default async function ComparePrintPage({ params, searchParams }: { param
           </label>
           <button type="submit" className="min-h-11 rounded-full px-4 text-sm font-semibold ring-1 ring-sand-deep">Confronta</button>
         </form>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <PrintButton />
-          <span className="text-sm text-muted">Sul telefono: Stampa → apri l&apos;anteprima → Condividi per salvarlo o mandarlo come PDF.</span>
+        <div className="flex flex-col gap-2">
+          <SheetPdfButton filename={`confronto-${slug(name)}-${b.date ?? todayISO()}.pdf`} title={`Composizione corporea: confronto · ${name}`} />
+          <p className="text-sm text-muted">Crea il PDF, poi condividilo (WhatsApp, Mail, File) o scaricalo. Sul computer puoi anche <PrintButton variant="link" label="stamparlo" />.</p>
         </div>
       </Card>
 
@@ -149,6 +150,10 @@ export default async function ComparePrintPage({ params, searchParams }: { param
       </article>
     </div>
   );
+}
+
+function slug(s: string) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "cliente";
 }
 
 function signed(n: number, digits = 1) {

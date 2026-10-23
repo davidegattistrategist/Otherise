@@ -59,8 +59,8 @@ test("lo staff vede il peso del cliente in Check e in Panoramica e lo può segna
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}/);
   const id = /\/staff\/clienti\/([0-9a-f-]{36})/.exec(page.url())![1];
   await page.goto(`/staff/clienti/${id}`);
-  await expect(page.locator("[data-weight-overview]")).toContainText("Media ultimi 7 giorni");
-  await page.locator("[data-weight-overview]").getByRole("link", { name: "Grafico e pesate" }).click();
+  await expect(page.locator("[data-weight-overview]").filter({ visible: true }).first()).toContainText("Media ultimi 7 giorni");
+  await page.locator("[data-weight-overview]").filter({ visible: true }).first().getByRole("link", { name: "Grafico e pesate" }).click();
   await page.waitForURL(/\/check/);
   const card = page.locator("[data-daily-weight]");
   await expect(card).toContainText("Lo segna il cliente in Progressi");
