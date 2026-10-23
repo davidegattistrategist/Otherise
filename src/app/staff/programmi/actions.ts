@@ -184,7 +184,20 @@ export async function saveProgram(id: string, input: unknown): Promise<SaveResul
     const before = normalizeWeeks(parseContent(current.content), current.weeks);
     if (JSON.stringify(before) !== JSON.stringify(content) || current.weeks !== v.weeks) {
       inProgressChanged = true;
-      await supabase.from("program_revisions").insert({ program_id: id, client_id: current.client_id, created_by: me.id, reason: v.revision_reason || "Modifica a mano", title: current.title, weeks: current.weeks, content: asJson(before) });
+      // con il salvataggio automatico ogni pausa è un salvataggio: una sola versione "di prima"
+      // per ogni giro di modifiche a mano (30 minuti); un ritocco con l'AI ha sempre la sua
+      const { data: recent } = v.revision_reason
+        ? { data: null }
+        : await supabase
+            .from("program_revisions")
+            .select("id")
+            .eq("program_id", id)
+            .eq("created_by", me.id)
+            .eq("reason", "Modifica a mano")
+            .gte("created_at", new Date(Date.now() - 30 * 60_000).toISOString())
+            .limit(1)
+            .maybeSingle();
+      if (!recent) await supabase.from("program_revisions").insert({ program_id: id, client_id: current.client_id, created_by: me.id, reason: v.revision_reason || "Modifica a mano", title: current.title, weeks: current.weeks, content: asJson(before) });
     }
   }
   const unknown = new Set<string>();

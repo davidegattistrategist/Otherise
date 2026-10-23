@@ -32,7 +32,8 @@ export function SubmitButton({
   );
 }
 
-export type ActionState = { ok?: boolean; error?: string; message?: string } | null;
+/** `notice`: avviso da mostrare anche nei moduli che si salvano da soli (es. invito da rifare). */
+export type ActionState = { ok?: boolean; error?: string; message?: string; notice?: string } | null;
 
 export function ActionMessage({ state }: { state: ActionState }) {
   if (!state) return null;

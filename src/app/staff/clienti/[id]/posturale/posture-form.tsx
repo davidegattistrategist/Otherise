@@ -2,6 +2,7 @@
 
 import { useActionState, useRef } from "react";
 import { FormDraft } from "@/components/draft-note";
+import { LiveForm } from "@/components/live-form";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 import { Input, Label, Textarea } from "@/components/ui";
 import { DictateButton } from "@/components/dictate-button";
@@ -15,17 +16,15 @@ const SECTIONS = [
   { key: "notes", label: "Altre note", placeholder: "" },
 ] as const;
 
-export function PostureForm({ action, values, today }: { action: (s: ActionState, fd: FormData) => Promise<ActionState>; values?: Values; today: string }) {
-  const [state, formAction] = useActionState(action, null);
-  const formRef = useRef<HTMLFormElement>(null);
+export function PostureForm({ action, values, today, postureId }: { action: (s: ActionState, fd: FormData) => Promise<ActionState>; values?: Values; today: string; postureId?: string }) {
   const refs = {
     tight_muscles: useRef<HTMLTextAreaElement>(null),
     what_works: useRef<HTMLTextAreaElement>(null),
     posture_work: useRef<HTMLTextAreaElement>(null),
     notes: useRef<HTMLTextAreaElement>(null),
   };
-  return (
-    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
+  const fields = (
+    <>
       <div className="flex flex-wrap items-end gap-4">
         <div>
           <Label htmlFor="assessed_on">Data</Label>
@@ -45,8 +44,27 @@ export function PostureForm({ action, values, today }: { action: (s: ActionState
           <Textarea ref={refs[s.key]} id={s.key} name={s.key} rows={3} defaultValue={values?.[s.key] ?? ""} placeholder={s.placeholder} />
         </div>
       ))}
+    </>
+  );
+  // valutazione già fatta: si salva da sola mentre scrivi
+  if (values && postureId) {
+    return (
+      <LiveForm action={action} name={`posturale-${postureId}`} className="flex flex-col gap-4">
+        {fields}
+      </LiveForm>
+    );
+  }
+  return <NewPosture action={action}>{fields}</NewPosture>;
+}
+
+function NewPosture({ action, children }: { action: (s: ActionState, fd: FormData) => Promise<ActionState>; children: React.ReactNode }) {
+  const [state, formAction] = useActionState(action, null);
+  const formRef = useRef<HTMLFormElement>(null);
+  return (
+    <form ref={formRef} action={formAction} className="flex flex-col gap-4">
+      {children}
       <ActionMessage state={state} />
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>{values ? "Salva modifiche" : "Salva la valutazione"}</SubmitButton><FormDraft form={formRef} name={values ? `posturale-${values.assessed_on ?? ""}` : "posturale-nuova"} /></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>Salva la valutazione</SubmitButton><FormDraft form={formRef} name="posturale-nuova" /></div>
     </form>
   );
 }

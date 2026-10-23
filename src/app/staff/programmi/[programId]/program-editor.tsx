@@ -121,6 +121,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   const guard = useCallback((c: ProgramContent) => (throughRef.current > 0 ? keepLockedWeeks(c, lockBase.current, throughRef.current) : c), []);
   // motivo della modifica, per lo storico "Ritocchi" (si azzera dopo il salvataggio)
   const revisionReason = useRef<string | null>(null);
+  // programma in corso cambiato: "avviso il cliente?" (non blocca: si continua a scrivere)
   const [askNotify, setAskNotify] = useState(false);
   const [aiNotes, setAiNotes] = useState<Record<string, string>>(program.ai_notes ?? {});
   const [updatedAt, setUpdatedAt] = useState(program.updated_at);
@@ -236,7 +237,8 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
       alive = false;
     };
   }, [draftKey, program.updated_at, adoptBackup, markDirty, doneWeeks]);
-  const autoSave = status !== "published" || program.is_template;
+  // tutto si salva da solo, anche un programma pubblicato (regola dell'app: niente "Salva")
+  const autoSave = true;
   useEffect(() => {
     if (!dirty || !autoSave || pending) return;
     const t = setTimeout(() => doSave(), 2000);
@@ -258,32 +260,6 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  // avviso se si esce con modifiche non salvate (un programma pubblicato: le
-  // modifiche restano comunque come bozza e si ritrovano alla riapertura)
-  useEffect(() => {
-    if (!dirty || autoSave) return;
-    const onBefore = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-    };
-    // anche i link dentro l'app (menu, "indietro"): chiedi prima di perdere le modifiche
-    const onClick = (e: MouseEvent) => {
-      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
-      if (!a || a.target === "_blank" || e.metaKey || e.ctrlKey || e.shiftKey) return;
-      const url = new URL(a.href, window.location.href);
-      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
-      if (!window.confirm("Hai modifiche non salvate. Uscire senza salvarle?")) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    };
-    window.addEventListener("beforeunload", onBefore);
-    document.addEventListener("click", onClick, true);
-    return () => {
-      window.removeEventListener("beforeunload", onBefore);
-      document.removeEventListener("click", onClick, true);
-    };
-  }, [dirty, autoSave]);
 
   /** Copia la settimana w sulle successive vuote (da computer e da telefono). */
   const copyForward = (w: number) => {
@@ -561,14 +537,11 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             <div className="mt-2 flex flex-wrap items-center gap-2 px-1 text-sm text-muted">
               <Pill active={status === "published"}>{program.is_template ? "Modello" : STATUS_LABEL[status]}</Pill>
               {program.source === "ai" ? <Pill><IconSparkle size={14} /> Bozza preparata con l&apos;AI</Pill> : null}
-              <span aria-live="polite">{pending ? "Salvataggio…" : dirty ? (autoSave ? "Salvo tra un attimo…" : "Modifiche da salvare (intanto restano qui anche se esci)") : savedAt ? `Salvato alle ${savedAt}${autoSave ? " (si salva da solo)" : ""}` : ""}</span>
-              {restored ? <span className="rounded-full bg-sand-deep px-3 py-1 text-ink">Non si è perso niente: ci sono le modifiche che non avevi salvato.</span> : null}
+              <span aria-live="polite" data-program-save={pending || dirty ? "saving" : savedAt ? "saved" : "idle"}>{pending || dirty ? "Salvo…" : savedAt ? `Salvato alle ${savedAt}` : "Si salva da solo mentre scrivi"}</span>
+              {restored ? <span className="rounded-full bg-sand-deep px-3 py-1 text-ink">Ho ripreso le modifiche che non erano arrivate al server: le salvo adesso.</span> : null}
             </div>
           </div>
           <div className="flex flex-wrap gap-2.5">
-            <Button onClick={doSave} disabled={pending} variant={dirty ? "primary" : "secondary"}>
-              Salva
-            </Button>
             {!program.is_template && status === "draft" ? (
               <Button
                 variant="secondary"
@@ -592,15 +565,36 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         </div>
       </div>
 
-      {/* sul telefono il pulsante Salva in alto sparisce scorrendo: barra fissa quando ci sono modifiche */}
-      {dirty && !selecting ? (
-        <div className="fixed right-[var(--edge-right)] bottom-[calc(var(--nav-space)+0.5rem)] left-[var(--edge-left)] z-40 flex items-center justify-between gap-3 rounded-2xl bg-ink px-4 py-2.5 text-card shadow-xl lg:hidden">
-          <span className="text-sm">{pending ? "Salvataggio…" : "Modifiche non salvate"}</span>
-          <Button size="sm" variant="secondary" onClick={doSave} disabled={pending}>Salva le modifiche</Button>
+      {message ? <Notice tone={message.tone}>{message.text}</Notice> : null}
+      {askNotify ? (
+        <div className="flex flex-col gap-3 rounded-[24px] bg-accent-soft px-5 py-4" role="region" aria-label="Avvisare il cliente?" data-notify-ask>
+          <p className="text-[15px] leading-relaxed">
+            <strong>Avvisare {clientName ?? "il cliente"}?</strong> Sta già facendo questo programma: le modifiche le vede subito aprendo l&apos;app. Se vuoi gli arriva anche una notifica (quando hai finito di cambiare).
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setAskNotify(false);
+                runAction(() => notifyProgramChanged(program.id));
+              }}
+              className="min-h-11 rounded-full bg-ink px-5 text-[15px] font-semibold text-card"
+              data-notify-yes
+            >
+              Sì, manda la notifica
+            </button>
+            <button
+              type="button"
+              onClick={() => setAskNotify(false)}
+              className="min-h-11 rounded-full bg-card px-5 text-[15px] font-semibold ring-1 ring-sand-deep"
+              data-notify-no
+            >
+              No, non serve
+            </button>
+          </div>
         </div>
       ) : null}
 
-      {message ? <Notice tone={message.tone}>{message.text}</Notice> : null}
       {unknown.length > 0 ? (
         <Notice tone="info">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1122,31 +1116,6 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             })}
           </ul>
         </details>
-      ) : null}
-
-      {askNotify ? (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-ink/40 sm:items-center" role="dialog" aria-modal="true" aria-label="Avvisare il cliente?">
-          <div className="w-full max-w-md rounded-t-[28px] bg-sand px-5 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] sm:rounded-[28px]">
-            <h2 className="text-[22px] leading-tight font-semibold">Avvisare {clientName ?? "il cliente"}?</h2>
-            <p className="mt-2 text-[16px] leading-relaxed">Hai cambiato un programma che sta già facendo: le modifiche le vede subito aprendo l&apos;app. Vuoi che gli arrivi anche una notifica?</p>
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setAskNotify(false);
-                  runAction(() => notifyProgramChanged(program.id));
-                }}
-                className="min-h-12 w-full rounded-full bg-ink text-[16px] font-semibold text-card"
-                data-notify-yes
-              >
-                Sì, manda la notifica
-              </button>
-              <button type="button" onClick={() => setAskNotify(false)} className="min-h-12 w-full rounded-full bg-card text-[16px] font-semibold ring-1 ring-sand-deep" data-notify-no>
-                No, non serve
-              </button>
-            </div>
-          </div>
-        </div>
       ) : null}
 
       {/* azioni sul programma */}

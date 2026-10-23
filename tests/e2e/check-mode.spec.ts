@@ -27,15 +27,15 @@ test("check: le misure di prima accanto, e quello che scrivi resta anche se esci
   // accanto ai campi le misure del check prima (le altre prove possono averne aggiunto uno senza peso)
   await expect(page.getByText(/^prima \d/).first()).toBeVisible();
   await page.locator("#weight_kg").fill("64,1");
-  await expect(page.getByText(/Salvato in automatico alle/)).toBeVisible();
+  await expect(page.getByText(/Non ancora salvato: la bozza è al sicuro/).filter({ visible: true }).first()).toBeVisible();
   // esco senza salvare e torno: il peso c'è ancora
   await page.goto("/staff");
   await page.goto(`/staff/clienti/${id}/check/nuovo`);
   // durante il caricamento la pagina può avere per un attimo una copia nascosta del modulo
   const weight = page.locator("#weight_kg").filter({ visible: true }).first();
   await expect(weight).toHaveValue("64,1");
-  await expect(page.getByText(/Non si è perso niente: c’è quello che avevi scritto/)).toBeVisible();
-  await page.getByRole("button", { name: "Svuota il modulo" }).click();
+  await expect(page.getByText(/Ci sono modifiche non ancora salvate/).filter({ visible: true }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Annulla le modifiche" }).click();
   await expect(weight).toHaveValue("");
 });
 
@@ -46,7 +46,7 @@ test("modalità check: si entra, si chiude per ora, si riprende con tutto quello
   await page.waitForURL(new RegExp(`/check/${id}$`));
   await expect(page.getByText("Modalità check").first()).toBeVisible();
   await page.locator("#weight_kg").fill("63,9");
-  await expect(page.getByText(/Salvato in automatico alle/)).toBeVisible();
+  await expect(page.getByText(/Non ancora salvato: la bozza è al sicuro/).filter({ visible: true }).first()).toBeVisible();
   // i confronti e il programma senza uscire
   await page.getByRole("button", { name: "Confronti" }).click();
   await expect(page.getByLabel("Confronta i check")).toBeVisible();

@@ -7,9 +7,10 @@
  * altre schede), si salva da solo a ogni lettera e passa da un dispositivo
  * all'altro.
  */
-import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { CheckForm, type CheckFormData, type CheckState, type CheckValues, type PreviousCheck } from "@/app/staff/clienti/[id]/check/check-form";
 import { withLiveCheck } from "@/lib/body/live-check";
+import type { KnownAge } from "@/lib/body/age";
 import { todayISO } from "@/lib/dates";
 import { BodyCharts, CheckCompare } from "@/components/body-progress";
 import type { BodyPoint, FormulaSeries } from "@/lib/body/progress";
@@ -35,6 +36,7 @@ export function CheckModeView(props: {
   formula: FormulaId | null;
   manual: boolean;
   lastMissing: SkinfoldSite[];
+  knownAges: KnownAge[];
   previous: PreviousCheck | null;
   values: CheckValues;
   action: (s: CheckState, fd: FormData) => Promise<CheckState>;
@@ -48,6 +50,15 @@ export function CheckModeView(props: {
 }) {
   const [tab, setTab] = useState<Tab>("misure");
   const [ending, setEnding] = useState(false);
+  // mentre chiude da qui, l'aggiornamento dal vivo non porta altrove (si apre il check salvato)
+  useEffect(() => {
+    const html = document.documentElement;
+    if (ending) html.dataset.checkEnding = "1";
+    else delete html.dataset.checkEnding;
+    return () => {
+      delete html.dataset.checkEnding;
+    };
+  }, [ending]);
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "misure", label: "Misure" },
     { key: "confronti", label: "Confronti" },
@@ -59,8 +70,8 @@ export function CheckModeView(props: {
   // il check che stai scrivendo entra nei confronti e nei grafici (anche dall'altro dispositivo)
   const [now, setNow] = useState<CheckFormData | null>(null);
   const live = useMemo(
-    () => (props.sex ? withLiveCheck(props.points, props.formulas, now, { sex: props.sex, birthDate: props.birthDate, formula: props.formula, today: todayISO() }) : { points: props.points, formulas: props.formulas }),
-    [props.points, props.formulas, now, props.sex, props.birthDate, props.formula],
+    () => (props.sex ? withLiveCheck(props.points, props.formulas, now, { sex: props.sex, birthDate: props.birthDate, formula: props.formula, today: todayISO(), knownAges: props.knownAges }) : { points: props.points, formulas: props.formulas }),
+    [props.points, props.formulas, now, props.sex, props.birthDate, props.formula, props.knownAges],
   );
   const { clientId } = props;
   const onSaved = useCallback(
@@ -130,6 +141,7 @@ export function CheckModeView(props: {
             formula={props.formula}
             manual={props.manual}
             lastMissing={props.lastMissing}
+            knownAges={props.knownAges}
             previous={props.previous}
             live
             photoFolder={props.photoFolder}
@@ -169,7 +181,10 @@ export function CheckModeView(props: {
         <button
           type="button"
           onClick={() => {
-            if (window.confirm("Annullare il check? Quello che hai scritto in questo check si cancella.")) void cancelCheckMode(props.clientId);
+            if (window.confirm("Annullare il check? Quello che hai scritto in questo check si cancella.")) {
+              setEnding(true);
+              void cancelCheckMode(props.clientId);
+            }
           }}
           className="text-sm font-semibold text-accent-deep underline"
         >

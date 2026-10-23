@@ -38,7 +38,8 @@ test("allenamenti: storico con programma e liberi, costanza, esercizi fatti", as
   const session = list.locator("[data-session]", { hasText: /\d+ di \d+ esercizi/ }).first();
   await session.locator("summary").click();
   await expect(session.getByRole("link", { name: "Apri il logbook" })).toBeVisible();
-  await expect(session.locator("li").first()).toContainText(/kg|×|x/);
+  // (altre prove possono aver segnato un esercizio solo con una nota)
+  await expect(session.locator("li").filter({ hasText: /kg|×|\dx\d/ }).first()).toBeVisible();
   // periodo più lungo: almeno le stesse sessioni
   const before = await list.locator("[data-session]").count();
   await page.getByRole("link", { name: "1 anno" }).click();

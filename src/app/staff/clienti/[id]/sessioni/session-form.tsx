@@ -1,6 +1,7 @@
 "use client";
 
 import { FormDraft } from "@/components/draft-note";
+import { LiveForm } from "@/components/live-form";
 import { useActionState, useEffect, useRef } from "react";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 import { Input, Label } from "@/components/ui";
@@ -14,6 +15,7 @@ export function SessionForm({
   compact,
   showPackage = true,
   packageLabel = "Conta nel pacchetto",
+  sessionId,
 }: {
   action: (s: ActionState, fd: FormData) => Promise<ActionState>;
   values?: { session_date: string; notes: string; counts_toward_package: boolean };
@@ -21,16 +23,13 @@ export function SessionForm({
   compact?: boolean;
   showPackage?: boolean;
   packageLabel?: string;
+  /** sessione già registrata: si salva da sola mentre scrivi */
+  sessionId?: string;
 }) {
-  const [state, formAction] = useActionState(action, null);
-  const formRef = useRef<HTMLFormElement>(null);
+  const uid = sessionId ?? "nuova";
   const notesRef = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    if (state?.ok && !values) formRef.current?.reset();
-  }, [state, values]);
-  const uid = values ? values.session_date + values.notes.length : "nuova";
-  return (
-    <form ref={formRef} action={formAction} className="flex flex-col gap-3">
+  const fields = (
+    <>
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <Label htmlFor={`d-${uid}`}>Data</Label>
@@ -52,8 +51,29 @@ export function SessionForm({
         </div>
         <NoteArea title="Note della sessione" ref={notesRef} id={`n-${uid}`} name="notes" rows={compact ? 3 : 5} defaultValue={values?.notes ?? ""} placeholder="Es. Squat 4x6 a 80 kg, ginocchio sinistro ok. Da rivedere lo stacco: schiena che si arrotonda all'ultima ripetizione." />
       </div>
+    </>
+  );
+  if (values && sessionId) {
+    return (
+      <LiveForm action={action} name={`sessione-${sessionId}`} className="flex flex-col gap-3">
+        {fields}
+      </LiveForm>
+    );
+  }
+  return <NewSession action={action} compact={compact} hasValues={Boolean(values)} draftName={`sessione-${uid}`}>{fields}</NewSession>;
+}
+
+function NewSession({ action, compact, hasValues, draftName, children }: { action: (s: ActionState, fd: FormData) => Promise<ActionState>; compact?: boolean; hasValues: boolean; draftName: string; children: React.ReactNode }) {
+  const [state, formAction] = useActionState(action, null);
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (state?.ok && !hasValues) formRef.current?.reset();
+  }, [state, hasValues]);
+  return (
+    <form ref={formRef} action={formAction} className="flex flex-col gap-3">
+      {children}
       <ActionMessage state={state} />
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton size={compact ? "sm" : "md"}>{values ? "Salva modifiche" : "Salva la sessione"}</SubmitButton><FormDraft form={formRef} name={`sessione-${uid}`} /></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton size={compact ? "sm" : "md"}>Registra la sessione</SubmitButton><FormDraft form={formRef} name={draftName} /></div>
     </form>
   );
 }

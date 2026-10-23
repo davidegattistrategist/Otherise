@@ -27,7 +27,7 @@ export default async function EditCheckPage({ params, searchParams }: { params: 
   const supabase = await createClient();
   const [{ data: c }, folds, previous, allPhotos, { data: order }] = await Promise.all([
     supabase.from("checks").select("*").eq("id", checkId).eq("client_id", id).maybeSingle(),
-    client.sex ? foldContext(supabase, { ...client, sex: client.sex }, checkId) : Promise.resolve({ ref: null, lastMissing: [] }),
+    client.sex ? foldContext(supabase, { ...client, sex: client.sex }, checkId) : Promise.resolve({ ref: null, lastMissing: [], knownAges: [] }),
     previousCheck(supabase, id, checkId),
     staffCheckPhotos(supabase, id),
     supabase.from("checks").select("id, check_date, sequence, created_at, order_hint").eq("client_id", id),
@@ -66,6 +66,7 @@ export default async function EditCheckPage({ params, searchParams }: { params: 
         formula={folds.ref?.id ?? null}
         manual={Boolean(client.skinfold_formula)}
         lastMissing={[]}
+        knownAges={folds.knownAges}
         values={{
           check_date: c.check_date ?? "",
           weight_kg: c.weight_kg === null ? null : Number(c.weight_kg),

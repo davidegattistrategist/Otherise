@@ -95,6 +95,8 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
     return sent || kept;
   };
 
+  // senza data di nascita resta vuota: il ricalcolo qui sotto usa l'età stimata dagli altri check
+  // (checkAge), e quando aggiungi la data di nascita vale quella
   const age = ageOn(client.birth_date, date || todayISO());
   const row = {
     client_id: clientId,
@@ -156,6 +158,8 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
   // la bozza del modulo non serve più (anche sull'altro dispositivo). Prima se ne
   // tiene una copia legata al check salvato: se un giorno manca qualcosa, si recupera
   // (le bozze vecchie si cancellano da sole dopo 60 giorni)
+  // salvataggio mentre scrivi (check già salvato): niente copia né segno, la bozza la toglie il browser
+  if (fd.get("__live") === "1") return { ok: true, checkId: saved.id };
   if (ownDraft) {
     if (draft) await supabase.from("drafts").upsert({ user_id: me.id, key: `check-salvato:${clientId}:${saved.id}`, data: draft as unknown as Json, updated_at: new Date().toISOString() });
     await supabase.from("drafts").upsert({ user_id: me.id, key: draftKey, data: draftTombstone(Date.now()), updated_at: new Date().toISOString() });

@@ -32,11 +32,8 @@ test("progetto annuale: il trainer lo modifica, il cliente lo vede", async ({ pa
   const goal = `Più forza nelle gambe (${info.project.name})`;
   await page.getByLabel(/Obiettivo dell'anno/).fill(goal);
   await page.getByRole("button", { name: /Forza massima, .*Tocca per cambiare/ }).first().click();
-  await page.getByRole("button", { name: "Salva", exact: true }).click();
-  // progetto visibile: prima di salvare chiede se avvisare il cliente
-  const ask = page.getByRole("dialog", { name: /Mandi una notifica a Giulia/ });
-  await expect(ask).toBeVisible();
-  await ask.getByRole("button", { name: "Sì, manda la notifica" }).click();
+  // si salva da solo; il progetto è visibile: "Avvisa Giulia delle novità" quando hai finito
+  await page.locator("[data-project-notify]").click({ timeout: 15000 });
   await expect(page.getByText(/Progetto salvato e cliente avvisato/)).toBeVisible();
 
   const ctx = await browser.newContext(info.project.use);
@@ -251,15 +248,14 @@ test("avvisi per email: di serie niente email allo staff, il titolare può cambi
   const clients = card.locator('input[name="client_emails"]');
   await expect(staff).not.toBeChecked();
   await expect(clients).toBeChecked();
+  // si salva appena tocchi
   await staff.check();
-  await card.getByRole("button", { name: "Salva le email" }).click();
-  await expect(card.getByText("Preferenze salvate.")).toBeVisible();
+  await expect(card.locator("[data-live-status=saved]")).toBeVisible({ timeout: 15000 });
   await page.reload();
   await expect(page.locator('#email input[name="staff_emails"]')).toBeChecked();
   // rimetto com'era
   await page.locator('#email input[name="staff_emails"]').uncheck();
-  await page.locator("#email").getByRole("button", { name: "Salva le email" }).click();
-  await expect(page.locator("#email").getByText("Preferenze salvate.")).toBeVisible();
+  await expect(page.locator("#email [data-live-status=saved]")).toBeVisible({ timeout: 15000 });
 });
 
 test("popup per attivare le notifiche (telefono Android): si può rimandare", async ({ browser }) => {

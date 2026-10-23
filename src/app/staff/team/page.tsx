@@ -4,8 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, Eyebrow, Input, PageTitle, Pill } from "@/components/ui";
 import { ConfirmButton, SubmitButton } from "@/components/form-bits";
+import { LiveForm } from "@/components/live-form";
 import { InviteForm } from "./invite-form";
-import { cancelInvite, inviteCollaborator, removeCollaborator, renameStaff, resendInvite } from "./actions";
+import { cancelInvite, inviteCollaborator, removeCollaborator, renameStaffLive, resendInvite } from "./actions";
 
 export const metadata: Metadata = { title: "Collaboratori" };
 
@@ -55,11 +56,10 @@ export default async function TeamPage() {
               </div>
               <div className="text-sm text-muted">{s.role === "owner" ? `Clienti senza collaboratore: ${unassigned}` : `Clienti assegnati: ${count(s.id)}`}</div>
               <div className="flex flex-wrap items-end gap-3 border-t border-sand-deep pt-3">
-                <form action={renameStaff.bind(null, s.id)} className="flex flex-wrap items-end gap-2">
+                <LiveForm action={renameStaffLive.bind(null, s.id)} name={`nome-${s.id}`} className="flex flex-col gap-1" hint="Il nome si salva da solo.">
                   <label className="sr-only" htmlFor={`name-${s.id}`}>Nome</label>
                   <Input id={`name-${s.id}`} name="full_name" defaultValue={s.full_name} className="w-56" />
-                  <SubmitButton variant="secondary" size="sm">Rinomina</SubmitButton>
-                </form>
+                </LiveForm>
                 {s.role === "coach" && !active ? (
                   <>
                     <form action={resendInvite.bind(null, s.id)}><SubmitButton variant="secondary" size="sm" pendingText="Invio…">Rimanda l&apos;invito</SubmitButton></form>

@@ -336,10 +336,10 @@ export function draftText(s: DraftState): string {
   }
 }
 
-type FormValues = Record<string, string | boolean | string[]>;
+export type FormValues = Record<string, string | boolean | string[]>;
 
 /** Valori di un modulo (testi, scelte, spunte; non i file né i campi nascosti). */
-function readForm(form: HTMLFormElement): FormValues {
+export function readForm(form: HTMLFormElement): FormValues {
   const out: FormValues = {};
   for (const el of Array.from(form.elements) as Array<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     if (!el.name || el.disabled || el.dataset.noDraft !== undefined) continue;
@@ -349,6 +349,24 @@ function readForm(form: HTMLFormElement): FormValues {
     else if (type === "radio") {
       if ((el as HTMLInputElement).checked) out[el.name] = el.value;
     } else out[el.name] = el.value;
+  }
+  return out;
+}
+
+/** I valori con cui il modulo è arrivato dal server (prima di qualsiasi lettera). */
+export function readFormDefaults(form: HTMLFormElement): FormValues {
+  const out: FormValues = {};
+  for (const el of Array.from(form.elements) as Array<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
+    if (!el.name || el.disabled || el.dataset.noDraft !== undefined) continue;
+    const type = (el as HTMLInputElement).type;
+    if (type === "file" || type === "hidden" || type === "submit" || type === "button" || type === "password") continue;
+    if (type === "checkbox") out[el.name] = (el as HTMLInputElement).defaultChecked;
+    else if (type === "radio") {
+      if ((el as HTMLInputElement).defaultChecked) out[el.name] = el.value;
+    } else if (el instanceof HTMLSelectElement) {
+      const opt = Array.from(el.options).find((o) => o.defaultSelected) ?? el.options[0];
+      out[el.name] = opt ? opt.value : "";
+    } else out[el.name] = (el as HTMLInputElement | HTMLTextAreaElement).defaultValue;
   }
   return out;
 }
@@ -413,7 +431,7 @@ export function useFormDraft(form: RefObject<HTMLFormElement | null>, name: stri
     };
   }, [form, key, adopt, clear]);
 
-  /** "Svuota il modulo": il modulo torna com'era e la bozza sparisce. */
+  /** "Annulla le modifiche": il modulo torna com'era e la bozza sparisce. */
   const discard = () => {
     clear();
     const f = form.current;
@@ -426,5 +444,11 @@ export function useFormDraft(form: RefObject<HTMLFormElement | null>, name: stri
     setRestored(null);
   };
 
-  return { status: draft.status, restored, discard };
+  /** Salvato davvero (salvataggio automatico sul server): la bozza non serve più. */
+  const markSaved = useCallback(() => {
+    clear();
+    setRestored(null);
+  }, [clear]);
+
+  return { status: draft.status, restored, discard, markSaved };
 }

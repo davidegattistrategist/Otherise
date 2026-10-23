@@ -4,7 +4,8 @@
  * quelle dei check salvati, anche se le scrive l'altro dispositivo.
  * Calcoli puri: nessun dato salvato, nessuna lettura dal database.
  */
-import { ageOn, formatShort, type ISODate } from "../dates";
+import { formatShort, type ISODate } from "../dates";
+import { ageAt, type KnownAge } from "./age";
 import { averagesOf, computeBodyComposition, protocolSites, type FormulaId, type Sex, type SkinfoldReadings } from "./skinfolds";
 import type { BodyPoint, FormulaSeries } from "./progress";
 
@@ -44,7 +45,7 @@ function composition(sex: Sex, age: number | null, weight: number | null, readin
  * Il punto del check in corso, o null se non c'è ancora nessuna misura.
  * `formula` = formula di riferimento del cliente (la % segue sempre quella).
  */
-export function livePoint(input: LiveCheckInput, opts: { sex: Sex; birthDate: string | null; formula: FormulaId | null; today: ISODate }): BodyPoint | null {
+export function livePoint(input: LiveCheckInput, opts: { sex: Sex; birthDate: string | null; formula: FormulaId | null; today: ISODate; knownAges?: KnownAge[] }): BodyPoint | null {
   const date = (input.check_date || opts.today) as ISODate;
   const weight = parse(input.weight);
   const readings = readingsOf(input, opts.sex);
@@ -55,7 +56,7 @@ export function livePoint(input: LiveCheckInput, opts: { sex: Sex; birthDate: st
     if (n !== null) circ[k] = n;
   }
   if (weight === null && !Object.keys(folds).length && !Object.keys(circ).length) return null;
-  const comp = composition(opts.sex, ageOn(opts.birthDate, date), weight, readings, opts.formula);
+  const comp = composition(opts.sex, ageAt(opts.birthDate, date, opts.knownAges), weight, readings, opts.formula);
   const year = Number(opts.today.slice(0, 4));
   return {
     id: LIVE_POINT_ID,
@@ -78,12 +79,12 @@ export function withLiveCheck(
   points: BodyPoint[],
   formulas: FormulaSeries[],
   input: LiveCheckInput | null,
-  opts: { sex: Sex; birthDate: string | null; formula: FormulaId | null; today: ISODate },
+  opts: { sex: Sex; birthDate: string | null; formula: FormulaId | null; today: ISODate; knownAges?: KnownAge[] },
 ): { points: BodyPoint[]; formulas: FormulaSeries[] } {
   const point = input ? livePoint(input, opts) : null;
   if (!point || !input) return { points, formulas };
   const readings = readingsOf(input, opts.sex);
-  const age = ageOn(opts.birthDate, point.date!);
+  const age = ageAt(opts.birthDate, point.date!, opts.knownAges);
   // i check senza data restano davanti, quelli con data in ordine: il check in corso va dopo quelli fino a oggi
   const after = points.findIndex((p) => p.date !== null && p.date > point.date!);
   const list = after === -1 ? [...points, point] : [...points.slice(0, after), point, ...points.slice(after)];

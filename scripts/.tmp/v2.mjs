@@ -1,0 +1,17 @@
+import { chromium } from "playwright";
+const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+const ls = [{ name: "otherise:install-guide", value: "done" }, { name: "otherise:push-popup", value: "9999999999999" }, { name: "otherise:quote-day", value: "off" }];
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, baseURL: "http://localhost:3000", storageState: { cookies: [], origins: [{ origin: "http://localhost:3000", localStorage: ls }] } });
+const p = await ctx.newPage();
+await p.goto("/login");
+await p.fill("input[name=email]", "titolare@prova.local");
+await p.fill("input[name=password]", "Password-di-prova-123");
+await Promise.all([p.waitForURL((u) => !u.pathname.startsWith("/login")), p.getByRole("button", { name: "Entra" }).click()]);
+await p.goto("/staff/impostazioni");
+await p.waitForLoadState("networkidle");
+await p.fill("input[name=business_name]", "Studio Prova");
+await p.locator("[data-live-form=impostazioni] [data-live-status=saved]").waitFor();
+await p.locator("[data-live-form=impostazioni]").scrollIntoViewIfNeeded();
+await p.locator("[data-live-form=impostazioni] [data-live-status]").scrollIntoViewIfNeeded();
+await p.screenshot({ path: "/tmp/claude-0/imp-390.png" });
+await b.close();

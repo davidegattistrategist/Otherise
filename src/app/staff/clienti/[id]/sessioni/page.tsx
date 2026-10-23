@@ -78,7 +78,7 @@ export default async function PtSessionsPage({ params, searchParams }: { params:
             modifica === s.id ? (
               <Card key={s.id} className="flex flex-col gap-3">
                 <Eyebrow>Modifica sessione</Eyebrow>
-                <SessionForm compact action={savePtSession.bind(null, id, s.id)} today={today} values={s} showPackage={showPackage} packageLabel={packageLabel} />
+                <SessionForm compact action={savePtSession.bind(null, id, s.id)} today={today} values={s} sessionId={s.id} showPackage={showPackage} packageLabel={packageLabel} />
                 <a href={`/staff/clienti/${id}/sessioni`} className="text-sm font-semibold underline">Chiudi</a>
               </Card>
             ) : (

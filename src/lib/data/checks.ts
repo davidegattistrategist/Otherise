@@ -6,7 +6,8 @@ import "server-only";
  * confrontabili. Va ricalcolata quando cambia un check o la formula.
  */
 import type { ServerSupabase } from "../supabase/server";
-import { ageOn, formatLong, todayISO } from "../dates";
+import { formatLong, todayISO } from "../dates";
+import { ageAt, knownAges, type KnownAge } from "../body/age";
 import { checkLabel, sortChecks } from "../check-order";
 import { circOf, toNumber, type BodyPoint, type FormulaSeries } from "../body/progress";
 import {
@@ -39,25 +40,27 @@ type Row = {
 const eq = (a: number | string | null, b: number | null) => (a === null || b === null ? a === b : Number(a) === b);
 
 /** Età da usare per un check: quella salvata, altrimenti dalla data di nascita. */
-export function checkAge(c: { age_years: number | null; check_date: string | null }, birthDate: string | null): number | null {
-  return c.age_years ?? ageOn(birthDate, c.check_date ?? todayISO());
+export function checkAge(c: { age_years: number | null; check_date: string | null }, birthDate: string | null, known: KnownAge[] = []): number | null {
+  // senza data di nascita: l'età scritta in questo check o, se manca, quella stimata dagli altri check
+  return c.age_years ?? ageAt(birthDate, c.check_date ?? todayISO(), known);
 }
 
-/** Ricalcola % grasso, massa grassa e magra di tutti i check del cliente. */
-export async function recomputeClientChecks(supabase: ServerSupabase, clientId: string): Promise<Formula | null> {
-  const [{ data: client }, { data: rows }] = await Promise.all([
-    supabase.from("clients").select("sex, birth_date, skinfold_formula").eq("id", clientId).maybeSingle(),
-    supabase.from("checks").select(FIELDS).eq("client_id", clientId),
-  ]);
-  if (!client || !client.sex) return null;
-  const sex = client.sex as Sex;
-  const list = rows ?? [];
-  const ref = referenceFormula(sex, list.map((c) => ({ averages: averagesOf(c.skinfolds as SkinfoldReadings) })), client.skinfold_formula);
-  for (const c of list) {
+type RecomputeRow = Row & { skinfold_sum_mm: number | string | null; body_fat_pct: number | string | null; fat_mass_kg: number | string | null; lean_mass_kg: number | string | null; body_fat_formula: string | null };
+
+/**
+ * I check i cui numeri salvati (somma, % grasso, massa grassa e magra) non sono
+ * quelli della formula di riferimento: con i valori giusti da scrivere.
+ */
+export function staleChecks(rows: RecomputeRow[], client: { sex: Sex; birth_date: string | null; skinfold_formula: string | null }) {
+  const { sex } = client;
+  const ref = referenceFormula(sex, rows.map((c) => ({ averages: averagesOf(c.skinfolds as SkinfoldReadings) })), client.skinfold_formula);
+  const known = knownAges(rows);
+  const out: Array<{ id: string; next: { skinfold_sum_mm: number | null; body_fat_pct: number | null; fat_mass_kg: number | null; lean_mass_kg: number | null; body_fat_formula: string | null } }> = [];
+  for (const c of rows) {
     const readings = (c.skinfolds ?? {}) as SkinfoldReadings;
     const avg = averagesOf(readings);
     const comp = ref
-      ? computeBodyComposition({ sex, age: checkAge(c, client.birth_date), weightKg: c.weight_kg === null ? null : Number(c.weight_kg), skinfolds: readings, formula: ref.id })
+      ? computeBodyComposition({ sex, age: checkAge(c, client.birth_date, known), weightKg: c.weight_kg === null ? null : Number(c.weight_kg), skinfolds: readings, formula: ref.id })
       : null;
     // con la formula scelta a mano un check senza le sue pliche resta senza %:
     // meglio un buco nel grafico che un punto calcolato in un altro modo
@@ -75,8 +78,20 @@ export async function recomputeClientChecks(supabase: ServerSupabase, clientId: 
       eq(c.fat_mass_kg, next.fat_mass_kg) &&
       eq(c.lean_mass_kg, next.lean_mass_kg) &&
       c.body_fat_formula === next.body_fat_formula;
-    if (!same) await supabase.from("checks").update(next).eq("id", c.id);
+    if (!same) out.push({ id: c.id, next });
   }
+  return { ref, out };
+}
+
+/** Ricalcola % grasso, massa grassa e magra di tutti i check del cliente. */
+export async function recomputeClientChecks(supabase: ServerSupabase, clientId: string): Promise<Formula | null> {
+  const [{ data: client }, { data: rows }] = await Promise.all([
+    supabase.from("clients").select("sex, birth_date, skinfold_formula").eq("id", clientId).maybeSingle(),
+    supabase.from("checks").select(FIELDS).eq("client_id", clientId),
+  ]);
+  if (!client || !client.sex) return null;
+  const { ref, out } = staleChecks(rows ?? [], { ...client, sex: client.sex as Sex });
+  for (const u of out) await supabase.from("checks").update(u.next).eq("id", u.id);
   return ref;
 }
 
@@ -85,14 +100,15 @@ export async function recomputeClientChecks(supabase: ServerSupabase, clientId: 
  * non sono state prese (così il trainer lo vede subito).
  */
 export async function foldContext(supabase: ServerSupabase, client: { id: string; sex: string; skinfold_formula: string | null }, excludeId?: string) {
-  const { data } = await supabase.from("checks").select("id, check_date, sequence, created_at, order_hint, skinfolds").eq("client_id", client.id);
+  const { data } = await supabase.from("checks").select("id, check_date, sequence, created_at, order_hint, skinfolds, age_years").eq("client_id", client.id);
   const sex = client.sex as Sex;
   const list = sortChecks((data ?? []).filter((c) => c.id !== excludeId));
   const folds = list.map((c) => ({ averages: averagesOf(c.skinfolds as SkinfoldReadings) }));
   const ref = referenceFormula(sex, folds, client.skinfold_formula);
   const lastWithFolds = [...folds].reverse().find((f) => Object.keys(f.averages).length > 0);
   const lastMissing: SkinfoldSite[] = lastWithFolds ? protocolSites(sex).filter((s) => lastWithFolds.averages[s] === undefined) : [];
-  return { ref, lastMissing };
+  // età scritte nei check (anche in quello che stai correggendo): servono se manca la data di nascita
+  return { ref, lastMissing, knownAges: knownAges(data ?? []) };
 }
 
 export type { Row as CheckRow };
@@ -109,6 +125,7 @@ export function staffBodyData<T extends StaffCheckRow>(rows: T[], sex: Sex, birt
   const list = sortChecks(rows).map((c) => ({ ...c, avg: averagesOf(c.skinfolds as SkinfoldReadings) }));
   const folds = list.map((c) => ({ averages: c.avg }));
   const ref = referenceFormula(sex, folds, clientFormula);
+  const known = knownAges(list);
   const refYear = Number(todayISO().slice(0, 4));
   const points: BodyPoint[] = list.map((c, i) => ({
     id: c.id,
@@ -130,7 +147,7 @@ export function staffBodyData<T extends StaffCheckRow>(rows: T[], sex: Sex, birt
       ref: f.id === ref?.id,
       values: Object.fromEntries(
         dated.map((c) => {
-          const r = computeBodyComposition({ sex, age: checkAge(c, birthDate), weightKg: c.weight_kg === null ? null : Number(c.weight_kg), skinfolds: c.skinfolds as SkinfoldReadings, formula: f.id });
+          const r = computeBodyComposition({ sex, age: checkAge(c, birthDate, known), weightKg: c.weight_kg === null ? null : Number(c.weight_kg), skinfolds: c.skinfolds as SkinfoldReadings, formula: f.id });
           return [c.id, r.ok && !r.fallback ? { pct: r.bodyFatPct, kg: r.fatMassKg, lean: r.leanMassKg } : { pct: null, kg: null, lean: null }];
         }),
       ),

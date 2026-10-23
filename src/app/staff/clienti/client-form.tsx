@@ -1,6 +1,7 @@
 "use client";
 
 import { FormDraft } from "@/components/draft-note";
+import { LiveForm } from "@/components/live-form";
 import { useActionState, useRef } from "react";
 import { Field, Input, Select, Textarea } from "@/components/ui";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
@@ -34,14 +35,12 @@ export function ClientForm({
   isOwner: boolean;
   isNew?: boolean;
 }) {
-  const [state, formAction] = useActionState(action, null);
-  const formRef = useRef<HTMLFormElement>(null);
-  return (
-    <form ref={formRef} action={formAction} className="flex flex-col gap-5">
+  const fields = (
+    <>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Nome"><Input name="first_name" defaultValue={values.first_name} required autoComplete="off" /></Field>
         <Field label="Cognome"><Input name="last_name" defaultValue={values.last_name} autoComplete="off" /></Field>
-        <Field label="Email" hint="serve per l'invito"><Input name="email" type="email" defaultValue={values.email ?? ""} autoComplete="off" data-client-email /></Field>
+        <Field label="Email" hint="serve per l'invito"><Input name="email" type="email" defaultValue={values.email ?? ""} autoComplete="off" data-client-email data-save-on-blur /></Field>
         <Field label="Telefono"><Input name="phone" type="tel" defaultValue={values.phone ?? ""} autoComplete="off" /></Field>
         <Field label="Sesso" hint="serve per le pliche">
           <Select name="sex" defaultValue={values.sex ?? ""}>
@@ -83,8 +82,28 @@ export function ClientForm({
           <span><strong>Invia subito l&apos;invito</strong><br /><span className="text-muted">Il cliente riceve un&apos;email per scegliere la password ed entrare.</span></span>
         </label>
       ) : null}
+    </>
+  );
+  // scheda di un cliente che c'è già: si salva da sola mentre scrivi
+  if (!isNew) {
+    return (
+      <LiveForm action={action} name="dati-cliente" className="flex flex-col gap-5">
+        {fields}
+      </LiveForm>
+    );
+  }
+  return <NewClientForm action={action}>{fields}</NewClientForm>;
+}
+
+/** Cliente nuovo: si crea con il pulsante (poi la sua scheda si salva da sola). */
+function NewClientForm({ action, children }: { action: (state: ActionState, fd: FormData) => Promise<ActionState>; children: React.ReactNode }) {
+  const [state, formAction] = useActionState(action, null);
+  const formRef = useRef<HTMLFormElement>(null);
+  return (
+    <form ref={formRef} action={formAction} className="flex flex-col gap-5">
+      {children}
       <ActionMessage state={state} />
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>{isNew ? "Crea cliente" : "Salva"}</SubmitButton><FormDraft form={formRef} name={isNew ? "nuovo-cliente" : "dati-cliente"} /></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>Crea cliente</SubmitButton><FormDraft form={formRef} name="nuovo-cliente" /></div>
     </form>
   );
 }

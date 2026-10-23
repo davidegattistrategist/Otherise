@@ -250,7 +250,7 @@ test("lezioni PT a parte: non spostano la scadenza del coaching; contatore, prez
   await page.goto(`${base}/sessioni`);
   await expect(page.getByText("Sessioni PT: ne restano 5 pagate").filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText("Si scala dalle sessioni PT pagate").first()).toBeVisible();
-  await page.getByRole("button", { name: "Salva la sessione" }).click();
+  await page.getByRole("button", { name: "Registra la sessione" }).click();
   await expect(page.getByText("Sessione salvata.")).toBeVisible();
   await page.goto(`${base}/sessioni`);
   await expect(page.getByText("Sessioni PT: ne restano 4 pagate").filter({ visible: true }).first()).toBeVisible();
@@ -264,8 +264,8 @@ test("lezioni PT a parte: non spostano la scadenza del coaching; contatore, prez
   const price = fix.locator("details", { hasText: "Prezzo a lezione PT" });
   await price.locator("summary").click();
   await price.locator("input[name=price]").fill("45");
-  await price.getByRole("button", { name: "Salva il prezzo" }).click();
-  await expect(page.getByText(/Prezzo salvato: 45\s€ a sessione/)).toBeVisible();
+  // si salva da solo mentre scrivi
+  await expect(price.locator("[data-live-status=saved]")).toBeVisible();
   await expect(card.getByText(/sessioni da saldare · 135\s€/)).toBeVisible();
   // nella pagina Pagamenti, con Pagato e Promemoria
   await page.goto("/staff/pagamenti");
@@ -439,9 +439,10 @@ test("email corretta e salvata dopo un invito mai usato: si può invitare di nuo
   await page.getByRole("button", { name: "Crea cliente" }).click();
   await page.waitForURL(/\/staff\/clienti\/[0-9a-f-]{36}$/);
   await page.goto(`${page.url()}/profilo`);
+  // l'email si salva da sola quando esci dalla casella
   await page.fill("input[name=email]", `esatta${stamp}@prova.local`);
-  await page.getByRole("button", { name: /^Salva/ }).first().click();
-  await expect(page.getByText(/L'invito mandato alla vecchia email non vale più/)).toBeVisible();
+  await page.locator("input[name=email][data-client-email]").blur();
+  await expect(page.getByText(/L'invito mandato alla vecchia email non vale più/)).toBeVisible({ timeout: 15000 });
   await page.reload();
   await page.getByRole("button", { name: "Invia invito" }).click();
   await expect(page.getByText(`Invito inviato a esatta${stamp}@prova.local.`)).toBeVisible();

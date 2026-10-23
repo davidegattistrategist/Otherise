@@ -76,7 +76,7 @@ test.describe("titolare", () => {
     await expect(page.getByText("Check salvato.")).toBeVisible();
     await page.goto(`${base}/check`);
     await expect(page.getByText(/Ora: 3 pliche \(petto, tricipite, sottoscapolare\), scelta in automatico/).filter({ visible: true }).first()).toBeVisible();
-    await expect(page.getByText("Pliche non prese: ascellare, coscia")).toBeVisible();
+    await expect(page.getByText("Pliche prese: 5 di 7 (manca ascellare, coscia)")).toBeVisible();
     await page.goto(`${base}/check/nuovo`);
     await expect(page.getByText("l'ultima volta non presa").filter({ visible: true })).toHaveCount(2);
 
@@ -90,7 +90,7 @@ test.describe("titolare", () => {
     // sessione PT
     await page.goto(`${base}/sessioni`);
     await page.fill("textarea[name=notes]", "Prima sessione di collaudo");
-    await page.getByRole("button", { name: "Salva la sessione" }).click();
+    await page.getByRole("button", { name: "Registra la sessione" }).click();
     await expect(page.getByText("Sessione salvata.")).toBeVisible();
     await expect(page.getByText("Prima sessione di collaudo").last()).toBeVisible();
 
@@ -126,8 +126,8 @@ test.describe("titolare", () => {
     await page.getByRole("button", { name: "AMRAP" }).first().click();
     await page.getByRole("button", { name: "Testo libero" }).first().click();
     await page.fill("#start", "2026-10-12");
-    await page.getByRole("button", { name: "Salva", exact: true }).click();
-    await expect(page.getByText(/Salvato alle/)).toBeVisible();
+    // si salva da solo
+    await expect(page.locator("[data-program-save=saved]")).toBeVisible({ timeout: 15000 });
     await page.getByRole("button", { name: "Pubblica" }).click();
     await expect(page.getByText(/Pubblicato/).first()).toBeVisible();
 
@@ -174,8 +174,7 @@ test.describe("titolare", () => {
     // il trainer corregge una riga della bozza e pubblica: l'AI ne ricava una lezione
     const cell = page.getByLabel(/, settimana 1$/).filter({ visible: true }).nth(1);
     await cell.fill("3x10/14");
-    await page.getByRole("button", { name: "Salva", exact: true }).click();
-    await expect(page.getByText(/Salvato alle/)).toBeVisible();
+    await expect(page.locator("[data-program-save=saved]")).toBeVisible({ timeout: 15000 });
     await page.getByRole("button", { name: "Pubblica", exact: true }).click();
     await expect(page.getByText(/Pubblicato/).first()).toBeVisible();
     // salva come modello
@@ -193,8 +192,8 @@ test.describe("titolare", () => {
     await expect(page.getByTestId("program-balance")).toBeVisible();
     await page.selectOption("#ai-strength", "intermedio");
     await page.getByLabel("Segui il programma").uncheck();
-    await page.getByRole("button", { name: "Salva le indicazioni" }).click();
-    await expect(page.getByText("Indicazioni salvate")).toBeVisible();
+    // si salvano da sole
+    await expect(page.locator("[data-live-form=indicazioni-ai] [data-live-status=saved]").filter({ visible: true }).first()).toBeVisible({ timeout: 15000 });
     expect(await noHorizontalScroll(page)).toBe(true);
 
     // impostazioni: le correzioni sono contate e diventate lezioni
@@ -211,7 +210,7 @@ test.describe("titolare", () => {
     await page.goto("/staff/eserciziario/nuovo");
     await page.fill("input[name=name]", `Esercizio ${info.project.name}`);
     await page.fill("input[name=video_url]", "https://youtu.be/abcdefghijk");
-    await page.getByRole("button", { name: "Salva" }).click();
+    await page.getByRole("button", { name: "Aggiungi l'esercizio" }).click();
     await page.waitForURL(/eserciziario\/[0-9a-f-]{36}/);
     await page.goto(`/staff/eserciziario?q=${encodeURIComponent(`Esercizio ${info.project.name}`)}`);
     await expect(page.getByText(`Esercizio ${info.project.name}`).filter({ visible: true }).first()).toBeVisible();
@@ -231,8 +230,7 @@ test.describe("titolare", () => {
     }
     await page.goto("/staff/impostazioni");
     await page.fill("input[name=reminder_days]", "5");
-    await page.getByRole("button", { name: "Salva", exact: true }).click();
-    await expect(page.getByText("Impostazioni salvate.")).toBeVisible();
+    await expect(page.locator("[data-live-form=impostazioni] [data-live-status=saved]")).toBeVisible({ timeout: 15000 });
     await page.goto("/staff/clienti?q=Giulia");
     await expect(page.getByRole("link", { name: /Esempio Giulia/ }).filter({ visible: true }).first()).toBeVisible();
     expect(errors).toEqual([]);
@@ -252,7 +250,7 @@ test.describe("collaboratore", () => {
     await expect(page.getByRole("link", { name: "Pagamenti" })).toHaveCount(0);
     await page.goto(`${base}/sessioni`);
     await page.fill("textarea[name=notes]", "Nota del collaboratore");
-    await page.getByRole("button", { name: "Salva la sessione" }).click();
+    await page.getByRole("button", { name: "Registra la sessione" }).click();
     await expect(page.getByText("Sessione salvata.")).toBeVisible();
     expect(errors).toEqual([]);
   });

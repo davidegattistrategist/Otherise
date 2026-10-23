@@ -1933,3 +1933,31 @@ describe("check in corso nei confronti della modalità check", () => {
     expect(withLiveCheck([old], [], null, opts).points).toHaveLength(1);
   });
 });
+
+describe("età senza data di nascita", () => {
+  it("si stima dall'età scritta nei check precedenti più gli anni passati", async () => {
+    const { estimateAge, knownAges, ageAt } = await import("./body/age");
+    const known = knownAges([
+      { check_date: "2026-01-09", age_years: 49 },
+      { check_date: "2026-09-03", age_years: "49" },
+      { check_date: null, age_years: 50 },
+      { check_date: "2026-10-23", age_years: null },
+    ]);
+    expect(known).toEqual([{ date: "2026-01-09", age: 49 }, { date: "2026-09-03", age: 49 }]);
+    expect(estimateAge(known, "2026-10-23")).toBe(49);
+    expect(estimateAge(known, "2027-09-10")).toBe(50);
+    expect(estimateAge(known, "2025-01-01")).toBe(48);
+    expect(estimateAge([], "2026-10-23")).toBeNull();
+    // la data di nascita vince sempre
+    expect(ageAt("1990-01-01", "2026-10-23", known)).toBe(36);
+    expect(ageAt(null, "2026-10-23", known)).toBe(49);
+  });
+
+  it("il check in corso ha la % anche senza data di nascita", async () => {
+    const { livePoint } = await import("./body/live-check");
+    const input = { check_date: "2026-10-23", weight: "80", sf: { pettorale: ["10"], tricipite: ["12"], sottoscapolare: ["15"] }, circ: {} };
+    const base = { sex: "M" as const, birthDate: null, formula: "m3_pts" as const, today: "2026-10-23" };
+    expect(livePoint(input, base)!.fatPct).toBeNull();
+    expect(livePoint(input, { ...base, knownAges: [{ date: "2026-09-03", age: 49 }] })!.fatPct).toBeGreaterThan(5);
+  });
+});

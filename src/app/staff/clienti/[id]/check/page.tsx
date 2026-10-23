@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getStaffClient } from "@/lib/data/client";
-import { staffBodyData } from "@/lib/data/checks";
+import { recomputeClientChecks, staffBodyData, staleChecks } from "@/lib/data/checks";
 import {
   formulaById,
   formulaUpgrade,
@@ -20,6 +20,7 @@ import { StrengthTests } from "@/components/strength-tests";
 import { strengthTestSeries } from "@/lib/strength/tests";
 import { Button, Card, EmptyState, Eyebrow, Notice, fmtNum } from "@/components/ui";
 import { ClearParams } from "@/components/clear-param";
+import { AutoSubmitSelect } from "@/components/auto-submit";
 import { setSkinfoldFormula } from "./actions";
 import { startCheckMode } from "@/app/check/actions";
 import { SexPrompt } from "./sex-prompt";
@@ -45,12 +46,21 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
   if (!client.sex) return <SexPrompt clientId={id} />;
   const supabase = await createClient();
   // foto: nell'elenco solo quante sono; si aprono dal check, dall'elenco qui sotto o nel confronto
-  const [{ data: checks }, photos, weights] = await Promise.all([supabase
-    .from("checks")
-    .select("id, check_date, sequence, created_at, order_hint, age_years, skinfolds, weight_kg, body_fat_pct, fat_mass_kg, lean_mass_kg, body_fat_formula, circumferences, strength_tests, tests_text, notes_next_phase, visible_to_client")
-    .eq("client_id", id)
-    .order("check_date", { ascending: true }), staffCheckPhotos(supabase, id), getWeights(supabase, id)]);
+  const readChecks = () =>
+    supabase
+      .from("checks")
+      .select("id, check_date, sequence, created_at, order_hint, age_years, skinfolds, weight_kg, skinfold_sum_mm, body_fat_pct, fat_mass_kg, lean_mass_kg, body_fat_formula, circumferences, strength_tests, tests_text, notes_next_phase, visible_to_client")
+      .eq("client_id", id)
+      .order("check_date", { ascending: true });
+  const [first, photos, weights] = await Promise.all([readChecks(), staffCheckPhotos(supabase, id), getWeights(supabase, id)]);
   const sex = client.sex as Sex;
+  // numeri salvati non aggiornati (per esempio un check senza età perché manca la data di nascita):
+  // si ricalcolano qui, così grafici, confronti e progressi del cliente tornano giusti
+  let checks = first.data;
+  if (checks?.length && staleChecks(checks, { sex, birth_date: client.birth_date, skinfold_formula: client.skinfold_formula }).out.length) {
+    await recomputeClientChecks(supabase, id);
+    checks = (await readChecks()).data;
+  }
   const body = staffBodyData(checks ?? [], sex, client.birth_date, client.skinfold_formula);
   const list = body.list;
   const folds = list.map((c) => ({ averages: c.avg }));
@@ -124,11 +134,11 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
               </p>
               <form action={setSkinfoldFormula.bind(null, id)} className="flex flex-wrap items-center gap-2">
                 <label htmlFor="ref-formula" className="sr-only">Formula</label>
-                <select key={client.skinfold_formula ?? "auto"} id="ref-formula" name="formula" defaultValue={client.skinfold_formula ?? ""} className="min-w-0 rounded-lg border border-sand-deep bg-sand px-2 py-2 text-[15px]">
+                <AutoSubmitSelect key={client.skinfold_formula ?? "auto"} id="ref-formula" name="formula" defaultValue={client.skinfold_formula ?? ""} className="!w-auto min-w-0">
                   <option value="">Automatica</option>
                   {formulasFor(sex).map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-                </select>
-                <Button type="submit" size="sm" variant="secondary">Salva</Button>
+                </AutoSubmitSelect>
+                <span className="text-sm text-muted">Si applica appena la scegli.</span>
               </form>
             </Card>
           ) : null}
@@ -151,7 +161,7 @@ export default async function ChecksPage({ params, searchParams }: { params: Pro
                     {c.body_fat_pct !== null ? <span>Grasso <strong className="tabular">{fmtNum(c.body_fat_pct, 2)}</strong> %</span> : null}
                     {c.lean_mass_kg !== null ? <span>Magra <strong className="tabular">{fmtNum(c.lean_mass_kg, 2)}</strong> kg</span> : null}
                   </div>
-                  {missing.length ? <div className="mt-1 text-sm text-muted">Pliche non prese: {lower(missing)}</div> : null}
+                  {missing.length ? <div className="mt-1 text-sm text-muted">Pliche prese: {measured.length} di {protocolSites(sex).length} (manca {lower(missing)})</div> : null}
                   {tests.length ? <div className="mt-1.5 text-sm text-muted">{tests.map((t) => `${t.exercise}${t.e1rm ? ` ≈ ${fmtNum(t.e1rm)} kg` : t.load ? ` ${fmtNum(t.load)}×${t.reps ?? "?"}` : ""}`).join(" · ")}</div> : null}
                   {c.tests_text ? <div className="mt-1 text-sm whitespace-pre-line text-muted">{c.tests_text}</div> : null}
                   {c.notes_next_phase ? <div className="mt-2 line-clamp-3 text-sm whitespace-pre-line text-ink-soft" data-clamp-ok>Prossima fase: {c.notes_next_phase}</div> : null}

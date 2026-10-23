@@ -38,7 +38,8 @@ export default async function PosturePage({ params, searchParams }: { params: Pr
         <Card className="flex flex-col gap-4">
           <Eyebrow>{editing ? "Modifica valutazione" : "Nuova valutazione posturale"}</Eyebrow>
           <p className="-mt-2 text-sm text-muted">Testo libero. Se la rendi visibile, il cliente la trova nei suoi progressi; l&apos;assistente AI la usa sempre per proporre il lavoro posturale nel programma.</p>
-          <PostureForm action={savePosture.bind(null, id, editing?.id ?? null)} values={editing} today={todayISO()} />
+          <PostureForm action={savePosture.bind(null, id, editing?.id ?? null)} values={editing} postureId={editing?.id} today={todayISO()} />
+          {editing ? <div><LinkButton href={`/staff/clienti/${id}/posturale`} variant="secondary">Fatto</LinkButton></div> : null}
         </Card>
       ) : (
         <div className="flex justify-end"><LinkButton href={`/staff/clienti/${id}/posturale?nuova`}>Nuova valutazione</LinkButton></div>

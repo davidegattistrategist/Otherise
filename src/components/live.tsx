@@ -70,7 +70,8 @@ export function LiveProvider({ initial, role, children, initialCheckMode = null 
         if (!inMode || here.split("/")[2] !== cm!.clientId) router.push(`/check/${cm!.clientId}`);
         else router.refresh();
       } else if (active(prev) && !active(cm)) {
-        if (inMode) router.push(cm ? `/staff/clienti/${cm.clientId}` : `/staff/clienti/${here.split("/")[2]}/check`);
+        // questo dispositivo sta chiudendo lui il check ("Check finito", "Annulla"): ci pensa il suo redirect
+        if (inMode && document.documentElement.dataset.checkEnding !== "1") router.push(cm ? `/staff/clienti/${cm.clientId}` : `/staff/clienti/${here.split("/")[2]}/check`);
       } else if (active(prev) && active(cm) && inMode && (prev!.clientId !== cm!.clientId || (prev!.checkId ?? null) !== (cm!.checkId ?? null))) {
         // dall'altro dispositivo hai aperto un altro check
         if (prev!.clientId !== cm!.clientId) router.push(`/check/${cm!.clientId}`);

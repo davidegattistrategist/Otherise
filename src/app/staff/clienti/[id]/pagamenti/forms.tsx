@@ -1,5 +1,6 @@
 "use client";
 
+import { LiveForm } from "@/components/live-form";
 import { useActionState, useState } from "react";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
 import { Field, Input, Select, Textarea } from "@/components/ui";
@@ -155,15 +156,11 @@ export function NextPeriodForm({ action, kind, start }: { action: Action; kind: 
 
 /** Prezzo di una sessione PT. */
 export function PtPriceForm({ action, price }: { action: Action; price: number | null }) {
-  const [state, formAction] = useActionState(action, null);
+  // si salva da solo mentre scrivi
   return (
-    <form action={formAction} className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <Input name="price" inputMode="decimal" placeholder="Es. 45" defaultValue={price !== null ? String(price).replace(".", ",") : undefined} className="max-w-32" aria-label="Prezzo a sessione" />
-        <SubmitButton variant="secondary" size="sm">Salva il prezzo</SubmitButton>
-      </div>
-      <ActionMessage state={state} />
-    </form>
+    <LiveForm action={action} name="prezzo-pt" className="flex flex-col gap-2">
+      <Input name="price" inputMode="decimal" placeholder="Es. 45" defaultValue={price !== null ? String(price).replace(".", ",") : undefined} className="max-w-32" aria-label="Prezzo a sessione" />
+    </LiveForm>
   );
 }
 

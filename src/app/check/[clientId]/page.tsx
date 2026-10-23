@@ -62,7 +62,7 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
       .eq("client_id", clientId),
     checkId ? supabase.from("checks").select("*").eq("id", checkId).eq("client_id", clientId).maybeSingle().then((r) => r.data) : Promise.resolve(null),
     previousCheck(supabase, clientId, checkId),
-    client.sex ? foldContext(supabase, { ...client, sex: client.sex }, checkId ?? undefined) : Promise.resolve({ ref: null, lastMissing: [] }),
+    client.sex ? foldContext(supabase, { ...client, sex: client.sex }, checkId ?? undefined) : Promise.resolve({ ref: null, lastMissing: [], knownAges: [] }),
     supabase.from("programs").select("id, title, weeks, start_date, status, content").eq("client_id", clientId).in("status", ["published", "archived"]).eq("is_template", false).order("start_date", { ascending: false, nullsFirst: false }).limit(12),
     me.role === "owner" ? getBillingLines(supabase) : Promise.resolve(null),
     me.role === "owner" ? supabase.from("payments").select("id, paid_on, amount, method, period_start, period_end, sessions").eq("client_id", clientId).eq("unpaid", false).order("paid_on", { ascending: false }).limit(4) : Promise.resolve({ data: null }),
@@ -125,6 +125,7 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
       formula={folds.ref?.id ?? null}
       manual={Boolean(client.skinfold_formula)}
       lastMissing={folds.lastMissing}
+      knownAges={folds.knownAges}
       previous={previous}
       values={values}
       action={saveCheck.bind(null, clientId, checkId)}

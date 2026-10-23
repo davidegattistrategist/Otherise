@@ -5,7 +5,7 @@
  * - "Sostituisci per alcune settimane": il cliente vede "Al posto di …";
  * - "Ritocca con l'AI": pezzo, settimane solo dopo le fatte, motivo, Prima → Dopo
  *   con le caselle, Applica, Annulla il ritocco;
- * - salvataggio di un programma in corso: finestra "Avvisare il cliente?";
+ * - programma in corso: si salva da solo, poi "Avvisare il cliente?" (riquadro, non blocca);
  * - "Ritocchi": si torna com'era prima.
  * Alla fine il programma torna come nel seed (il test gira su pc e telefono).
  */
@@ -37,15 +37,14 @@ async function openGiuliaProgram(page: Page) {
 
 const visible = (page: Page, selector: string) => page.locator(selector).filter({ visible: true }).first();
 
-/** Salva e risponde alla finestra "Avvisare il cliente?" */
+/** Si salva da solo: poi risponde a "Avvisare il cliente?" */
 async function save(page: Page, notify: boolean) {
-  await page.getByRole("button", { name: /^(Salva|Salva le modifiche)$/ }).filter({ visible: true }).first().click();
-  const ask = page.getByRole("dialog", { name: "Avvisare il cliente?" });
+  const ask = page.getByRole("region", { name: "Avvisare il cliente?" });
   await expect(ask).toBeVisible({ timeout: 15_000 });
   await expect(ask).toContainText("Avvisare Giulia");
   await ask.getByRole("button", { name: notify ? "Sì, manda la notifica" : "No, non serve" }).click();
   await expect(ask).toHaveCount(0);
-  await expect(page.getByText(/Salvato alle/).filter({ visible: true }).first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("[data-program-save=saved]").filter({ visible: true }).first()).toBeVisible({ timeout: 15_000 });
 }
 
 /** Su telefono una settimana alla volta: sceglie la scheda della settimana */
@@ -83,8 +82,7 @@ test("programma in corso: settimane fatte, limitazione, sostituto, ritocco con l
   const limitation = `Distorsione al polso sinistro ${info.project.name}`;
   await page.locator("#ai-limitation").fill(limitation);
   await page.locator("#ai-limitation-until").fill("2030-12-31");
-  await page.getByRole("button", { name: "Salva le indicazioni" }).click();
-  await expect(page.getByText("Indicazioni salvate")).toBeVisible();
+  await expect(page.locator("[data-live-form=indicazioni-ai] [data-live-status=saved]").filter({ visible: true }).first()).toBeVisible({ timeout: 15000 });
   await page.goto(url);
   await page.waitForLoadState("networkidle");
   await expect(page.locator("[data-limitation-note]")).toContainText(limitation);
@@ -192,8 +190,7 @@ test("programma in corso: settimane fatte, limitazione, sostituto, ritocco con l
   await page.waitForLoadState("networkidle");
   await page.locator("#ai-limitation").fill("");
   await page.locator("#ai-limitation-until").fill("");
-  await page.getByRole("button", { name: "Salva le indicazioni" }).click();
-  await expect(page.getByText("Indicazioni salvate")).toBeVisible();
+  await expect(page.locator("[data-live-form=indicazioni-ai] [data-live-status=saved]").filter({ visible: true }).first()).toBeVisible({ timeout: 15000 });
   await page.goto(url);
   await expect(page.locator("[data-limitation-note]")).toHaveCount(0);
   await client.context().close();

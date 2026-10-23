@@ -41,7 +41,7 @@ export function ProjectEditor({
   // le modifiche non salvate restano (anche se chiudi l'app) finché non salvi
   const draftKey = `progetto:${usePathname()}`;
   const { adopt } = useDraft(draftKey, dirty ? p : null, { isEmpty: (v) => v === null });
-  const [restored, setRestored] = useState(false);
+  const [, setRestored] = useState(false);
   useEffect(() => {
     let alive = true;
     void loadDraft<Project>(draftKey).then((d) => {
@@ -58,15 +58,19 @@ export function ProjectEditor({
   const months = projectMonths(p.start);
   const now = months.findIndex((m) => m.key === today.slice(0, 7));
 
+  const version = useRef(0);
   const edit = (fn: (d: Project) => void) => {
     setP((cur) => {
       const d = structuredClone(cur);
       fn(d);
       return d;
     });
+    version.current += 1;
     setDirty(true);
     setMsg(null);
   };
+  // novità salvate da quando il cliente è stato avvisato l'ultima volta
+  const [unannounced, setUnannounced] = useState(false);
 
   // progetto visibile: prima di salvare chiediamo se avvisare il cliente
   const [ask, setAsk] = useState<{ visible: boolean } | null>(null);
@@ -77,13 +81,29 @@ export function ProjectEditor({
   const doSave = (nextVisible: boolean, notifyClient: boolean) =>
     start(async () => {
       setAsk(null);
+      const v = version.current;
       const r = await save(p, nextVisible, notifyClient);
       if (r.ok) {
-        setDirty(false);
+        if (version.current === v) setDirty(false);
         setVisible(nextVisible);
-      }
-      setMsg(r.ok ? { ok: true, text: r.message } : { ok: false, text: r.error });
+        setSavedAt(Date.now());
+        setUnannounced(notifyClient ? false : nextVisible);
+        // il messaggio solo per le scelte fatte apposta (visibile, notifica), non a ogni lettera
+        setMsg(notifyClient || nextVisible !== visible ? { ok: true, text: r.message } : null);
+      } else setMsg({ ok: false, text: r.error });
     });
+  // si salva da solo un attimo dopo l'ultima modifica
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const saveRef = useRef(doSave);
+  useEffect(() => {
+    saveRef.current = doSave;
+  });
+  useEffect(() => {
+    if (!dirty || pending || ask) return;
+    const t = setTimeout(() => saveRef.current(visible, false), 1000);
+    return () => clearTimeout(t);
+  }, [dirty, pending, ask, visible, p]);
+  const statusText = pending ? "Salvo…" : dirty ? "Salvo…" : msg && !msg.ok ? "Non salvato: guarda il messaggio" : savedAt ? `Salvato alle ${new Date(savedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : isNew ? "Si salva da solo appena scrivi" : "Si salva da solo mentre scrivi";
 
   const cell = "min-w-[92px] px-1 py-1.5 text-center";
 
@@ -98,8 +118,10 @@ export function ProjectEditor({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {isNew && !dirty ? <span className="text-sm text-muted">Non ancora salvato</span> : dirty ? <span className="text-sm text-muted">{restored ? "Ho ripreso le modifiche non salvate: salva quando vuoi" : "Modifiche da salvare (restano qui anche se esci)"}</span> : null}
-            <Button onClick={() => onSave()} disabled={pending}>{pending ? "Salvataggio…" : "Salva"}</Button>
+            <span className="text-sm text-muted" aria-live="polite" data-live-status={pending || dirty ? "saving" : savedAt ? "saved" : "idle"}>{statusText}</span>
+            {visible && canNotify && unannounced && !dirty && !pending ? (
+              <Button variant="secondary" size="sm" onClick={() => doSave(visible, true)} data-project-notify>Avvisa {clientName} delle novità</Button>
+            ) : null}
           </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-[200px_minmax(0,1fr)]">
@@ -119,7 +141,7 @@ export function ProjectEditor({
             onChange={(e) => onSave(e.target.checked)}
             className="mt-1 h-5 w-5 accent-[#1b1a17]"
           />
-          <span><strong>Visibile al cliente</strong><br /><span className="text-muted">Quando salvi ti chiedo se mandare una notifica. Puoi cambiare il progetto quando vuoi.</span></span>
+          <span><strong>Visibile al cliente</strong><br /><span className="text-muted">Quando lo rendi visibile ti chiedo se mandare una notifica. Ogni modifica si salva da sola.</span></span>
         </label>
         {msg ? <Notice tone={msg.ok ? "success" : "error"}>{msg.text}</Notice> : null}
       </Card>
@@ -225,8 +247,7 @@ export function ProjectEditor({
             ) : null}
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Button onClick={() => onSave()} disabled={pending}>{pending ? "Salvataggio…" : "Salva il progetto"}</Button>
-            {dirty ? <span className="text-sm text-muted">Modifiche da salvare</span> : msg ? <span className={cx("text-sm", msg.ok ? "text-muted" : "text-accent-deep")}>{msg.ok ? "Salvato" : "Non salvato: guarda il messaggio in alto"}</span> : null}
+            <span className="text-sm text-muted" aria-live="polite">{statusText}</span>
           </div>
           <p className="mt-3 text-sm text-muted">Tocca una cella per cambiare il livello: vuoto = assente, poi mantenimento, medio, alto. Per l&apos;alimentazione: non trattata, deficit, normocalorica, surplus. Nelle note: gare, vacanze, obiettivi del mese. Fase con il bordo tratteggiato: non l&apos;hai scelta e la deduco dalla forza prioritaria (massima → intensificazione, resistente o massa magra → volumizzazione, pari → transizione); cambia da sola se cambi i livelli, sceglila tu per fissarla.</p>
         </div>

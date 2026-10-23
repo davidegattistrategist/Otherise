@@ -27,6 +27,7 @@ export default async function NewCheckPage({ params }: { params: Promise<{ id: s
       formula={folds.ref?.id ?? null}
       manual={Boolean(client.skinfold_formula)}
       lastMissing={folds.lastMissing}
+      knownAges={folds.knownAges}
       previous={previous}
       values={{ check_date: todayISO(), weight_kg: null, skinfolds: {}, circumferences: {}, strength_tests: [], tests_text: "", notes_next_phase: "", visible_to_client: true }}
     />

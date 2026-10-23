@@ -1,5 +1,6 @@
 "use server";
 
+import { recomputeClientChecks } from "@/lib/data/checks";
 import { revalidatePath } from "next/cache";
 import { linkAllowedForRole } from "@/lib/invite-link";
 import { friendlyError } from "@/lib/friendly-error";
@@ -70,13 +71,15 @@ export async function updateClientAction(clientId: string, _: ActionState, fd: F
   const parsed = readClientForm(fd);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await createClient();
-  const { data: before } = await supabase.from("clients").select("email, user_id").eq("id", clientId).maybeSingle();
+  const { data: before } = await supabase.from("clients").select("email, user_id, birth_date, sex").eq("id", clientId).maybeSingle();
   const update: TablesUpdate<"clients"> = { ...parsed.data };
   // "Inizio percorso" lasciato vuoto in una modifica: resta la data di prima (non diventa oggi)
   if (!String(fd.get("start_date") ?? "").trim()) delete update.start_date;
   if (me.role === "owner") update.coach_id = String(fd.get("coach_id") ?? "") || null;
   const { error } = await supabase.from("clients").update(update).eq("id", clientId);
   if (error) return { error: dbError(error.message) };
+  // data di nascita o sesso cambiati: la % di grasso dei check va rifatta
+  if (before && ((before.birth_date ?? null) !== (parsed.data.birth_date ?? null) || (before.sex ?? null) !== (parsed.data.sex ?? null))) await recomputeClientChecks(supabase, clientId);
   const notes = fd.get("private_notes");
   if (notes !== null) {
     await supabase.from("client_private_notes").upsert({ client_id: clientId, notes: String(notes), updated_at: new Date().toISOString() });
@@ -88,7 +91,7 @@ export async function updateClientAction(clientId: string, _: ActionState, fd: F
     if (dropped) note = parsed.data.email ? " L'invito mandato alla vecchia email non vale più: premi “Invia invito” per mandarlo a quella nuova." : "";
   }
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
-  return { ok: true, message: `Scheda salvata.${note}` };
+  return { ok: true, message: `Scheda salvata.${note}`, ...(note ? { notice: note.trim() } : {}) };
 }
 
 /**

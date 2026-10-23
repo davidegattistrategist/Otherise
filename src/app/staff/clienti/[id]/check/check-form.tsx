@@ -23,7 +23,7 @@ import { FieldNav } from "@/components/field-nav";
 import { IconDown, IconPhoto, IconX } from "@/components/icons";
 import { CIRCUMFERENCES, SKINFOLD_SITES, averagesOf, computeBodyComposition, formulaById, protocolSites, siteAverage, siteLabel, sumOf, type FormulaId, type Sex, type SkinfoldAverages, type SkinfoldSite } from "@/lib/body/skinfolds";
 import { estimateOneRepMax, RPE_VALUES } from "@/lib/strength/e1rm";
-import { ageOn } from "@/lib/dates";
+import { ageAt, type KnownAge } from "@/lib/body/age";
 import { Card, Eyebrow, Input, Label, cx, fmtNum } from "@/components/ui";
 import { NoteArea } from "@/components/note-area";
 import { ActionMessage, SubmitButton, type ActionState } from "@/components/form-bits";
@@ -121,6 +121,7 @@ export function CheckForm({
   onSaved,
   onBusy,
   onValues,
+  knownAges = [],
   submitLabel,
   formId,
   view = "all",
@@ -152,6 +153,8 @@ export function CheckForm({
   onBusy?: (busy: boolean) => void;
   /** modalità check: il modulo com'è adesso (anche con quello che arriva dall'altro dispositivo), per i confronti */
   onValues?: (data: CheckFormData) => void;
+  /** età scritte nei check precedenti: se manca la data di nascita l'età si stima da qui */
+  knownAges?: KnownAge[];
   submitLabel?: string;
   /** id del modulo (modalità check: "Check finito" in alto lo invia) */
   formId?: string;
@@ -250,6 +253,75 @@ export function CheckForm({
     });
   }, [state, clientId, photos, router, clear, onSaved]);
 
+  // check già salvato, fuori dalla modalità check: si salva da solo mentre scrivi (niente "Salva")
+  const autoSave = Boolean(checkId) && !live;
+  const [liveStatus, setLiveStatus] = useState<{ kind: "idle" | "waiting" | "saving" | "saved" | "error"; at?: number; error?: string }>({ kind: "idle" });
+  const lastSent = useRef(JSON.stringify(start));
+  const autoRunning = useRef(false);
+  const autoAgain = useRef(false);
+  const actionRef = useRef(action);
+  useEffect(() => {
+    actionRef.current = action;
+  });
+  const valueOf = useRef(f);
+  const autoRun = useCallback(async (el?: HTMLFormElement | null) => {
+    if (autoRunning.current) {
+      autoAgain.current = true;
+      return;
+    }
+    autoRunning.current = true;
+    try {
+      do {
+        autoAgain.current = false;
+        const form = formRef.current ?? el;
+        if (!form) return;
+        const snap = JSON.stringify(valueOf.current);
+        if (snap === lastSent.current) {
+          setLiveStatus((s) => (s.kind === "waiting" || s.kind === "error" ? { kind: "saved", at: s.at } : s));
+          continue;
+        }
+        setLiveStatus((s) => ({ kind: "saving", at: s.at }));
+        const fd = new FormData(form);
+        fd.set("__live", "1");
+        let r: CheckState = null;
+        try {
+          r = await actionRef.current(null, fd);
+        } catch {
+          r = { error: "Non sono riuscito a salvare: controlla la connessione. Quello che hai scritto resta qui." };
+        }
+        if (r?.error) {
+          setLiveStatus({ kind: "error", error: r.error });
+          continue;
+        }
+        lastSent.current = snap;
+        setLiveStatus({ kind: "saved", at: Date.now() });
+        if (JSON.stringify(valueOf.current) === snap) clear();
+      } while (autoAgain.current);
+    } finally {
+      autoRunning.current = false;
+    }
+  }, [clear]);
+  useEffect(() => {
+    valueOf.current = f;
+    if (!autoSave || JSON.stringify(f) === lastSent.current) return;
+    setLiveStatus((s) => (s.kind === "saving" ? s : { kind: "waiting", at: s.at }));
+    const t = setTimeout(() => void autoRun(), 900);
+    return () => clearTimeout(t);
+  }, [f, autoSave, autoRun]);
+  useEffect(() => {
+    if (!autoSave) return;
+    const el = formRef.current;
+    const now = () => void autoRun(el);
+    const onHidden = () => document.visibilityState === "hidden" && now();
+    window.addEventListener("pagehide", now);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("pagehide", now);
+      document.removeEventListener("visibilitychange", onHidden);
+      now();
+    };
+  }, [autoSave, autoRun]);
+
   // un salvataggio alla volta (due tocchi su "Check finito" mandavano due salvataggi:
   // il secondo dava errore anche se il check era salvato). In modalità check prima
   // si prende l'ultima versione scritta sull'altro dispositivo.
@@ -302,7 +374,8 @@ export function CheckForm({
   // i test restano chiusi, tranne se ce ne sono già
   const hasTests = f.tests.some((t) => t.exercise || t.load) || Boolean(f.tests_text.trim());
   const sites = protocolSites(sex);
-  const age = ageOn(birthDate, f.check_date);
+  const age = ageAt(birthDate, f.check_date, knownAges);
+  const ageEstimated = !birthDate && age !== null;
   const readings = useMemo(() => {
     const r: Partial<Record<SkinfoldSite, Array<number | null>>> = {};
     for (const s of sites) r[s] = f.sf[s].map(toNum);
@@ -410,6 +483,7 @@ export function CheckForm({
               </div>
               <p className="mt-3 text-sm leading-relaxed text-muted-dark">
                 Formula: {comp.formula.label}.
+                {ageEstimated ? ` Età ${age} anni, presa dai check precedenti: manca la data di nascita (la aggiungi nei Dati del cliente).` : ""}
                 {comp.fallback && ref
                   ? ` Manca ${lower(refMissing)}: al salvataggio tutti i check di questo cliente passeranno a questa formula, così i grafici restano confrontabili. Puoi cambiarla dalla pagina dei check.`
                   : ""}
@@ -569,10 +643,26 @@ export function CheckForm({
       ) : (
         <ActionMessage state={state?.ok ? null : state} />
       )}
-      {upload ? null : (
+      {upload ? null : autoSave ? (
+        <p
+          className={cx("text-sm", liveStatus.kind === "error" ? "font-semibold text-accent-deep" : "text-muted")}
+          role={liveStatus.kind === "error" ? "alert" : undefined}
+          aria-live="polite"
+          data-live-status={liveStatus.kind}
+        >
+          {liveStatus.kind === "waiting" || liveStatus.kind === "saving"
+            ? "Salvo…"
+            : liveStatus.kind === "saved"
+              ? `Salvato${liveStatus.at ? ` alle ${new Date(liveStatus.at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : ""}`
+              : liveStatus.kind === "error"
+                ? `Non salvato: ${liveStatus.error}`
+                : "Si salva da solo mentre scrivi."}
+        </p>
+      ) : (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <SubmitButton>{submitLabel ?? (photos.length ? `Salva check e ${photos.length} foto` : "Salva check")}</SubmitButton>
           <DraftNote
+            confirm={submitLabel ?? (photos.length ? `Salva check e ${photos.length} foto` : "Salva check")}
             status={draft.status}
             restored={restored}
             onDiscard={() => {

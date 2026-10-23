@@ -6,6 +6,7 @@ import { createAdminClient } from "./supabase/admin";
 import { rpcOr } from "./data/rpc";
 import { latestDate } from "./free-workout";
 import { removeOrphanChatUploads } from "./storage-cleanup";
+import { recomputeClientChecks } from "./data/checks";
 import { notify, type NewNotification } from "./notify";
 import { deliverPendingEmails } from "./email";
 import { addDays, ageOn, diffDays, formatLong, isBirthday, isoWeekday, todayISO } from "./dates";
@@ -238,6 +239,8 @@ export async function runDailyChecks(today = todayISO()) {
   const videosRemoved = await step(() => removeOldChatMedia(today), 0);
   // allegati della chat caricati e mai inviati, dopo 24 ore
   const orphansRemoved = await step(() => removeOrphanChatUploads(), 0);
+  // check con i numeri non aggiornati (es. senza età perché manca la data di nascita): si ricalcolano
+  await step(() => recomputeStaleChecks(), 0);
   // niente riepilogo per email: il riepilogo è "Oggi" nell'app
   const emailed = await step(() => deliverPendingEmails(), 0);
   await step(async () => {
@@ -324,4 +327,17 @@ export async function backupCheck(ownerIds: string[], now = new Date()): Promise
     { push: notice.urgent },
   );
   return notice.key.split(":")[1];
+}
+
+/**
+ * I clienti con check che hanno le pliche ma non la % di grasso: si ricalcola
+ * (se ora si può, per esempio con l'età stimata dai check precedenti). Al
+ * massimo 40 clienti per giro.
+ */
+export async function recomputeStaleChecks(): Promise<number> {
+  const admin = createAdminClient();
+  const { data } = await admin.from("checks").select("client_id").neq("skinfolds", "{}").is("body_fat_pct", null).limit(1000);
+  const ids = [...new Set((data ?? []).map((r) => r.client_id))].slice(0, 40);
+  for (const id of ids) await recomputeClientChecks(admin, id);
+  return ids.length;
 }

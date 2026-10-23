@@ -77,6 +77,13 @@ export async function removeCollaborator(userId: string) {
   revalidatePath("/staff/clienti");
 }
 
+/** Nome che si salva mentre scrivi (pagina Team). */
+export async function renameStaffLive(userId: string, _: unknown, fd: FormData): Promise<{ ok?: boolean; error?: string }> {
+  if (!String(fd.get("full_name") ?? "").trim()) return { error: "Scrivi il nome." };
+  await renameStaff(userId, fd);
+  return { ok: true };
+}
+
 export async function renameStaff(userId: string, fd: FormData) {
   const me = await requireOwner();
   const supabase = await createClient();

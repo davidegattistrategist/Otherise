@@ -27,6 +27,8 @@ export async function savePosture(clientId: string, postureId: string | null, _:
     : await supabase.from("posture_assessments").insert({ ...row, client_id: clientId, created_by: me.id });
   if (error) return { error: "Salvataggio non riuscito." };
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
+  // salvataggio mentre scrivi (valutazione già fatta): si resta nella pagina
+  if (fd.get("__live") === "1") return { ok: true };
   redirect(`/staff/clienti/${clientId}/posturale?salvato=1`);
 }
 
