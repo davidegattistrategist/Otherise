@@ -225,7 +225,7 @@ test.describe("titolare", () => {
     expect(errors).toEqual([]);
   });
 
-  test("pagine generali e impostazioni", async ({ page }) => {
+  test("pagine generali e impostazioni", async ({ page }, info) => {
     const errors = await login(page, "titolare@prova.local");
     for (const p of ["/staff", "/staff/clienti", "/staff/pagamenti", "/staff/notifiche", "/staff/team", "/staff/impostazioni", "/staff/modelli", "/staff/eserciziario"]) {
       await page.goto(p);
@@ -233,7 +233,8 @@ test.describe("titolare", () => {
       expect(await noHorizontalScroll(page), p).toBe(true);
     }
     await page.goto("/staff/impostazioni");
-    await page.fill("input[name=reminder_days]", "5");
+    // un valore diverso per progetto: se è già quello, non c'è niente da salvare
+    await page.fill("input[name=reminder_days]", info.project.name === "pc" ? "5" : "4");
     await expect(page.locator("[data-live-form=impostazioni] [data-live-status=saved]")).toBeVisible({ timeout: 15000 });
     await page.goto("/staff/clienti?q=Giulia");
     await expect(page.getByRole("link", { name: /Esempio Giulia/ }).filter({ visible: true }).first()).toBeVisible();
