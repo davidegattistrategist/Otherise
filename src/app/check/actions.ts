@@ -65,17 +65,27 @@ export async function cancelCheckMode(clientId: string) {
   const me = await requireStaff();
   const supabase = await createClient();
   const mode = await getCheckMode(supabase, me.id);
-  const key = `check:${clientId}:${mode?.checkId ?? "nuovo"}`;
-  // le foto caricate in questo check e non ancora registrate: via anche i file
+  // solo per un cliente che puoi seguire (i permessi del database decidono)
+  const { data: client } = await supabase.from("clients").select("id").eq("id", clientId).maybeSingle();
+  if (!client) redirect("/staff/clienti");
+  // la bozza di questa sessione (check nuovo: una per sessione, con l'id già deciso)
+  const folder = mode?.checkId ?? mode?.newId ?? null;
+  const key = `check:${clientId}:${folder ?? "nuovo"}`;
+  // le foto caricate in questo check e non ancora registrate: via anche i file (solo nella
+  // cartella di questo check; se non si riesce a leggere cosa è registrato, non si cancella niente)
   const { data: draft } = await supabase.from("drafts").select("data").eq("user_id", me.id).eq("key", key).maybeSingle();
   // nella bozza le foto sono per percorso (oggetto); le versioni vecchie le avevano in un elenco
   const raw = (draft?.data as { photos?: PendingPhoto[] | Record<string, PendingPhoto> } | null)?.photos ?? [];
-  const pending = (Array.isArray(raw) ? raw : Object.values(raw)).filter((p) => p && typeof p.path === "string" && p.path.startsWith(`${clientId}/`) && typeof p.thumbPath === "string" && p.thumbPath.startsWith(`${clientId}/`));
+  const prefix = `${clientId}/${folder ?? "-"}/`;
+  const pending = (Array.isArray(raw) ? raw : Object.values(raw)).filter((p) => p && typeof p.path === "string" && p.path.startsWith(prefix) && typeof p.thumbPath === "string" && p.thumbPath.startsWith(prefix));
   if (pending.length) {
-    const { data: registered } = await supabase.from("check_photos").select("path").in("path", pending.map((p) => p.path));
-    const keep = new Set((registered ?? []).map((r) => r.path));
-    const remove = pending.filter((p) => !keep.has(p.path)).flatMap((p) => [p.path, p.thumbPath]);
-    if (remove.length) await createAdminClient().storage.from(CHECK_PHOTOS_BUCKET).remove(remove);
+    const admin = createAdminClient();
+    const { data: registered, error } = await admin.from("check_photos").select("path").in("path", pending.map((p) => p.path));
+    if (!error) {
+      const keep = new Set((registered ?? []).map((r) => r.path));
+      const remove = pending.filter((p) => !keep.has(p.path)).flatMap((p) => [p.path, p.thumbPath]);
+      if (remove.length) await admin.storage.from(CHECK_PHOTOS_BUCKET).remove(remove);
+    }
   }
   await supabase.from("drafts").upsert({ user_id: me.id, key, data: draftTombstone(Date.now()), updated_at: new Date().toISOString() });
   await setCheckMode(supabase, me.id, null);

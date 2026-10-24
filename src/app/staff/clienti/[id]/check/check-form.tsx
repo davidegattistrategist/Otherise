@@ -75,7 +75,7 @@ const toNum = (s: string) => {
 const str = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(Math.round(n * 100) / 100).replace(".", ","));
 
 /** Righe dei test di forza al massimo (le legge anche il salvataggio). */
-const MAX_TESTS = 10;
+export const MAX_TESTS = 10;
 
 export function initialCheckData(values: CheckValues): CheckFormData {
   const sf: Record<string, string[]> = {};
@@ -90,6 +90,13 @@ export function initialCheckData(values: CheckValues): CheckFormData {
 
 /** Chiave della bozza: un check nuovo per cliente, oppure quel check. */
 export const checkDraftKey = (clientId: string, checkId: string | null | undefined) => `check:${clientId}:${checkId ?? "nuovo"}`;
+
+/** La bozza sopra il check salvato, ma un campo vuoto nella bozza non cancella un testo già scritto. */
+export function keepFilled(saved: CheckFormData, draft: CheckFormData): CheckFormData {
+  const text = (k: "notes_next_phase" | "tests_text") => (draft[k].trim() ? draft[k] : saved[k]);
+  const draftTests = draft.tests.some((t) => t.exercise.trim() || t.load.trim()) ? draft.tests : saved.tests;
+  return { ...draft, notes_next_phase: text("notes_next_phase"), tests_text: text("tests_text"), tests: draftTests };
+}
 
 const sign = (n: number) => (n > 0 ? "+" : n < 0 ? "−" : "±");
 
@@ -127,6 +134,7 @@ export function CheckForm({
   view = "all",
   photoFolder = null,
   savedPhotos = [],
+  modeStartedAt = null,
 }: {
   clientId: string;
   /** check già salvato (modifica) */
@@ -164,6 +172,8 @@ export function CheckForm({
   photoFolder?: string | null;
   /** modalità check su un check salvato: le sue foto */
   savedPhotos?: CheckPhoto[];
+  /** modalità check: quando è iniziata (il server rifiuta un "Check finito" di una sessione già chiusa) */
+  modeStartedAt?: string | null;
 }) {
   const hideMisure = view === "appunti";
   const hideAppunti = view === "misure";
@@ -180,9 +190,15 @@ export function CheckForm({
     [action],
   );
   const [state, formAction] = useActionState(safeAction, null);
+  // id del check nuovo deciso qui: un secondo tocco su "Salva check" (risposta persa) non crea un doppione
+  const [ownId] = useState(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : ""));
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
-  const key = checkDraftKey(clientId, checkId);
+  // Chiave della bozza: in modalità check il check nuovo usa l'id già deciso (una bozza per
+  // sessione: quella di un check annullato o finito non torna in quello dopo); un check salvato
+  // aperto fuori dalla modalità ha una chiave sua (non tocca la sessione in pausa)
+  const savedCheck = Boolean(checkId) && !live;
+  const key = savedCheck ? `check-modifica:${clientId}:${checkId}` : checkDraftKey(clientId, checkId ?? (live && photoFolder ? photoFolder : null));
   const start = useMemo(() => initialCheckData(values), [values]);
   const [f, setF] = useState<CheckFormData>(start);
   const [restored, setRestored] = useState<number | null>(null);
@@ -201,17 +217,27 @@ export function CheckForm({
   // modalità check) il modulo resta com'è. In modalità check la bozza è il
   // check in corso, quindi niente avviso "Ho ripreso…".
   const startRef = useRef(start);
-  // check già salvato fuori dalla modalità check: quello salvato è la versione giusta.
-  // Una bozza rimasta (per esempio da quando lo scrivevi in modalità check) NON si riprende:
-  // con il salvataggio automatico finirebbe sopra il check e cancellerebbe appunti e test.
-  const savedCheck = Boolean(checkId) && !live;
+  // check già salvato fuori dalla modalità check: quello salvato è la versione giusta. Una
+  // bozza rimasta (es. un salvataggio automatico non riuscito) NON si applica da sola: con il
+  // salvataggio automatico finirebbe sopra il check (23/10: persi appunti e test). Si mostra
+  // un riquadro e decidi tu; i campi vuoti della bozza non cancellano mai quelli pieni.
+  const [pendingDraft, setPendingDraft] = useState<{ data: CheckFormData; at: number } | null>(null);
   useEffect(() => {
-    if (savedCheck) return;
     let alive = true;
     void loadDraft<CheckFormData>(key).then((d) => {
       if (!alive || !d) return;
       if (JSON.stringify(d.data) === JSON.stringify(startRef.current)) {
         adopt(d.data, d.at);
+        return;
+      }
+      if (savedCheck) {
+        const merged = keepFilled(startRef.current, d.data);
+        if (JSON.stringify(merged) === JSON.stringify(startRef.current)) {
+          clear();
+          return;
+        }
+        adopt(startRef.current, d.at);
+        setPendingDraft({ data: merged, at: d.at });
         return;
       }
       adopt(d.data, d.at);
@@ -221,7 +247,7 @@ export function CheckForm({
     return () => {
       alive = false;
     };
-  }, [key, adopt, live, savedCheck]);
+  }, [key, adopt, clear, live, savedCheck]);
 
   // solo le foto di questo check (una bozza rimasta da un check annullato può averne di un'altra cartella)
   const pendingList = Object.values(f.photos ?? {}).filter((p) => photoFolder && p.path.startsWith(`${clientId}/${photoFolder}/`)).sort((a, b) => a.at - b.at);
@@ -313,16 +339,27 @@ export function CheckForm({
     const t = setTimeout(() => void autoRun(), 900);
     return () => clearTimeout(t);
   }, [f, autoSave, autoRun]);
+  const liveStatusRef = useRef(liveStatus);
+  useEffect(() => {
+    liveStatusRef.current = liveStatus;
+  });
   useEffect(() => {
     if (!autoSave) return;
     const el = formRef.current;
     const now = () => void autoRun(el);
     const onHidden = () => document.visibilityState === "hidden" && now();
+    // tornata la rete, o l'app in primo piano, dopo un salvataggio non riuscito: si riprova
+    const retry = () => liveStatusRef.current.kind === "error" && now();
+    const onVisible = () => document.visibilityState === "visible" && retry();
     window.addEventListener("pagehide", now);
+    window.addEventListener("online", retry);
     document.addEventListener("visibilitychange", onHidden);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.removeEventListener("pagehide", now);
+      window.removeEventListener("online", retry);
       document.removeEventListener("visibilitychange", onHidden);
+      document.removeEventListener("visibilitychange", onVisible);
       now();
     };
   }, [autoSave, autoRun]);
@@ -332,6 +369,7 @@ export function CheckForm({
   // si prende l'ultima versione scritta sull'altro dispositivo.
   const submitting = useRef(false);
   const synced = useRef(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const onBusyRef = useRef(onBusy);
   useEffect(() => {
     onBusyRef.current = onBusy;
@@ -351,9 +389,20 @@ export function CheckForm({
       e.preventDefault();
       submitting.current = true;
       onBusyRef.current?.(true);
-      void syncNow().then(async () => {
+      void syncNow().then(async (r) => {
+        if (r === "failed" || r === "gone") {
+          submitting.current = false;
+          onBusyRef.current?.(false);
+          setSyncError(
+            r === "gone"
+              ? "Questo check è già stato chiuso dall'altro dispositivo: quello che vedi qui non è stato salvato. Aprilo dall'elenco dei check per correggerlo."
+              : "Non riesco a leggere l'altro dispositivo: controlla la connessione e tocca di nuovo «Check finito».",
+          );
+          return;
+        }
+        setSyncError(null);
         // il modulo si ridisegna con quello che è arrivato, poi parte
-        await new Promise((r) => setTimeout(r, 80));
+        await new Promise((r) => setTimeout(r, 150));
         synced.current = true;
         submitting.current = false;
         formRef.current?.requestSubmit();
@@ -397,6 +446,7 @@ export function CheckForm({
   return (
     <form ref={formRef} id={formId} action={formAction} onSubmit={onSubmit} className="flex flex-col gap-5">
       <input type="hidden" name="draft_key" value={key} />
+      {modeStartedAt ? <input type="hidden" name="mode_started" value={modeStartedAt} /> : null}
       {previous && !hideMisure ? (
         <p className="-mb-2 px-1 text-sm text-muted">Accanto a ogni misura: quella del check del <strong className="text-ink">{previous.label}</strong> e la differenza.</p>
       ) : null}
@@ -541,7 +591,7 @@ export function CheckForm({
               })
             }
           />
-          {newCheck ? <input type="hidden" name="new_id" value={photoFolder} /> : null}
+          {newCheck ? <input type="hidden" name="new_id" value={photoFolder ?? ownId} /> : null}
           {pendingList.length ? <input type="hidden" name="pending_photos" value={JSON.stringify(pendingList.map(({ path, thumbPath, width, height, size }) => ({ path, thumbPath, width, height, size })))} /> : null}
         </Card>
       ) : null}
@@ -645,9 +695,43 @@ export function CheckForm({
         </div>
       ) : uploadError ? (
         <div className="rounded-2xl bg-accent-soft px-4 py-3 text-[15px]" role="alert">{uploadError}</div>
+      ) : syncError ? (
+        <div className="rounded-2xl bg-accent-soft px-4 py-3 text-[15px]" role="alert">{syncError}</div>
       ) : (
         <ActionMessage state={state?.ok ? null : state} />
       )}
+      {pendingDraft ? (
+        <div className="flex flex-col gap-2 rounded-2xl bg-accent-soft px-4 py-3 text-[15px] leading-relaxed" role="status" data-draft-top>
+          <p>
+            <strong>Modifiche non salvate.</strong> C&apos;è una versione di questo check scritta il{" "}
+            {new Date(pendingDraft.at).toLocaleString("it-IT", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })} che non era arrivata al server. Vuoi usarla?
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setF(pendingDraft.data);
+                setPendingDraft(null);
+              }}
+              className="min-h-10 rounded-full bg-ink px-4 text-sm font-semibold text-card"
+              data-draft-apply
+            >
+              Usa queste modifiche
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clear();
+                setPendingDraft(null);
+              }}
+              className="min-h-10 rounded-full px-4 text-sm font-semibold ring-1 ring-ink/30"
+              data-draft-discard
+            >
+              Lascia il check com&apos;è
+            </button>
+          </div>
+        </div>
+      ) : null}
       {upload ? null : autoSave ? (
         <p
           className={cx("text-sm", liveStatus.kind === "error" ? "font-semibold text-accent-deep" : "text-muted")}

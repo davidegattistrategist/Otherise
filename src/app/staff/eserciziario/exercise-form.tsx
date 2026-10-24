@@ -47,7 +47,7 @@ function NewExercise({ action, children }: { action: (s: ActionState, fd: FormDa
     <form ref={formRef} action={formAction} className="flex flex-col gap-4">
       {children}
       <ActionMessage state={state} />
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>Aggiungi l&apos;esercizio</SubmitButton><FormDraft form={formRef} name="esercizio-nuovo" /></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>Aggiungi l&apos;esercizio</SubmitButton><FormDraft form={formRef} name="esercizio-nuovo" error={state?.error ?? null} /></div>
     </form>
   );
 }

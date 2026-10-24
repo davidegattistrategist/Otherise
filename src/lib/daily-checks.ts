@@ -251,8 +251,8 @@ export async function runDailyChecks(today = todayISO()) {
   await step(async () => {
     // pulizia: bozze dimenticate da più di 2 mesi
     await admin.from("drafts").delete().lt("updated_at", `${addDays(today, -60)}T00:00:00Z`);
-    // i segni delle bozze cancellate servono solo per poco
-    await admin.from("drafts").delete().not("data->__deleted", "is", null).lt("updated_at", `${addDays(today, -1)}T00:00:00Z`);
+    // i segni delle bozze cancellate restano quanto le bozze (un dispositivo rimasto senza
+    // rete per giorni non deve far tornare una bozza già chiusa): se ne vanno con la riga sopra
     // pulizia: notifiche lette più vecchie di 6 mesi
     await admin.from("notifications").delete().lt("created_at", `${addDays(today, -180)}T00:00:00Z`).not("read_at", "is", null);
   }, undefined);

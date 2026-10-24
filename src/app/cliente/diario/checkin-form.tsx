@@ -3,7 +3,8 @@
 import { DictateButton } from "@/components/dictate-button";
 import { useActionState, useRef, useState } from "react";
 import { FormDraft } from "@/components/draft-note";
-import { CHECKIN_QUESTIONS, SCORE_LABELS } from "@/lib/checkin";
+import { CHECKIN_QUESTIONS, SCORE_LABELS, checkinWeekFor } from "@/lib/checkin";
+import { todayISO } from "@/lib/dates";
 import { ActionMessage, SubmitButton } from "@/components/form-bits";
 import { Label, Textarea } from "@/components/ui";
 import { submitCheckin } from "./actions";
@@ -53,7 +54,8 @@ export function CheckinForm({ values, coach }: { values?: Values; coach: string 
       </div>
       {missing.length ? <p role="alert" className="rounded-xl bg-accent-soft px-3 py-2 text-sm">{missing.length === 1 ? "Manca la risposta a una domanda." : `Mancano le risposte a ${missing.length} domande.`}</p> : null}
       <ActionMessage state={state} />
-      <FormDraft form={formRef} name="diario" />
+      {/* una bozza per settimana: quella lasciata a metà non ricompare nel diario della settimana dopo */}
+      <FormDraft form={formRef} name={`diario-${checkinWeekFor(todayISO()) ?? "oggi"}`} error={state?.error ?? null} />
       <SubmitButton className="w-full" pendingText="Invio…">{values ? "Aggiorna il diario" : "Invia il diario"}</SubmitButton>
     </form>
   );

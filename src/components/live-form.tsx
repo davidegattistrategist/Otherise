@@ -16,7 +16,7 @@ import type { ActionState } from "./form-bits";
 import { cx } from "./ui";
 
 export type LiveAction = (state: ActionState, fd: FormData) => Promise<ActionState>;
-type Status = { kind: "idle" | "waiting" | "saving" | "saved" | "error" | "offline"; at?: number; error?: string };
+type Status = { kind: "idle" | "waiting" | "saving" | "saved" | "error" | "offline" | "restored"; at?: number; error?: string };
 
 /** Pausa dopo l'ultima lettera prima di salvare. */
 const TYPE_DELAY = 800;
@@ -58,14 +58,23 @@ export function LiveForm({
     restoredRef.current = draft.restored;
   });
 
-  const run = useCallback(async (el?: HTMLFormElement) => {
+  const run = useCallback(async (el?: HTMLFormElement, opts: { confirmed?: boolean } = {}) => {
     if (timer.current) {
       clearTimeout(timer.current);
       timer.current = null;
     }
     // all'uscita dalla pagina il modulo non è più collegato: si usa quello passato
-    const target = () => form.current ?? el ?? null;
+    // (preso ORA: più avanti form.current potrebbe già essere sparito)
+    const captured = form.current ?? el ?? null;
+    const target = () => form.current ?? captured;
     if (!target()) return;
+    // una bozza ritrovata (più vecchia di mezz'ora) non si salva finché non scegli tu:
+    // "Salva queste modifiche" o "Annulla le modifiche" (prima bastava una lettera in
+    // un altro campo per mandarla tutta)
+    if (restoredRef.current && !opts.confirmed) {
+      setStatus({ kind: "restored" });
+      return;
+    }
     if (running.current) {
       // un salvataggio è già in corso: appena finisce ne parte un altro con le ultime lettere
       again.current = true;
@@ -91,6 +100,13 @@ export function LiveForm({
         setStatus((s) => ({ kind: "saving", at: s.at }));
         const fd = new FormData(f);
         fd.set("__live", "1");
+        // i campi cambiati QUI rispetto all'ultimo salvataggio: l'azione aggiorna solo quelli,
+        // così una pagina rimasta aperta a lungo non riscrive quello che hai cambiato altrove
+        // (telefono, altro collaboratore, AI) con i valori di quando l'aveva aperta
+        const was = saved.current ? (JSON.parse(saved.current) as Record<string, unknown>) : {};
+        const cur = readForm(f);
+        const changed = Object.keys(cur).filter((k) => JSON.stringify(cur[k]) !== JSON.stringify(was[k]));
+        fd.set("__changed", changed.join(","));
         let r: ActionState = null;
         try {
           r = await actionRef.current(null, fd);
@@ -166,8 +182,9 @@ export function LiveForm({
       window.removeEventListener("pagehide", now);
       window.removeEventListener("online", now);
       document.removeEventListener("visibilitychange", onHidden);
-      // si esce dalla pagina con un salvataggio in attesa: parte subito
-      if (timer.current) void run(f);
+      // si esce dalla pagina con un salvataggio in attesa (o un campo "salva uscendo
+      // dalla casella" mai lasciato): parte subito
+      if (timer.current || JSON.stringify(readForm(f)) !== saved.current) void run(f);
     };
   }, [run, schedule]);
 
@@ -178,7 +195,7 @@ export function LiveForm({
     if (!restoredAt) return;
     const fresh = restoredAt > Date.now() - 30 * 60_000;
     if (!fresh) return;
-    const t = setTimeout(() => void run(), 50);
+    const t = setTimeout(() => void run(undefined, { confirmed: true }), 50);
     return () => clearTimeout(t);
   }, [restoredAt, run]);
 
@@ -191,7 +208,9 @@ export function LiveForm({
           ? "Senza rete: è al sicuro su questo dispositivo, lo salvo appena torna la connessione"
           : status.kind === "error"
             ? `Non salvato: ${status.error}`
-            : hint;
+            : status.kind === "restored"
+              ? "Non salvato: prima scegli qui sopra se tenere o annullare le modifiche ritrovate"
+              : hint;
 
   return (
     <form ref={form} className={className} noValidate data-live-form={name}>
@@ -202,10 +221,18 @@ export function LiveForm({
             {new Date(draft.restored).toLocaleString("it-IT", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })} e che non era stato salvato.
           </p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => void run()} className="min-h-10 rounded-full bg-ink px-4 text-sm font-semibold text-card" data-draft-apply>
+            <button type="button" onClick={() => void run(undefined, { confirmed: true })} className="min-h-10 rounded-full bg-ink px-4 text-sm font-semibold text-card" data-draft-apply>
               Salva queste modifiche
             </button>
-            <button type="button" onClick={draft.discard} className="min-h-10 rounded-full px-4 text-sm font-semibold ring-1 ring-ink/30" data-draft-discard>
+            <button
+              type="button"
+              onClick={() => {
+                draft.discard();
+                setStatus({ kind: "idle" });
+              }}
+              className="min-h-10 rounded-full px-4 text-sm font-semibold ring-1 ring-ink/30"
+              data-draft-discard
+            >
               Annulla le modifiche
             </button>
           </div>
@@ -218,7 +245,7 @@ export function LiveForm({
         </p>
       ) : null}
       <p
-        className={cx("text-sm", status.kind === "error" ? "font-semibold text-accent-deep" : status.kind === "offline" ? "text-accent-deep" : "text-muted")}
+        className={cx("text-sm", status.kind === "error" || status.kind === "restored" ? "font-semibold text-accent-deep" : status.kind === "offline" ? "text-accent-deep" : "text-muted")}
         role={status.kind === "error" ? "alert" : undefined}
         aria-live="polite"
         data-live-status={status.kind}

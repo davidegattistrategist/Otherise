@@ -34,7 +34,11 @@ export async function GET(req: NextRequest) {
   const { data } = await supabase.from("drafts").select("data, updated_at").eq("user_id", me.id).eq("key", key).maybeSingle();
   const since = Number(req.nextUrl.searchParams.get("since"));
   if (since > 0 && data && new Date(data.updated_at).getTime() <= since) return new NextResponse(null, { status: 204, headers: { "cache-control": "no-store" } });
-  return NextResponse.json(data && deletedAt(data.data) === null ? data : null, { headers: { "cache-control": "no-store" } });
+  // bozza cancellata: lo si dice (con l'ora), così anche la copia rimasta nel browser
+  // di un altro dispositivo viene buttata invece di tornare nel modulo
+  const gone = data ? deletedAt(data.data) : null;
+  if (data && gone !== null) return NextResponse.json({ deleted: gone, now: Date.now() }, { headers: { "cache-control": "no-store" } });
+  return NextResponse.json(data ? { ...data, now: Date.now() } : null, { headers: { "cache-control": "no-store" } });
 }
 
 export async function POST(req: NextRequest) {
@@ -54,8 +58,11 @@ export async function POST(req: NextRequest) {
   let data = body.data as Json;
   const { data: row } = await supabase.from("drafts").select("data, updated_at").eq("user_id", me.id).eq("key", body.key).maybeSingle();
   const gone = row ? deletedAt(row.data) : null;
-  // cancellata dopo che questa bozza era partita: resta cancellata
-  if (gone !== null && typeof body.t === "number" && body.t <= gone) return NextResponse.json({ ok: true, ignored: true, updated_at: row!.updated_at });
+  // cancellata dopo che questa bozza era partita: resta cancellata (l'ora del browser non
+  // vale mai più di quella del server: un orologio avanti non "vince" sul segno)
+  const now = Date.now();
+  const t = typeof body.t === "number" ? Math.min(body.t, now) : now;
+  if (gone !== null && t <= gone) return NextResponse.json({ ok: true, ignored: true, updated_at: row!.updated_at, now });
   if (body.patch && row && gone === null) {
     // solo i campi cambiati, sopra quello che ha scritto l'altro dispositivo
     data = applyPatch(row.data, body.patch) as Json;
@@ -63,7 +70,7 @@ export async function POST(req: NextRequest) {
   const updated_at = new Date().toISOString();
   const { error } = await supabase.from("drafts").upsert({ user_id: me.id, key: body.key, data, updated_at });
   if (error) return NextResponse.json({ error: "Non salvata" }, { status: 500 });
-  return NextResponse.json(body.patch ? { ok: true, updated_at, data } : { ok: true, updated_at });
+  return NextResponse.json(body.patch ? { ok: true, updated_at, data, now } : { ok: true, updated_at, now });
 }
 
 export async function DELETE(req: NextRequest) {
@@ -72,7 +79,7 @@ export async function DELETE(req: NextRequest) {
   const key = req.nextUrl.searchParams.get("key");
   if (!writableKey(key)) return NextResponse.json({ error: "Bozza non valida" }, { status: 400 });
   const supabase = await createClient();
-  const t = Number(req.nextUrl.searchParams.get("t")) || Date.now();
+  const t = Math.min(Number(req.nextUrl.searchParams.get("t")) || Date.now(), Date.now());
   await supabase.from("drafts").upsert({ user_id: me.id, key, data: draftTombstone(t), updated_at: new Date().toISOString() });
   return NextResponse.json({ ok: true });
 }

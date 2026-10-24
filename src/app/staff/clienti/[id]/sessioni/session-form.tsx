@@ -73,7 +73,7 @@ function NewSession({ action, compact, hasValues, draftName, children }: { actio
     <form ref={formRef} action={formAction} className="flex flex-col gap-3">
       {children}
       <ActionMessage state={state} />
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton size={compact ? "sm" : "md"}>Registra la sessione</SubmitButton><FormDraft form={formRef} name={draftName} /></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton size={compact ? "sm" : "md"}>Registra la sessione</SubmitButton><FormDraft form={formRef} name={draftName} error={state?.error ?? null} saved={Boolean(state?.ok)} /></div>
     </form>
   );
 }

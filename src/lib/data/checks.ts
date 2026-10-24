@@ -6,7 +6,7 @@ import "server-only";
  * confrontabili. Va ricalcolata quando cambia un check o la formula.
  */
 import type { ServerSupabase } from "../supabase/server";
-import { formatLong, todayISO } from "../dates";
+import { ageOn, formatLong, todayISO, type ISODate } from "../dates";
 import { ageAt, knownAges, type KnownAge } from "../body/age";
 import { checkLabel, sortChecks } from "../check-order";
 import { circOf, toNumber, type BodyPoint, type FormulaSeries } from "../body/progress";
@@ -59,6 +59,9 @@ export function staleChecks(rows: RecomputeRow[], client: { sex: Sex; birth_date
   for (const c of rows) {
     const readings = (c.skinfolds ?? {}) as SkinfoldReadings;
     const avg = averagesOf(readings);
+    // check senza pliche (storico importato con la % scritta a mano): i suoi numeri restano
+    // com'erano, non c'è niente da ricalcolare e non vanno azzerati
+    if (!Object.keys(avg).length) continue;
     const comp = ref
       ? computeBodyComposition({ sex, age: checkAge(c, client.birth_date, known), weightKg: c.weight_kg === null ? null : Number(c.weight_kg), skinfolds: readings, formula: ref.id })
       : null;
@@ -81,6 +84,18 @@ export function staleChecks(rows: RecomputeRow[], client: { sex: Sex; birth_date
     if (!same) out.push({ id: c.id, next });
   }
   return { ref, out };
+}
+
+/**
+ * Data di nascita aggiunta o corretta: l'età scritta nei check con la data si
+ * rifà da quella (la % di grasso la ricalcola poi recomputeClientChecks).
+ */
+export async function refreshCheckAges(supabase: ServerSupabase, clientId: string, birthDate: string) {
+  const { data: rows } = await supabase.from("checks").select("id, check_date, age_years").eq("client_id", clientId).not("check_date", "is", null);
+  for (const c of rows ?? []) {
+    const age = ageOn(birthDate, c.check_date as ISODate);
+    if (age !== null && age !== c.age_years) await supabase.from("checks").update({ age_years: age }).eq("id", c.id);
+  }
 }
 
 /** Ricalcola % grasso, massa grassa e magra di tutti i check del cliente. */

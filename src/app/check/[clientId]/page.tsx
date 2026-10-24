@@ -119,6 +119,7 @@ export default async function CheckModePage({ params }: { params: Promise<{ clie
       clientName={`${client.first_name} ${client.last_name}`.trim()}
       checkId={checkId}
       photoFolder={checkId ?? mode.newId ?? null}
+      modeStartedAt={mode.startedAt}
       savedPhotos={checkId ? (saved?.get(checkId) ?? []) : []}
       sex={sex}
       birthDate={client.birth_date}

@@ -8,7 +8,8 @@
  * all'altro.
  */
 import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { CheckForm, type CheckFormData, type CheckState, type CheckValues, type PreviousCheck } from "@/app/staff/clienti/[id]/check/check-form";
+import { CheckForm, checkDraftKey, type CheckFormData, type CheckState, type CheckValues, type PreviousCheck } from "@/app/staff/clienti/[id]/check/check-form";
+import { clearDraft } from "@/components/use-draft";
 import { withLiveCheck } from "@/lib/body/live-check";
 import type { KnownAge } from "@/lib/body/age";
 import { todayISO } from "@/lib/dates";
@@ -30,6 +31,7 @@ export function CheckModeView(props: {
   clientName: string;
   checkId: string | null;
   photoFolder: string | null;
+  modeStartedAt: string | null;
   savedPhotos: CheckPhoto[];
   sex: Sex | null;
   birthDate: string | null;
@@ -145,6 +147,7 @@ export function CheckModeView(props: {
             previous={props.previous}
             live
             photoFolder={props.photoFolder}
+            modeStartedAt={props.modeStartedAt}
             savedPhotos={props.savedPhotos}
             formId={FORM_ID}
             view={formView}
@@ -183,6 +186,8 @@ export function CheckModeView(props: {
           onClick={() => {
             if (window.confirm("Annullare il check? Quello che hai scritto in questo check si cancella.")) {
               setEnding(true);
+              // anche la copia nel browser di questo dispositivo, così non torna nel check dopo
+              clearDraft(checkDraftKey(props.clientId, props.checkId ?? props.photoFolder));
               void cancelCheckMode(props.clientId);
             }
           }}

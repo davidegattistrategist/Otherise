@@ -103,7 +103,7 @@ function NewClientForm({ action, children }: { action: (state: ActionState, fd: 
     <form ref={formRef} action={formAction} className="flex flex-col gap-5">
       {children}
       <ActionMessage state={state} />
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>Crea cliente</SubmitButton><FormDraft form={formRef} name="nuovo-cliente" /></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>Crea cliente</SubmitButton><FormDraft form={formRef} name="nuovo-cliente" error={state?.error ?? null} /></div>
     </form>
   );
 }

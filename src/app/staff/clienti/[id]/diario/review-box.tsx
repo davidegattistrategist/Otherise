@@ -7,7 +7,7 @@
  * quello che succede: "Invia risposta" se hai scritto qualcosa (al cliente
  * arriva un avviso), "Segna come visto" se il campo è vuoto.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import { FormDraft } from "@/components/draft-note";
 import { SubmitButton } from "@/components/form-bits";
 
@@ -19,7 +19,7 @@ export function ReviewBox({
   reviewedLabel,
   children,
 }: {
-  action: (fd: FormData) => void | Promise<void>;
+  action: (fd: FormData) => Promise<{ ok: boolean; error?: string } | void>;
   name: string;
   reviewed: boolean;
   reply: string;
@@ -29,6 +29,7 @@ export function ReviewBox({
 }) {
   const [open, setOpen] = useState(!reviewed);
   const form = useRef<HTMLFormElement>(null);
+  const [state, formAction] = useActionState(async (_: { ok: boolean; error?: string } | null, fd: FormData) => (await action(fd)) ?? { ok: true }, null);
   const [hasText, setHasText] = useState(Boolean(reply.trim()));
   useEffect(() => {
     const f = form.current;
@@ -52,13 +53,14 @@ export function ReviewBox({
   }
   const label = reviewed ? (hasText ? "Aggiorna risposta" : "Salva") : hasText ? "Invia risposta" : "Segna come visto";
   return (
-    <form ref={form} action={action} className="flex flex-col gap-2">
+    <form ref={form} action={formAction} className="flex flex-col gap-2">
       {children}
       <div className="flex flex-wrap items-center gap-3">
         <SubmitButton size="sm" variant={reviewed ? "secondary" : "primary"}>{label}</SubmitButton>
         {reviewedLabel ? <span className="text-sm text-muted">{reviewedLabel}</span> : null}
       </div>
-      <FormDraft form={form} name={name} />
+      {state?.error ? <p role="alert" className="text-sm font-semibold text-accent-deep">{state.error}</p> : null}
+      <FormDraft form={form} name={name} error={state?.error ?? null} saved={Boolean(state?.ok)} />
     </form>
   );
 }

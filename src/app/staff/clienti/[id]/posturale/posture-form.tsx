@@ -64,7 +64,7 @@ function NewPosture({ action, children }: { action: (s: ActionState, fd: FormDat
     <form ref={formRef} action={formAction} className="flex flex-col gap-4">
       {children}
       <ActionMessage state={state} />
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>Salva la valutazione</SubmitButton><FormDraft form={formRef} name="posturale-nuova" /></div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><SubmitButton>Salva la valutazione</SubmitButton><FormDraft form={formRef} name="posturale-nuova" error={state?.error ?? null} saved={Boolean(state?.ok)} /></div>
     </form>
   );
 }

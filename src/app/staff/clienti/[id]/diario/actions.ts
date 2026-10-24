@@ -6,14 +6,17 @@ import { createClient } from "@/lib/supabase/server";
 import { notify } from "@/lib/notify";
 import { emailsLater } from "@/lib/email";
 import { closeDrafts, generateCheckinDraft, type ReplyDraft } from "@/lib/ai/reply";
+import { clearFormDraft } from "@/lib/drafts-server";
 
 export async function reviewCheckin(clientId: string, checkinId: string, fd: FormData) {
   const me = await requireStaff();
   const supabase = await createClient();
   const reply = String(fd.get("coach_reply") ?? "").trim();
   const { data: before } = await supabase.from("checkins").select("coach_reply").eq("id", checkinId).eq("client_id", clientId).maybeSingle();
-  if (!before) return;
-  await supabase.from("checkins").update({ coach_reply: reply, reviewed_at: new Date().toISOString() }).eq("id", checkinId).eq("client_id", clientId);
+  if (!before) return { ok: false, error: "Diario non trovato." };
+  const { error } = await supabase.from("checkins").update({ coach_reply: reply, reviewed_at: new Date().toISOString() }).eq("id", checkinId).eq("client_id", clientId);
+  if (error) return { ok: false, error: "Risposta non salvata: riprova." };
+  await clearFormDraft(supabase, me.id, fd);
   // la bozza dell'assistente: usata (anche se corretta) o sostituita. Il testo vero insegna lo stile.
   if (reply && reply !== before.coach_reply) {
     const used = String(fd.get("draft_used") ?? "");

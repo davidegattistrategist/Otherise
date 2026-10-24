@@ -10,6 +10,7 @@ import { CHECKIN_QUESTIONS, checkinWeekFor } from "@/lib/checkin";
 import { emailsLater } from "@/lib/email";
 import { generateCheckinDraft } from "@/lib/ai/reply";
 import type { ActionState } from "@/components/form-bits";
+import { clearFormDraft } from "@/lib/drafts-server";
 
 export async function submitCheckin(_: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireActiveClient();
@@ -35,6 +36,7 @@ export async function submitCheckin(_: ActionState, fd: FormData): Promise<Actio
     ? await supabase.from("checkins").update(row).eq("id", existing.id).select("id").single()
     : await supabase.from("checkins").insert({ ...row, client_id: me.clientId, week_start: week }).select("id").single();
   if (error || !saved) return { error: "Invio non riuscito, riprova." };
+  await clearFormDraft(supabase, me.id, fd);
   // C'è una richiesta per il coach: l'assistente gli prepara una bozza di risposta
   if (row.request) after(() => generateCheckinDraft(saved.id).catch(() => undefined));
   // Se qualcosa non va il database ha già creato l'avviso per lo staff: lo mandiamo anche per email

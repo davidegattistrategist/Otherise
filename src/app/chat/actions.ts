@@ -134,8 +134,18 @@ export async function deleteMessage(clientId: string, messageId: string): Promis
   if (!msg || msg.sender_id !== me.id) return { ok: false };
   const { error } = await supabase.from("messages").update({ deleted_at: new Date().toISOString() }).eq("id", messageId);
   if (error) return { ok: false };
-  const paths = ((msg.attachments as ChatAttachment[]) ?? []).map((a) => a.path);
-  if (paths.length) await createAdminClient().storage.from(CHAT_BUCKET).remove(paths);
+  // i file: solo quelli di questa chat e non usati da nessun altro messaggio (un messaggio
+  // scritto a mano nel database potrebbe indicare l'allegato di un altro)
+  const paths = ((msg.attachments as ChatAttachment[]) ?? []).map((a) => a.path).filter((p) => typeof p === "string" && p.startsWith(`${clientId}/`) && !p.includes(".."));
+  if (paths.length) {
+    const admin = createAdminClient();
+    const { data: others, error: othersError } = await admin.from("messages").select("attachments").eq("client_id", clientId).neq("id", messageId).neq("attachments", "[]");
+    if (!othersError) {
+      const used = new Set((others ?? []).flatMap((m) => ((m.attachments ?? []) as ChatAttachment[]).map((a) => a.path)));
+      const free = paths.filter((p) => !used.has(p));
+      if (free.length) await admin.storage.from(CHAT_BUCKET).remove(free);
+    }
+  }
   return { ok: true };
 }
 

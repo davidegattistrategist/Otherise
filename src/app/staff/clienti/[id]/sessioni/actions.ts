@@ -5,6 +5,8 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isISODate, todayISO } from "@/lib/dates";
 import type { ActionState } from "@/components/form-bits";
+import { clearFormDraft } from "@/lib/drafts-server";
+import { changedOnly } from "@/lib/changed-only";
 
 export async function savePtSession(clientId: string, sessionId: string | null, _: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireStaff();
@@ -16,10 +18,14 @@ export async function savePtSession(clientId: string, sessionId: string | null, 
     notes: String(fd.get("notes") ?? "").trim(),
     counts_toward_package: fd.get("counts_toward_package") === "on",
   };
+  const patch = sessionId ? changedOnly(fd, row) : row;
   const { error } = sessionId
-    ? await supabase.from("pt_sessions").update(row).eq("id", sessionId).eq("client_id", clientId)
+    ? Object.keys(patch).length
+      ? await supabase.from("pt_sessions").update(patch).eq("id", sessionId).eq("client_id", clientId)
+      : { error: null }
     : await supabase.from("pt_sessions").insert({ ...row, client_id: clientId, created_by: me.id });
   if (error) return { error: "Salvataggio non riuscito." };
+  await clearFormDraft(supabase, me.id, fd);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
   return { ok: true, message: sessionId ? "Sessione aggiornata." : "Sessione salvata." };
 }

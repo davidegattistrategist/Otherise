@@ -756,13 +756,14 @@ describe.skipIf(!run)("permessi", () => {
     // non si modificano: si aggiungono o si cancellano
     await coach.from("program_revisions").update({ reason: "cambiato" }).eq("program_id", publishedId);
     expect((await admin.from("program_revisions").select("reason").eq("program_id", publishedId)).data).toEqual([{ reason: "Ritocco con l'AI" }]);
-    // al massimo 30 per programma: restano le più recenti
+    // al massimo 30 per programma: restano le 29 più recenti e la prima di tutte (la versione di partenza)
     for (let i = 0; i < 31; i++) await admin.from("program_revisions").insert({ ...rev(publishedId, clientAId, `n${i}`), created_at: new Date(Date.now() + (i + 1) * 1000).toISOString() }).throwOnError();
     const kept = (await admin.from("program_revisions").select("reason").eq("program_id", publishedId)).data!.map((r) => r.reason);
     expect(kept).toHaveLength(30);
     expect(kept).toContain("n30");
     expect(kept).not.toContain("n0");
-    expect(kept).not.toContain("Ritocco con l'AI");
+    expect(kept).not.toContain("n1");
+    expect(kept).toContain("Ritocco con l'AI");
     // eliminando il programma se ne vanno anche le versioni
     await admin.from("programs").delete().eq("id", otherProgram).throwOnError();
     expect((await admin.from("program_revisions").select("id").eq("program_id", otherProgram)).data).toEqual([]);
@@ -827,5 +828,18 @@ describe.skipIf(!run)("permessi", () => {
     const { data: trimmed } = await admin.rpc("trim_row_history", { keep_days: 0 });
     expect(trimmed).toBeGreaterThanOrEqual(3);
     await admin.from("checks").delete().eq("id", ck!.id).throwOnError();
+  });
+  it("sicurezza dei dati (24/10): allegati solo della propria chat, created_by non si finge, staff di un cliente non si legge", async () => {
+    // un messaggio con il percorso di un file di un'altra chat viene rifiutato
+    expect((await clientA.from("messages").insert({ client_id: clientAId, sender_id: (await clientA.auth.getUser()).data.user!.id, body: "", attachments: [{ kind: "image", path: `${clientBId}/2026-10/x.jpg` }] })).error).not.toBeNull();
+    expect((await clientA.from("messages").insert({ client_id: clientAId, sender_id: (await clientA.auth.getUser()).data.user!.id, body: "", attachments: [{ kind: "image", path: `${clientAId}/../x.jpg` }] })).error).not.toBeNull();
+    // created_by è chi scrive, anche se il browser manda un altro id
+    const day = (offset: number) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome" }).format(new Date(Date.now() + offset * 86_400_000));
+    const { data: w } = await clientA.from("weight_logs").insert({ client_id: clientAId, log_date: day(-6), kg: 63, created_by: coachId }).select("created_by").single().throwOnError();
+    expect(w!.created_by).toBe((await clientA.auth.getUser()).data.user!.id);
+    await admin.from("weight_logs").delete().eq("client_id", clientAId).eq("log_date", day(-6));
+    // lo staff di un cliente non si legge dall'app
+    expect((await clientA.rpc("client_staff_recipients", { cid: clientBId })).error).not.toBeNull();
+    expect((await stranger.rpc("client_staff_recipients", { cid: clientAId })).error).not.toBeNull();
   });
 });

@@ -54,9 +54,24 @@ export async function removeOrphanChatUploads(now = Date.now()): Promise<number>
     if (f.id !== null || !/^[0-9a-f-]{36}$/i.test(f.name)) continue;
     const files = (await listAll(CHAT_BUCKET, f.name)).filter((x) => x.createdAt && Date.parse(x.createdAt) < cutoff);
     if (!files.length) continue;
-    const { data: msgs } = await admin.from("messages").select("attachments").eq("client_id", f.name);
-    const used = new Set((msgs ?? []).flatMap((m) => ((m.attachments ?? []) as Array<{ path?: string }>).map((a) => a.path ?? "")));
+    // TUTTI i messaggi con allegati, a pagine (Supabase dà al massimo 1000 righe per lettura:
+    // prima, oltre i 1000 messaggi, gli allegati dei messaggi esclusi sembravano orfani).
+    // Se una lettura non riesce, per questo cliente non si cancella niente.
+    const used = new Set<string>();
+    let complete = true;
+    for (let from = 0; ; from += 1000) {
+      const { data: msgs, error } = await admin.from("messages").select("attachments").eq("client_id", f.name).neq("attachments", "[]").order("id").range(from, from + 999);
+      if (error) {
+        complete = false;
+        break;
+      }
+      for (const m of msgs ?? []) for (const a of (m.attachments ?? []) as Array<{ path?: string }>) if (a.path) used.add(a.path);
+      if (!msgs || msgs.length < 1000) break;
+    }
+    if (!complete) continue;
     const orphans = files.map((x) => x.path).filter((p) => !used.has(p));
+    // mai più di qualche file alla volta: un elenco "tutto orfano" è quasi certamente un errore
+    if (orphans.length > 50) continue;
     await removeAll(CHAT_BUCKET, orphans);
     removed += orphans.length;
   }

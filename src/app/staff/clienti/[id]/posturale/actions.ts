@@ -6,6 +6,8 @@ import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { isISODate } from "@/lib/dates";
 import type { ActionState } from "@/components/form-bits";
+import { clearFormDraft } from "@/lib/drafts-server";
+import { changedOnly } from "@/lib/changed-only";
 
 export async function savePosture(clientId: string, postureId: string | null, _: ActionState, fd: FormData): Promise<ActionState> {
   const me = await requireStaff();
@@ -22,10 +24,14 @@ export async function savePosture(clientId: string, postureId: string | null, _:
     visible_to_client: fd.get("visible_to_client") === "on",
   };
   if (!row.tight_muscles && !row.what_works && !row.posture_work && !row.notes) return { error: "Scrivi almeno una delle sezioni." };
+  const patch = postureId ? changedOnly(fd, row) : row;
   const { error } = postureId
-    ? await supabase.from("posture_assessments").update(row).eq("id", postureId).eq("client_id", clientId)
+    ? Object.keys(patch).length
+      ? await supabase.from("posture_assessments").update(patch).eq("id", postureId).eq("client_id", clientId)
+      : { error: null }
     : await supabase.from("posture_assessments").insert({ ...row, client_id: clientId, created_by: me.id });
   if (error) return { error: "Salvataggio non riuscito." };
+  await clearFormDraft(supabase, me.id, fd);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
   // salvataggio mentre scrivi (valutazione già fatta): si resta nella pagina
   if (fd.get("__live") === "1") return { ok: true };

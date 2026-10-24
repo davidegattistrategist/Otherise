@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { ageOn, isISODate, todayISO } from "@/lib/dates";
+import { ageOn, isISODate } from "@/lib/dates";
 import { CIRCUMFERENCES, SKINFOLD_SITES, formulaById, type SkinfoldReadings } from "@/lib/body/skinfolds";
 import { recomputeClientChecks } from "@/lib/data/checks";
 import { estimateOneRepMax } from "@/lib/strength/e1rm";
@@ -16,6 +16,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CHECK_PHOTOS_BUCKET } from "@/lib/check-photos";
 import { MAX_PHOTOS_PER_UPLOAD } from "@/lib/check-photos-shared";
+import { MAX_TESTS } from "./check-form";
 import { getCheckMode } from "@/lib/check-mode";
 import type { ServerSupabase } from "@/lib/supabase/server";
 
@@ -67,7 +68,7 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
     if (v !== null) circumferences[c.key] = v;
   }
   const tests: Array<{ exercise: string; load: number | null; reps: number | null; rpe: number | null; e1rm: number | null }> = [];
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < MAX_TESTS; i++) {
     const exercise = String(fd.get(`test_${i}_exercise`) ?? "").trim();
     if (!exercise) continue;
     const load = num(fd.get(`test_${i}_load`));
@@ -87,37 +88,63 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
     getCheckMode(supabase, me.id),
   ]);
   const draft = draftRow && deletedAt(draftRow.data) === null ? (draftRow.data as { notes_next_phase?: unknown; tests_text?: unknown }) : null;
+  // "Check finito" da un dispositivo rimasto indietro (schermo spento) quando la modalità è
+  // già stata chiusa dall'altro: quel modulo è vecchio e non deve né creare un secondo
+  // check né riscrivere quello salvato con i campi vuoti
+  const modeStarted = String(fd.get("mode_started") ?? "");
+  if (modeStarted && (!mode || mode.clientId !== clientId || mode.startedAt !== modeStarted)) {
+    return { error: "Questo check è già stato chiuso dall'altro dispositivo: quello che vedi qui non è stato salvato. Aprilo dall'elenco dei check per correggerlo." };
+  }
   // solo in modalità check su questo stesso check (lì la bozza è la versione comune ai dispositivi)
-  const liveDraft = Boolean(mode && mode.clientId === clientId && (mode.checkId ?? null) === (checkId ?? null));
+  const liveDraft = Boolean(mode && !mode.paused && mode.clientId === clientId && (mode.checkId ?? null) === (checkId ?? null));
   const fromDraft = (field: "notes_next_phase" | "tests_text") => {
     const sent = String(fd.get(field) ?? "").trim();
     const kept = liveDraft && typeof draft?.[field] === "string" ? (draft[field] as string).trim() : "";
     return sent || kept;
   };
 
-  // senza data di nascita resta vuota: il ricalcolo qui sotto usa l'età stimata dagli altri check
-  // (checkAge), e quando aggiungi la data di nascita vale quella
-  const age = ageOn(client.birth_date, date || todayISO());
+  // modalità check: il check nuovo prende l'id già deciso (le foto sono già nella sua cartella)
+  // (anche fuori dalla modalità il modulo manda un id deciso nel browser: se la risposta si
+  // perde e tocchi di nuovo "Salva check", il check è lo stesso e non ne nasce un secondo)
+  const newId = String(fd.get("new_id") ?? "");
+  const presetId = !checkId && /^[0-9a-f-]{36}$/i.test(newId) ? newId : null;
+  // il check nuovo della modalità check è già stato salvato (secondo tocco, o un
+  // salvataggio riuscito di cui il telefono non ha avuto risposta): si aggiorna quello
+  const existingSel = "id, age_years, skinfolds, circumferences, strength_tests";
+  const { data: existing } =
+    checkId || presetId
+      ? await supabase.from("checks").select(existingSel).eq("id", checkId ?? presetId!).eq("client_id", clientId).maybeSingle()
+      : { data: null };
+  if (checkId && !existing) return { error: "Check non trovato: forse è stato eliminato." };
+  const updateId = existing?.id ?? null;
+
+  // Aggiornando un check si parte da quello salvato: il modulo mostra solo le pliche
+  // del protocollo, le circonferenze previste e fino a MAX_TESTS test; quello che non
+  // mostra (pliche importate di un altro protocollo, altre misure) resta com'è
+  const prevFolds = (existing?.skinfolds ?? {}) as Record<string, unknown>;
+  const prevCirc = (existing?.circumferences ?? {}) as Record<string, unknown>;
+  const prevTests = Array.isArray(existing?.strength_tests) ? (existing.strength_tests as unknown[]) : [];
+  const shownSites = new Set<string>(SKINFOLD_SITES.map((s) => s.key));
+  const shownCirc = new Set<string>(CIRCUMFERENCES.map((c) => c.key));
+  const mergedFolds = { ...Object.fromEntries(Object.entries(prevFolds).filter(([k]) => !shownSites.has(k))), ...skinfolds };
+  const mergedCirc = { ...Object.fromEntries(Object.entries(prevCirc).filter(([k]) => !shownCirc.has(k))), ...circumferences };
+  const mergedTests = [...tests, ...prevTests.slice(MAX_TESTS)];
+  // senza data di nascita l'età resta quella già scritta (importata) o vuota: il ricalcolo
+  // usa l'età stimata dagli altri check (checkAge); con la data di nascita vale quella
+  const age = client.birth_date && date ? ageOn(client.birth_date, date) : (existing?.age_years ?? null);
   const row = {
     client_id: clientId,
     check_date: date || null,
     weight_kg: weight,
     age_years: age,
     sex: client.sex,
-    skinfolds: skinfolds as unknown as NonNullable<Json>,
-    circumferences: circumferences as unknown as NonNullable<Json>,
-    strength_tests: tests as unknown as NonNullable<Json>,
+    skinfolds: mergedFolds as unknown as NonNullable<Json>,
+    circumferences: mergedCirc as unknown as NonNullable<Json>,
+    strength_tests: mergedTests as unknown as NonNullable<Json>,
     tests_text: fromDraft("tests_text"),
     notes_next_phase: fromDraft("notes_next_phase"),
     visible_to_client: fd.get("visible_to_client") === "on",
   };
-  // modalità check: il check nuovo prende l'id già deciso (le foto sono già nella sua cartella)
-  const newId = String(fd.get("new_id") ?? "");
-  const presetId = !checkId && /^[0-9a-f-]{36}$/i.test(newId) && (await isPendingCheck(supabase, me.id, clientId, newId)) ? newId : null;
-  // il check nuovo della modalità check è già stato salvato (secondo tocco, o un
-  // salvataggio riuscito di cui il telefono non ha avuto risposta): si aggiorna quello
-  const { data: already } = presetId ? await supabase.from("checks").select("id").eq("id", presetId).eq("client_id", clientId).maybeSingle() : { data: null };
-  const updateId = checkId ?? already?.id ?? null;
   let { data: saved, error } = updateId
     ? await supabase.from("checks").update(row).eq("id", updateId).eq("client_id", clientId).select("id").maybeSingle()
     : // l'autore è chi lo crea (chi lo corregge dopo non ne diventa l'autore)
@@ -144,9 +171,11 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
       const start = Math.max(-1, ...(already ?? []).map((p) => p.sort_order)) + 1;
       const fresh = parsed.data.filter((p) => p.path.startsWith(prefix) && p.thumbPath.startsWith(prefix) && !p.path.includes("..") && !known.has(p.path));
       if (fresh.length) {
-        await supabase.from("check_photos").insert(
+        const { error: photoError } = await supabase.from("check_photos").insert(
           fresh.map((p, i) => ({ check_id: saved.id, client_id: clientId, path: p.path, thumb_path: p.thumbPath, width: p.width, height: p.height, size_bytes: p.size, sort_order: start + i })),
         );
+        // il check è salvato ma le foto no: la bozza resta, così "Check finito" si può ripetere
+        if (photoError) return { error: "Check salvato, ma non sono riuscito a registrare le foto. Tocca di nuovo «Check finito»." };
         revalidatePath("/cliente/progressi");
       }
     }
@@ -172,10 +201,12 @@ export async function saveCheck(clientId: string, checkId: string | null, _: Che
 export async function deleteCheck(clientId: string, checkId: string) {
   await requireStaff();
   const supabase = await createClient();
-  // le foto spariscono con il check (anche i file)
+  // le foto spariscono con il check (anche i file): prima la riga, poi i file, così se
+  // la cancellazione non riesce il check resta intero
   const { data: photos } = await supabase.from("check_photos").select("path, thumb_path").eq("check_id", checkId).eq("client_id", clientId);
+  const { error } = await supabase.from("checks").delete().eq("id", checkId).eq("client_id", clientId);
+  if (error) redirect(`/staff/clienti/${clientId}/check/${checkId}?errore=eliminazione`);
   if (photos?.length) await createAdminClient().storage.from(CHECK_PHOTOS_BUCKET).remove(photos.flatMap((p) => [p.path, p.thumb_path]));
-  await supabase.from("checks").delete().eq("id", checkId).eq("client_id", clientId);
   await recomputeClientChecks(supabase, clientId);
   revalidatePath(`/staff/clienti/${clientId}`, "layout");
   redirect(`/staff/clienti/${clientId}/check`);

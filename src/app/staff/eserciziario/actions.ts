@@ -10,6 +10,8 @@ import { requireOwner, requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { parseExerciseCsv, type ExerciseRow } from "@/lib/import/exercises";
 import type { ActionState } from "@/components/form-bits";
+import { clearFormDraft } from "@/lib/drafts-server";
+import { changedOnly } from "@/lib/changed-only";
 
 async function importRows(rows: ExerciseRow[]): Promise<ActionState> {
   const supabase = await createClient();
@@ -60,7 +62,7 @@ export async function importBundledExercises(_: ActionState): Promise<ActionStat
 }
 
 export async function saveExercise(id: string | null, _: ActionState, fd: FormData): Promise<ActionState> {
-  await requireStaff();
+  const me = await requireStaff();
   const name = String(fd.get("name") ?? "").trim().replace(/\s+/g, " ");
   const video = String(fd.get("video_url") ?? "").trim();
   if (!name) return { error: "Il nome è obbligatorio." };
@@ -73,10 +75,14 @@ export async function saveExercise(id: string | null, _: ActionState, fd: FormDa
     archived: fd.get("archived") === "on",
   };
   const supabase = await createClient();
+  const patch = id ? changedOnly(fd, row) : row;
   const { data, error } = id
-    ? await supabase.from("exercises").update(row).eq("id", id).select("id").single()
+    ? Object.keys(patch).length
+      ? await supabase.from("exercises").update(patch).eq("id", id).select("id").single()
+      : { data: { id }, error: null }
     : await supabase.from("exercises").insert(row).select("id").single();
   if (error) return { error: error.message.includes("exercises_name_unique") ? "Esiste già un esercizio con questo nome." : "Salvataggio non riuscito." };
+  await clearFormDraft(supabase, me.id, fd);
   invalidateExercises();
   revalidatePath("/staff/eserciziario");
   if (!id) redirect(`/staff/eserciziario/${data!.id}?nuovo=1`);

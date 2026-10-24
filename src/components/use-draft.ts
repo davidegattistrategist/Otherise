@@ -47,24 +47,42 @@ function removeLocal(key: string) {
   }
 }
 
-/** La bozza sul server; con `since` solo se è più nuova (altrimenti "same"). */
-async function readServer<T>(key: string, since = 0): Promise<Stored<T> | null | "same"> {
+/** Bozza cancellata sul server (con l'ora della cancellazione). */
+type Gone = { deleted: number };
+const isGone = (v: unknown): v is Gone => typeof v === "object" && v !== null && "deleted" in v;
+
+/**
+ * La bozza sul server; con `since` solo se è più nuova (altrimenti "same").
+ * "failed" = non si è riusciti a leggere (rete, errore): diverso da "non c'è".
+ */
+async function readServer<T>(key: string, since = 0): Promise<Stored<T> | Gone | null | "same" | "failed"> {
   try {
     const r = await fetch(`/api/bozze?key=${encodeURIComponent(key)}${since ? `&since=${since}` : ""}`, { cache: "no-store" });
     if (r.status === 204) return "same";
-    if (!r.ok) return null;
-    const d = (await r.json()) as { data: T; updated_at: string } | null;
-    return d ? { data: d.data, at: new Date(d.updated_at).getTime() } : null;
+    if (!r.ok) return "failed";
+    const d = (await r.json()) as { data: T; updated_at: string } | Gone | null;
+    if (!d) return null;
+    if (isGone(d)) return d;
+    return { data: d.data, at: new Date(d.updated_at).getTime() };
   } catch {
-    return null;
+    return "failed";
   }
 }
 
-/** La bozza più recente tra telefono e server (null se non ce n'è). */
+/**
+ * La bozza più recente tra telefono e server (null se non ce n'è). Se sul
+ * server la bozza è stata cancellata (salvata davvero, o annullata, anche
+ * dall'altro dispositivo) la copia del telefono va via: non deve tornare nel
+ * modulo settimane dopo.
+ */
 export async function loadDraft<T>(key: string): Promise<Stored<T> | null> {
   const local = readLocal<T>(key);
   const s = await readServer<T>(key);
-  const server = s === "same" ? null : s;
+  if (isGone(s)) {
+    removeLocal(key);
+    return null;
+  }
+  const server = s === "same" || s === "failed" ? null : s;
   if (!local) return server;
   if (!server) return local;
   return local.at > server.at ? local : server;
@@ -145,9 +163,14 @@ export function useDraft<T>(
           : `{"key":${JSON.stringify(k)},"t":${t},"data":${body}}`;
         const r = await fetch("/api/bozze", { method: "POST", body: payload, keepalive: payload.length < 60_000 });
         if (!r.ok) throw new Error();
-        const d = (await r.json()) as { updated_at: string; data?: T };
+        const d = (await r.json()) as { updated_at: string; data?: T; ignored?: boolean };
         serverAt.current = Math.max(serverAt.current, new Date(d.updated_at).getTime());
         if (pending.current === body) pending.current = null;
+        if (d.ignored) {
+          // il server l'ha scartata (bozza cancellata nel frattempo): niente "Salvato"
+          setStatus({ state: "idle", at: null });
+          return;
+        }
         if (isLive && d.data !== undefined && !cleared.current) {
           // il server ha unito anche le modifiche dell'altro dispositivo
           if (takeRemote(sent, d.data)) {
@@ -222,7 +245,11 @@ export function useDraft<T>(
       const body = liveRef.current
         ? JSON.stringify({ key, data, patch: diffDraft(synced.current ?? {}, data), t })
         : `{"key":${JSON.stringify(key)},"t":${t},"data":${pending.current}}`;
-      if (navigator.sendBeacon?.("/api/bozze", new Blob([body], { type: "text/plain" }))) pending.current = null;
+      if (navigator.sendBeacon?.("/api/bozze", new Blob([body], { type: "text/plain" }))) {
+        pending.current = null;
+        // da qui in poi quello che è partito è la base per unire con l'altro dispositivo
+        if (liveRef.current) synced.current = data;
+      }
     };
     const onHidden = () => document.visibilityState === "hidden" && flush();
     const onOnline = () => pending.current && !cleared.current && void send(key);
@@ -247,7 +274,7 @@ export function useDraft<T>(
       busy = true;
       try {
         const s = await readServer<T>(key, serverAt.current);
-        if (!s || s === "same" || s.at <= serverAt.current || sending.current || cleared.current) return;
+        if (!s || s === "same" || s === "failed" || isGone(s) || s.at <= serverAt.current || sending.current || cleared.current) return;
         serverAt.current = s.at;
         writeLocal(key, s.data);
         if (takeRemote(synced.current, s.data)) {
@@ -294,28 +321,28 @@ export function useDraft<T>(
    * finito" su un telefono appena ripreso in mano non salva una versione
    * vecchia. Torna true se il modulo qui è cambiato (va ridisegnato).
    */
-  const syncNow = useCallback(async (): Promise<boolean> => {
-    if (!key || cleared.current) return false;
+  const syncNow = useCallback(async (): Promise<"changed" | "same" | "failed" | "gone"> => {
+    if (!key || cleared.current) return "same";
     if (timer.current) clearTimeout(timer.current);
     // aspetta un invio in corso (massimo 5 secondi)
     for (let i = 0; i < 50 && sending.current; i++) await new Promise((r) => setTimeout(r, 100));
     if (pending.current) await send(key);
     const before = JSON.stringify(valueRef.current);
-    try {
-      const s = await readServer<T>(key, 0);
-      if (s && s !== "same" && !cleared.current) {
-        serverAt.current = Math.max(serverAt.current, s.at);
-        writeLocal(key, s.data);
-        if (takeRemote(synced.current, s.data)) {
-          pending.current = JSON.stringify(valueRef.current);
-          pendingAt.current = pendingAt.current || Date.now();
-          await send(key);
-        }
+    const s = await readServer<T>(key, 0);
+    // non si è letto l'altro dispositivo: meglio fermarsi che salvare una versione vecchia
+    if (s === "failed") return "failed";
+    // la bozza è stata chiusa (salvata o annullata) dall'altro dispositivo
+    if (isGone(s)) return "gone";
+    if (s && s !== "same" && !cleared.current) {
+      serverAt.current = Math.max(serverAt.current, s.at);
+      writeLocal(key, s.data);
+      if (takeRemote(synced.current, s.data)) {
+        pending.current = JSON.stringify(valueRef.current);
+        pendingAt.current = pendingAt.current || Date.now();
+        await send(key);
       }
-    } catch {
-      // senza rete si salva quello che c'è qui
     }
-    return JSON.stringify(valueRef.current) !== before;
+    return JSON.stringify(valueRef.current) !== before ? "changed" : "same";
   }, [key, send, takeRemote]);
 
   return { status, clear, adopt, syncNow };
@@ -337,6 +364,10 @@ export function draftText(s: DraftState): string {
 }
 
 export type FormValues = Record<string, string | boolean | string[]>;
+/** Bozza di un modulo: i valori e com'era il modulo quando è stato aperto. */
+export type FormDraftData = { data: FormValues; base: FormValues | null };
+const isFormDraftData = (v: unknown): v is FormDraftData =>
+  typeof v === "object" && v !== null && "data" in v && "base" in v && typeof (v as FormDraftData).data === "object";
 
 /** Valori di un modulo (testi, scelte, spunte; non i file né i campi nascosti). */
 export function readForm(form: HTMLFormElement): FormValues {
@@ -393,7 +424,7 @@ function writeForm(form: HTMLFormElement, values: FormValues) {
 export function useFormDraft(form: RefObject<HTMLFormElement | null>, name: string) {
   const pathname = usePathname();
   const key = `${pathname}#${name}`;
-  const [values, setValues] = useState<FormValues | null>(null);
+  const [values, setValues] = useState<FormDraftData | null>(null);
   const [restored, setRestored] = useState<number | null>(null);
   const draft = useDraft(key, values, { enabled: values !== null });
   const { adopt, clear } = draft;
@@ -402,41 +433,53 @@ export function useFormDraft(form: RefObject<HTMLFormElement | null>, name: stri
     const f = form.current;
     if (!f) return;
     let alive = true;
+    // com'è arrivato dal server: la bozza ricorda da dove si partiva (`base`), così alla
+    // ripresa si applicano solo i campi che avevi cambiato TU e che il server non ha
+    // cambiato nel frattempo. Prima tornava tutto il modulo di allora, anche i campi
+    // mai toccati, sopra valori più nuovi (23/10: lezioni dell'AI svuotate).
+    const base = readFormDefaults(f);
     const start = readForm(f);
-    void loadDraft<FormValues>(key).then((d) => {
+    void loadDraft<FormDraftData | FormValues>(key).then((d) => {
       if (!alive) return;
-      if (d && JSON.stringify(d.data) !== JSON.stringify(start)) {
-        // una bozza vecchia non svuota mai un campo che sul server è scritto (il 23/10
-        // bozze di qualche giorno prima avevano svuotato le lezioni sulle risposte):
-        // si riprendono solo i campi che nella bozza hanno qualcosa
+      if (d) {
+        const stored = isFormDraftData(d.data) ? d.data : { data: d.data as FormValues, base: null };
+        const typed = readForm(f);
         const keep: FormValues = {};
-        for (const [k, v] of Object.entries(d.data)) {
-          const now = start[k];
-          if (typeof v === "string" && !v.trim() && typeof now === "string" && now.trim()) continue;
-          keep[k] = v;
+        for (const [k, v] of Object.entries(stored.data)) {
+          if (!(k in start)) continue;
+          // intanto hai già scritto qui: quello che hai scritto vale di più
+          if (typed[k] !== start[k]) continue;
+          if (stored.base) {
+            // non era cambiato nella bozza, o il server l'ha cambiato dopo: resta com'è
+            if (stored.base[k] === v || stored.base[k] !== start[k]) continue;
+          } else {
+            // bozza di prima di questa regola: solo un testo scritto in un campo vuoto
+            const now = start[k];
+            if (typeof v !== "string" || !v.trim() || (typeof now === "string" && now.trim()) || typeof now !== "string") continue;
+          }
+          if (v !== start[k]) keep[k] = v;
         }
-        writeForm(f, keep);
-        if (JSON.stringify(readForm(f)) !== JSON.stringify(start)) setRestored(d.at);
+        if (Object.keys(keep).length) {
+          writeForm(f, keep);
+          setRestored(d.at);
+        } else if (!sameDraft(stored.data, readForm(f))) {
+          // niente da riprendere: la bozza è vecchia o uguale, via
+          clear();
+        }
       }
       const now = readForm(f);
-      adopt(now, d?.at);
-      setValues(now);
+      adopt({ data: now, base }, d?.at);
+      setValues({ data: now, base });
     });
-    const onInput = () => setValues(readForm(f));
-    const onSubmit = () => {
-      if (navigator.onLine) {
-        clear();
-        setRestored(null);
-      }
-    };
+    const onInput = () => setValues({ data: readForm(f), base });
     f.addEventListener("input", onInput);
     f.addEventListener("change", onInput);
-    f.addEventListener("submit", onSubmit);
+    // all'invio la bozza NON si cancella: resta finché il salvataggio non è riuscito
+    // davvero (markSaved), così un errore del server o della rete non perde il testo
     return () => {
       alive = false;
       f.removeEventListener("input", onInput);
       f.removeEventListener("change", onInput);
-      f.removeEventListener("submit", onSubmit);
     };
   }, [form, key, adopt, clear]);
 
@@ -447,17 +490,24 @@ export function useFormDraft(form: RefObject<HTMLFormElement | null>, name: stri
     if (f) {
       f.reset();
       const now = readForm(f);
-      adopt(now);
-      setValues(now);
+      adopt({ data: now, base: readFormDefaults(f) });
+      setValues({ data: now, base: readFormDefaults(f) });
     }
     setRestored(null);
   };
 
-  /** Salvato davvero (salvataggio automatico sul server): la bozza non serve più. */
+  /** Salvato davvero (salvataggio automatico sul server, o azione riuscita): la bozza non serve più. */
   const markSaved = useCallback(() => {
     clear();
     setRestored(null);
   }, [clear]);
 
-  return { status: draft.status, restored, discard, markSaved };
+  /** Dopo un errore dell'azione (React 19 svuota il modulo): rimette quello che avevi scritto. */
+  const restoreTyped = () => {
+    const f = form.current;
+    const v = values?.data;
+    if (f && v) writeForm(f, v);
+  };
+
+  return { status: draft.status, restored, discard, markSaved, restoreTyped };
 }

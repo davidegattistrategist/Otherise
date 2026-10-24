@@ -1,6 +1,6 @@
 "use server";
 
-import { recomputeClientChecks } from "@/lib/data/checks";
+import { recomputeClientChecks, refreshCheckAges } from "@/lib/data/checks";
 import { revalidatePath } from "next/cache";
 import { linkAllowedForRole } from "@/lib/invite-link";
 import { friendlyError } from "@/lib/friendly-error";
@@ -14,6 +14,8 @@ import { siteUrl } from "@/lib/site";
 import { isISODate, todayISO } from "@/lib/dates";
 import type { ActionState } from "@/components/form-bits";
 import type { TablesUpdate } from "@/lib/supabase/database.types";
+import { clearFormDraft } from "@/lib/drafts-server";
+import { changedFields, changedOnly } from "@/lib/changed-only";
 
 const clientSchema = z.object({
   first_name: z.string().trim().min(1, "Il nome è obbligatorio"),
@@ -58,6 +60,7 @@ export async function createClientAction(_: ActionState, fd: FormData): Promise<
   const coachId = me.role === "owner" ? (String(fd.get("coach_id") ?? "") || null) : me.id;
   const { data, error } = await supabase.from("clients").insert({ ...parsed.data, coach_id: coachId }).select("id").single();
   if (error || !data) return { error: dbError(error?.message ?? "") };
+  await clearFormDraft(supabase, me.id, fd);
   if (fd.get("invite_now") === "on" && parsed.data.email) {
     const res = await sendInvite(data.id);
     if (res?.error) redirect(`/staff/clienti/${data.id}/profilo?invito=errore`);
@@ -72,21 +75,32 @@ export async function updateClientAction(clientId: string, _: ActionState, fd: F
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const supabase = await createClient();
   const { data: before } = await supabase.from("clients").select("email, user_id, birth_date, sex").eq("id", clientId).maybeSingle();
-  const update: TablesUpdate<"clients"> = { ...parsed.data };
+  const full: TablesUpdate<"clients"> = { ...parsed.data };
   // "Inizio percorso" lasciato vuoto in una modifica: resta la data di prima (non diventa oggi)
-  if (!String(fd.get("start_date") ?? "").trim()) delete update.start_date;
-  if (me.role === "owner") update.coach_id = String(fd.get("coach_id") ?? "") || null;
-  const { error } = await supabase.from("clients").update(update).eq("id", clientId);
-  if (error) return { error: dbError(error.message) };
-  // data di nascita o sesso cambiati: la % di grasso dei check va rifatta
-  if (before && ((before.birth_date ?? null) !== (parsed.data.birth_date ?? null) || (before.sex ?? null) !== (parsed.data.sex ?? null))) await recomputeClientChecks(supabase, clientId);
+  if (!String(fd.get("start_date") ?? "").trim()) delete full.start_date;
+  if (me.role === "owner") full.coach_id = String(fd.get("coach_id") ?? "") || null;
+  // salvataggio live: solo i campi cambiati su questo dispositivo
+  const update = changedOnly(fd, full as Record<string, unknown>) as TablesUpdate<"clients">;
+  if (Object.keys(update).length) {
+    const { error } = await supabase.from("clients").update(update).eq("id", clientId);
+    if (error) return { error: dbError(error.message) };
+  }
+  // data di nascita o sesso cambiati: la % di grasso dei check va rifatta (e l'età scritta nei check con la data)
+  if (before && ((before.birth_date ?? null) !== (parsed.data.birth_date ?? null) || (before.sex ?? null) !== (parsed.data.sex ?? null))) {
+    if ("birth_date" in update || "sex" in update) {
+      if (update.birth_date) await refreshCheckAges(supabase, clientId, update.birth_date);
+      await recomputeClientChecks(supabase, clientId);
+    }
+  }
   const notes = fd.get("private_notes");
-  if (notes !== null) {
-    await supabase.from("client_private_notes").upsert({ client_id: clientId, notes: String(notes), updated_at: new Date().toISOString() });
+  const changed = changedFields(fd);
+  if (notes !== null && (!changed || changed.has("private_notes"))) {
+    const { error: notesError } = await supabase.from("client_private_notes").upsert({ client_id: clientId, notes: String(notes), updated_at: new Date().toISOString() });
+    if (notesError) return { error: "Le note riservate non sono state salvate: riprova." };
   }
   // email corretta dopo un invito mai usato: l'account con l'email sbagliata non serve più
   let note = "";
-  if (before?.user_id && (before.email ?? "") !== (parsed.data.email ?? "")) {
+  if (before?.user_id && "email" in update && (before.email ?? "") !== (parsed.data.email ?? "")) {
     const dropped = await dropUnusedAccount(before.user_id, parsed.data.email);
     if (dropped) note = parsed.data.email ? " L'invito mandato alla vecchia email non vale più: premi “Invia invito” per mandarlo a quella nuova." : "";
   }

@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useFormDraft, type DraftState } from "./use-draft";
+import { usePathname } from "next/navigation";
 import { cx } from "./ui";
 
 const hm = (at: number | null) => (at ? new Date(at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "");
@@ -43,8 +44,36 @@ export function DraftNote({ status, restored, onDiscard, className, dark, confir
  * Salvataggio automatico di un modulo semplice: basta mettere questo
  * componente dentro (o accanto) al modulo con il suo ref.
  */
-export function FormDraft({ form, name, className }: { form: RefObject<HTMLFormElement | null>; name: string; className?: string }) {
+export function FormDraft({
+  form,
+  name,
+  className,
+  error,
+  saved,
+}: {
+  form: RefObject<HTMLFormElement | null>;
+  name: string;
+  className?: string;
+  /** l'azione ha risposto con un errore: React 19 svuota il modulo, qui si rimette quello che avevi scritto */
+  error?: string | null;
+  /** l'azione è riuscita senza cambiare pagina: la bozza non serve più */
+  saved?: boolean;
+}) {
   const d = useFormDraft(form, name);
+  const { markSaved } = d;
+  const restoreRef = useRef(d.restoreTyped);
+  useEffect(() => {
+    restoreRef.current = d.restoreTyped;
+  });
+  const pathname = usePathname();
+  useEffect(() => {
+    if (!error) return;
+    const id = requestAnimationFrame(() => restoreRef.current());
+    return () => cancelAnimationFrame(id);
+  }, [error]);
+  useEffect(() => {
+    if (saved) markSaved();
+  }, [saved, markSaved]);
   // il nome del pulsante del modulo ("Salva", "Salva la sessione"…), così la riga dice cosa premere
   const [confirm, setConfirm] = useState("Salva");
   useEffect(() => {
@@ -70,6 +99,8 @@ export function FormDraft({ form, name, className }: { form: RefObject<HTMLFormE
   }, [form, d.restored]);
   return (
     <>
+      {/* l'azione, se riesce, cancella la bozza sul server (clearFormDraft) anche cambiando pagina */}
+      <input type="hidden" name="__draft_key" value={`${pathname}#${name}`} />
       <DraftNote status={d.status} restored={d.restored} onDiscard={d.discard} className={className} confirm={confirm} />
       {top && d.restored
         ? createPortal(
