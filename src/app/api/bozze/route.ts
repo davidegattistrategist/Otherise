@@ -79,7 +79,8 @@ export async function POST(req: NextRequest) {
     .eq("user_id", me.id)
     .eq("key", body.key)
     .or(`data->__deleted.is.null,data->__deleted.lt.${t}`)
-    .select("key");
+    // (PostgREST: con un filtro su `data->…` la colonna `data` deve stare anche nel select)
+    .select("key, data");
   if (error) return NextResponse.json({ error: "Non salvata" }, { status: 500 });
   if (!upd?.length) {
     const { error: insErr } = await supabase.from("drafts").upsert({ user_id: me.id, key: body.key, data, updated_at }, { onConflict: "user_id,key", ignoreDuplicates: true });

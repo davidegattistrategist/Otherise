@@ -307,6 +307,26 @@ export function useDraft<T>(
     setStatus({ state: "idle", at: null });
   }, [key]);
 
+  /**
+   * Dopo `clear` fatto in anticipo (es. la bozza del messaggio si cancella appena
+   * tocchi Invia, così chiudendo l'app subito dopo non torna): se poi l'invio non
+   * riesce, il testo che è ancora nella casella torna a essere salvato come bozza.
+   */
+  const keep = useCallback(() => {
+    if (!key) return;
+    cleared.current = false;
+    wantClear.current = null;
+    const v = valueRef.current;
+    if (isEmpty.current?.(v)) return;
+    const json = JSON.stringify(v);
+    lastJson.current = json;
+    writeLocal(key, v);
+    pending.current = json;
+    pendingAt.current = Date.now();
+    setStatus((s) => (s.state === "local" ? s : { state: "saving", at: s.at }));
+    void send(key);
+  }, [key, send]);
+
   /** dopo aver ripreso una bozza: quel valore è il nuovo punto di partenza */
   const adopt = useCallback((v: T, at?: number) => {
     lastJson.current = JSON.stringify(v);
@@ -345,7 +365,7 @@ export function useDraft<T>(
     return JSON.stringify(valueRef.current) !== before ? "changed" : "same";
   }, [key, send, takeRemote]);
 
-  return { status, clear, adopt, syncNow };
+  return { status, clear, keep, adopt, syncNow };
 }
 
 /** "Salvato in automatico alle 15:42" sotto il modulo. */

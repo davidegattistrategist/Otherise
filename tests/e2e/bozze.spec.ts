@@ -50,11 +50,14 @@ test("bozza di risposta in chat: una sola risposta per punti, si usa e si correg
   await box.press("End");
   await box.pressSequentially(` ${tag}`);
   await owner.getByRole("button", { name: "Invia" }).click();
-  await expect(owner.getByText(new RegExp(`insieme ${tag}`)).filter({ visible: true }).first()).toBeVisible();
+  // il messaggio nella conversazione (getByText prende anche la casella di testo: si esclude)
+  const bubble = (p: Page) => p.getByText(new RegExp(`insieme ${tag}`)).and(p.locator(":not(textarea)")).filter({ visible: true }).first();
+  await expect(bubble(owner)).toBeVisible();
+  await expect(owner.locator("textarea")).toHaveValue("");
 
   // dopo l'invio la bozza non torna, e nemmeno il testo inviato nella casella
   await owner.reload();
-  await expect(owner.getByText(new RegExp(`insieme ${tag}`)).filter({ visible: true }).first()).toBeVisible();
+  await expect(bubble(owner)).toBeVisible();
   await expect(owner.getByLabel("Bozza di risposta")).toHaveCount(0);
   await owner.waitForTimeout(1500);
   await expect(owner.locator("textarea")).toHaveValue("");
@@ -89,7 +92,7 @@ test("su richiesta: 'Scrivo da zero' toglie la bozza, 'Prepara una bozza' la rif
   await expect(card).toHaveCount(0);
   await owner.locator("textarea").fill(`Brava, avanti così ${tag}`);
   await owner.getByRole("button", { name: "Invia" }).click();
-  await expect(owner.getByText(`Brava, avanti così ${tag}`)).toBeVisible();
+  await expect(owner.getByText(`Brava, avanti così ${tag}`).and(owner.locator(":not(textarea)"))).toBeVisible();
 
   // la bozza riscritta da zero insegna: lezioni generali in Impostazioni e su Giulia nella sua scheda
   await expect(async () => {

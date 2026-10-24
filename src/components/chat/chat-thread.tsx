@@ -82,7 +82,7 @@ export function ChatThread({
   const [text, setText] = useState(prefill ?? "");
   // quello che stai scrivendo resta anche se chiudi l'app (si cancella all'invio)
   const textDraftKey = `chat:${clientId}`;
-  const { adopt: adoptText, clear: clearTextDraft } = useDraft(textDraftKey, text, { isEmpty: (t) => !t.trim() });
+  const { adopt: adoptText, clear: clearTextDraft, keep: keepTextDraft } = useDraft(textDraftKey, text, { isEmpty: (t) => !t.trim() });
   useEffect(() => {
     let alive = true;
     void loadDraft<string>(textDraftKey).then((d) => {
@@ -430,6 +430,20 @@ export function ChatThread({
     };
   }, [busyWithMedia]);
 
+  // la pagina si sta chiudendo (ricaricata, chiusa, altra pagina)
+  const leaving = useRef(false);
+  useEffect(() => {
+    const mark = () => {
+      leaving.current = true;
+    };
+    window.addEventListener("pagehide", mark);
+    window.addEventListener("beforeunload", mark);
+    return () => {
+      window.removeEventListener("pagehide", mark);
+      window.removeEventListener("beforeunload", mark);
+    };
+  }, []);
+
   const send = async () => {
     if (sending) return;
     const body = text.trim();
@@ -438,6 +452,10 @@ export function ChatThread({
     setSending(true);
     setError(null);
     stick.current = true;
+    // il messaggio parte: la bozza del testo si cancella SUBITO (se chiudi l'app un attimo dopo
+    // aver toccato Invia, il messaggio arriva e il testo non torna nella casella); se l'invio
+    // non riesce, il testo è ancora qui e torna a essere salvato come bozza (`keepTextDraft`)
+    if (body) clearTextDraft();
     try {
       const attachments: ChatAttachment[] = [];
       for (const p of pending) {
@@ -450,11 +468,8 @@ export function ChatThread({
       uploads.current.clear();
       const res = await sendMessage(clientId, { body, attachments, draftId: usedDraft });
       if (!res.ok) throw new Error(res.error);
-      // il messaggio è partito davvero: la bozza non serve più (prima che il messaggio compaia:
-      // se la pagina viene chiusa o ricaricata subito dopo, la cancellazione è già partita).
-      // Se intanto hai scritto altro nella casella (un video sale anche un minuto), quello resta
-      if (body) clearTextDraft();
       merge([res.message], [], {}, false);
+      // se intanto hai scritto altro nella casella (un video sale anche un minuto), quello resta
       setText((cur) => (cur.trim() === body ? "" : cur.startsWith(body) ? cur.slice(body.length).trimStart() : cur));
       if (inputRef.current) inputRef.current.style.height = "auto";
       if (body && draft) setDraft(null);
@@ -462,6 +477,8 @@ export function ChatThread({
       pending.forEach((p) => URL.revokeObjectURL(p.preview));
       setPending([]);
     } catch (e) {
+      // pagina chiusa mentre il messaggio partiva: quasi sempre è arrivato, il testo non si rimette in bozza
+      if (body && !leaving.current) keepTextDraft();
       setError(friendlyError(e, "Invio non riuscito: riprova."));
     } finally {
       setSending(false);
