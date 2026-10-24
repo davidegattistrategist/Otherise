@@ -29,14 +29,17 @@ export async function notify(items: NewNotification[], opts: { push?: boolean } 
   for (let i = 0; i < keyed.length; i += 200) {
     const chunk = keyed.slice(i, i + 200);
     // le notifiche già mandate (stessa chiave) vengono saltate: tornano solo quelle nuove
-    const { data } = await admin.from("notifications").upsert(chunk.map(full), { onConflict: "recipient_id,dedupe_key", ignoreDuplicates: true }).select("recipient_id, dedupe_key");
+    const { data, error } = await admin.from("notifications").upsert(chunk.map(full), { onConflict: "recipient_id,dedupe_key", ignoreDuplicates: true }).select("recipient_id, dedupe_key");
+    // una notifica che non si salva non blocca chi l'ha generata, ma deve restare nei registri
+    if (error) console.error("notifiche non salvate:", error.message, chunk.map((n) => n.kind).join(","));
     const fresh = new Set((data ?? []).map((r) => `${r.recipient_id}|${r.dedupe_key}`));
     created.push(...chunk.filter((n) => fresh.has(`${n.recipient_id}|${n.dedupe_key}`)));
   }
   for (let i = 0; i < plain.length; i += 200) {
     const chunk = plain.slice(i, i + 200);
     const { error } = await admin.from("notifications").insert(chunk.map(full));
-    if (!error) created.push(...chunk);
+    if (error) console.error("notifiche non salvate:", error.message, chunk.map((n) => n.kind).join(","));
+    else created.push(...chunk);
   }
   if (opts.push === false || created.length === 0) return;
   await pushLater(() =>

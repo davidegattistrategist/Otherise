@@ -9,6 +9,8 @@ import { expect, test, type Page } from "@playwright/test";
 const PASS = "Password-di-prova-123";
 
 async function login(page: Page, email: string) {
+  // togliere una pesata chiede conferma
+  page.on("dialog", (d) => d.accept());
   await page.goto("/login");
   await page.fill("input[name=email]", email);
   await page.fill("input[name=password]", PASS);

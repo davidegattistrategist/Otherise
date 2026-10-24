@@ -84,12 +84,12 @@ export function ChatThread({
   const textDraftKey = `chat:${clientId}`;
   const { adopt: adoptText, clear: clearTextDraft } = useDraft(textDraftKey, text, { isEmpty: (t) => !t.trim() });
   useEffect(() => {
-    if (prefill) return;
     let alive = true;
     void loadDraft<string>(textDraftKey).then((d) => {
       if (!alive || !d || typeof d.data !== "string" || !d.data.trim()) return;
       adoptText(d.data, d.at);
-      setText((t) => t || d.data);
+      // con un testo già pronto (promemoria) quello che stavi scrivendo non si butta: resta sopra
+      setText((t) => (prefill ? (t === prefill && !d.data.includes(prefill) ? `${d.data.trimEnd()}\n\n${prefill}` : t) : t || d.data));
     });
     return () => {
       alive = false;

@@ -193,6 +193,22 @@ describe.skipIf(!run)("permessi", () => {
     expect(data!.coach_reply).toBe("Ne parliamo giovedì");
   });
 
+  it("diario già guardato e poi modificato dal cliente: torna da guardare (24/10)", async () => {
+    // il cliente può correggere solo il diario dell'ultima settimana
+    const weekStart = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const { data: ci } = await clientA.from("checkins").insert({ client_id: clientAId, week_start: weekStart, training: 4, sleep: 2, stress: 4, adherence: 4 }).select("id").single().throwOnError();
+    await coach.from("checkins").update({ coach_reply: "Ne parliamo giovedì", reviewed_at: new Date().toISOString() }).eq("id", ci!.id).throwOnError();
+    // il cliente salva senza cambiare niente: resta visto
+    await clientA.from("checkins").update({ training: 4 }).eq("id", ci!.id).throwOnError();
+    expect((await admin.from("checkins").select("reviewed_at").eq("id", ci!.id).single()).data!.reviewed_at).not.toBeNull();
+    // cambia una risposta (e prova a togliere la risposta del trainer): la revisione si azzera, la risposta resta
+    await clientA.from("checkins").update({ issues: "ginocchio", coach_reply: null, reviewed_at: new Date().toISOString() }).eq("id", ci!.id).throwOnError();
+    const { data } = await admin.from("checkins").select("reviewed_at, coach_reply, issues").eq("id", ci!.id).single();
+    expect(data!.reviewed_at).toBeNull();
+    expect(data!.coach_reply).toBe("Ne parliamo giovedì");
+    expect(data!.issues).toBe("ginocchio");
+  });
+
   it("un diario tranquillo non manda avvisi", async () => {
     const before = (await owner.from("notifications").select("id")).data!.length;
     await clientA.from("checkins").insert({

@@ -194,14 +194,16 @@ function WeightList({ entries, clientId, canEdit }: { entries: WeightEntry[]; cl
                   disabled={pending}
                   aria-label={`Togli il peso del ${formatShort(e.date)}`}
                   className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-sand hover:text-ink"
-                  onClick={() =>
+                  onClick={() => {
+                    // una pesata si toglie con un tocco: meglio chiedere (un dito sbagliato nell'elenco la perderebbe)
+                    if (!window.confirm(`Togliere il peso del ${formatShort(e.date)} (${fmtNum(e.kg, 2)} kg)?`)) return;
                     start(async () => {
                       setError(null);
                       const r = await deleteWeight({ clientId, date: e.date });
                       if (!r.ok) setError(r.error);
                       else router.refresh();
-                    })
-                  }
+                    });
+                  }}
                 >
                   <IconX size={14} />
                 </button>
