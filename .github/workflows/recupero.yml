@@ -1,0 +1,108 @@
+# Recupero dai backup notturni (lanciato a mano da Actions → Recupero dai backup).
+# Decifra i backup scelti, li ricarica su un database di prova e copia nel
+# database vero, nello schema privato "recupero" (non raggiungibile dall'app né
+# dal browser), i check e le bozze dei check com'erano quella notte. Non cambia
+# niente nei dati dell'app: da lì si confronta e si rimette a posto con calma.
+name: Recupero dai backup
+
+on:
+  workflow_dispatch:
+    inputs:
+      backups:
+        description: "Numeri dei backup (es. 16,17,18)"
+        required: true
+        default: "16,17,18"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  recupero:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      prova:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: prova
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      SOURCE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      GH_TOKEN: ${{ github.token }}
+      BACKUPS: ${{ inputs.backups }}
+    steps:
+      - name: Strumenti di Postgres 17
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 > /dev/null
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Schema privato nel database vero
+        run: |
+          psql "$SOURCE_URL" -q -v ON_ERROR_STOP=1 <<'SQL'
+          create schema if not exists recupero;
+          revoke all on schema recupero from public;
+          do $$ begin
+            if exists (select 1 from pg_roles where rolname = 'anon') then execute 'revoke all on schema recupero from anon'; end if;
+            if exists (select 1 from pg_roles where rolname = 'authenticated') then execute 'revoke all on schema recupero from authenticated'; end if;
+          end $$;
+          create table if not exists recupero.righe (
+            backup text not null,
+            kind text not null,
+            ref text not null,
+            data jsonb not null,
+            copied_at timestamptz not null default now(),
+            primary key (backup, kind, ref)
+          );
+          SQL
+
+      - name: Decifra, ricarica e copia
+        run: |
+          set -euo pipefail
+          T=postgresql://postgres:prova@localhost:5432
+          for n in ${BACKUPS//,/ }; do
+            echo "== backup-$n"
+            run=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=backup-$n" --jq '.artifacts[0].id')
+            gh api "repos/${{ github.repository }}/actions/artifacts/$run/zip" > "b$n.zip"
+            unzip -o -q "b$n.zip" -d "b$n"
+            f=$(ls b$n/*.gpg | head -1)
+            gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 -o "b$n.dump" -d "$f" 3<<<"$BACKUP_PASSPHRASE"
+            psql "$T/postgres" -qc "drop database if exists r$n" -qc "create database r$n"
+            psql "$T/r$n" -q <<'SQL'
+          do $$ begin
+            if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
+            if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
+            if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin bypassrls; end if;
+            if not exists (select 1 from pg_roles where rolname = 'authenticator') then create role authenticator nologin; end if;
+            if not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then create role supabase_auth_admin nologin; end if;
+            if not exists (select 1 from pg_roles where rolname = 'supabase_admin') then create role supabase_admin nologin; end if;
+            if not exists (select 1 from pg_roles where rolname = 'dashboard_user') then create role dashboard_user nologin; end if;
+          end $$;
+          create schema if not exists extensions;
+          create extension if not exists pgcrypto with schema extensions;
+          create extension if not exists "uuid-ossp" with schema extensions;
+          SQL
+            pg_restore -d "$T/r$n" --no-owner --no-privileges "b$n.dump" 2> /dev/null || true
+            day=$(basename "$f" | sed -E 's/otherise-([0-9-]+)\.dump\.gpg/\1/')
+            psql "$T/r$n" -Atq -c "\copy (
+              select '$day', 'check', k.id::text, to_jsonb(k) from public.checks k where k.created_at > '2026-10-12'
+              union all
+              select '$day', 'draft', d.user_id::text || ' ' || d.key, to_jsonb(d) from public.drafts d where d.key like 'check%' or d.key = 'modalita-check'
+            ) to 'r$n.csv' with (format csv)"
+            echo "righe: $(wc -l < r$n.csv)"
+            psql "$SOURCE_URL" -q -v ON_ERROR_STOP=1 \
+              -c "create temp table t (backup text, kind text, ref text, data jsonb)" \
+              -c "\copy t from 'r$n.csv' with (format csv)" \
+              -c "insert into recupero.righe (backup, kind, ref, data) select backup, kind, ref, data from t on conflict (backup, kind, ref) do update set data = excluded.data, copied_at = now()"
+            rm -f "b$n.dump" "b$n.zip" "r$n.csv"; rm -rf "b$n"
+          done
+          psql "$SOURCE_URL" -Atqc "select backup, kind, count(*) from recupero.righe group by 1,2 order by 1,2"

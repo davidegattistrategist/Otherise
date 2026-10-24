@@ -201,7 +201,12 @@ export function CheckForm({
   // modalità check) il modulo resta com'è. In modalità check la bozza è il
   // check in corso, quindi niente avviso "Ho ripreso…".
   const startRef = useRef(start);
+  // check già salvato fuori dalla modalità check: quello salvato è la versione giusta.
+  // Una bozza rimasta (per esempio da quando lo scrivevi in modalità check) NON si riprende:
+  // con il salvataggio automatico finirebbe sopra il check e cancellerebbe appunti e test.
+  const savedCheck = Boolean(checkId) && !live;
   useEffect(() => {
+    if (savedCheck) return;
     let alive = true;
     void loadDraft<CheckFormData>(key).then((d) => {
       if (!alive || !d) return;
@@ -216,7 +221,7 @@ export function CheckForm({
     return () => {
       alive = false;
     };
-  }, [key, adopt, live]);
+  }, [key, adopt, live, savedCheck]);
 
   // solo le foto di questo check (una bozza rimasta da un check annullato può averne di un'altra cartella)
   const pendingList = Object.values(f.photos ?? {}).filter((p) => photoFolder && p.path.startsWith(`${clientId}/${photoFolder}/`)).sort((a, b) => a.at - b.at);

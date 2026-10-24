@@ -1,6 +1,7 @@
 import { requireStaff } from "@/lib/auth";
 import { AiJobsButton } from "@/components/ai-jobs";
 import { NavBehavior } from "@/components/nav-behavior";
+import { LocalDraftRescue } from "@/components/local-draft-rescue";
 import { getBusinessName } from "@/lib/data/shared";
 import { createClient } from "@/lib/supabase/server";
 import { StaffNav, type NavItem } from "@/components/staff-nav";
@@ -65,6 +66,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       </header>
       <Toaster />
       <NavBehavior />
+      <LocalDraftRescue />
       <StaffMobileNav main={mainMobile} more={moreMobile} signOut={signOut} who={`${me.fullName} · ${owner ? "Titolare" : "Collaboratore"}`} />
       <aside className="box-border hidden w-full flex-col gap-6 border-b border-sand-deep px-4 py-5 lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-[260px] lg:border-r lg:border-b-0 lg:px-5 lg:py-8">
         <div className="flex items-center justify-between gap-2.5 px-2">
