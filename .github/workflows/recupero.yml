@@ -97,6 +97,16 @@ jobs:
               select '$day', 'check', k.id::text, to_jsonb(k) from public.checks k where k.created_at > '2026-10-12'
               union all
               select '$day', 'draft', d.user_id::text || ' ' || d.key, to_jsonb(d) from public.drafts d where d.key like 'check%' or d.key = 'modalita-check'
+              union all
+              select '$day', 'client', c.id::text, to_jsonb(c) from public.clients c
+              union all
+              select '$day', 'ai_profile', p.client_id::text, to_jsonb(p) from public.client_ai_profiles p
+              union all
+              select '$day', 'posture', p.id::text, to_jsonb(p) from public.posture_assessments p where p.created_at > '2026-10-12'
+              union all
+              select '$day', 'pt_session', s.id::text, to_jsonb(s) from public.pt_sessions s where s.created_at > '2026-10-12'
+              union all
+              select '$day', 'project', p.client_id::text, to_jsonb(p) from public.client_projects p
             ) to 'r$n.csv' with (format csv)"
             echo "righe: $(wc -l < r$n.csv)"
             psql "$SOURCE_URL" -q -v ON_ERROR_STOP=1 \
