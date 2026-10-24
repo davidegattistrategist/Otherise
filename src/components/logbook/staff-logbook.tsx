@@ -5,11 +5,12 @@
  * scala" e le note della lezione). Chiudendo l'allenamento si salvano insieme
  * l'allenamento e la sessione PT: un passo solo.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Logbook, type LogbookProps } from "./logbook";
 import { DictateButton } from "@/components/dictate-button";
 import { NoteArea } from "@/components/note-area";
 import { savePtFromWorkout } from "@/app/staff/clienti/[id]/sessioni/actions";
+import { loadDraft, useDraft } from "@/components/use-draft";
 
 export function StaffLogbook({
   clientId,
@@ -23,9 +24,30 @@ export function StaffLogbook({
   const [counts, setCounts] = useState(pt.counts);
   const [notes, setNotes] = useState(pt.notes);
   const source = `${props.programId}:${props.week}:${props.day.id}`;
+  // le note della lezione si tengono in bozza mentre scrivi (prima restavano solo in memoria:
+  // un'app ricaricata a metà lezione le perdeva); sparisce quando la sessione è salvata
+  const draftKey = `pt-note:${source}`;
+  const draft = useDraft(draftKey, { notes, isPt, counts }, { isEmpty: (v) => !v.notes.trim() && v.isPt === pt.checked && v.counts === pt.counts });
+  const { adopt, clear } = draft;
+  useEffect(() => {
+    let alive = true;
+    void loadDraft<{ notes: string; isPt: boolean; counts: boolean }>(draftKey).then((d) => {
+      if (!alive || !d?.data) return;
+      adopt(d.data, d.at);
+      // un testo nella bozza vale più di quello caricato (è più recente); vuoto non cancella niente
+      if (d.data.notes.trim()) setNotes(d.data.notes);
+      setIsPt(d.data.isPt);
+      setCounts(d.data.counts);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [draftKey, adopt]);
 
-  const beforeFinish = async () => {
-    const r = await savePtFromWorkout(clientId, { source, date: props.today, notes, countsTowardPackage: counts, isPt });
+  const beforeFinish = async ({ performedOn }: { performedOn: string }) => {
+    // la sessione PT ha la data dell'allenamento (registrato oggi per un altro giorno: quella)
+    const r = await savePtFromWorkout(clientId, { source, date: performedOn || props.today, notes, countsTowardPackage: counts, isPt });
+    if (r.ok) clear();
     return r.ok ? null : r.error;
   };
 

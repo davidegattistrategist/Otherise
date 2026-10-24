@@ -61,6 +61,13 @@ const inputSchema = z.object({
       resultText: z.string().max(1000),
     }),
   ).max(80),
+  /**
+   * Esercizi toccati su QUESTO dispositivo (diversi da com'erano all'apertura): solo
+   * questi si scrivono o si cancellano. Così il telefono del cliente e quello del
+   * trainer, aperti sullo stesso allenamento, non si cancellano le serie a vicenda.
+   * Senza (app vecchia) si scrive tutto come prima.
+   */
+  touchedItems: z.array(z.string().min(1).max(40)).max(80).optional(),
 });
 
 export type SaveWorkoutInput = z.infer<typeof inputSchema>;
@@ -95,9 +102,14 @@ export async function saveWorkout(raw: SaveWorkoutInput): Promise<SaveWorkoutRes
   // "Iniziato" oggi e sembra fatto un allenamento in più.
   const empty = !input.completed && !discomfort && !input.notes.trim() && input.items.every((it) => !it.resultText.trim() && it.sets.every((x) => (x.kg ?? null) === null && (x.reps ?? null) === null && !x.done));
   if (empty && !before?.completed) {
-    if (before) await supabase.from("workout_logs").delete().eq("id", before.id);
+    if (before) {
+      // la riga si toglie solo se davvero vuota anche sul server (un altro dispositivo può averci scritto)
+      const { count } = await supabase.from("exercise_logs").select("id", { count: "exact", head: true }).eq("workout_log_id", before.id);
+      if (!count) await supabase.from("workout_logs").delete().eq("id", before.id);
+    }
     return { ok: true, savedAt: new Date().toISOString() };
   }
+  const touched = input.touchedItems ? new Set(input.touchedItems) : null;
   const { data: log, error } = await supabase
     .from("workout_logs")
     .upsert(
@@ -117,6 +129,8 @@ export async function saveWorkout(raw: SaveWorkoutInput): Promise<SaveWorkoutRes
   for (const it of input.items) {
     const item = items.get(it.itemId);
     if (!item) continue;
+    // non toccato qui: resta com'è sul server (anche se da qui sembra vuoto)
+    if (touched && !touched.has(it.itemId)) continue;
     const sets = it.sets.map((s) => ({ kg: s.kg ?? null, reps: s.reps ?? null, ...(s.done ? { done: true } : {}) }));
     const hasData = sets.some((s) => s.kg !== null || s.reps !== null || s.done) || it.resultText.trim();
     if (!hasData) {

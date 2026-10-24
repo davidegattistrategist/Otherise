@@ -160,7 +160,10 @@ export function ChatThread({
     }
   };
 
-  const merge = useCallback((incoming: ChatMessage[], deleted: string[] = [], transcripts: Record<string, Transcript> = {}) => {
+  // `advance`: sposta il punto da cui l'aggiornamento automatico legge i messaggi nuovi. Dopo un
+  // invio NON si sposta: un messaggio dell'altra persona arrivato un attimo prima del mio
+  // (con `created_at` più vecchio) altrimenti non comparirebbe mai senza ricaricare
+  const merge = useCallback((incoming: ChatMessage[], deleted: string[] = [], transcripts: Record<string, Transcript> = {}, advance = true) => {
     setMessages((cur) => {
       const byId = new Map(cur.map((m) => [m.id, m]));
       for (const m of incoming) byId.set(m.id, m);
@@ -173,7 +176,7 @@ export function ChatThread({
         if (m) byId.set(id, { ...m, deleted: true, body: "", attachments: [] });
       }
       const all = [...byId.values()].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
-      if (all.length) lastAt.current = all[all.length - 1].createdAt;
+      if (advance && all.length) lastAt.current = all[all.length - 1].createdAt;
       return all;
     });
   }, []);
@@ -435,8 +438,6 @@ export function ChatThread({
     setSending(true);
     setError(null);
     stick.current = true;
-    // il messaggio parte: la bozza non serve più (se l'invio non riesce il testo resta nella casella)
-    if (body) clearTextDraft();
     try {
       const attachments: ChatAttachment[] = [];
       for (const p of pending) {
@@ -449,8 +450,11 @@ export function ChatThread({
       uploads.current.clear();
       const res = await sendMessage(clientId, { body, attachments, draftId: usedDraft });
       if (!res.ok) throw new Error(res.error);
-      merge([res.message]);
-      setText("");
+      merge([res.message], [], {}, false);
+      // il messaggio è partito davvero: la bozza non serve più. Se intanto hai scritto altro
+      // nella casella (un video sale anche un minuto), quello resta
+      if (body) clearTextDraft();
+      setText((cur) => (cur.trim() === body ? "" : cur.startsWith(body) ? cur.slice(body.length).trimStart() : cur));
       if (inputRef.current) inputRef.current.style.height = "auto";
       if (body && draft) setDraft(null);
       setUsedDraft(null);
@@ -472,9 +476,12 @@ export function ChatThread({
     }
   };
 
-  async function sendVoice() {
-    const rec = await voice.stop(true);
-    if (!rec) return;
+  // vocale registrato ma non partito (rete): resta qui con "Riprova", non si riregistra
+  const [failedVoice, setFailedVoice] = useState<{ blob: Blob; type: string; seconds: number; path?: string } | null>(null);
+  async function sendVoice(again?: { blob: Blob; type: string; seconds: number; path?: string }) {
+    const stopped = again ?? (await voice.stop(true));
+    if (!stopped) return;
+    const rec: { blob: Blob; type: string; seconds: number; path?: string } = stopped;
     if (rec.seconds < 1) {
       setError("Vocale troppo corto.");
       return;
@@ -482,14 +489,20 @@ export function ChatThread({
     setSending(true);
     setError(null);
     stick.current = true;
+    let path = rec.path;
     try {
-      const ticket = await prepareUpload(clientId, { type: rec.type, size: rec.blob.size });
-      if ("error" in ticket) throw new Error(ticket.error);
-      await uploadWithProgress(ticket.signedUrl, rec.blob, rec.type, () => undefined);
-      const res = await sendMessage(clientId, { body: "", attachments: [{ path: ticket.path, kind: "audio", name: "Vocale", size: rec.blob.size, seconds: Math.round(rec.seconds) }] });
+      if (!path) {
+        const ticket = await prepareUpload(clientId, { type: rec.type, size: rec.blob.size });
+        if ("error" in ticket) throw new Error(ticket.error);
+        await uploadWithProgress(ticket.signedUrl, rec.blob, rec.type, () => undefined);
+        path = ticket.path;
+      }
+      const res = await sendMessage(clientId, { body: "", attachments: [{ path, kind: "audio", name: "Vocale", size: rec.blob.size, seconds: Math.round(rec.seconds) }] });
       if (!res.ok) throw new Error(res.error);
-      merge([res.message]);
+      merge([res.message], [], {}, false);
+      setFailedVoice(null);
     } catch (e) {
+      setFailedVoice({ blob: rec.blob, type: rec.type, seconds: rec.seconds, path });
       setError(friendlyError(e, "Vocale non inviato: riprova."));
     } finally {
       setSending(false);
@@ -650,6 +663,13 @@ export function ChatThread({
       {/* composizione */}
       <div className="border-t border-sand-deep bg-card px-3 py-3 sm:px-4">
         {error ? <p role="alert" className="mb-2 rounded-xl bg-accent-soft px-3 py-2 text-sm">{error}</p> : null}
+        {failedVoice ? (
+          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-xl bg-accent-soft px-3 py-2 text-sm" data-failed-voice>
+            <span>Vocale di {Math.round(failedVoice.seconds)} s non inviato.</span>
+            <button type="button" disabled={sending} onClick={() => void sendVoice(failedVoice)} className="min-h-9 rounded-full bg-ink px-3 font-semibold text-card">Riprova</button>
+            <button type="button" onClick={() => { setFailedVoice(null); setError(null); }} className="min-h-9 rounded-full px-3 font-semibold ring-1 ring-ink/30">Elimina</button>
+          </div>
+        ) : null}
         {showDraft ? (
           <div className="mb-3 rounded-2xl border border-sand-deep bg-sand/60 p-3" aria-label="Bozza di risposta">
             <div className="flex items-center justify-between gap-2">

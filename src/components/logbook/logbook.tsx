@@ -40,7 +40,8 @@ export type LogbookProps = {
   /** Posizione della barra in basso (sopra il menu del telefono) */
   barClass?: string;
   /** Prima di chiudere l'allenamento (es. salva la sessione PT dello staff): un testo = errore, non si chiude */
-  beforeFinish?: () => Promise<string | null>;
+  /** logbook dello staff: salva la sessione PT (riceve la data dell'allenamento) */
+  beforeFinish?: (info: { performedOn: string }) => Promise<string | null>;
   /** Contenuto in fondo, prima della barra (es. sessione PT e note della lezione) */
   footer?: React.ReactNode;
   /**
@@ -161,6 +162,10 @@ export function Logbook(props: LogbookProps) {
   const [status, setStatus] = useState<{ kind: "idle" | "saving" | "saved" | "error"; text?: string }>({ kind: "idle" });
   const clock = useWorkoutTimer();
   const dirty = useRef(false);
+  /** ogni modifica conta: un salvataggio partito prima non deve "pulire" quello scritto dopo */
+  const edits = useRef(0);
+  /** com'erano gli esercizi all'apertura (per sapere quali hai toccato tu) */
+  const baseItems = useRef<Record<string, ItemState>>(buildInitial());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveRef = useRef<(() => Promise<boolean>) | null>(null);
@@ -220,8 +225,11 @@ export function Logbook(props: LogbookProps) {
     try {
       const raw = localStorage.getItem(storageKey(props));
       if (!raw) return;
-      const draft = JSON.parse(raw) as { ts: string; items: Record<string, ItemState>; notes: string; discomfort?: string; performedOn: string };
-      if (!initial.updatedAt || draft.ts > initial.updatedAt) {
+      const draft = JSON.parse(raw) as { ts: string; base?: string | null; items: Record<string, ItemState>; notes: string; discomfort?: string; performedOn: string };
+      // la bozza vale se il server non è cambiato da quando è stata scritta (`base`, l'ora del server:
+      // l'orologio del telefono può essere indietro o avanti); le bozze vecchie senza base: come prima
+      const usable = draft.base !== undefined ? (draft.base ?? null) === (initial.updatedAt ?? null) : !initial.updatedAt || draft.ts > initial.updatedAt;
+      if (usable) {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- ripristino della bozza salvata sul telefono
         setItems((cur) => ({ ...cur, ...draft.items }));
         setNotes(draft.notes);
@@ -251,6 +259,7 @@ export function Logbook(props: LogbookProps) {
     async (opts: { completed?: boolean } = {}) => {
       const s = latest.current;
       const done = opts.completed ?? s.completed;
+      const rev = edits.current;
       setStatus({ kind: "saving" });
       try {
         const res = await saveWorkout({
@@ -262,15 +271,20 @@ export function Logbook(props: LogbookProps) {
           notes: s.notes,
           discomfort: s.discomfort,
           items: Object.entries(s.items).map(([itemId, v]) => ({ itemId, sets: v.sets.map((x) => ({ kg: x.kg ?? null, reps: x.reps ?? null, done: x.done })), resultText: v.resultText })),
+          // solo gli esercizi cambiati su questo dispositivo si scrivono sul server
+          touchedItems: Object.keys(s.items).filter((id) => JSON.stringify(s.items[id]) !== JSON.stringify(baseItems.current[id] ?? null)),
         });
         if (!res.ok) {
           setStatus({ kind: "error", text: res.error });
           return false;
         }
-        dirty.current = false;
-        try {
-          localStorage.removeItem(storageKey({ programId, week, day }));
-        } catch {}
+        // intanto hai scritto altro? allora resta "da salvare" e la copia nel telefono non si tocca
+        if (edits.current === rev) {
+          dirty.current = false;
+          try {
+            localStorage.removeItem(storageKey({ programId, week, day }));
+          } catch {}
+        }
         const t = new Date(res.savedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
         setStatus({ kind: "saved", text: `Salvato alle ${t}` });
         return true;
@@ -296,7 +310,7 @@ export function Logbook(props: LogbookProps) {
     saveRef.current = async () => {
       const ok = await save(finishing.current ? { completed: true } : {});
       if (ok && finishing.current) {
-        const err = (await props.beforeFinish?.()) ?? null;
+        const err = (await props.beforeFinish?.({ performedOn: latest.current.performedOn })) ?? null;
         if (err) {
           setStatus({ kind: "error", text: err });
           return ok;
@@ -328,13 +342,14 @@ export function Logbook(props: LogbookProps) {
 
   const touch = useCallback(() => {
     dirty.current = true;
+    edits.current += 1;
     try {
       const s = latest.current;
-      localStorage.setItem(storageKey({ programId, week, day }), JSON.stringify({ ts: new Date().toISOString(), items: s.items, notes: s.notes, discomfort: s.discomfort, performedOn: s.performedOn }));
+      localStorage.setItem(storageKey({ programId, week, day }), JSON.stringify({ ts: new Date().toISOString(), base: initial.updatedAt ?? null, items: s.items, notes: s.notes, discomfort: s.discomfort, performedOn: s.performedOn }));
     } catch {}
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => void save(), 1500);
-  }, [programId, week, day, save]);
+  }, [programId, week, day, save, initial.updatedAt]);
 
   useEffect(() => {
     const onHide = () => {
@@ -554,7 +569,7 @@ export function Logbook(props: LogbookProps) {
     try {
       const ok = await save({ completed: false });
       if (!ok) return;
-      const err = (await props.beforeFinish?.()) ?? null;
+      const err = (await props.beforeFinish?.({ performedOn: latest.current.performedOn })) ?? null;
       if (err) {
         setStatus({ kind: "error", text: err });
         return;
@@ -578,7 +593,7 @@ export function Logbook(props: LogbookProps) {
     try {
       const ok = await save({ completed: true });
       if (ok) {
-        const err = (await props.beforeFinish?.()) ?? null;
+        const err = (await props.beforeFinish?.({ performedOn: latest.current.performedOn })) ?? null;
         if (err) {
           setStatus({ kind: "error", text: err });
           return;

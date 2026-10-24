@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
-import { loadDraft, useDraft } from "@/components/use-draft";
+import { clearDraft, loadDraft, useDraft } from "@/components/use-draft";
 import { MONTHS, PROJECT_PHASES, PHASE_BY_KEY, inferPhase, levelLabel, projectMonths, rowId, type Project } from "@/lib/project";
 import { Button, Card, Eyebrow, Input, Notice, Textarea, cx } from "@/components/ui";
 import { IconPlus, IconX } from "@/components/icons";
@@ -22,6 +22,8 @@ export function ProjectEditor({
   clientName,
   canNotify,
   today,
+  updatedAt = null,
+  unreadable = false,
   save,
 }: {
   initial: Project;
@@ -31,30 +33,45 @@ export function ProjectEditor({
   /** il cliente ha l'account: si può avvisare con una notifica */
   canNotify: boolean;
   today: string;
-  save: (data: Project, visible: boolean, notifyClient: boolean) => Promise<SaveProjectResult>;
+  /** ultima modifica salvata sul server (la bozza vale solo se fatta su questa versione) */
+  updatedAt?: string | null;
+  /** il progetto salvato non si legge: non si salva niente sopra finché non lo decidi */
+  unreadable?: boolean;
+  save: (data: Project, visible: boolean, notifyClient: boolean, expectedUpdatedAt: string | null) => Promise<SaveProjectResult>;
 }) {
   const [p, setP] = useState<Project>(initial);
+  // versione del progetto sul server, aggiornata a ogni salvataggio riuscito
+  const [serverAt, setServerAt] = useState<string | null>(updatedAt ?? null);
   const [visible, setVisible] = useState(initialVisible);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
-  // le modifiche non salvate restano (anche se chiudi l'app) finché non salvi
+  const [blocked, setBlocked] = useState(Boolean(unreadable));
+  // le modifiche non salvate restano (anche se chiudi l'app) finché non salvi; la bozza
+  // ricorda su quale versione del progetto è stata fatta (`base`)
+  type Snapshot = { base: string | null; project: Project };
   const draftKey = `progetto:${usePathname()}`;
-  const { adopt } = useDraft(draftKey, dirty ? p : null, { isEmpty: (v) => v === null });
-  const [, setRestored] = useState(false);
+  const { adopt } = useDraft<Snapshot | null>(draftKey, dirty ? { base: serverAt, project: p } : null, { isEmpty: (v) => v === null });
+  // bozza fatta su un'altra versione (il progetto è stato salvato altrove nel frattempo): si chiede
+  const [staleDraft, setStaleDraft] = useState<{ project: Project; at: number } | null>(null);
   useEffect(() => {
     let alive = true;
-    void loadDraft<Project>(draftKey).then((d) => {
+    void loadDraft<Snapshot | Project>(draftKey).then((d) => {
       if (!alive || !d?.data) return;
-      adopt(d.data, d.at);
-      setP(d.data);
+      const snap: Snapshot = "project" in d.data && "base" in d.data ? (d.data as Snapshot) : { base: null, project: d.data as Project };
+      // formato vecchio (senza base) o versione diversa: non si applica da sola
+      if (snap.base !== (updatedAt ?? null)) {
+        setStaleDraft({ project: snap.project, at: d.at });
+        return;
+      }
+      adopt(snap, d.at);
+      setP(snap.project);
       setDirty(true);
-      setRestored(true);
     });
     return () => {
       alive = false;
     };
-  }, [draftKey, adopt]);
+  }, [draftKey, adopt, updatedAt]);
   const months = projectMonths(p.start);
   const now = months.findIndex((m) => m.key === today.slice(0, 7));
 
@@ -81,10 +98,18 @@ export function ProjectEditor({
   const doSave = (nextVisible: boolean, notifyClient: boolean) =>
     start(async () => {
       setAsk(null);
+      if (blocked) return;
       const v = version.current;
-      const r = await save(p, nextVisible, notifyClient);
+      let r: SaveProjectResult;
+      try {
+        r = await save(p, nextVisible, notifyClient, serverAt);
+      } catch {
+        setMsg({ ok: false, text: "Non sono riuscito a salvare: controlla la connessione. Quello che hai scritto resta qui." });
+        return;
+      }
       if (r.ok) {
         if (version.current === v) setDirty(false);
+        setServerAt(r.updated_at);
         setVisible(nextVisible);
         setSavedAt(Date.now());
         setUnannounced(notifyClient ? false : nextVisible);
@@ -99,16 +124,37 @@ export function ProjectEditor({
     saveRef.current = doSave;
   });
   useEffect(() => {
-    if (!dirty || pending || ask) return;
+    if (!dirty || pending || ask || blocked || (msg && !msg.ok)) return;
     const t = setTimeout(() => saveRef.current(visible, false), 1000);
     return () => clearTimeout(t);
-  }, [dirty, pending, ask, visible, p]);
+  }, [dirty, pending, ask, visible, p, blocked, msg]);
   const statusText = pending ? "Salvo…" : dirty ? "Salvo…" : msg && !msg.ok ? "Non salvato: guarda il messaggio" : savedAt ? `Salvato alle ${new Date(savedAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : isNew ? "Si salva da solo appena scrivi" : "Si salva da solo mentre scrivi";
 
   const cell = "min-w-[92px] px-1 py-1.5 text-center";
 
   return (
     <div className="flex flex-col gap-4">
+      {blocked ? (
+        <div className="flex flex-col gap-2 rounded-2xl bg-accent-soft px-4 py-3 text-[15px] leading-relaxed" role="alert" data-project-unreadable>
+          <p>
+            <strong>Il progetto salvato non si riesce a leggere</strong> (forse importato con testi più lunghi del previsto). Per non cancellarlo, qui non si salva niente. Puoi guardarlo dal database oppure ripartire da zero.
+          </p>
+          <div>
+            <Button size="sm" variant="ghost" onClick={() => { if (window.confirm("Ripartire da un progetto vuoto? Quello salvato verrà sostituito al primo salvataggio.")) setBlocked(false); }}>Riparti da zero</Button>
+          </div>
+        </div>
+      ) : null}
+      {staleDraft ? (
+        <div className="flex flex-col gap-2 rounded-2xl bg-accent-soft px-4 py-3 text-[15px] leading-relaxed" role="status" data-project-stale-draft>
+          <p>
+            <strong>Modifiche non salvate del {new Date(staleDraft.at).toLocaleString("it-IT", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}.</strong> Il progetto è stato salvato altrove nel frattempo: vuoi usare quella versione al posto di questa?
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => { setP(staleDraft.project); version.current += 1; setDirty(true); setStaleDraft(null); }}>Usa le modifiche non salvate</Button>
+            <Button size="sm" variant="ghost" onClick={() => { clearDraft(draftKey); setStaleDraft(null); }}>Tieni il progetto attuale</Button>
+          </div>
+        </div>
+      ) : null}
       <Card className="flex flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="max-w-2xl">

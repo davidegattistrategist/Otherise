@@ -15,12 +15,16 @@ export default async function ClientProjectPage({ params }: { params: Promise<{ 
   const client = await getStaffClient(id);
   const supabase = await createClient();
   const { data } = await supabase.from("client_projects").select("data, visible, updated_at").eq("client_id", id).maybeSingle();
-  const project = parseProject(data?.data) ?? emptyProject(defaultStart(todayISO()));
+  const parsed = parseProject(data?.data);
+  const project = parsed ?? emptyProject(defaultStart(todayISO()));
   return (
     <ProjectEditor
       initial={project}
       initialVisible={data?.visible ?? false}
       isNew={!data}
+      updatedAt={data?.updated_at ?? null}
+      // progetto salvato che non si legge (es. importato con testi troppo lunghi): non va sovrascritto
+      unreadable={Boolean(data) && !parsed && data!.data !== null && JSON.stringify(data!.data) !== "{}"}
       clientName={client.first_name}
       canNotify={Boolean(client.user_id)}
       today={todayISO()}
