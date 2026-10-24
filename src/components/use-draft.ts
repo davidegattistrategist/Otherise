@@ -406,8 +406,17 @@ export function useFormDraft(form: RefObject<HTMLFormElement | null>, name: stri
     void loadDraft<FormValues>(key).then((d) => {
       if (!alive) return;
       if (d && JSON.stringify(d.data) !== JSON.stringify(start)) {
-        writeForm(f, d.data);
-        setRestored(d.at);
+        // una bozza vecchia non svuota mai un campo che sul server è scritto (il 23/10
+        // bozze di qualche giorno prima avevano svuotato le lezioni sulle risposte):
+        // si riprendono solo i campi che nella bozza hanno qualcosa
+        const keep: FormValues = {};
+        for (const [k, v] of Object.entries(d.data)) {
+          const now = start[k];
+          if (typeof v === "string" && !v.trim() && typeof now === "string" && now.trim()) continue;
+          keep[k] = v;
+        }
+        writeForm(f, keep);
+        if (JSON.stringify(readForm(f)) !== JSON.stringify(start)) setRestored(d.at);
       }
       const now = readForm(f);
       adopt(now, d?.at);
