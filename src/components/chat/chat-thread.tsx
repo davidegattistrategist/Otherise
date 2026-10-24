@@ -450,10 +450,11 @@ export function ChatThread({
       uploads.current.clear();
       const res = await sendMessage(clientId, { body, attachments, draftId: usedDraft });
       if (!res.ok) throw new Error(res.error);
-      merge([res.message], [], {}, false);
-      // il messaggio è partito davvero: la bozza non serve più. Se intanto hai scritto altro
-      // nella casella (un video sale anche un minuto), quello resta
+      // il messaggio è partito davvero: la bozza non serve più (prima che il messaggio compaia:
+      // se la pagina viene chiusa o ricaricata subito dopo, la cancellazione è già partita).
+      // Se intanto hai scritto altro nella casella (un video sale anche un minuto), quello resta
       if (body) clearTextDraft();
+      merge([res.message], [], {}, false);
       setText((cur) => (cur.trim() === body ? "" : cur.startsWith(body) ? cur.slice(body.length).trimStart() : cur));
       if (inputRef.current) inputRef.current.style.height = "auto";
       if (body && draft) setDraft(null);

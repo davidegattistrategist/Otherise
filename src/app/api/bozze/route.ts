@@ -68,8 +68,26 @@ export async function POST(req: NextRequest) {
     data = applyPatch(row.data, body.patch) as Json;
   }
   const updated_at = new Date().toISOString();
-  const { error } = await supabase.from("drafts").upsert({ user_id: me.id, key: body.key, data, updated_at });
+  // Scrittura che non scavalca una cancellazione arrivata tra la lettura qui sopra e questo
+  // momento (una DELETE e una POST in volo insieme: il messaggio inviato e la bozza del testo
+  // che partiva nello stesso istante): si aggiorna solo se il segno di cancellazione non c'è
+  // o è più vecchio di questa versione; se non si aggiorna niente, o la riga non c'è ancora
+  // (e si crea) o è stata cancellata dopo (e questa versione si scarta).
+  const { data: upd, error } = await supabase
+    .from("drafts")
+    .update({ data, updated_at })
+    .eq("user_id", me.id)
+    .eq("key", body.key)
+    .or(`data->__deleted.is.null,data->__deleted.lt.${t}`)
+    .select("key");
   if (error) return NextResponse.json({ error: "Non salvata" }, { status: 500 });
+  if (!upd?.length) {
+    const { error: insErr } = await supabase.from("drafts").upsert({ user_id: me.id, key: body.key, data, updated_at }, { onConflict: "user_id,key", ignoreDuplicates: true });
+    if (insErr) return NextResponse.json({ error: "Non salvata" }, { status: 500 });
+    const { data: after } = await supabase.from("drafts").select("data, updated_at").eq("user_id", me.id).eq("key", body.key).maybeSingle();
+    const goneNow = after ? deletedAt(after.data) : null;
+    if (goneNow !== null) return NextResponse.json({ ok: true, ignored: true, updated_at: after!.updated_at, now });
+  }
   return NextResponse.json(body.patch ? { ok: true, updated_at, data, now } : { ok: true, updated_at, now });
 }
 
