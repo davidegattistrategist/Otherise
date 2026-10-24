@@ -241,6 +241,11 @@ export async function runDailyChecks(today = todayISO()) {
   const orphansRemoved = await step(() => removeOrphanChatUploads(), 0);
   // check con i numeri non aggiornati (es. senza età perché manca la data di nascita): si ricalcolano
   await step(() => recomputeStaleChecks(), 0);
+  // storico delle modifiche (versioni precedenti delle righe, migrazione 20261024100000): oltre 90 giorni via
+  await step(async () => {
+    const { data } = await admin.rpc("trim_row_history", { keep_days: 90 });
+    return data ?? 0;
+  }, 0);
   // niente riepilogo per email: il riepilogo è "Oggi" nell'app
   const emailed = await step(() => deliverPendingEmails(), 0);
   await step(async () => {

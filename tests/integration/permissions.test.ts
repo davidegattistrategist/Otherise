@@ -804,4 +804,28 @@ describe.skipIf(!run)("permessi", () => {
     await admin.from("clients").update({ status: "active" }).eq("id", clientAId).throwOnError();
     await admin.from("weight_logs").delete().in("client_id", [clientAId, clientBId]).throwOnError();
   });
+  it("storico delle modifiche: la versione precedente di una riga resta nel database, nessuno la legge dall'app", async () => {
+    // una pesata del cliente, poi corretta e cancellata dal cliente stesso
+    const day = (offset: number) => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome" }).format(new Date(Date.now() + offset * 86_400_000));
+    const { data: w } = await clientA.from("weight_logs").insert({ client_id: clientAId, log_date: day(-4), kg: 63.1 }).select("id").single().throwOnError();
+    await clientA.from("weight_logs").update({ kg: 63.4 }).eq("id", w!.id).throwOnError();
+    await clientA.from("weight_logs").delete().eq("id", w!.id).throwOnError();
+    const { data: hist } = await admin.from("row_history").select("op, old_data").eq("table_name", "weight_logs").eq("row_id", w!.id).order("changed_at");
+    expect(hist!.map((h) => [h.op, (h.old_data as { kg: number }).kg])).toEqual([["update", 63.1], ["delete", 63.4]]);
+    // un check modificato dallo staff: la versione di prima (con gli appunti) resta
+    const { data: ck } = await coach.from("checks").insert({ client_id: clientAId, check_date: day(-1), notes_next_phase: "Appunti importanti", strength_tests: [{ exercise: "Stacco", load: 100, reps: 5, rpe: 9, e1rm: 115 }] }).select("id").single().throwOnError();
+    await coach.from("checks").update({ notes_next_phase: "", strength_tests: [] }).eq("id", ck!.id).throwOnError();
+    const { data: before } = await admin.from("row_history").select("old_data").eq("table_name", "checks").eq("row_id", ck!.id).order("changed_at", { ascending: false }).limit(1).single();
+    expect((before!.old_data as { notes_next_phase: string }).notes_next_phase).toBe("Appunti importanti");
+    expect(((before!.old_data as { strength_tests: unknown[] }).strength_tests).length).toBe(1);
+    // dall'app non si legge né si scrive (titolare compreso)
+    expect((await owner.from("row_history").select("id").limit(1)).error).not.toBeNull();
+    expect((await clientA.from("row_history").select("id").limit(1)).error).not.toBeNull();
+    expect((await owner.from("row_history").delete().eq("table_name", "checks")).error).not.toBeNull();
+    // la pulizia la fa solo il server
+    expect((await owner.rpc("trim_row_history", { keep_days: 0 })).error).not.toBeNull();
+    const { data: trimmed } = await admin.rpc("trim_row_history", { keep_days: 0 });
+    expect(trimmed).toBeGreaterThanOrEqual(3);
+    await admin.from("checks").delete().eq("id", ck!.id).throwOnError();
+  });
 });

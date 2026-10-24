@@ -753,6 +753,9 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
+            "trim_row_history":
+{ Args: { "keep_days"?: number }; Returns: number
+                           },
             "accept_privacy":
 { Args: { "version": string; "instagram"?: boolean }; Returns: undefined
                            },
