@@ -133,7 +133,7 @@ export async function createNextPhase(previousId: string, fd?: FormData) {
 }
 
 const saveSchema = z.object({
-  title: z.string().trim().min(1, "Dai un nome al programma").max(120),
+  title: z.string().trim().max(120),
   description: z.string().max(4000).default(""),
   weeks: z.number().int().min(1).max(12),
   /** Tempo a disposizione per seduta (minuti), facoltativo */
@@ -162,10 +162,12 @@ export async function saveProgram(id: string, input: unknown): Promise<SaveResul
   }
   if (current.status === "published" && !v.start_date) return { ok: false, error: "Un programma pubblicato deve avere la data di inizio" };
   const content = normalizeWeeks(v.content, v.weeks);
-  const { data, error } = await supabase
+  // titolo cancellato per riscriverlo: resta quello di prima (il salvataggio automatico non si ferma)
+  const title = v.title.trim() || current.title;
+  let query = supabase
     .from("programs")
     .update({
-      title: v.title,
+      title,
       description: v.description,
       weeks: v.weeks,
       start_date: v.start_date || null,
@@ -174,16 +176,19 @@ export async function saveProgram(id: string, input: unknown): Promise<SaveResul
       ...(v.ai_notes !== undefined ? { ai_notes: v.ai_notes && Object.keys(v.ai_notes).length ? v.ai_notes : null } : {}),
       ...(v.ai_notes && Object.keys(v.ai_notes).length ? { source: "ai" } : {}),
     })
-    .eq("id", id)
-    .select("updated_at, client_id")
-    .single();
-  if (error || !data) return { ok: false, error: "Salvataggio non riuscito. Riprova." };
-  // programma pubblicato e già iniziato: si tiene la versione di prima (Ritocchi → Ripristina)
+    .eq("id", id);
+  // la versione attesa si controlla anche nell'update: due salvataggi insieme non passano entrambi
+  if (v.expected_updated_at) query = query.eq("updated_at", v.expected_updated_at);
+  const { data, error } = await query.select("updated_at, client_id").maybeSingle();
+  if (error) return { ok: false, error: "Salvataggio non riuscito. Riprova." };
+  if (!data) return { ok: false, conflict: true, error: "Il programma è stato modificato da un altro dispositivo proprio adesso." };
+  // programma pubblicato: si tiene la versione di prima (Ritocchi → Ripristina); "in corso" se già iniziato
   let inProgressChanged = false;
-  if (current.status === "published" && current.client_id && current.start_date && current.start_date <= todayISO()) {
+  if (current.status === "published" && current.client_id) {
     const before = normalizeWeeks(parseContent(current.content), current.weeks);
+    const started = Boolean(current.start_date && current.start_date <= todayISO());
     if (JSON.stringify(before) !== JSON.stringify(content) || current.weeks !== v.weeks) {
-      inProgressChanged = true;
+      inProgressChanged = started;
       // con il salvataggio automatico ogni pausa è un salvataggio: una sola versione "di prima"
       // per ogni giro di modifiche a mano (30 minuti); un ritocco con l'AI ha sempre la sua
       const { data: recent } = v.revision_reason
@@ -197,7 +202,10 @@ export async function saveProgram(id: string, input: unknown): Promise<SaveResul
             .gte("created_at", new Date(Date.now() - 30 * 60_000).toISOString())
             .limit(1)
             .maybeSingle();
-      if (!recent) await supabase.from("program_revisions").insert({ program_id: id, client_id: current.client_id, created_by: me.id, reason: v.revision_reason || "Modifica a mano", title: current.title, weeks: current.weeks, content: asJson(before) });
+      if (!recent) {
+        const { error: revError } = await supabase.from("program_revisions").insert({ program_id: id, client_id: current.client_id, created_by: me.id, reason: v.revision_reason || "Modifica a mano", title: current.title, weeks: current.weeks, content: asJson(before) });
+        if (revError) console.error("program_revisions non salvata", revError.message);
+      }
     }
   }
   const unknown = new Set<string>();
@@ -278,12 +286,21 @@ export async function archiveProgram(id: string): Promise<StatusResult> {
   return { ok: true, updated_at: data.updated_at, message: "Archiviato: resta nello storico del cliente." };
 }
 
-export async function deleteProgram(id: string) {
+/**
+ * Elimina un programma. Con allenamenti registrati serve `confirmLogged` (il
+ * logbook del cliente se ne va con il programma): il server lo ricontrolla, il
+ * conteggio della pagina può essere vecchio.
+ */
+export async function deleteProgram(id: string, confirmLogged = false): Promise<{ error: string } | void> {
   await requireStaff();
   const supabase = await createClient();
-  const { data } = await supabase.from("programs").select("client_id, is_template").eq("id", id).maybeSingle();
-  await supabase.from("programs").delete().eq("id", id);
-  if (data?.client_id) {
+  const { data } = await supabase.from("programs").select("client_id, is_template, status").eq("id", id).maybeSingle();
+  if (!data) return { error: "Programma non trovato." };
+  const { count } = await supabase.from("workout_logs").select("id", { count: "exact", head: true }).eq("program_id", id);
+  if ((count ?? 0) > 0 && !confirmLogged) return { error: `Questo programma ha ${count} allenamenti registrati: ricarica la pagina e conferma l'eliminazione in due passi.` };
+  const { error } = await supabase.from("programs").delete().eq("id", id);
+  if (error) return { error: "Non sono riuscito a eliminare il programma. Riprova." };
+  if (data.client_id) {
     revalidatePath(`/staff/clienti/${data.client_id}`, "layout");
     redirect(`/staff/clienti/${data.client_id}/programma`);
   }

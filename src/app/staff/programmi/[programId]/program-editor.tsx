@@ -113,6 +113,11 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   // settimane fatte: bloccate finché non le sblocchi (vale per ogni modifica, anche dell'AI)
   const [unlocked, setUnlocked] = useState(false);
   const lockBase = useRef<ProgramContent>(normalizeWeeks(initialContent, program.weeks));
+  // dopo ogni salvataggio la pagina riceve il contenuto salvato: le settimane "fatte" si
+  // confrontano con quello, non con la versione di quando hai aperto l'editor
+  useEffect(() => {
+    lockBase.current = normalizeWeeks(initialContent, program.weeks);
+  }, [initialContent, program.weeks]);
   const through = !unlocked && program.status === "published" && !program.is_template ? doneWeeks : 0;
   const throughRef = useRef(through);
   useEffect(() => {
@@ -165,10 +170,13 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   }, [markDirty, guard]);
 
   /** Salva subito; restituisce l'errore (o null se è andato bene). */
+  const [conflict, setConflict] = useState(false);
   const saveNow = useCallback(async (): Promise<string | null> => {
     const version = edits.current;
-    {
-      const res = await saveProgram(program.id, {
+    const reason = revisionReason.current;
+    let res: Awaited<ReturnType<typeof saveProgram>>;
+    try {
+      res = await saveProgram(program.id, {
         title,
         description,
         weeks,
@@ -177,22 +185,31 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
         content,
         expected_updated_at: updatedAt,
         ai_notes: aiNotes,
-        ...(revisionReason.current ? { revision_reason: revisionReason.current } : {}),
+        ...(reason ? { revision_reason: reason } : {}),
       });
-      if (res.ok) {
-        setUpdatedAt(res.updated_at);
-        revisionReason.current = null;
-        // programma in corso cambiato: si chiede se avvisare il cliente
-        if (res.inProgressChanged && program.client_id) setAskNotify(true);
-        if (edits.current === version) setDirty(false);
-        setSavedAt(new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }));
-        setUnknown(res.unknownExercises);
-        setMessage(null);
-        return null;
-      }
-      setMessage({ tone: "error", text: res.error });
-      return res.error;
+    } catch {
+      // senza rete (o sessione scaduta) niente pagina di errore: resta tutto qui e nella copia di riserva
+      const text = "Non sono riuscito a salvare: controlla la connessione. Quello che hai scritto resta qui e riprovo tra poco.";
+      setMessage({ tone: "error", text });
+      return text;
     }
+    if (res.ok) {
+      setUpdatedAt(res.updated_at);
+      // un ritocco o un sostituto applicati mentre salvava hanno già scritto il loro motivo: resta
+      if (revisionReason.current === reason) revisionReason.current = null;
+      // programma in corso cambiato: si chiede se avvisare il cliente
+      if (res.inProgressChanged && program.client_id) setAskNotify(true);
+      if (edits.current === version) setDirty(false);
+      setSavedAt(new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }));
+      setUnknown(res.unknownExercises);
+      setMessage(null);
+      return null;
+    }
+    // modificato da un altro dispositivo: niente tentativi a ripetizione, le modifiche restano qui
+    // (e nella copia di riserva) finché non scegli cosa fare
+    if (res.conflict) setConflict(true);
+    setMessage({ tone: "error", text: res.error });
+    return res.error;
   }, [program.id, program.is_template, program.client_id, title, description, weeks, startDate, minutes, content, updatedAt, aiNotes]);
   const doSave = useCallback(() => {
     startTransition(async () => {
@@ -210,40 +227,75 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
   const snapshot: Snapshot | null = dirty ? { base: updatedAt, title, description, weeks, startDate, minutes, content } : null;
   const backup = useDraft(draftKey, snapshot, { isEmpty: (v) => v === null });
   const [restored, setRestored] = useState<number | null>(null);
+  // copia di riserva fatta su una versione diversa del programma (nel frattempo è stato
+  // salvato altrove): non si applica da sola e non si butta, decidi tu
+  const [staleBackup, setStaleBackup] = useState<{ data: Snapshot; at: number } | null>(null);
   const { adopt: adoptBackup } = backup;
-  useEffect(() => {
-    let alive = true;
-    void loadDraft<Snapshot>(draftKey).then((d) => {
-      if (!alive || !d?.data) return;
-      // solo se nel frattempo il programma non è stato salvato da un'altra parte
-      if (d.data.base !== program.updated_at) {
-        clearDraft(draftKey);
-        return;
-      }
-      adoptBackup(d.data, d.at);
-      setTitle(d.data.title);
-      setDescription(d.data.description);
-      setWeeks(d.data.weeks);
-      setStartDate(d.data.startDate);
-      setMinutes(d.data.minutes);
-      const back = normalizeWeeks(d.data.content, d.data.weeks);
+  const applyBackup = useCallback(
+    (d: Snapshot) => {
+      setTitle(d.title);
+      setDescription(d.description);
+      setWeeks(d.weeks);
+      setStartDate(d.startDate);
+      setMinutes(d.minutes);
+      const back = normalizeWeeks(d.content, d.weeks);
       // la bozza ha correzioni nelle settimane fatte (le avevi sbloccate): restano sbloccate
       if (doneWeeks > 0 && lockedWeeksDiffer(back, lockBase.current, doneWeeks)) setUnlocked(true);
       setContent(back);
       markDirty();
+    },
+    [doneWeeks, markDirty],
+  );
+  // solo all'apertura (program.updated_at cambia a ogni salvataggio automatico: se l'effetto
+  // ripartisse, riapplicherebbe la copia di riserva sopra le lettere scritte nel frattempo)
+  const openedAt = useRef(program.updated_at);
+  useEffect(() => {
+    let alive = true;
+    void loadDraft<Snapshot>(draftKey).then((d) => {
+      if (!alive || !d?.data) return;
+      if (edits.current > 0) return; // hai già scritto qui: quello che scrivi vale di più
+      if (d.data.base !== openedAt.current) {
+        setStaleBackup({ data: d.data, at: d.at });
+        return;
+      }
+      adoptBackup(d.data, d.at);
+      applyBackup(d.data);
       setRestored(d.at);
     });
     return () => {
       alive = false;
     };
-  }, [draftKey, program.updated_at, adoptBackup, markDirty, doneWeeks]);
+  }, [draftKey, adoptBackup, applyBackup]);
   // tutto si salva da solo, anche un programma pubblicato (regola dell'app: niente "Salva")
   const autoSave = true;
   useEffect(() => {
-    if (!dirty || !autoSave || pending) return;
-    const t = setTimeout(() => doSave(), 2000);
+    if (!dirty || !autoSave || pending || conflict) return;
+    const t = setTimeout(() => doSave(), 800);
     return () => clearTimeout(t);
-  }, [dirty, autoSave, pending, doSave]);
+  }, [dirty, autoSave, pending, conflict, doSave]);
+  // si esce dalla pagina (link, app in secondo piano, smontaggio) con modifiche in attesa: parte subito
+  const saveNowRef = useRef(saveNow);
+  const dirtyRef = useRef(dirty);
+  const conflictRef = useRef(conflict);
+  useEffect(() => {
+    saveNowRef.current = saveNow;
+    dirtyRef.current = dirty;
+    conflictRef.current = conflict;
+  });
+  useEffect(() => {
+    const flush = () => {
+      if (dirtyRef.current && !conflictRef.current) void saveNowRef.current();
+    };
+    const onHidden = () => document.visibilityState === "hidden" && flush();
+    const retry = () => flush();
+    document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("online", retry);
+    return () => {
+      document.removeEventListener("visibilitychange", onHidden);
+      window.removeEventListener("online", retry);
+      flush();
+    };
+  }, []);
 
   // Ctrl/Cmd+S salva
   const saveRef = useRef(doSave);
@@ -281,7 +333,13 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
 
   const runAction = (fn: () => Promise<{ ok?: boolean; error?: string; message?: string; updated_at?: string } | null>, after?: () => void) => {
     startTransition(async () => {
-      const r = await fn();
+      let r: Awaited<ReturnType<typeof fn>>;
+      try {
+        r = await fn();
+      } catch {
+        setMessage({ tone: "error", text: "Non ci sono riuscito: controlla la connessione e riprova." });
+        return;
+      }
       if (r?.error) setMessage({ tone: "error", text: r.error });
       else {
         // il programma è cambiato sul server: il prossimo Salva parte da qui
@@ -537,9 +595,65 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
             <div className="mt-2 flex flex-wrap items-center gap-2 px-1 text-sm text-muted">
               <Pill active={status === "published"}>{program.is_template ? "Modello" : STATUS_LABEL[status]}</Pill>
               {program.source === "ai" ? <Pill><IconSparkle size={14} /> Bozza preparata con l&apos;AI</Pill> : null}
-              <span aria-live="polite" data-program-save={pending || dirty ? "saving" : savedAt ? "saved" : "idle"}>{pending || dirty ? "Salvo…" : savedAt ? `Salvato alle ${savedAt}` : "Si salva da solo mentre scrivi"}</span>
+              <span
+                aria-live="polite"
+                className={cx((conflict || (message?.tone === "error" && dirty)) && "font-semibold text-accent-deep")}
+                data-program-save={conflict ? "conflict" : message?.tone === "error" && dirty ? "error" : pending || dirty ? "saving" : savedAt ? "saved" : "idle"}
+              >
+                {conflict ? "Non salvato: modificato da un altro dispositivo" : message?.tone === "error" && dirty ? "Non salvato: riprovo tra poco" : pending || dirty ? "Salvo…" : savedAt ? `Salvato alle ${savedAt}` : "Si salva da solo mentre scrivi"}
+              </span>
               {restored ? <span className="rounded-full bg-sand-deep px-3 py-1 text-ink">Ho ripreso le modifiche che non erano arrivate al server: le salvo adesso.</span> : null}
             </div>
+            {conflict ? (
+              <div className="mt-3 flex flex-col gap-2 rounded-2xl bg-accent-soft px-4 py-3 text-[15px] leading-relaxed" role="alert" data-program-conflict>
+                <p>
+                  <strong>Questo programma è stato modificato da un altro dispositivo</strong> (o da un collaboratore) mentre era aperto qui. Le modifiche fatte qui non sono state salvate e restano in questa pagina.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => window.location.reload()}>Vedi la versione nuova (le modifiche di qui restano come copia di riserva)</Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (!window.confirm("Sovrascrivere la versione salvata dall'altro dispositivo con quella di questa pagina?")) return;
+                      setConflict(false);
+                      setUpdatedAt("");
+                      markDirty();
+                    }}
+                  >
+                    Tieni la versione di questa pagina
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            {staleBackup ? (
+              <div className="mt-3 flex flex-col gap-2 rounded-2xl bg-accent-soft px-4 py-3 text-[15px] leading-relaxed" role="status" data-program-stale-backup>
+                <p>
+                  <strong>Modifiche non salvate del {new Date(staleBackup.at).toLocaleString("it-IT", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}.</strong> Il programma è stato salvato altrove nel frattempo: vuoi riapplicarle sopra la versione attuale?
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      applyBackup(staleBackup.data);
+                      setStaleBackup(null);
+                    }}
+                  >
+                    Riapplica le modifiche
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      clearDraft(draftKey);
+                      setStaleBackup(null);
+                    }}
+                  >
+                    Lascia la versione attuale
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2.5">
             {!program.is_template && status === "draft" ? (
@@ -607,6 +721,11 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               disabled={pending}
               onClick={() =>
                 runAction(async () => {
+                  // il server riscrive il contenuto: prima si salva quello che c'è qui
+                  if (dirty) {
+                    const err = await saveNow();
+                    if (err) return { error: err };
+                  }
                   const r = await addMissingExercises(program.id);
                   if (r.content) setContent(guard(normalizeWeeks(r.content, weeks)));
                   if (r.updated_at) setUpdatedAt(r.updated_at);
@@ -850,7 +969,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
               <IconBtn
                 label="Elimina giorno"
                 onClick={() => {
-                  if (window.confirm(`Eliminare “${day.title}”?`)) mutate((d) => void d.days.splice(dayIdx, 1));
+                  if (okToRemove() && window.confirm(`Eliminare “${day.title}”?`)) mutate((d) => void d.days.splice(dayIdx, 1));
                 }}
               >
                 <IconTrash size={18} />
@@ -905,6 +1024,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                 programId={program.id}
                 select={selectFor(dayIdx, blockIdx, block)}
                 onBlock={(fn) => mutate((d) => fn(d.days[dayIdx].blocks[blockIdx], d.days[dayIdx].blocks))}
+                confirmRemove={okToRemove}
                 onItemName={(itemIdx, name) => setItemName(dayIdx, blockIdx, itemIdx, name)}
                 done={through}
                 swapsOn={!program.is_template && Boolean(program.client_id)}
@@ -966,6 +1086,7 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
                     programId={program.id}
                     select={selectFor(dayIdx, blockIdx, block)}
                     onBlock={(fn) => mutate((d) => fn(d.days[dayIdx].blocks[blockIdx], d.days[dayIdx].blocks))}
+                    confirmRemove={okToRemove}
                     onItemName={(itemIdx, name) => setItemName(dayIdx, blockIdx, itemIdx, name)}
                     done={through}
                     swapsOn={!program.is_template && Boolean(program.client_id)}
@@ -1122,7 +1243,20 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
       <Card>
         <Eyebrow className="mb-4">Altre azioni</Eyebrow>
         <div className="flex flex-col gap-5">
-          <SaveAsTemplate onSave={(t) => runAction(() => saveAsTemplate(program.id, t))} defaultTitle={title} disabled={pending} />
+          <SaveAsTemplate
+            onSave={(t) =>
+              runAction(async () => {
+                // il modello si fa dalla versione sul server: prima si salva quello che c'è qui
+                if (dirty) {
+                  const err = await saveNow();
+                  if (err) return { error: err };
+                }
+                return saveAsTemplate(program.id, t);
+              })
+            }
+            defaultTitle={title}
+            disabled={pending}
+          />
           {!program.is_template ? (
             <div className="flex flex-wrap gap-2.5">
               {status === "published" ? (
@@ -1166,20 +1300,34 @@ export function ProgramEditor({ program, initialContent, exercises, lastLogs, ne
  */
 function DeleteProgram({ programId, template, logged, canArchive, onArchive }: { programId: string; template: boolean; logged: number; canArchive: boolean; onArchive: () => void }) {
   const [asking, setAsking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, startDelete] = useTransition();
   const what = template ? "modello" : "programma";
+  // il server ricontrolla gli allenamenti registrati (il numero della pagina può essere vecchio)
+  const remove = (confirmLogged: boolean) =>
+    startDelete(async () => {
+      try {
+        const r = await deleteProgram(programId, confirmLogged);
+        if (r?.error) setError(r.error);
+      } catch {
+        setError("Non sono riuscito a eliminare il programma: controlla la connessione.");
+      }
+    });
   if (!logged) {
     return (
-      <form action={deleteProgram.bind(null, programId)}>
+      <div className="flex flex-col gap-2">
         <button
-          type="submit"
+          type="button"
+          disabled={busy}
           className={buttonClass("danger", "sm")}
-          onClick={(e) => {
-            if (!window.confirm(`Eliminare questo ${what}?`)) e.preventDefault();
+          onClick={() => {
+            if (window.confirm(`Eliminare questo ${what} per sempre?${template ? "" : " Se deve solo sparire dal percorso del cliente, meglio archiviarlo."}`)) remove(false);
           }}
         >
           Elimina {what}
         </button>
-      </form>
+        {error ? <p role="alert" className="text-sm font-semibold text-accent-deep">{error}</p> : null}
+      </div>
     );
   }
   if (!asking) {
@@ -1193,11 +1341,10 @@ function DeleteProgram({ programId, template, logged, canArchive, onArchive }: {
       </p>
       <div className="flex flex-wrap gap-2">
         {canArchive ? <Button size="sm" onClick={() => { setAsking(false); onArchive(); }}>Archivia</Button> : null}
-        <form action={deleteProgram.bind(null, programId)}>
-          <button type="submit" className={buttonClass("danger", "sm")}>Elimina per sempre</button>
-        </form>
+        <button type="button" disabled={busy} className={buttonClass("danger", "sm")} onClick={() => remove(true)}>Elimina per sempre</button>
         <Button size="sm" variant="ghost" onClick={() => setAsking(false)}>Annulla</Button>
       </div>
+      {error ? <p className="text-sm font-semibold text-accent-deep">{error}</p> : null}
     </div>
   );
 }
@@ -1344,6 +1491,7 @@ function BlockRows({
   programId,
   select,
   onBlock,
+  confirmRemove,
   onItemName,
   done,
   swapsOn,
@@ -1362,6 +1510,8 @@ function BlockRows({
   aiEnabled: boolean;
   programId: string;
   onBlock: (fn: (b: ProgramBlock, siblings: ProgramBlock[]) => void) => void;
+  /** prima di togliere esercizi, blocchi o giorni: conferma se il cliente ha già allenamenti registrati */
+  confirmRemove: () => boolean;
   onItemName: (itemIdx: number, name: string) => void;
 } & ItemExtras) {
   const multi = block.kind !== "single" && block.kind !== "text";
@@ -1378,7 +1528,7 @@ function BlockRows({
       <IconBtn small label="Sposta blocco su" disabled={blockIdx === 0} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx - 1))}><IconUp size={16} /></IconBtn>
       <IconBtn small label="Sposta blocco giù" disabled={blockIdx === blockCount - 1} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx + 1))}><IconDown size={16} /></IconBtn>
       <span />
-      <IconBtn small label="Elimina blocco" onClick={() => { if (window.confirm("Eliminare questo blocco?")) onBlock((_, s) => void s.splice(blockIdx, 1)); }}><IconTrash size={16} /></IconBtn>
+      <IconBtn small label="Elimina blocco" onClick={() => { if (confirmRemove() && window.confirm("Eliminare questo blocco?")) onBlock((_, s) => void s.splice(blockIdx, 1)); }}><IconTrash size={16} /></IconBtn>
     </div>
   );
 
@@ -1522,7 +1672,7 @@ function BlockRows({
                 <IconBtn
                   small
                   label="Togli esercizio"
-                  onClick={() => onBlock((b, s) => {
+                  onClick={() => confirmRemove() && onBlock((b, s) => {
                     b.items.splice(itemIdx, 1);
                     if (b.items.length === 0) s.splice(blockIdx, 1);
                     else if (b.items.length === 1 && b.kind === "superset") b.kind = "single";
@@ -1747,6 +1897,7 @@ function MobileBlock({
   programId,
   select,
   onBlock,
+  confirmRemove,
   onItemName,
   done,
   swapsOn,
@@ -1765,6 +1916,8 @@ function MobileBlock({
   aiNotes: Record<string, string>;
   lastLogFor: (it: ProgramItem) => string | undefined;
   onBlock: (fn: (b: ProgramBlock, siblings: ProgramBlock[]) => void) => void;
+  /** prima di togliere esercizi, blocchi o giorni: conferma se il cliente ha già allenamenti registrati */
+  confirmRemove: () => boolean;
   onItemName: (itemIdx: number, name: string) => void;
 } & ItemExtras) {
   const multi = block.kind !== "single" && block.kind !== "text";
@@ -1772,7 +1925,7 @@ function MobileBlock({
     <div className="flex items-center">
       <IconBtn label="Sposta blocco su" disabled={blockIdx === 0} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx - 1))}><IconUp size={16} /></IconBtn>
       <IconBtn label="Sposta blocco giù" disabled={blockIdx === blockCount - 1} onClick={() => onBlock((_, s) => swap(s, blockIdx, blockIdx + 1))}><IconDown size={16} /></IconBtn>
-      <IconBtn label="Elimina blocco" onClick={() => { if (window.confirm("Eliminare questo blocco?")) onBlock((_, s) => void s.splice(blockIdx, 1)); }}><IconTrash size={16} /></IconBtn>
+      <IconBtn label="Elimina blocco" onClick={() => { if (confirmRemove() && window.confirm("Eliminare questo blocco?")) onBlock((_, s) => void s.splice(blockIdx, 1)); }}><IconTrash size={16} /></IconBtn>
     </div>
   );
   const box = select ? <SelectBox checked={select.checked} label={select.label} onPick={select.onPick} id={block.id} /> : null;
@@ -1809,7 +1962,7 @@ function MobileBlock({
               <div className="flex items-start gap-2">
                 <span className="w-7 shrink-0 pt-2 text-sm font-semibold text-muted">{itemLabel(block, blockIdx, itemIdx)}</span>
                 <NameField value={it.name} onChange={(v) => onItemName(itemIdx, v)} placeholder="Esercizio" className={cx(cellInput, "min-w-0 flex-1 font-semibold")} />
-                <IconBtn label="Togli esercizio" onClick={() => onBlock((b, s) => { b.items.splice(itemIdx, 1); if (b.items.length === 0) s.splice(blockIdx, 1); else if (b.items.length === 1 && b.kind === "superset") b.kind = "single"; })}><IconX size={16} /></IconBtn>
+                <IconBtn label="Togli esercizio" onClick={() => confirmRemove() && onBlock((b, s) => { b.items.splice(itemIdx, 1); if (b.items.length === 0) s.splice(blockIdx, 1); else if (b.items.length === 1 && b.kind === "superset") b.kind = "single"; })}><IconX size={16} /></IconBtn>
               </div>
               <div className="flex flex-col gap-2 pl-9">
                 {swapFor(it, week + 1) ? <span className="text-sm font-semibold break-words text-accent-deep" data-swap-cell>Settimana {week + 1}: al suo posto {swapFor(it, week + 1)!.name}</span> : null}
